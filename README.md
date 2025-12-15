@@ -39,16 +39,16 @@ chatybot implements a command-line chatbot interface that interacts with various
 ### 2. Command Processing
 - Implements a primitive command parser with these commands:
 
-  /help - Show this help message.
-  /file <path> - Read a text file into the buffer.
-  /showfile [all] - Show the first 100 characters of the file buffer or the entire file if 'all' is specified.
-  /model <alias> - Switch to a different model.
-  /listmodels - list available models from toml. 
-  /logging <start|end> - Start or stop logging.
-  /save <file> - Save the last chat completion to a file.
-  /codeonly - Set flag to generate code only without explanations.
-  /codeoff - Reverse the code-only flag.
-  /quit - Exit the program.
+  -  /help - Show this help message.
+  -  /file <path> - Read a text file into the buffer.
+  -  /showfile [all] - Show the first 100 characters of the file buffer or the entire file if 'all' is specified.
+  -  /model <alias> - Switch to a different model.
+  -  /listmodels - list available models from toml. 
+  -  /logging <start|end> - Start or stop logging.
+  -  /save <file> - Save the last chat completion to a file.
+  -  /codeonly - Set flag to generate code only without explanations.
+  -  /codeoff - Reverse the code-only flag.
+  -  /quit - Exit the program.
 
 
 ### 3. File Buffer System
