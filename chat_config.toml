@@ -1,0 +1,74 @@
+[models.mistral_1]
+name = "mistral-large-2512"
+temperature = 0.7
+top_k = 1
+base_url = "https://api.mistral.ai/v1"
+api_key = "MISTRAL_API_KEY"
+
+[models.gemini_flash]
+# Gemini Model running on Google's OpenAI-compatible endpoint
+name = "gemini-2.5-flash"
+temperature = 0.0
+top_k = 1
+base_url = "https://generativelanguage.googleapis.com/v1beta/openai/"
+api_key = "GEMINI_API_KEY"
+# API key is now strictly read from the LLM_API_KEY environment variable.
+
+[models.gemini_pro]
+# Another Gemini model
+name = "gemini-2.5-pro"
+temperature = 0.0
+top_k = 1
+base_url = "https://generativelanguage.googleapis.com/v1beta/openai/"
+api_key = "GEMINI_API_KEY"
+
+[models.gemma_3]
+# Another model, same endpoint
+name = "gemma-3-27b-it"
+temperature = 0.2
+top_k = 1
+base_url = "https://generativelanguage.googleapis.com/v1beta/openai/"
+api_key = "GEMINI_API_KEY"
+
+[models.openai_gpt4]
+# Example of a different vendor (OpenAI)
+name = "gpt-4o"
+temperature = 0.1
+top_k = 1 # Ignored by OpenAI, kept for consistency
+base_url = "https://api.openai.com/v1"
+api_key = "OPENAI_API_KEY"
+
+[models.nova_2]
+name = "amazon/nova-2-lite-v1:free"
+temperature = 0.9
+top_k = 1
+base_url = "https://openrouter.ai/api/v1"
+api_key = "OPENROUTER_API_KEY"
+
+[models.nvidia_1]
+name = "nvidia/nemotron-nano-12b-v2-vl:free"
+temperature = 0.7
+top_k = 1
+base_url = "https://openrouter.ai/api/v1"
+api_key = "OPENROUTER_API_KEY"
+
+[models.gpt_oss_20b]
+name = "openai/gpt-oss-20b:free"
+temperature = 0.7
+top_k = 1
+base_url = "https://openrouter.ai/api/v1"
+api_key = "OPENROUTER_API_KEY"
+
+[models.qwen2_5_instruct]
+name = "Qwen/Qwen2.5-3B-Instruct"
+temperature = 0.5
+top_k = 1
+base_url = "https://api.bytez.com/models/v2/openai/v1"
+api_key = "BYTEZ_API_KEY"
+
+[models.Jan_v1_4b]
+name = "janhq/Jan-v1-4B"
+temprature = 0.6
+base_url = "https://api.bytez.com/models/v2/openai/v1"
+api_key = "BYTEZ_API_KEY"
+
