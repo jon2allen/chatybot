@@ -1,80 +1,99 @@
-## Overview
-chatybot implements a command-line chatbot interface that interacts with various language models through the OpenAI API (or compatible APIs). It provides a flexible system for chatting with different AI models and includes file input capabilities.
+## Updated README for chatybot.py
 
-## Core Functions
+---
 
-### 1. Configuration Management
-- **`load_config()`**: Loads model configurations from a TOML file (`chat_config.toml`)
-  - Returns a dictionary containing model settings
-  - Sets up the default model from the first entry in the config
+## **Overview**
+`chatybot.py` is a command-line chatbot interface that interacts with various language models using the OpenAI API (or compatible APIs). It provides a flexible and interactive way to chat with AI models, supports file input for context, and includes multiple customizable features.
 
-### 2. API Client Management
-- **`get_openai_client(model_alias)`**:
-  - Creates an asynchronous OpenAI client instance
-  - Uses environment variables (`LLM_API_KEY`) for authentication
-  - Configures the client with model-specific settings (base URL, etc.)
+---
 
-### 3. Chat Functionality
-- **`chat_completion(client, model_alias, prompt)`**:
-  - Sends a prompt to the specified language model
-  - Uses model-specific parameters (temperature, top_k) from config
-  - Returns the model's response
+## **New Features and Updates**
 
-### 4. Main Application Loop
-- **`main()`**:
-  - Initializes the chatbot with the default model
-  - Provides an interactive command-line interface
-  - Handles user commands and chat interactions
+### **1. Enhanced Command System**
+The chatbot now supports an expanded set of commands for better usability:
+- **`/help`**: Display the help message with all available commands.
+- **`/file <path>`**: Load a text file into the buffer for context.
+- **`/showfile [all]`**: Display the first 100 characters of the file buffer or the entire file if `all` is specified.
+- **`/clearfile`**: Clear the file buffer.
+- **`/model <alias>`**: Switch to a different model using its alias.
+- **`/listmodels`**: List all available models from the TOML configuration file.
+- **`/logging <start|end>`**: Start or stop logging chat sessions.
+- **`/save <file>`**: Save the last chat completion to a file.
+- **`/codeonly`**: Enable code-only mode (generates code without explanations).
+- **`/codeoff`**: Disable code-only mode.
+- **`/multiline`**: Toggle multi-line input mode (use `;;` to end input).
+- **`/system <message>`**: Set a custom system message for the model.
+- **`/temp <value>`**: Set the temperature for the current model (0.0-2.0).
+- **`/maxtokens <value>`**: Set the max tokens for the current model.
+- **`/stream`**: Toggle streaming responses.
+- **`/quit`**: Exit the program.
 
-## Architecture Components
+---
 
-### 1. Configuration System
-- Uses TOML format for configuration
-- Stores multiple model definitions with:
-  - Model names
-  - API base URLs
-  - Temperature settings
-  - Top-k sampling parameters
+### **2. Multi-Line Input Mode**
+- Users can now enter multi-line prompts by enabling **`/multiline`** mode.
+- Input is terminated by entering `;;` on a new line.
 
-### 2. Command Processing
-- Implements a primitive command parser with these commands:
+---
 
-  -  /help - Show this help message.
-  -  /file <path> - Read a text file into the buffer.
-  -  /showfile [all] - Show the first 100 characters of the file buffer or the entire file if 'all' is specified.
-  -  /model <alias> - Switch to a different model.
-  -  /listmodels - list available models from toml. 
-  -  /logging <start|end> - Start or stop logging.
-  -  /save <file> - Save the last chat completion to a file.
-  -  /codeonly - Set flag to generate code only without explanations.
-  -  /codeoff - Reverse the code-only flag.
-  -  /quit - Exit the program.
+### **3. Streaming Responses**
+- Users can toggle streaming responses using the **`/stream`** command.
+- Streaming provides real-time output from the model.
 
+---
 
-### 3. File Buffer System
-- Maintains a file buffer (up to 4KB) for context
-- Automatically incorporates file content into prompts
-- Clears buffer after each response
+### **4. Custom System Messages**
+- Users can set a custom system message using the **`/system <message>`** command.
+- This message is included in the prompt to guide the model's behavior.
 
-### 4. Asynchronous Design
-- Uses Python's asyncio for non-blocking API calls
-- Allows the chatbot to remain responsive during API calls
+---
 
-## Workflow
-1. User starts the application - python3 chatybot.py
-2. System loads configuration and initializes default model
-3. User enters prompts or commands
-4. For chat prompts:
-   - System combines prompt with file buffer (if any)
-   - Sends to LLM via API
-   - Displays response
-5. For commands:
-   - System executes the appropriate action (load file, switch model, etc.)
+### **5. Temperature and Max Tokens Control**
+- Users can adjust the **temperature** and **max tokens** for the current model using the **`/temp`** and **`/maxtokens`** commands.
+- Temperature controls the randomness of the model's output (0.0-2.0).
+- Max tokens limits the length of the model's response.
 
-## Technical Highlights
-- Type hints for better code maintainability
-- Environment variable support for API keys
-- Configurable model parameters
-- File content integration for context
-- Command-line interface with readline support (for better input handling)
-- Error handling for file operations and API calls
+---
+
+### **6. Code-Only Mode**
+- Users can enable **`/codeonly`** mode to generate code without explanations or descriptions.
+- This is useful for quickly generating code snippets.
+
+---
+
+### **7. Logging**
+- Users can start or stop logging chat sessions using the **`/logging <start|end>`** command.
+- Logs are saved with a timestamp for easy reference.
+
+---
+
+### **8. File Buffer System**
+- Users can load a file into the buffer using the **`/file <path>`** command.
+- The file content is automatically included in the prompt for context.
+- The buffer can be cleared using **`/clearfile`**.
+
+---
+
+### **9. Input History**
+- The chatbot now supports input history, allowing users to navigate previous inputs using the **Tab** key.
+- Input history is saved to `.chat_history` for persistence across sessions.
+
+---
+
+## **Workflow**
+1. Start the application: `python3 chatybot.py`.
+2. The system loads the configuration and initializes the default model.
+3. Enter prompts or commands.
+   - For chat prompts, the system combines the prompt with the file buffer (if any) and sends it to the model.
+   - For commands, the system executes the appropriate action (e.g., load file, switch model, etc.).
+4. The model's response is displayed in the terminal.
+
+---
+
+## **Technical Highlights**
+- **Type hints** for better code maintainability.
+- **Environment variable support** for API keys.
+- **Configurable model parameters** (temperature, max tokens, etc.).
+- **File content integration** for context.
+- **Command-line interface with readline support** for better input handling.
+- **Error handling** for file operations and API calls.

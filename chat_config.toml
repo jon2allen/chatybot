@@ -68,7 +68,21 @@ api_key = "BYTEZ_API_KEY"
 
 [models.Jan_v1_4b]
 name = "janhq/Jan-v1-4B"
-temprature = 0.6
+temprature = 0.9
 base_url = "https://api.bytez.com/models/v2/openai/v1"
 api_key = "BYTEZ_API_KEY"
+
+[models.llama1]
+name = "meta/llama-3.1-405b-instruct"
+temperature = 0.5
+top_k = 1
+base_url = "https://integrate.api.nvidia.com/v1"
+api_key = "NVIDIA_API"
+
+[models.kimi_k2_instruct]
+name = "moonshotai/kimi-k2-instruct"
+temperature = 0.5
+top_k = 1
+base_url = "https://integrate.api.nvidia.com/v1"
+api_key = "NVIDIA_API"
 
