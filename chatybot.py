@@ -1,5 +1,5 @@
-import os
 import asyncio
+import os
 import readline
 import tomllib
 from datetime import datetime
@@ -19,12 +19,14 @@ DEFAULT_MODEL_ALIAS = None
 ACTIVE_MODEL_ALIAS = None
 CHAT_HISTORY: List[Tuple[str, str]] = []
 FILE_BUFFER = ""
+PROMPT_BUFFER = ""
 CODE_ONLY_FLAG = False
 LOGGING_ACTIVE = False
 LOG_FILE = None
 MULTI_LINE_MODE = False
 INPUT_HISTORY: List[str] = []
 INPUT_HISTORY_INDEX = -1
+INPUT_HISTORY_MATCHES: List[str] = []
 SYSTEM_MESSAGE = "You are a helpful assistant."
 MAX_TOKENS = None
 STREAMING_ENABLED = False
@@ -116,19 +118,26 @@ def log_message(message: str) -> None:
 
 def list_models() -> None:
     """
-    List all available models with their details.
+    List all available models with their details in a formatted table.
     """
     print("\nAvailable Models:")
-    print("{:<15} {:<30} {:<40} {:<10} {:<10}".format(
-        "Alias", "Model Name", "Base URL", "Temp", "Max Tokens"))
-    print("-" * 85)
 
+    # Calculate column widths
+    alias_width = max(len("Alias"), max(len(alias) for alias in CONFIG["models"]))
+    name_width = max(len("Model Name"), max(len(config["name"]) for config in CONFIG["models"].values()))
+    url_width = max(len("Base URL"), max(len(config.get("base_url", "Default OpenAI URL")) for config in CONFIG["models"].values()))
+
+    # Print header
+    header = f"{'Alias':<{alias_width}} {'Model Name':<{name_width}} {'Base URL':<{url_width}} {'Temp':<6} {'Max Tokens':<10}"
+    print(header)
+    print("-" * len(header))
+
+    # Print models
     for alias, config in CONFIG["models"].items():
         base_url = config.get("base_url", "Default OpenAI URL")
         temp = config.get("temperature", 0.7)
         max_tokens = config.get("max_tokens", "Default")
-        print("{:<15} {:<30} {:<40} {:<10.2f} {:<10}".format(
-            alias, config["name"], base_url, temp, str(max_tokens)))
+        print(f"{alias:<{alias_width}} {config['name']:<{name_width}} {base_url:<{url_width}} {temp:<6.2f} {str(max_tokens):<10}")
 
     print()
 
@@ -158,13 +167,12 @@ def input_history_completer(text: str, state: int) -> Optional[str]:
     """
     Completer function for readline to navigate input history.
     """
-    global INPUT_HISTORY, INPUT_HISTORY_INDEX
+    global INPUT_HISTORY, INPUT_HISTORY_INDEX, INPUT_HISTORY_MATCHES
 
     if state == 0:
         # Filter history based on text
-        matches = [h for h in INPUT_HISTORY if h.startswith(text)]
+        INPUT_HISTORY_MATCHES = [h for h in INPUT_HISTORY if h.startswith(text)]
         INPUT_HISTORY_INDEX = 0
-        INPUT_HISTORY_MATCHES = matches
     else:
         INPUT_HISTORY_INDEX += 1
 
@@ -176,14 +184,16 @@ async def chat_completion(prompt: str, stream: bool = False) -> str:
     """
     Send a prompt to the OpenAI API and return the response.
     """
-    global ACTIVE_MODEL_ALIAS, CHAT_HISTORY, FILE_BUFFER, CODE_ONLY_FLAG, MAX_TOKENS
+    global ACTIVE_MODEL_ALIAS, CHAT_HISTORY, FILE_BUFFER, PROMPT_BUFFER, CODE_ONLY_FLAG, MAX_TOKENS
 
     client = get_openai_client(ACTIVE_MODEL_ALIAS)
     model_config = CONFIG["models"][ACTIVE_MODEL_ALIAS]
     model_name = model_config["name"]
 
-    # Prepare the prompt with file buffer if available
+    # Prepare the prompt with file buffer and prompt buffer if available
     full_prompt = prompt
+    if PROMPT_BUFFER:
+        full_prompt = PROMPT_BUFFER + "\n\n" + full_prompt
     if FILE_BUFFER:
         full_prompt = f"File:\n{FILE_BUFFER}\n\n{full_prompt}"
 
@@ -234,7 +244,7 @@ def handle_escape_command(command: str) -> bool:
     """
     Handle escape commands. Returns True if the command was handled, False otherwise.
     """
-    global ACTIVE_MODEL_ALIAS, FILE_BUFFER, CODE_ONLY_FLAG, LOGGING_ACTIVE, MULTI_LINE_MODE
+    global ACTIVE_MODEL_ALIAS, FILE_BUFFER, PROMPT_BUFFER, CODE_ONLY_FLAG, LOGGING_ACTIVE, MULTI_LINE_MODE
     global SYSTEM_MESSAGE, MAX_TOKENS, STREAMING_ENABLED
 
     parts = command.split(maxsplit=1)
@@ -243,10 +253,11 @@ def handle_escape_command(command: str) -> bool:
     if cmd == "/help":
         print("Active escape commands:")
         print("  /help - Show this help message.")
+        print("  /prompt <file> - Load a prompt from a file.")
         print("  /file <path> - Read a text file into the buffer.")
         print("  /showfile [all] - Show the first 100 characters of the file buffer or the entire file if 'all' is specified.")
         print("  /clearfile - Clear the file buffer.")
-        print("  /model <alias> - Switch to a different model.")
+        print("  /model [alias] - Switch to a different model or show current model.")
         print("  /listmodels - List available models from toml.")
         print("  /logging <start|end> - Start or stop logging.")
         print("  /save <file> - Save the last chat completion to a file.")
@@ -258,6 +269,37 @@ def handle_escape_command(command: str) -> bool:
         print("  /maxtokens <value> - Set max tokens for the current model.")
         print("  /stream - Toggle streaming responses.")
         print("  /quit - Exit the program.")
+        return True
+
+    elif cmd == "/prompt":
+        if len(parts) < 2:
+            print("Usage: /prompt <file>")
+            return True
+
+        file_path = parts[1]
+        try:
+            with open(file_path, "r") as f:
+                PROMPT_BUFFER = f.read()
+            print(f"\nPrompt loaded from '{file_path}':")
+            print("-" * 40)
+            print(PROMPT_BUFFER)
+            print("-" * 40)
+
+            # Ask for confirmation
+            while True:
+                confirm = input("\nExecute this prompt? (Y/N): ").strip().lower()
+                if confirm in ['y', 'yes']:
+                    print("\nExecuting prompt...")
+                    # Set a flag to execute the prompt in the main loop
+                    return "EXECUTE_PROMPT"
+                elif confirm in ['n', 'no']:
+                    PROMPT_BUFFER = ""
+                    print("Prompt discarded.")
+                    return True
+                else:
+                    print("Please enter Y or N.")
+        except Exception as e:
+            print(f"Error reading prompt file: {str(e)}")
         return True
 
     elif cmd == "/file":
@@ -291,7 +333,9 @@ def handle_escape_command(command: str) -> bool:
 
     elif cmd == "/model":
         if len(parts) < 2:
-            print("Usage: /model <alias>")
+            # Show current model
+            model_config = CONFIG["models"][ACTIVE_MODEL_ALIAS]
+            print(f"Current model: {model_config['name']} (alias: {ACTIVE_MODEL_ALIAS})")
             return True
 
         model_alias = parts[1]
@@ -427,7 +471,7 @@ async def main() -> None:
     """
     Main function to run the chat loop.
     """
-    global ACTIVE_MODEL_ALIAS, INPUT_HISTORY, STREAMING_ENABLED
+    global ACTIVE_MODEL_ALIAS, INPUT_HISTORY, STREAMING_ENABLED, PROMPT_BUFFER
 
     # Load configuration
     load_config()
@@ -460,8 +504,15 @@ async def main() -> None:
                 continue
 
             if prompt.startswith("/"):
-                if not handle_escape_command(prompt):
-                    print("Unknown command. Type '/help' for available commands.")
+                result = handle_escape_command(prompt)
+                if result == "EXECUTE_PROMPT":
+                    # Execute the buffered prompt
+                    temp_prompt = "Using the following prompt, please provide a response:\n" + PROMPT_BUFFER
+                    response = await chat_completion(temp_prompt, stream=STREAMING_ENABLED)
+                    if not STREAMING_ENABLED:
+                        print(response)
+                    log_message(f"User: {temp_prompt}\nAssistant: {response}\n")
+                    PROMPT_BUFFER = ""  # Clear the buffer after execution
                 continue
 
             response = await chat_completion(prompt, stream=STREAMING_ENABLED)
@@ -478,4 +529,4 @@ async def main() -> None:
             print(f"Error: {str(e)}")
 
 if __name__ == "__main__":
-    asyncio.run(main()) 
+    asyncio.run(main())

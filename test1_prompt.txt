@@ -1,0 +1,6 @@
+
+Create 6 types of fiboncci sequence in C language.
+
+Describe them.
+
+And tell when to use each one, what are the pros and cons
