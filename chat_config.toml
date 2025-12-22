@@ -86,3 +86,24 @@ top_k = 1
 base_url = "https://integrate.api.nvidia.com/v1"
 api_key = "NVIDIA_API"
 
+[models.eurollm]
+name = "utter-project/EuroLLM-22B-Instruct-2512"
+temperature = 0.6
+top_k = 1
+base_url = "https://api.publicai.co/v1"
+api_key = "SWISS_API_KEY"
+
+[models.swiss]
+name = "swiss-ai/apertus-8b-instruct"
+temperature = 0.7
+top_k = 1
+base_url = "https://api.publicai.co/v1"
+api_key = "SWISS_API_KEY"
+
+[models.swiss2]
+name = "swiss-ai/apertus-70b-instruct"
+temperature = 0.7
+top_k = 1
+base_url = "https://api.publicai.co/v1"
+api_key = "SWISS_API_KEY"
+

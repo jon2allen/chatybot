@@ -1,6 +1,7 @@
 import asyncio
 import os
 import readline
+import time
 import tomllib
 from datetime import datetime
 from typing import Dict, Any, List, Tuple, Optional
@@ -209,6 +210,7 @@ async def chat_completion(prompt: str, stream: bool = False) -> str:
         messages.insert(0, {"role": "system", "content": SYSTEM_MESSAGE})
 
     try:
+        start_time = time.time()
         if stream:
             response = await client.chat.completions.create(
                 model=model_name,
@@ -234,6 +236,14 @@ async def chat_completion(prompt: str, stream: bool = False) -> str:
                 max_tokens=MAX_TOKENS if MAX_TOKENS else model_config.get("max_tokens"),
             )
             full_response = response.choices[0].message.content
+            print(full_response)
+
+        # Calculate and display metrics
+        elapsed_time = time.time() - start_time
+        print(f"\nExecution time: {elapsed_time:.2f} seconds")
+
+        if hasattr(response, 'usage'):
+            print(f"Input tokens: {response.usage.prompt_tokens}, Output tokens: {response.usage.completion_tokens}")
 
         CHAT_HISTORY.append((prompt, full_response))
         return full_response
@@ -475,6 +485,10 @@ async def main() -> None:
 
     # Load configuration
     load_config()
+    print("===========================")
+    print("Chatybot.py                ")
+    print("Created by Jon Allen - 2025")
+    print("===========================")
     print(f"Active model: {CONFIG['models'][ACTIVE_MODEL_ALIAS]['name']} (alias: {ACTIVE_MODEL_ALIAS})")
 
     # Set up input history
@@ -509,15 +523,11 @@ async def main() -> None:
                     # Execute the buffered prompt
                     temp_prompt = "Using the following prompt, please provide a response:\n" + PROMPT_BUFFER
                     response = await chat_completion(temp_prompt, stream=STREAMING_ENABLED)
-                    if not STREAMING_ENABLED:
-                        print(response)
                     log_message(f"User: {temp_prompt}\nAssistant: {response}\n")
                     PROMPT_BUFFER = ""  # Clear the buffer after execution
                 continue
 
             response = await chat_completion(prompt, stream=STREAMING_ENABLED)
-            if not STREAMING_ENABLED:
-                print(response)
             log_message(f"User: {prompt}\nAssistant: {response}\n")
 
         except KeyboardInterrupt:
@@ -530,3 +540,4 @@ async def main() -> None:
 
 if __name__ == "__main__":
     asyncio.run(main())
+
