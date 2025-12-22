@@ -21,6 +21,7 @@ ACTIVE_MODEL_ALIAS = None
 CHAT_HISTORY: List[Tuple[str, str]] = []
 FILE_BUFFER = ""
 PROMPT_BUFFER = ""
+FILE_BANKS: Dict[str, str] = {f"filebank{i}": "" for i in range(1, 6)}
 CODE_ONLY_FLAG = False
 LOGGING_ACTIVE = False
 LOG_FILE = None
@@ -181,6 +182,16 @@ def input_history_completer(text: str, state: int) -> Optional[str]:
         return INPUT_HISTORY_MATCHES[INPUT_HISTORY_INDEX]
     return None
 
+def replace_filebank_placeholders(prompt: str) -> str:
+    """
+    Replace filebank placeholders in the prompt with their content.
+    """
+    for bank_name, content in FILE_BANKS.items():
+        placeholder = f"{{{bank_name}}}"
+        if placeholder in prompt:
+            prompt = prompt.replace(placeholder, content)
+    return prompt
+
 async def chat_completion(prompt: str, stream: bool = False) -> str:
     """
     Send a prompt to the OpenAI API and return the response.
@@ -191,8 +202,10 @@ async def chat_completion(prompt: str, stream: bool = False) -> str:
     model_config = CONFIG["models"][ACTIVE_MODEL_ALIAS]
     model_name = model_config["name"]
 
+    # Replace filebank placeholders in the prompt
+    full_prompt = replace_filebank_placeholders(prompt)
+
     # Prepare the prompt with file buffer and prompt buffer if available
-    full_prompt = prompt
     if PROMPT_BUFFER:
         full_prompt = PROMPT_BUFFER + "\n\n" + full_prompt
     if FILE_BUFFER:
@@ -255,9 +268,9 @@ def handle_escape_command(command: str) -> bool:
     Handle escape commands. Returns True if the command was handled, False otherwise.
     """
     global ACTIVE_MODEL_ALIAS, FILE_BUFFER, PROMPT_BUFFER, CODE_ONLY_FLAG, LOGGING_ACTIVE, MULTI_LINE_MODE
-    global SYSTEM_MESSAGE, MAX_TOKENS, STREAMING_ENABLED
+    global SYSTEM_MESSAGE, MAX_TOKENS, STREAMING_ENABLED, FILE_BANKS
 
-    parts = command.split(maxsplit=1)
+    parts = command.split(maxsplit=2)
     cmd = parts[0].lower()
 
     if cmd == "/help":
@@ -267,6 +280,9 @@ def handle_escape_command(command: str) -> bool:
         print("  /file <path> - Read a text file into the buffer.")
         print("  /showfile [all] - Show the first 100 characters of the file buffer or the entire file if 'all' is specified.")
         print("  /clearfile - Clear the file buffer.")
+        print("  /filebank{1..5} <file> - Load a text file into filebank1 through filebank5.")
+        print("  /filebank{1..5} clear - Clear the specified filebank.")
+        print("  /filebank{1..5} show [all] - Show the first 100 characters of the filebank or all if 'all' is specified.")
         print("  /model [alias] - Switch to a different model or show current model.")
         print("  /listmodels - List available models from toml.")
         print("  /logging <start|end> - Start or stop logging.")
@@ -311,6 +327,47 @@ def handle_escape_command(command: str) -> bool:
         except Exception as e:
             print(f"Error reading prompt file: {str(e)}")
         return True
+
+    elif cmd.startswith("/filebank"):
+        # Handle filebank commands
+        bank_num = cmd[9:]  # Extract the number after /filebank
+        if not bank_num.isdigit() or int(bank_num) < 1 or int(bank_num) > 5:
+            print("Invalid filebank number. Please use /filebank1 through /filebank5.")
+            return True
+
+        bank_name = f"filebank{bank_num}"
+
+        if len(parts) < 2:
+            print(f"Usage: {cmd} <file> or {cmd} clear or {cmd} show [all]")
+            return True
+
+        subcommand = parts[1].lower()
+
+        if subcommand == "clear":
+            FILE_BANKS[bank_name] = ""
+            print(f"{bank_name} cleared.")
+            return True
+        elif subcommand == "show":
+            content = FILE_BANKS[bank_name]
+            if not content:
+                print(f"{bank_name} is empty.")
+                return True
+
+            if len(parts) > 2 and parts[2].lower() == "all":
+                print(content)
+            else:
+                print(content[:100] + ("..." if len(content) > 100 else ""))
+            return True
+        else:
+            # Assume it's a file path
+            file_path = parts[1]
+            try:
+                with open(file_path, "r") as f:
+                    FILE_BANKS[bank_name] = f.read()
+                print(f"File '{file_path}' loaded into {bank_name}.")
+            except Exception as e:
+                print(f"Error reading file: {str(e)}")
+            return True
 
     elif cmd == "/file":
         if len(parts) < 2:
@@ -539,5 +596,4 @@ async def main() -> None:
             print(f"Error: {str(e)}")
 
 if __name__ == "__main__":
-    asyncio.run(main())
-
+   asyncio.run(main())
