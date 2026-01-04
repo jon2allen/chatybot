@@ -4,9 +4,13 @@ import readline
 import time
 import tomllib
 from datetime import datetime
-from typing import Dict, Any, List, Tuple, Optional
+from typing import Dict, Any, List, Tuple, Optional, Callable, Union # Added Callable, Union
 import logging
 import atexit
+
+# Add these imports at the top of the file
+import re
+import shlex
 
 try:
     import openai
@@ -32,6 +36,10 @@ INPUT_HISTORY_MATCHES: List[str] = []
 SYSTEM_MESSAGE = "You are a helpful assistant."
 MAX_TOKENS = None
 STREAMING_ENABLED = False
+
+# Add these global variables
+SCRIPT_VARS: Dict[str, str] = {}
+SCRIPT_CONTEXT = False
 
 def load_config() -> None:
     """
@@ -263,7 +271,147 @@ async def chat_completion(prompt: str, stream: bool = False) -> str:
     except Exception as e:
         return f"Error: {str(e)}"
 
-def handle_escape_command(command: str) -> bool:
+# Add this function to handle script execution
+async def execute_script_command(command: str, original_handler: Callable[[str], Union[bool, str]]) -> bool:
+    """
+    Execute a command within a script context.
+    Returns True if the command was handled, False otherwise.
+    """
+    global SCRIPT_VARS, SCRIPT_CONTEXT, PROMPT_BUFFER
+
+    # Handle script-specific commands
+    if command.startswith("set "):
+        try:
+            _, var_part = command.split(maxsplit=1)
+            var_name, var_value = var_part.split("=", maxsplit=1)
+            SCRIPT_VARS[var_name.strip()] = var_value.strip().strip('"\'')
+            return True
+        except ValueError:
+            print("Invalid set command. Usage: set <name> = <value>")
+            return True
+
+    # Replace variables in the command
+    def replace_var(match):
+        # debug, print("match: ", match )
+        var_name = match.group(1)
+        # debug, print("var_name" , var_name )
+        var1 = SCRIPT_VARS.get(var_name, "")
+
+        # debug, print("var1: ", var1 )
+
+        return var1
+
+    processed_command = re.sub(r'\$\{(\w+)\}', replace_var, command)
+
+    #  print("processed command: ",  processed_command )
+
+    # Handle wait command
+    if processed_command.startswith("wait "):
+        try:
+            _, seconds = processed_command.split(maxsplit=1)
+            await asyncio.sleep(float(seconds))
+            return True
+        except ValueError:
+            print("Invalid wait command. Usage: wait <seconds>")
+            return True
+
+    # Handle if-then commands
+    if processed_command.startswith("if "):
+        try:
+            # Simple condition checking for now (can be expanded)
+            if "then" in processed_command:
+                condition, then_part = processed_command[3:].split("then", maxsplit=1)
+                condition = condition.strip()
+                then_command = then_part.strip()
+
+                # Simple condition evaluation (can be expanded)
+                # Check if condition is a variable name and its value is truthy
+                if condition in SCRIPT_VARS:
+                    # More robust truthy check for string variables
+                    if SCRIPT_VARS[condition].lower() in ["true", "1", "yes"]:
+                        return await execute_script_command(then_command, original_handler)
+                    elif SCRIPT_VARS[condition].lower() in ["false", "0", "no", ""]:
+                        return True # Condition is false, do nothing
+                elif condition.lower() == "true":
+                    return await execute_script_command(then_command, original_handler)
+                elif condition.lower() == "false":
+                    return True
+        except ValueError:
+            print("Invalid if command. Usage: if <condition> then <command>")
+            return True
+
+    # For other commands, use the original handler
+    if processed_command.startswith("/"):
+        # The original_handler (handle_escape_command) is now async, so we must await it.
+        result = await original_handler(processed_command)
+        if result == "EXECUTE_PROMPT":
+            # This means a /prompt command was executed and confirmed.
+            # The prompt buffer is already set by handle_escape_command.
+            # We need to trigger the chat completion here.
+            temp_prompt = "Using the following prompt, please provide a response:\n" + PROMPT_BUFFER
+            response = await chat_completion(temp_prompt, stream=STREAMING_ENABLED)
+            log_message(f"User: {temp_prompt}\nAssistant: {response}\n")
+            PROMPT_BUFFER = ""  # Clear the buffer after execution
+            return True # Handled
+        return result if isinstance(result, bool) else False # Return boolean indicating if handled
+
+    # If not a command, treat as chat input
+    if SCRIPT_CONTEXT:
+        response = await chat_completion(processed_command, stream=STREAMING_ENABLED)
+        log_message(f"User: {processed_command}\nAssistant: {response}\n")
+        return True
+
+    return False
+
+async def execute_script(script_path: str) -> None:
+    """
+    Execute a script file containing multiple commands.
+    """
+    global SCRIPT_CONTEXT
+
+    try:
+        print("Loading script: ", script_path)
+        with open(script_path, "r") as f:
+            script_content = f.read()
+
+        # Remove comments (lines starting with #)
+        script_content = "\n".join(
+            line for line in script_content.split("\n")
+            if not line.strip().startswith("#")
+        )
+
+        # Split commands by newlines or semicolons
+        commands_list = []
+        for line in script_content.split("\n"):
+            line = line.strip()
+            if not line:
+                continue
+            # Attempt to split by semicolon, but be aware of quotes.
+            # A simple split by ';' will break quoted strings containing ';'.
+            # For robust parsing, a state machine or a more complex regex is needed.
+            # For "little change", we'll use a simple split and note the limitation.
+            if ';' in line:
+                # This will break quoted strings like "set msg = "hello; world""
+                # Users should avoid using ';' inside quoted strings if it's meant as a command separator.
+                commands_list.extend([cmd.strip() for cmd in line.split(';') if cmd.strip()])
+            else:
+                commands_list.append(line)
+
+        # Execute each command
+        SCRIPT_CONTEXT = True
+        for cmd in commands_list:
+            print(f"Executing: {cmd}")
+            handled = await execute_script_command(cmd, handle_escape_command)
+            if not handled:
+                print(f"Unknown command in script: {cmd}")
+
+    except Exception as e:
+        print(f"Error executing script: {str(e)}")
+    finally:
+        SCRIPT_CONTEXT = False
+
+# Modify the handle_escape_command function to add the /script command
+async def handle_escape_command(command: str) -> Union[bool, str]: # Changed to async and updated return type
     """
     Handle escape commands. Returns True if the command was handled, False otherwise.
     """
@@ -294,7 +442,14 @@ def handle_escape_command(command: str) -> bool:
         print("  /temp <value> - Set temperature for the current model (0.0-2.0).")
         print("  /maxtokens <value> - Set max tokens for the current model.")
         print("  /stream - Toggle streaming responses.")
+        print("  /script <file> - Execute a script file containing multiple commands.") # Added
         print("  /quit - Exit the program.")
+        print("\nScript-specific features:") # Added
+        print("  set <name> = <value> - Define a variable") # Added
+        print("  ${name} - Reference a variable") # Added
+        print("  if <condition> then <command> - Conditional execution") # Added
+        print("  wait <seconds> - Pause execution") # Added
+        print("  # comment - Comments in script files") # Added
         return True
 
     elif cmd == "/prompt":
@@ -311,19 +466,23 @@ def handle_escape_command(command: str) -> bool:
             print(PROMPT_BUFFER)
             print("-" * 40)
 
-            # Ask for confirmation
-            while True:
-                confirm = input("\nExecute this prompt? (Y/N): ").strip().lower()
-                if confirm in ['y', 'yes']:
-                    print("\nExecuting prompt...")
-                    # Set a flag to execute the prompt in the main loop
-                    return "EXECUTE_PROMPT"
-                elif confirm in ['n', 'no']:
-                    PROMPT_BUFFER = ""
-                    print("Prompt discarded.")
-                    return True
-                else:
-                    print("Please enter Y or N.")
+            # Ask for confirmation only if not in script context
+            if not SCRIPT_CONTEXT:
+                while True:
+                    confirm = input("\nExecute this prompt? (Y/N): ").strip().lower()
+                    if confirm in ['y', 'yes']:
+                        print("\nExecuting prompt...")
+                        # Set a flag to execute the prompt in the main loop
+                        return "EXECUTE_PROMPT"
+                    elif confirm in ['n', 'no']:
+                        PROMPT_BUFFER = ""
+                        print("Prompt discarded.")
+                        return True
+                    else:
+                        print("Please enter Y or N.")
+            else:
+                # In script context, assume confirmation and return flag
+                return "EXECUTE_PROMPT"
         except Exception as e:
             print(f"Error reading prompt file: {str(e)}")
         return True
@@ -513,6 +672,17 @@ def handle_escape_command(command: str) -> bool:
         list_models()
         return True
 
+    elif cmd == "/script": # New case for /script command
+        if len(parts) < 2:
+            print("Usage: /script <file>")
+            return True
+
+        script_path = parts[1]
+        print("command /script with ", script_path )
+        # Execute script asynchronously so it doesn't block the main loop
+        await execute_script(script_path)
+        return True
+
     elif cmd == "/quit":
         print("Goodbye! Thanks for chatting.")
         stop_logging()
@@ -575,7 +745,7 @@ async def main() -> None:
                 continue
 
             if prompt.startswith("/"):
-                result = handle_escape_command(prompt)
+                result = await handle_escape_command(prompt) # Added await
                 if result == "EXECUTE_PROMPT":
                     # Execute the buffered prompt
                     temp_prompt = "Using the following prompt, please provide a response:\n" + PROMPT_BUFFER

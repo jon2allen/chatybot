@@ -1,0 +1,8 @@
+# Test Case 10: Error Handling
+# Description: Test error cases (invalid commands, missing files).
+
+set test_dir = "./dsl_test"
+
+/invalidcommand
+/file ${test_dir}/nonexistent.txt
+/model nonexistent_model

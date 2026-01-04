@@ -1,0 +1,12 @@
+# Test Case 6: Multi-line Input
+# Description: Test multi-line prompt input.
+
+set test_dir = "./dsl_test"
+
+/multiline
+Write a Python function
+to reverse a string.
+;;
+/codeonly
+
+/multiline

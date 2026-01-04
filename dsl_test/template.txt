@@ -1,0 +1,2 @@
+This is a prompt template for testing prompt engineering in chatdsl.
+It will be loaded into the prompt buffer using the /prompt command.

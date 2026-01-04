@@ -1,0 +1,9 @@
+# Test Case 2: File Handling
+# Description: Test file loading, display, and clearing.
+
+set test_dir = "./dsl_test"
+
+/file ${test_dir}/test.txt
+/showfile
+/clearfile
+/showfile

@@ -1,0 +1,7 @@
+# Test Case 4: Prompt Engineering
+# Description: Test prompt template loading and system message override.
+
+set test_dir = "./dsl_test"
+
+/prompt ${test_dir}/template.txt
+/system "You are a helpful assistant."

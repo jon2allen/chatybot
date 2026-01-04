@@ -1,0 +1,7 @@
+# Test Case 7: Variable Substitution in Prompts
+# Description: Test dynamic variable substitution in prompts.
+
+set test_dir = "./dsl_test"
+
+set name = "Alice"
+chat --> Hello, ${name}! How are you?

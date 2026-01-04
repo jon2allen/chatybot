@@ -1,0 +1,43 @@
+# Test Master Script
+# Description: Executes all 10 test cases in sequence.
+
+set test_dir = "./dsl_test"
+
+# Test Case 1: Basic Command Execution
+/script ${test_dir}/test1_basic_commands.chatdsl
+wait 2
+
+# Test Case 2: File Handling
+/script ${test_dir}/test2_file_handling.chatdsl
+wait 2
+
+# Test Case 3: File Bank Operations
+/script ${test_dir}/test3_file_bank.chatdsl
+wait 2
+
+# Test Case 4: Prompt Engineering
+/script ${test_dir}/test4_prompt_engineering.chatdsl
+wait 2
+
+# Test Case 5: Script Execution
+/script ${test_dir}/test5_script_execution.chatdsl
+wait 2
+
+# Test Case 6: Multi-line Input
+/script ${test_dir}/test6_multiline_input.chatdsl
+wait 2
+
+# Test Case 7: Variable Substitution in Prompts
+/script ${test_dir}/test7_variable_substitution.chatdsl
+wait 2
+
+# Test Case 8: Conditional Logic in Scripts
+/script ${test_dir}/test8_conditional_logic.chatdsl
+wait 2
+
+# Test Case 9: Streaming and Logging
+/script ${test_dir}/test9_streaming_logging.chatdsl
+wait 2
+
+# Test Case 10: Error Handling
+/script ${test_dir}/test10_error_handling.chatdsl

@@ -1,0 +1,8 @@
+# Test Case 1: Basic Command Execution
+# Description: Verify basic command processing and model switching.
+
+set test_dir = "./dsl_test"
+
+/model gpt4
+/listmodels
+/model

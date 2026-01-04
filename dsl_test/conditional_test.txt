@@ -1,0 +1,3 @@
+set debug = true
+if ${debug} then /temp 0.1
+if not ${debug} then /temp 0.7

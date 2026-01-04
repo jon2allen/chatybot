@@ -1,0 +1,2 @@
+This is a notes file for testing file bank operations in chatdsl.
+It will be loaded into filebank1 and displayed using /showfile all.

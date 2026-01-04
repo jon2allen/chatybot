@@ -1,0 +1,6 @@
+# Test Case 8: Conditional Logic in Scripts
+# Description: Test `if-then` logic in a script.
+
+set test_dir = "./dsl_test"
+
+/script ${test_dir}/conditional_test.txt

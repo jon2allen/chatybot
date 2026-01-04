@@ -1,0 +1,4 @@
+set project = "chatbot"
+if ${project} then /file ${project}_requirements.txt
+wait 1
+/showfile

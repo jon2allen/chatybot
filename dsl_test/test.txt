@@ -1,0 +1,2 @@
+This is a test file for testing file handling in chatdsl.
+It contains sample text to verify that the /file, /showfile, and /clearfile commands work correctly.

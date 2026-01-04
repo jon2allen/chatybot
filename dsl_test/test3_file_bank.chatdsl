@@ -1,0 +1,7 @@
+# Test Case 3: File Bank Operations
+# Description: Test file bank loading and substitution.
+
+set test_dir = "./dsl_test"
+
+/filebank1 ${test_dir}/notes.txt
+/showfile all

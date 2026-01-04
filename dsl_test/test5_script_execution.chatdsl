@@ -1,0 +1,6 @@
+# Test Case 5: Script Execution
+# Description: Test a simple script with variables and conditionals.
+
+set test_dir = "./dsl_test"
+
+/script ${test_dir}/test_script.txt

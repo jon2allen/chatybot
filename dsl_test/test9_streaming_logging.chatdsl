@@ -1,0 +1,9 @@
+# Test Case 9: Streaming and Logging
+# Description: Test streaming responses and logging.
+
+set test_dir = "./dsl_test"
+
+/stream
+/logging start
+chat --> Tell me a story.
+/logging end

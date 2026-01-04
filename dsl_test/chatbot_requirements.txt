@@ -1,0 +1,2 @@
+This file contains the requirements for the chatbot project.
+It is used in Test Case 5 to verify script execution and variable substitution.
