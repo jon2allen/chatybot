@@ -71,14 +71,12 @@ chatybot is an interactive command-line tool that enables seamless communication
 ### **Installation Steps**
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/chatybot.git
+git clone https://github.com/jon2allen/chatybot.git
 cd chatybot
 
 # Install dependencies
 pip install -r requirements.txt
 
-# Copy and configure the settings file
-cp chat_config.example.toml chat_config.toml
 nano chat_config.toml  # Add your API keys and model configurations
 ```
 
@@ -259,18 +257,22 @@ chatdsl/
 Edit `chat_config.toml` to customize:
 
 ```toml
-[models]
-default = "gpt4"
 
-[models.gpt4]
-api_key = "${OPENAI_API_KEY}"
-base_url = "https://api.openai.com/v1"
+[models.mistral_1]
+name = "mistral-large-2512"
 temperature = 0.7
-max_tokens = 1000
+top_k = 1
+base_url = "https://api.mistral.ai/v1"
+api_key = "MISTRAL_API_KEY"
 
-[logging]
-enabled = true
-directory = "logs"
+[models.gemini_flash]
+# Gemini Model running on Google's OpenAI-compatible endpoint
+name = "gemini-2.5-flash"
+temperature = 0.0
+top_k = 1
+base_url = "https://generativelanguage.googleapis.com/v1beta/openai/"
+api_key = "GEMINI_API_KEY"
+
 ```
 
 ---
