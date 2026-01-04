@@ -88,6 +88,42 @@ nano chat_config.toml  # Add your API keys and model configurations
 # Start the chat interface
 python3 chatybot.py
 
+
+Created by Jon Allen - 2025
+===========================
+Active model: mistral-large-2512 (alias: mistral_1)
+chat --> /help
+Active escape commands:
+  /help - Show this help message.
+  /prompt <file> - Load a prompt from a file.
+  /file <path> - Read a text file into the buffer.
+  /showfile [all] - Show the first 100 characters of the file buffer or the entire file if 'all' is specified.
+  /clearfile - Clear the file buffer.
+  /filebank{1..5} <file> - Load a text file into filebank1 through filebank5.
+  /filebank{1..5} clear - Clear the specified filebank.
+  /filebank{1..5} show [all] - Show the first 100 characters of the filebank or all if 'all' is specified.
+  /model [alias] - Switch to a different model or show current model.
+  /listmodels - List available models from toml.
+  /logging <start|end> - Start or stop logging.
+  /save <file> - Save the last chat completion to a file.
+  /codeonly - Set flag to generate code only without explanations.
+  /codeoff - Reverse the code-only flag.
+  /multiline - Toggle multi-line input mode (use ';;' to end input).
+  /system <message> - Set a custom system message.
+  /temp <value> - Set temperature for the current model (0.0-2.0).
+  /maxtokens <value> - Set max tokens for the current model.
+  /stream - Toggle streaming responses.
+  /script <file> - Execute a script file containing multiple commands.
+  /quit - Exit the program.
+
+Script-specific features:
+  set <name> = <value> - Define a variable
+  ${name} - Reference a variable
+  if <condition> then <command> - Conditional execution
+  wait <seconds> - Pause execution
+  # comment - Comments in script files
+
+
 # Basic usage
 /model gpt4          # Switch to GPT-4 model
 /file context.txt    # Load a context file
