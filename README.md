@@ -1,99 +1,320 @@
-## Updated README for chatybot.py
+
+# chatybot - Interactive AI Chatbot Interface
+
+
+**chatybot ** is a powerful command-line interface for interacting with language models, featuring a custom domain-specific language (DSL) for advanced prompt engineering, scripting, and automation.
+
+---
+
+## **Table of Contents**
+- [Overview](#overview)
+- [Key Features](#key-features)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Command Reference](#command-reference)
+- [Advanced Features](#advanced-features)
+  - [File Handling](#file-handling)
+  - [Prompt Engineering](#prompt-engineering)
+  - [Scripting](#scripting)
+  - [Variable Substitution](#variable-substitution)
+  - [Conditional Logic](#conditional-logic)
+- [Test Cases](#test-cases)
+- [Architecture](#architecture)
+- [Technical Details](#technical-details)
+- [Configuration](#configuration)
+- [Examples](#examples)
+- [Roadmap](#roadmap)
+- [Contributing](#contributing)
+- [License](#license)
 
 ---
 
 ## **Overview**
-`chatybot.py` is a command-line chatbot interface that interacts with various language models using the OpenAI API (or compatible APIs). It provides a flexible and interactive way to chat with AI models, supports file input for context, and includes multiple customizable features.
+
+chatybot is an interactive command-line tool that enables seamless communication with large language models (LLMs) like GPT-4, Claude, or local models. It provides a rich set of features for:
+
+- **Interactive chat** with AI models
+- **File-based context management** for prompts
+- **Advanced scripting** with variables and conditionals
+- **Prompt engineering** with templates and system messages
+- **Session logging** and response streaming
 
 ---
 
-## **New Features and Updates**
+## **Key Features**
 
-### **1. Enhanced Command System**
-The chatbot now supports an expanded set of commands for better usability:
-- **`/help`**: Display the help message with all available commands.
-- **`/file <path>`**: Load a text file into the buffer for context.
-- **`/showfile [all]`**: Display the first 100 characters of the file buffer or the entire file if `all` is specified.
-- **`/clearfile`**: Clear the file buffer.
-- **`/model <alias>`**: Switch to a different model using its alias.
-- **`/listmodels`**: List all available models from the TOML configuration file.
-- **`/logging <start|end>`**: Start or stop logging chat sessions.
-- **`/save <file>`**: Save the last chat completion to a file.
-- **`/codeonly`**: Enable code-only mode (generates code without explanations).
-- **`/codeoff`**: Disable code-only mode.
-- **`/multiline`**: Toggle multi-line input mode (use `;;` to end input).
-- **`/system <message>`**: Set a custom system message for the model.
-- **`/temp <value>`**: Set the temperature for the current model (0.0-2.0).
-- **`/maxtokens <value>`**: Set the max tokens for the current model.
-- **`/stream`**: Toggle streaming responses.
-- **`/quit`**: Exit the program.
+### **Core Functionality**
+✅ **Model Switching** - Easily switch between different LLMs
+✅ **File Buffer System** - Load files as context for prompts
+✅ **Multi-Line Input** - Compose complex prompts with ease
+✅ **Streaming Responses** - Real-time output from the model
+✅ **Session Logging** - Save and review chat sessions
+✅ **Input History** - Navigate previous inputs with Tab key
+
+### **Advanced Features**
+🚀 **Scripting Engine** - Automate workflows with scripts
+🚀 **Variable Substitution** - Dynamic prompts with `${variables}`
+🚀 **Conditional Logic** - `if-then` statements in scripts
+🚀 **File Banks** - Organize multiple context files
+🚀 **Prompt Templates** - Reusable prompt structures
+🚀 **Code-Only Mode** - Generate pure code without explanations
 
 ---
 
-### **2. Multi-Line Input Mode**
-- Users can now enter multi-line prompts by enabling **`/multiline`** mode.
-- Input is terminated by entering `;;` on a new line.
+## **Installation**
+
+### **Prerequisites**
+- Python 3.8+
+- `pip` package manager
+- API keys for your preferred LLMs (OpenAI, Anthropic, etc.)
+
+### **Installation Steps**
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/chatybot.git
+cd chatybot
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Copy and configure the settings file
+cp chat_config.example.toml chat_config.toml
+nano chat_config.toml  # Add your API keys and model configurations
+```
 
 ---
 
-### **3. Streaming Responses**
-- Users can toggle streaming responses using the **`/stream`** command.
-- Streaming provides real-time output from the model.
+## **Quick Start**
+
+```bash
+# Start the chat interface
+python3 chatybot.py
+
+# Basic usage
+/model gpt4          # Switch to GPT-4 model
+/file context.txt    # Load a context file
+chat --> Hello!      # Start a conversation
+```
 
 ---
 
-### **4. Custom System Messages**
-- Users can set a custom system message using the **`/system <message>`** command.
-- This message is included in the prompt to guide the model's behavior.
+## **Command Reference**
+
+| Command | Description | Example |
+|---------|-------------|---------|
+| `/help` | Show help message | `/help` |
+| `/model <alias>` | Switch models | `/model gpt4` |
+| `/listmodels` | List available models | `/listmodels` |
+| `/file <path>` | Load file into buffer | `/file notes.txt` |
+| `/filebank1 <path>` | Load file into file bank 1 | `/filebank1 data.txt` |
+| `/showfile [all]` | Show file content | `/showfile all` |
+| `/clearfile` | Clear file buffer | `/clearfile` |
+| `/prompt <path>` | Load prompt template | `/prompt template.txt` |
+| `/system <msg>` | Set system message | `/system "You are an expert coder."` |
+| `/temp <value>` | Set temperature (0.0-2.0) | `/temp 0.7` |
+| `/maxtokens <value>` | Set max tokens | `/maxtokens 1000` |
+| `/stream` | Toggle streaming | `/stream` |
+| `/codeonly` | Enable code-only mode | `/codeonly` |
+| `/codeoff` | Disable code-only mode | `/codeoff` |
+| `/multiline` | Toggle multi-line input | `/multiline` |
+| `/logging <start\|end>` | Start/stop logging | `/logging start` |
+| `/save <file>` | Save last response | `/save output.txt` |
+| `/script <path>` | Execute a script | `/script setup.dsl` |
+| `/quit` | Exit the program | `/quit` |
 
 ---
 
-### **5. Temperature and Max Tokens Control**
-- Users can adjust the **temperature** and **max tokens** for the current model using the **`/temp`** and **`/maxtokens`** commands.
-- Temperature controls the randomness of the model's output (0.0-2.0).
-- Max tokens limits the length of the model's response.
+## **Advanced Features**
+
+### **File Handling**
+```bash
+/file document.txt      # Load a file into the main buffer
+/filebank1 notes.txt    # Load a file into file bank 1
+/showfile all           # Show all loaded files
+/clearfile              # Clear the main buffer
+```
+
+### **Prompt Engineering**
+```bash
+/prompt template.txt    # Load a prompt template
+/system "Act as a tutor" # Set system message
+```
+
+### **Scripting**
+Create a script file (`setup.chatdsl`):
+```dsl
+set project = "chatbot"
+if ${project} then /file ${project}_requirements.txt
+wait 1
+chat --> Generate documentation for this project
+```
+
+Execute the script:
+```bash
+/script setup.chatdsl
+```
+
+### **Variable Substitution**
+```bash
+set name = "Alice"
+chat --> Hello ${name}, how are you today?
+```
+
+### **Conditional Logic**
+```dsl
+set debug = true
+if ${debug} then /temp 0.1
+if not ${debug} then /temp 0.7
+```
 
 ---
 
-### **6. Code-Only Mode**
-- Users can enable **`/codeonly`** mode to generate code without explanations or descriptions.
-- This is useful for quickly generating code snippets.
+## **Test Cases**
+
+### **Test Case 1: Basic Command Execution**
+**Input**:
+```
+/model gpt4
+/listmodels
+/model
+```
+**Expected**: Switches to `gpt4`, lists models, shows current model.
+
+### **Test Case 2: File Handling**
+**Input**:
+```
+/file test.txt
+/showfile
+/clearfile
+/showfile
+```
+**Expected**: Loads file, shows content, clears buffer, shows empty buffer.
+
+### **Test Case 3: Script Execution**
+**Script** (`test_script.txt`):
+```dsl
+set project = "chatbot"
+if ${project} then /file ${project}_requirements.txt
+wait 1
+/showfile
+```
+**Input**: `/script test_script.txt`
+**Expected**: Loads file, waits, shows content.
+
+### **Test Case 4: Error Handling**
+**Input**:
+```
+/invalidcommand
+/file nonexistent.txt
+```
+**Expected**: Shows error messages for invalid command and missing file.
+
 
 ---
 
-### **7. Logging**
-- Users can start or stop logging chat sessions using the **`/logging <start|end>`** command.
-- Logs are saved with a timestamp for easy reference.
+## **Architecture**
+
+```
+chatdsl/
+├── chatybot.py          # Main application
+├── chat_config.toml    # Configuration file
+├── dsl_test/           # Script files
+├── logs               # Session logs
+```
+
+### **Core Components**
+1. **Command Parser**: Processes user input and DSL commands
+2. **Prompt Engine**: Handles variable substitution and template processing
+3. **File Manager**: Manages file buffers and file banks
+4. **Script Interpreter**: Executes DSL scripts with conditionals
+5. **Model Interface**: Communicates with LLMs via API
+6. **Session Logger**: Records chat sessions
 
 ---
 
-### **8. File Buffer System**
-- Users can load a file into the buffer using the **`/file <path>`** command.
-- The file content is automatically included in the prompt for context.
-- The buffer can be cleared using **`/clearfile`**.
+## **Technical Details**
+
+### **Language Features**
+- **Type hints** for better code maintainability
+- **Environment variables** for API keys (`OPENAI_API_KEY`, etc.)
+- **TOML configuration** for models and settings
+- **Readline support** for input history and navigation
+- **Asynchronous operations** for streaming and file I/O
+
+### **Error Handling**
+- File operations (missing files, permissions)
+- API calls (rate limits, authentication)
+- Command parsing (invalid commands, syntax errors)
+- Script execution (runtime errors, missing variables)
+
+### **Performance Considerations**
+- **Streaming responses** reduce perceived latency
+- **File caching** for frequently used context files
+- **Batch processing** for script execution
 
 ---
 
-### **9. Input History**
-- The chatbot now supports input history, allowing users to navigate previous inputs using the **Tab** key.
-- Input history is saved to `.chat_history` for persistence across sessions.
+## **Configuration**
+
+Edit `chat_config.toml` to customize:
+
+```toml
+[models]
+default = "gpt4"
+
+[models.gpt4]
+api_key = "${OPENAI_API_KEY}"
+base_url = "https://api.openai.com/v1"
+temperature = 0.7
+max_tokens = 1000
+
+[logging]
+enabled = true
+directory = "logs"
+```
 
 ---
 
-## **Workflow**
-1. Start the application: `python3 chatybot.py`.
-2. The system loads the configuration and initializes the default model.
-3. Enter prompts or commands.
-   - For chat prompts, the system combines the prompt with the file buffer (if any) and sends it to the model.
-   - For commands, the system executes the appropriate action (e.g., load file, switch model, etc.).
-4. The model's response is displayed in the terminal.
+## **Examples**
+
+### **Example 1: Code Generation**
+```bash
+/codeonly
+/file requirements.txt
+chat --> Generate a Python Flask app that meets these requirements
+```
+
+### **Example 2: Research Assistant**
+```bash
+/file research_papers.txt
+/system "You are a research assistant. Summarize key points."
+chat --> What are the main findings in these papers?
+```
+
+### **Example 3: Automated Workflow**
+```dsl
+# setup.chatdsl
+set topic = "climate change"
+/file ${topic}_notes.txt
+chat --> Create a blog post outline about ${topic}
+/save ${topic}_outline.md
+```
 
 ---
 
-## **Technical Highlights**
-- **Type hints** for better code maintainability.
-- **Environment variable support** for API keys.
-- **Configurable model parameters** (temperature, max tokens, etc.).
-- **File content integration** for context.
-- **Command-line interface with readline support** for better input handling.
-- **Error handling** for file operations and API calls.
+
+## **License**
+
+This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) file for details.
+
+---
+
+## **Support**
+
+For questions or issues:
+- Open an issue on [GitHub](https://github.com/jon2allen/chatybot
+
+---
+
+**Happy Chatting with ghatybot** 
+
