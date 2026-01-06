@@ -1,0 +1,105 @@
+<chatybot-dsl> ::= <command> | <script>
+
+<script> ::= { <script-line> }
+
+<script-line> ::= <command> <line-end>
+               | <comment> <line-end>
+               | <empty-line>
+
+<line-end> ::= "\n" | ";"
+
+<command> ::= <escape-command>
+            | <chat-input>
+            | <script-command>
+
+<escape-command> ::= "/" <escape-command-name> [ <escape-command-args> ]
+
+<escape-command-name> ::= "help"
+                        | "prompt"
+                        | "file"
+                        | "showfile"
+                        | "clearfile"
+                        | "filebank" <digit>
+                        | "model"
+                        | "listmodels"
+                        | "logging"
+                        | "save"
+                        | "codeonly"
+                        | "codeoff"
+                        | "multiline"
+                        | "system"
+                        | "temp"
+                        | "maxtokens"
+                        | "stream"
+                        | "script"
+                        | "quit"
+
+<escape-command-args> ::= <file-path>
+                        | "all"
+                        | "clear"
+                        | "start"
+                        | "end"
+                        | <model-alias>
+                        | <temperature>
+                        | <max-tokens>
+                        | <message>
+                        | ε
+
+<script-command> ::= <set-command>
+                   | <wait-command>
+                   | <if-command>
+                   | <chat-input>
+
+<set-command> ::= "set" <whitespace> <variable-name> <whitespace> "=" <whitespace> <variable-value>
+
+<wait-command> ::= "wait" <whitespace> <number>
+
+<if-command> ::= "if" <whitespace> <condition> <whitespace> "then" <whitespace> <command>
+
+<condition> ::= <variable-name>
+              | "true"
+              | "false"
+              | <variable-reference>
+
+<variable-name> ::= <identifier>
+
+<variable-value> ::= <string>
+                   | <number>
+                   | "true"
+                   | "false"
+                   | "yes"
+                   | "no"
+
+<variable-reference> ::= "${" <variable-name> "}"
+
+<chat-input> ::= <text>
+
+<comment> ::= "#" <text>
+
+<empty-line> ::= ε
+
+<file-path> ::= <string>
+
+<model-alias> ::= <identifier>
+
+<temperature> ::= <number>
+
+<max-tokens> ::= <number>
+
+<message> ::= <string>
+
+<identifier> ::= <letter> { <letter> | <digit> | "_" }
+
+<string> ::= '"' { <any-character-except-quote> } '"'
+           | "'" { <any-character-except-apostrophe> } "'"
+           | <unquoted-string>
+
+<unquoted-string> ::= { <non-whitespace-character> }
+
+<number> ::= <digit> { <digit> } [ "." <digit> { <digit> } ]
+
+<whitespace> ::= " " | "\t" { " " | "\t" }
+
+<digit> ::= "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"
+
+<letter> ::= "a" | "b" | ... | "z" | "A" | "B" | ... | "Z"

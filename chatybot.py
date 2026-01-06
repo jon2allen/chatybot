@@ -367,6 +367,119 @@ async def execute_script(script_path: str) -> None:
     """
     Execute a script file containing multiple commands.
     """
+    global SCRIPT_VARS, SCRIPT_CONTEXT, MULTI_LINE_MODE
+
+    try:
+        print("Loading script: ", script_path)
+        with open(script_path, "r") as f:
+            script_content = f.read()
+
+        # Remove comments (lines starting with #)
+        script_content = "\n".join(
+            line for line in script_content.split("\n")
+            if not line.strip().startswith("#")
+        )
+
+        # Split commands by newlines or semicolons
+        commands_list = []
+        for line in script_content.split("\n"):
+            line = line.strip()
+            if not line:
+                continue
+            # Attempt to split by semicolon, but be aware of quotes
+            if ';' in line:
+                # Split by semicolon but preserve quoted strings
+                commands = []
+                current = []
+                in_quotes = False
+                quote_char = None
+
+                for char in line:
+                    if char in ('"', "'") and not in_quotes:
+                        in_quotes = True
+                        quote_char = char
+                        current.append(char)
+                    elif char == quote_char and in_quotes:
+                        in_quotes = False
+                        quote_char = None
+                        current.append(char)
+                    elif char == ';' and not in_quotes:
+                        commands.append(''.join(current).strip())
+                        current = []
+                    else:
+                        current.append(char)
+
+                if current:
+                    commands.append(''.join(current).strip())
+
+                commands_list.extend([cmd for cmd in commands if cmd])
+            else:
+                commands_list.append(line)
+
+        # Execute each command
+        SCRIPT_CONTEXT = True
+        multi_line_buffer = []
+        in_multi_line = False
+
+        for cmd in commands_list:
+            # Check if we're in multi-line mode and not processing an escaped command
+            if MULTI_LINE_MODE and not cmd.startswith("/") and not in_multi_line:
+                in_multi_line = True
+                multi_line_buffer = [cmd]
+                continue
+
+            if in_multi_line:
+                if cmd.strip() == ";;":
+                    # End of multi-line input, process it
+                    full_prompt = "\n".join(multi_line_buffer)
+                    print(f"Executing multi-line prompt: {full_prompt[:50]}...")
+                    handled = await execute_script_command(full_prompt, handle_escape_command)
+                    if not handled:
+                        print(f"Error processing multi-line command")
+                    in_multi_line = False
+                    multi_line_buffer = []
+                elif cmd.startswith("/"):
+                    # Escaped command in the middle of multi-line - process the buffer first
+                    full_prompt = "\n".join(multi_line_buffer)
+                    print(f"Executing multi-line prompt: {full_prompt[:50]}...")
+                    handled = await execute_script_command(full_prompt, handle_escape_command)
+                    if not handled:
+                        print(f"Error processing multi-line command")
+
+                    # Then process the escaped command
+                    print(f"Executing: {cmd}")
+                    handled = await execute_script_command(cmd, handle_escape_command)
+                    if not handled:
+                        print(f"Unknown command in script: {cmd}")
+                    in_multi_line = False
+                    multi_line_buffer = []
+                else:
+                    # Continue building multi-line input
+                    multi_line_buffer.append(cmd)
+            else:
+                print(f"Executing: {cmd}")
+                handled = await execute_script_command(cmd, handle_escape_command)
+                if not handled:
+                    print(f"Unknown command in script: {cmd}")
+
+        # If we ended while in multi-line mode, process what we have
+        if in_multi_line and multi_line_buffer:
+            full_prompt = "\n".join(multi_line_buffer)
+            print(f"Executing multi-line prompt: {full_prompt[:50]}...")
+            handled = await execute_script_command(full_prompt, handle_escape_command)
+            if not handled:
+                print(f"Error processing multi-line command")
+
+    except Exception as e:
+        print(f"Error executing script: {str(e)}")
+    finally:
+        SCRIPT_CONTEXT = False
+
+
+async def execute_script_old(script_path: str) -> None:
+    """
+    Execute a script file containing multiple commands.
+    """
     global SCRIPT_CONTEXT
 
     try:

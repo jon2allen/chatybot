@@ -1,0 +1,105 @@
+# Nanjing Street Food Knowledge Comparison Script
+# This script evaluates two models' knowledge of Nanjing street food
+
+# Initialize variables
+set model1 = "mistral_1"
+set model2 = "nvidia_1"
+set output_dir = "nanjing_food_comparison"
+set question_file = "nanjing_questions.txt"
+set results1 = "mistral_results.txt"
+set results2 = "nvidia_results.txt"
+set comparison = "comparison_report.txt"
+
+# Create question file
+/file clear
+/multiline
+Please create a comprehensive set of 10 questions about Nanjing street food that would test an AI's knowledge depth and accuracy. Include questions about:
+
+1. Historical origins of famous dishes
+2. Regional variations within Nanjing
+3. Ingredients and preparation methods
+4. Cultural significance
+5. Seasonal specialties
+6. Street food markets and locations
+7. Unique utensils or serving methods
+8. Modern adaptations of traditional foods
+9. Common misconceptions
+10. Comparison with other regional Chinese street foods
+
+Format as numbered questions, one per line.
+;;
+/multiline
+/file save ${question_file}
+
+# Set up output directory (simulated by using different filenames)
+/file clear
+
+# Test Model 1 (mistral_1)
+/model ${model1}
+/prompt ${question_file}
+/save ${results1}
+
+# Test Model 2 (nvidia_1)
+/model ${model2}
+/prompt ${question_file}
+/save ${results2}
+
+# Generate comparison report
+/file clear
+/multiline
+Analyze the following two sets of responses about Nanjing street food from different AI models.
+Compare them for:
+
+1. Accuracy of information
+2. Depth of knowledge
+3. Cultural understanding
+4. Specificity of details
+5. Handling of historical context
+6. Recognition of regional variations
+7. Any factual errors or omissions
+
+Model 1 (${model1}) responses:
+---
+/filebank1 show all
+---
+
+Model 2 (${model2}) responses:
+---
+/filebank2 show all
+---
+
+Provide a detailed comparison with specific examples from each model's responses.
+Also give an overall assessment of which model demonstrates better knowledge of Nanjing street food and why.
+;;
+/multiline
+
+# Load the questions and responses into file banks for the comparison
+/filebank1 ${results1}
+/filebank2 ${results2}
+/save ${comparison}
+
+/file clear
+/multiline
+Create a scoring table (1-10 scale) for each model across these categories:
+1. Historical accuracy
+2. Cultural knowledge
+3. Specificity of details
+4. Regional expertise
+5. Overall knowledge depth
+
+Based on the comparison report in ${comparison}, fill in the scores and calculate totals.
+;;
+/multiline
+/save scores_${model1}_vs_${model2}.txt
+
+# Final summary
+/file clear
+/multiline
+Based on all the previous analysis, provide a final verdict:
+Which model (${model1} or ${model2}) has superior knowledge of Nanjing street food?
+What are the key strengths of each model's responses?
+What recommendations would you make for someone seeking information about Nanjing street food?
+;;
+/multiline
+/save final_verdict.txt
+

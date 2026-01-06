@@ -1,0 +1,88 @@
+# Fibonacci Program Generator Specification
+#/model nvidia_1
+
+# Set up variables
+set language = "C"
+set output_file = "fibonacci_c.txt"
+set prompt_intro = "Create a complete, well-commented program in"
+
+# Load the Fibonacci specification into filebank1
+/filebank1 fibonacci_spec.txt
+/multiline
+Please create a specification for a Fibonacci sequence generator program that meets these requirements:
+
+1. The program should generate Fibonacci numbers up to a user-specified limit
+2. It should include both iterative and recursive implementations
+3. The program should validate user input (positive integers only)
+4. It should display timing information for both implementations
+5. Include clear comments explaining the code
+6. The program should have a clean, modular structure
+7. Include a main menu for user selection
+;;
+/multiline
+
+# Generate C program
+/multiline
+${prompt_intro} C that implements the Fibonacci sequence generator as specified in filebank1.
+Follow these additional requirements:
+1. Use proper C syntax and conventions
+2. Include all necessary headers
+3. Implement both iterative and recursive solutions in separate functions
+4. Use clock() from time.h for timing measurements
+5. Format output clearly with proper spacing
+6. Include error handling for invalid input
+7. The program should compile with gcc without warnings
+;;
+/multiline
+/save ${output_file}
+/filebank2 ${output_file}
+
+# Generate Pascal program
+set language = "Pascal"
+set output_file = "fibonacci_pascal.txt"
+/multiline
+${prompt_intro} Pascal that implements the Fibonacci sequence generator as specified in filebank1.
+Follow these additional requirements:
+1. Use proper Pascal syntax and conventions
+2. Include all necessary units
+3. Implement both iterative and recursive solutions in separate functions/procedures
+4. Use GetTickCount or similar for timing measurements
+5. Format output clearly with proper spacing
+6. Include error handling for invalid input
+7. The program should compile with Free Pascal without warnings
+;;
+/multiline
+/save ${output_file}
+/filebank3 ${output_file}
+
+# Generate Python program
+set language = "Python"
+set output_file = "fibonacci_python.txt"
+/multiline
+${prompt_intro} Python that implements the Fibonacci sequence generator as specified in filebank1.
+Follow these additional requirements:
+1. Use proper Python syntax and conventions
+2. Include all necessary imports
+3. Implement both iterative and recursive solutions in separate functions
+4. Use time.time() for timing measurements
+5. Format output clearly with proper spacing
+6. Include error handling for invalid input
+7. Include type hints where appropriate
+8. The program should run with Python 3.8+
+9. Include a __name__ == "__main__" guard
+;;
+/multiline
+/save ${output_file}
+/filebank4 ${output_file}
+
+# Summary of generated programs
+/multiline
+Please provide a summary of the three Fibonacci sequence generator programs we've created:
+1. Compare the implementations in C, Pascal, and Python
+2. Highlight language-specific features used in each implementation
+3. Discuss the performance characteristics of each approach
+4. Suggest potential improvements for each implementation
+;;
+/multiline
+/save "fibonacci_summary.txt"
+

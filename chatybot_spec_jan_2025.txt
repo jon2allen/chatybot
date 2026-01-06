@@ -1,0 +1,136 @@
+# ChatyBot Specification
+
+## Overview
+ChatyBot is a command-line interface for interacting with various AI language models through the OpenAI API. It provides a flexible environment for sending prompts, managing files, and executing scripts.
+
+## Core Functionality
+
+### 1. Configuration Management
+- Loads settings from `chat_config.toml` at startup
+- Supports multiple AI models with different configurations
+- Maintains system-wide and model-specific parameters
+
+### 2. Chat Interface
+- Interactive command-line prompt
+- Multi-line input mode
+- Input history with tab completion
+- Streaming or batch response modes
+
+### 3. File Management
+- File buffer for temporary content
+- Five file banks for persistent content storage
+- File loading and display capabilities
+
+### 4. Scripting Engine
+- Execute sequences of commands from files
+- Variable substitution
+- Conditional execution
+- Delay/wait commands
+
+## Command Specification
+
+### Standard Commands (prefixed with `/`)
+| Command | Parameters | Description |
+|---------|------------|-------------|
+| `/help` | - | Show available commands |
+| `/prompt` | `<file>` | Load prompt from file |
+| `/file` | `<path>` | Load file into buffer |
+| `/showfile` | `[all]` | Display file buffer content |
+| `/clearfile` | - | Clear file buffer |
+| `/filebank{N}` | `<file>` or `clear` or `show [all]` | Manage file banks (1-5) |
+| `/model` | `[alias]` | Show current model or switch models |
+| `/listmodels` | - | List available models |
+| `/logging` | `<start|end>` | Start/stop logging |
+| `/save` | `<file>` | Save last response to file |
+| `/codeonly` | - | Enable code-only mode |
+| `/codeoff` | - | Disable code-only mode |
+| `/multiline` | - | Toggle multi-line input mode |
+| `/system` | `[message]` | Set/show system prompt |
+| `/temp` | `[value]` | Set/show temperature (0.0-2.0) |
+| `/maxtokens` | `[value]` | Set/show max tokens |
+| `/stream` | - | Toggle streaming responses |
+| `/script` | `<file>` | Execute script file |
+| `/quit` | - | Exit program |
+
+### Scripting Commands
+| Command | Parameters | Description |
+|---------|------------|-------------|
+| `set` | `<name> = <value>` | Define a variable |
+| `${name}` | - | Reference a variable |
+| `if` | `<condition> then <command>` | Conditional execution |
+| `wait` | `<seconds>` | Pause execution |
+| `#` | `<comment>` | Comment line |
+
+## Execution Flow
+
+1. **Initialization**
+   - Load configuration from `chat_config.toml`
+   - Set up input history and readline completion
+   - Initialize global variables and buffers
+
+2. **Main Loop**
+   - Display prompt and wait for user input
+   - Process escape commands (starting with `/`)
+   - For regular input, send to AI model via `chat_completion()`
+   - Handle responses (streaming or batch)
+   - Log interactions if enabled
+
+3. **Command Processing**
+   - Escape commands are routed to `handle_escape_command()`
+   - Script commands are processed by `execute_script_command()`
+   - Regular input is sent to the AI model
+
+4. **Script Execution**
+   - script uses special domain specific language 
+   - Load script file and remove comments
+   - Split commands by newlines or semicolons
+   - Process each command sequentially
+   - Handle variables, conditionals, and delays
+   - a command must start on line1.  avoid putting /commands in variable.  use that for filenames or other data:
+   - a line with no /escape command or variable  will be sent to the the LLM of the last /model command 
+   - multiline to be sent to LLM must be inline like this, important to disable it after sequence with another /multiline - boolean toggle
+     /multiline
+     Please give me details on pears
+     1.  varieties
+     2.  countries of origin of each variety.
+     ;;
+     /multiline
+   - questions or asks should be inline and not be in a file
+   - there is no way to save artibrary text to a file, only LLM command completions can be saved
+   - there are no subroutines, no loops, repeat commands if necessary
+   - all outputs from chat completion have to be saved to files, for later use
+   - favor filebank1, filebank2... filebank5 are like file memory buffers, and serve as special file text variable.
+   - do not use /file
+   - there are no conventions for filenames created, but prefer .txt
+
+5. **Cleanup**
+   - Save input history
+   - Close log file if open
+   - Exit program
+
+## Key Features
+
+1. **Multi-Model Support**
+   - Configure multiple AI models in TOML file
+   - Switch between models during runtime
+
+2. **Prompt Engineering**
+   - File buffer for context
+   - Prompt buffer for structured prompts
+   - File banks for reusable content
+
+3. **Response Control**
+   - Code-only mode
+   - Temperature and max tokens settings
+   - Streaming vs batch responses
+
+4. **Scripting Capabilities**
+   - Automate complex workflows
+   - Variable substitution
+   - Conditional logic
+   - Delay execution
+
+5. **Session Management**
+   - Input history with tab completion
+   - Logging to timestamped files
+   - Persistent file banks
