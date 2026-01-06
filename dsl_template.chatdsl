@@ -1,0 +1,22 @@
+
+set bnf = "chatdsl_bnf.txt"
+set spec = "chatybot_spec_jan_2025.txt"
+set model = "mistral_1"
+
+/filebank1 ${bnf}
+/filebank2 ${spec}
+
+# /model nvidia_1  --- use if you do not want mistral_1
+
+set prompt = "create a program that creates a specificiation for a finocci proram generator, then uses llm calls to create from the specification programs in C, Pascal and python.  Use the /model nvidia_1"
+
+
+/codeonly
+/multiline
+
+${prompt}
+
+Use the /model ${model}. Use this DSL and program specification: \n {filebank1}  \n\n program specification: \n \n {filebank2}
+
+;;
+/multiline
