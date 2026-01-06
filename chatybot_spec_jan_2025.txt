@@ -65,8 +65,6 @@ ChatyBot is a command-line interface for interacting with various AI language mo
 
 1. **Initialization**
    - Load configuration from `chat_config.toml`
-   - Set up input history and readline completion
-   - Initialize global variables and buffers
 
 2. **Main Loop**
    - Display prompt and wait for user input
@@ -86,6 +84,7 @@ ChatyBot is a command-line interface for interacting with various AI language mo
    - Split commands by newlines or semicolons
    - Process each command sequentially
    - Handle variables, conditionals, and delays
+   - set variable command does not support multiline strings - consider using /multiline
    - a command must start on line1.  avoid putting /commands in variable.  use that for filenames or other data:
    - a line with no /escape command or variable  will be sent to the the LLM of the last /model command 
    - multiline to be sent to LLM must be inline like this, important to disable it after sequence with another /multiline - boolean toggle
@@ -102,11 +101,10 @@ ChatyBot is a command-line interface for interacting with various AI language mo
    - favor filebank1, filebank2... filebank5 are like file memory buffers, and serve as special file text variable.
    - do not use /file
    - there are no conventions for filenames created, but prefer .txt
+   - any commentary should be commented with line 1 being a "#"
 
 5. **Cleanup**
    - Save input history
-   - Close log file if open
-   - Exit program
 
 ## Key Features
 
