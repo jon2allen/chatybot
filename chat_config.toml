@@ -5,6 +5,13 @@ top_k = 1
 base_url = "https://api.mistral.ai/v1"
 api_key = "MISTRAL_API_KEY"
 
+[models.devstral_1]
+name = "devstral-2512"
+temperature = 0.7
+top_k = 1
+base_url = "https://api.mistral.ai/v1"
+api_key = "MISTRAL_API_KEY"
+
 [models.gemini_flash]
 # Gemini Model running on Google's OpenAI-compatible endpoint
 name = "gemini-2.5-flash"

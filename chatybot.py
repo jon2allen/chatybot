@@ -462,6 +462,8 @@ async def execute_script(script_path: str) -> None:
                 if not handled:
                     print(f"Unknown command in script: {cmd}")
 
+        print("Script execution finished")
+
         # If we ended while in multi-line mode, process what we have
         if in_multi_line and multi_line_buffer:
             full_prompt = "\n".join(multi_line_buffer)
