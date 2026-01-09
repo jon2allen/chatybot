@@ -1,57 +1,38 @@
-nd> ::= "if" <whitespace> <condition> <whitespace> "then" <whitespace> <command>
+<chatybot-dsl> ::= <command> | <script>
 
-<condition> ::= <variable-name>
-              | "true"
-              | "false"
-              | <variable-reference>
+<script> ::= { <script-line> }
 
-<variable-name> ::= <identifier>
+<script-line> ::= ( <command> | <comment> | <empty-line> ) <newline>
 
-<variable-value> ::= <string>
-                   | <number>
-                   | "true"
-                   | "false"
-                   | "yes"
-                   | "no"
+<command> ::= <escape-command> | <script-command> | <chat-input>
+
+<escape-command> ::= "/" <escape-command-name> [ <whitespace> <escape-command-args> ]
+
+<escape-command-name> ::= "help" | "prompt" | "file" | "showfile" | "clearfile" | 
+                          "filebank" <digit_1_5> | "model" | "listmodels" | "logging" | 
+                          "save" | "codeonly" | "codeoff" | "multiline" | "system" | 
+                          "temp" | "maxtokens" | "stream" | "script" | "quit"
+
+<script-command> ::= <set-command> | <wait-command> | <if-command>
+
+<set-command> ::= "set" <whitespace> <variable-name> <whitespace> "=" <whitespace> <variable-value>
+
+<wait-command> ::= "wait" <whitespace> <number>
+
+<if-command> ::= "if" <whitespace> <condition> <whitespace> "then" <whitespace> ( <escape-command> | <script-command> | <chat-input> )
+
+<chat-input> ::= <single-line-text> | <multiline-block>
+
+<multiline-block> ::= "/multiline" <newline> { <text-content> <newline> } ";;"
+
+<text-content> ::= { <any-character> | <variable-reference> | <filebank-reference> }
 
 <variable-reference> ::= "${" <variable-name> "}"
 
-<chat-input> ::= <text>
+<filebank-reference> ::= "{" "filebank" <digit_1_5> "}"
 
-<comment> ::= "#" <text>
-
-<empty-line> ::= ε
-
-<file-path> ::= <string>
-
-<model-alias> ::= <identifier>
-
-<temperature> ::= <number>
-
-<max-tokens> ::= <number>
-
-<message> ::= <string>
-
-<identifier> ::= <letter> { <letter> | <digit> | "_" }
-
-<string> ::= '"' { <any-character-except-quote-or-newline> } '"'
-           | "'" { <any-character-except-apostrophe-or-newline> } "'"
-
-<any-character-except-quote-or-newline> ::= any Unicode character except '"' and '\n' and '\r'
-<any-character-except-apostrophe-or-newline> ::= any Unicode character except "'" and '\n' and '\r'
-
-<unquoted-string> ::= { <non-whitespace-character> }
-
-<number> ::= <digit> { <digit> } [ "." <digit> { <digit> } ]
-
-<whitespace> ::= " " | "\t" { " " | "\t" }
-
-<digit> ::= "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"
-
-<letter> ::= "a" | "b" | ... | "z" | "A" | "B" | ... | "Z"
-
-<non-whitespace-character> ::= any Unicode character except " ", "\t", "\n", "\r"
-
-<text> ::= { <any-character> }
-<any-character> ::= any Unicode character
-
+<variable-name> ::= <identifier>
+<variable-value> ::= <string> | <number> | "true" | "false" | "yes" | "no"
+<digit_1_5> ::= "1" | "2" | "3" | "4" | "5"
+<newline> ::= "\n"
+<whitespace> ::= " " | "\t"
