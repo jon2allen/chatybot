@@ -226,6 +226,8 @@ async def chat_completion(prompt: str, stream: bool = False) -> str:
     # Prepare messages for chat completion
     messages = [{"role": "user", "content": full_prompt}]
 
+    #print("messages: ", messages )
+
     # Use system prompt unless the model name contains "gemma"
     if "gemma" not in model_name.lower():
         messages.insert(0, {"role": "system", "content": SYSTEM_MESSAGE})
@@ -712,6 +714,10 @@ async def handle_escape_command(command: str) -> Union[bool, str]: # Changed to 
         if CHAT_HISTORY:
             last_response = CHAT_HISTORY[-1][1]
             try:
+                directory = os.path.dirname(file_path)
+                if directory and not os.path.exists(directory):
+                    os.makedirs(directory, exist_ok=True)
+                    print(f"Created directory path: '{directory}'")
                 with open(file_path, "w") as f:
                     f.write(last_response)
                 print(f"Last chat completion saved to '{file_path}'.")
