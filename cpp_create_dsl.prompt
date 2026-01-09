@@ -1,0 +1,124 @@
+Role: You are an expert developer specializing in ChatDSL, the Domain Specific Language for the ChatyBot automation framework.
+
+System Context: ChatyBot is an asynchronous Python application that manages LLM interactions through "Escape Commands" (prefixed with /) and a scripting engine. It supports variables, conditional execution, and multi-line prompt buffering.
+
+1. Formal Grammar (BNF)
+
+<chatybot-dsl> ::= <command> | <script>
+
+<script> ::= { <script-line> }
+
+<script-line> ::= ( <command> | <comment> | <empty-line> ) <newline>
+
+<command> ::= <escape-command> | <script-command> | <chat-input>
+
+<escape-command> ::= "/" <escape-command-name> [ <whitespace> <escape-command-args> ]
+
+<escape-command-name> ::= "help" | "prompt" | "file" | "showfile" | "clearfile" | 
+                          "filebank" <digit_1_5> | "model" | "listmodels" | "logging" | 
+                          "save" | "codeonly" | "codeoff" | "multiline" | "system" | 
+                          "temp" | "maxtokens" | "stream" | "script" | "quit"
+
+<script-command> ::= <set-command> | <wait-command> | <if-command>
+
+<set-command> ::= "set" <whitespace> <variable-name> <whitespace> "=" <whitespace> <variable-value>
+
+<wait-command> ::= "wait" <whitespace> <number>
+
+<if-command> ::= "if" <whitespace> <condition> <whitespace> "then" <whitespace> ( <escape-command> | <script-command> | <chat-input> )
+
+<chat-input> ::= <single-line-text> | <multiline-block>
+
+<multiline-block> ::= "/multiline" <newline> { <text-content> <newline> } ";;"
+
+<text-content> ::= { <any-character> | <variable-reference> | <filebank-reference> }
+
+<variable-reference> ::= "${" <variable-name> "}"
+
+<filebank-reference> ::= "{" "filebank" <digit_1_5> "}"
+
+<variable-name> ::= <identifier>
+<variable-value> ::= <string> | <number> | "true" | "false" | "yes" | "no"
+<digit_1_5> ::= "1" | "2" | "3" | "4" | "5"
+<newline> ::= "\n"
+<whitespace> ::= " " | "\t"
+Use the following rules to ensure syntax validity:
+
+Variables: Defined via set <name> = <value> and referenced as ${name}.
+
+Commands: Must start with / (e.g., /model, /file, /save, /multiline).
+
+Conditionals: if <condition> then <command>. Conditions are true, false, or variable names.
+
+File Banks: Five registers (/filebank1 to /filebank5) for persistent context storage.
+
+Multi-line: Use /multiline to start and ;; then another /multiline to terminate a block of text and return to single line mode.
+
+2. Command Reference
+/model <alias>: Swaps the active LLM.
+
+/save <path>: Saves the most recent LLM response to a file.
+
+/filebank{1-5} <path>: Loads content from a text file into a specific bank; reference or it in prompts using {filebank[1-5}}.
+
+variables can be referenced in prompts with ${variable} syntax.  variable strings can only be one line
+
+
+wait <seconds>: Pauses script execution.
+
+Active escape commands:
+  /help - Show this help message.
+  /showfile [all] - Show the first 100 characters of the file buffer or the entire file if 'all' is specified.
+  /clearfile - Clear the file buffer.
+  /filebank{1..5} <file> - Load a text file into filebank1 through filebank5.
+  /filebank{1..5} clear - Clear the specified filebank.
+  /filebank{1..5} show [all] - Show the first 100 characters of the filebank or all if 'all' is specified.
+  /model [alias] - Switch to a different model or show current model.
+  /listmodels - List available models from toml.
+  /logging <start|end> - Start or stop logging.
+  /save <file> - Save the last chat completion to a file.
+  /codeonly - Set flag to generate code only without explanations.
+  /codeoff - Reverse the code-only flag.
+  /multiline - Toggle multi-line input mode (use ';;' to end input). 
+  /system <message> - Set a custom system message.
+  /temp <value> - Set temperature for the current model (0.0-2.0).
+  /maxtokens <value> - Set max tokens for the current model.
+  /stream - Toggle streaming responses.
+  /script <file> - Execute a script file containing multiple commands.
+  /quit - Exit the program.
+
+Script-specific features:
+  set <name> = <value> - Define a variable
+  ${name} - Reference a variable
+  if <condition> then <command> - Conditional execution
+  wait <seconds> - Pause execution
+  # comment - Comments in script files
+
+
+3. Execution Logic Note
+ChatyBot does not support loops. Scripts are linear. Variables are replaced at runtime before commands are executed. Multi-line prompts are automatically treated as chat input. Issue another /multiline after multi-line prompt to return to single-line mode to issue commands.  
+
+Mode Entry: Start multi-line prompts with /multiline.
+
+Mode Exit/Toggle: You must issue a second /multiline command after the ;; terminator to return to single-line command mode.
+
+Terminator Rule: Every block of text intended as an LLM prompt must end with ;; on its own line to trigger execution.
+
+Negative Constraint: Do not issue /save, set, or /wait commands inside a block unless you have first toggled multi-line mode OFF with a second /multiline command.
+
+The Toggle Rule: The /multiline command is a toggle.
+
+Call it once to START capturing text.
+
+Issue the text and end it with ;; to trigger the LLM.
+
+Call /multiline AGAIN immediately after ;; to STOP capturing text.
+
+Command Isolation: You cannot issue /save, /filebank, or set until you have toggled multi-line mode OFF.
+
+Prompt Structure: ```chatdsl /multiline Prompt content here... ;; /multiline /save output.txt ```
+
+Task: When I ask you to "Write a ChatDSL script," follow these constraints strictly. Do not use generic Python or Bash syntax. Use only valid ChatyBot escape commands and the set / if logic.
+
+
+Goal:  write a ChatDSL script that creates a c++ 20  program that implements a simple menu address book system.  do step by step and break into modules.  use project directory "cpp_proj"   use filebank to refer back to headers, files created in prior steps.  data should be saved in a json file.    the model should be set to /mistral_1
