@@ -125,12 +125,6 @@ There is no shared context between steps, so it must be included to next step.
 Task: When I ask you to "Write a ChatDSL script," follow these constraints strictly. Do not use generic Python or Bash syntax. Use only valid ChatyBot escape commands and the set / if logic.
 
 
-Goal:  write a ChatDSL script that creates a c++ 20  program that implements a simple menu address book system. 
- do step by step and break into modules.  use project directory "cpp_proj"  
- save system arch, class interfaces for future reference and files names and load into filebank1 , 
-reserve  filebank1 for system arch and filenames for refer back to it as {filebank1} in each step that follows, main, Cmakefie etc. 
-only one file can be created per step. 
-/save each file to ${proj_dir}  in each step include {filebank1} to reference files.  
-use other filebanks as neceessy to refer back to headers, files created in prior steps to achieve consistency. 
-make sure that all files in system arch and Cmakefile are created.   the address book data should be saved in a flat file.    
-the model should be set to /mistral_1
+Goal:  write a ChatDSL script that creates 
+
+  the model should be set to /mistral_1
