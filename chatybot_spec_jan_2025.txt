@@ -5,10 +5,6 @@ ChatyBot is a command-line interface for interacting with various AI language mo
 
 ## Core Functionality
 
-### 1. Configuration Management
-- Loads settings from `chat_config.toml` at startup
-- Supports multiple AI models with different configurations
-- Maintains system-wide and model-specific parameters
 
 ### 2. Chat Interface
 - Interactive command-line prompt
@@ -17,15 +13,22 @@ ChatyBot is a command-line interface for interacting with various AI language mo
 - Streaming or batch response modes
 
 ### 3. File Management
-- File buffer for temporary content
-- Five file banks for persistent content storage
-- File loading and display capabilities
+- Five file banks for persistent content storage - like registers for text for LLM input
+- File text loading and display capabilities
+- filebank1..5 - chatybot can handle 5 corpus of text loaded from files.
+- /save command - save last llm chat completion in buffer to a file. IMPORTANT there is no ability to save portions to different files.  only one output is supported
+- chat completion does not support multiple-file output. has to be saved as one unit 
+- important only one file can be creaed at a time with save - no spliting of text is allowed.  No appendiing
+- /filebank and /file can only load text from file.  Important it cannot save text string, nor create files ahead
+- a filebank has to loaded from disk - /filebank1 "readme.txt".  it stores it in a string in memory.  you can refer 
+  to it later as {filebank1} in text sent to LLM
 
 ### 4. Scripting Engine
 - Execute sequences of commands from files
 - Variable substitution
 - Conditional execution
 - Delay/wait commands
+- there is no way to execute OS commands or shell commands - other than saving and loading files into filebank
 
 ## Command Specification
 
@@ -33,26 +36,27 @@ ChatyBot is a command-line interface for interacting with various AI language mo
 | Command | Parameters | Description |
 |---------|------------|-------------|
 | `/help` | - | Show available commands |
-| `/prompt` | `<file>` | Load prompt from file |
-| `/file` | `<path>` | Load file into buffer |
+| `/prompt` | `<file>` | Load LLM prompt text from file |
+| `/file` | `<path>` | Load file into buffer that is permenent context for LLM call  |
 | `/showfile` | `[all]` | Display file buffer content |
-| `/clearfile` | - | Clear file buffer |
-| `/filebank{N}` | `<file>` or `clear` or `show [all]` | Manage file banks (1-5) |
+| `/clearfile` | - | Clear file buffer in memory, no effect on disk|
+| `/filebank{N}` | `<file>` or `clear` or `show [all]` | Manage file banks (1-5).  load text from file into buffer |
 | `/model` | `[alias]` | Show current model or switch models |
 | `/listmodels` | - | List available models |
 | `/logging` | `<start|end>` | Start/stop logging |
-| `/save` | `<file>` | Save last response to file |
+| `/save` | `<file>` | Save last chat response to file |
 | `/codeonly` | - | Enable code-only mode |
 | `/codeoff` | - | Disable code-only mode |
 | `/multiline` | - | Toggle multi-line input mode |
-| `/system` | `[message]` | Set/show system prompt |
+| `/system` | `[message]` | Set/show system prompt for LLM completion |
 | `/temp` | `[value]` | Set/show temperature (0.0-2.0) |
 | `/maxtokens` | `[value]` | Set/show max tokens |
 | `/stream` | - | Toggle streaming responses |
-| `/script` | `<file>` | Execute script file |
+| `/script` | `<file>` | Execute a chatdslscript file |
 | `/quit` | - | Exit program |
 
 ### Scripting Commands
+important: only one line string are supported by parser
 | Command | Parameters | Description |
 |---------|------------|-------------|
 | `set` | `<name> = <value>` | Define a variable |
@@ -64,7 +68,6 @@ ChatyBot is a command-line interface for interacting with various AI language mo
 ## Execution Flow
 
 1. **Initialization**
-   - Load configuration from `chat_config.toml`
 
 2. **Main Loop**
    - Display prompt and wait for user input
@@ -77,6 +80,7 @@ ChatyBot is a command-line interface for interacting with various AI language mo
    - Escape commands are routed to `handle_escape_command()`
    - Script commands are processed by `execute_script_command()`
    - Regular input is sent to the AI model
+   - there is no way to save arbitrary text to file, only text from LLM completion chat
 
 4. **Script Execution**
    - script uses special domain specific language 
@@ -103,8 +107,6 @@ ChatyBot is a command-line interface for interacting with various AI language mo
    - there are no conventions for filenames created, but prefer .txt
    - any commentary should be commented with line 1 being a "#"
 
-5. **Cleanup**
-   - Save input history
 
 ## Key Features
 
@@ -115,7 +117,7 @@ ChatyBot is a command-line interface for interacting with various AI language mo
 2. **Prompt Engineering**
    - File buffer for context
    - Prompt buffer for structured prompts
-   - File banks for reusable content
+   - File banks for text data on content
 
 3. **Response Control**
    - Code-only mode
@@ -128,7 +130,3 @@ ChatyBot is a command-line interface for interacting with various AI language mo
    - Conditional logic
    - Delay execution
 
-5. **Session Management**
-   - Input history with tab completion
-   - Logging to timestamped files
-   - Persistent file banks
