@@ -109,6 +109,7 @@ Active escape commands:
   /codeonly - Set flag to generate code only without explanations.
   /codeoff - Reverse the code-only flag.
   /multiline - Toggle multi-line input mode (use ';;' to end input).
+  /notemode - when saving chat completion - split off code to file and LLM explaination to notes_code_file.c
   /system <message> - Set a custom system message.
   /temp <value> - Set temperature for the current model (0.0-2.0).
   /maxtokens <value> - Set max tokens for the current model.
@@ -336,6 +337,70 @@ set topic = "climate change"
 /file ${topic}_notes.txt
 chat --> Create a blog post outline about ${topic}
 /save ${topic}_outline.md
+```
+
+### Change log
+
+Jan 10th
+-------------
+
+  - added /notemode - this will split code from explaination.  but only first block.
+
+   Warning:  should not be used for marddown, readme or other such docs.
+
+```
+===========================
+Active model: mistral-large-2512 (alias: mistral_1)
+chat --> /model nvidia_1
+Switched to model: nvidia/nemotron-nano-12b-v2-vl:free (alias: nvidia_1)
+chat --> create a C program that demostrates a linked list
+Here's a well-structured C program that demonstrates the implementation and usage of a **singly linked list**. This program includes basic operations such as:
+
+- **Appending** elements to the end of the list.
+- **Printing** the contents of the list.
+- **Freeing** the memory allocated to the list to prevent memory leaks.
+
+---
+
+### ✅ C Program: Demonstrating a Singly Linked List
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+
+.............
+
+This program provides a solid foundation for understanding and working with linked lists in C. You can expand upon it to implement more complex data structures or algorithms.
+
+
+Execution time: 28.95 seconds
+Input tokens: 29, Output tokens: 2509
+chat --> /notemode on
+Note mode enabled. Code blocks will be extracted when using /save.
+chat --> /save demo_link_list.c
+Last chat completion saved to 'demo_link_list.c'.
+Note mode is ON. Processing file 'demo_link_list.c'...
+Processed demo_link_list.c -> notes_demo_link_list.c
+
+```
+
+The demo_link_list.c should be a raw C file.  the notes_ prefix has all the notes
+
+-rw-r--r--  1 jon2allen jon2allen  1.6K Jan 10 16:24 demo_link_list.c
+-rw-r--r--  1 jon2allen jon2allen  1.6K Jan 10 16:24 notes_demo_link_list.c
+
+       
+
+  - enhanced logging - when logging is enabled 
+
+```
+Datetime: Jan 10, 2026, 04:11:42 PM 
+Model: nvidia_1 (nvidia/nemotron-nano-12b-v2-vl:free)
+User: create a bash program that uses cat for all programs with *.py extension in a subdir
+
+Execution time: 50.25 seconds
+Number of tokens: Input 37, Output 3971
+Assistant: Here's a well-structured Bash script that uses the `cat` command to display the contents of all `.py` files located in a specified subdirectory. The script is designed to be flexible, robust, and user-friendly.
 ```
 
 ---
