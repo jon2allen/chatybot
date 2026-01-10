@@ -4,13 +4,14 @@ import readline
 import time
 import tomllib
 from datetime import datetime
-from typing import Dict, Any, List, Tuple, Optional, Callable, Union # Added Callable, Union
+from typing import Dict, Any, List, Tuple, Optional, Callable, Union
 import logging
 import atexit
 
 # Add these imports at the top of the file
 import re
 import shlex
+from extract_code import process_file  # Import the function from extract_code.py
 
 try:
     import openai
@@ -36,6 +37,7 @@ INPUT_HISTORY_MATCHES: List[str] = []
 SYSTEM_MESSAGE = "You are a helpful assistant."
 MAX_TOKENS = None
 STREAMING_ENABLED = False
+NOTE_MODE = False  # New global variable for note mode
 
 # Add these global variables
 SCRIPT_VARS: Dict[str, str] = {}
@@ -226,8 +228,6 @@ async def chat_completion(prompt: str, stream: bool = False) -> str:
     # Prepare messages for chat completion
     messages = [{"role": "user", "content": full_prompt}]
 
-    #print("messages: ", messages )
-
     # Use system prompt unless the model name contains "gemma"
     if "gemma" not in model_name.lower():
         messages.insert(0, {"role": "system", "content": SYSTEM_MESSAGE})
@@ -273,7 +273,6 @@ async def chat_completion(prompt: str, stream: bool = False) -> str:
     except Exception as e:
         return f"Error: {str(e)}"
 
-# Add this function to handle script execution
 async def execute_script_command(command: str, original_handler: Callable[[str], Union[bool, str]]) -> bool:
     """
     Execute a command within a script context.
@@ -294,18 +293,10 @@ async def execute_script_command(command: str, original_handler: Callable[[str],
 
     # Replace variables in the command
     def replace_var(match):
-        # debug, print("match: ", match )
         var_name = match.group(1)
-        # debug, print("var_name" , var_name )
-        var1 = SCRIPT_VARS.get(var_name, "")
-
-        # debug, print("var1: ", var1 )
-
-        return var1
+        return SCRIPT_VARS.get(var_name, "")
 
     processed_command = re.sub(r'\$\{(\w+)\}', replace_var, command)
-
-    #  print("processed command: ",  processed_command )
 
     # Handle wait command
     if processed_command.startswith("wait "):
@@ -479,7 +470,6 @@ async def execute_script(script_path: str) -> None:
     finally:
         SCRIPT_CONTEXT = False
 
-
 async def execute_script_old(script_path: str) -> None:
     """
     Execute a script file containing multiple commands.
@@ -527,13 +517,12 @@ async def execute_script_old(script_path: str) -> None:
     finally:
         SCRIPT_CONTEXT = False
 
-# Modify the handle_escape_command function to add the /script command
-async def handle_escape_command(command: str) -> Union[bool, str]: # Changed to async and updated return type
+async def handle_escape_command(command: str) -> Union[bool, str]:
     """
     Handle escape commands. Returns True if the command was handled, False otherwise.
     """
     global ACTIVE_MODEL_ALIAS, FILE_BUFFER, PROMPT_BUFFER, CODE_ONLY_FLAG, LOGGING_ACTIVE, MULTI_LINE_MODE
-    global SYSTEM_MESSAGE, MAX_TOKENS, STREAMING_ENABLED, FILE_BANKS
+    global SYSTEM_MESSAGE, MAX_TOKENS, STREAMING_ENABLED, FILE_BANKS, NOTE_MODE
 
     parts = command.split(maxsplit=2)
     cmd = parts[0].lower()
@@ -552,6 +541,7 @@ async def handle_escape_command(command: str) -> Union[bool, str]: # Changed to 
         print("  /listmodels - List available models from toml.")
         print("  /logging <start|end> - Start or stop logging.")
         print("  /save <file> - Save the last chat completion to a file.")
+        print("  /notemode <on|off> - Toggle note mode for /save command.")
         print("  /codeonly - Set flag to generate code only without explanations.")
         print("  /codeoff - Reverse the code-only flag.")
         print("  /multiline - Toggle multi-line input mode (use ';;' to end input).")
@@ -559,14 +549,14 @@ async def handle_escape_command(command: str) -> Union[bool, str]: # Changed to 
         print("  /temp <value> - Set temperature for the current model (0.0-2.0).")
         print("  /maxtokens <value> - Set max tokens for the current model.")
         print("  /stream - Toggle streaming responses.")
-        print("  /script <file> - Execute a script file containing multiple commands.") # Added
+        print("  /script <file> - Execute a script file containing multiple commands.")
         print("  /quit - Exit the program.")
-        print("\nScript-specific features:") # Added
-        print("  set <name> = <value> - Define a variable") # Added
-        print("  ${name} - Reference a variable") # Added
-        print("  if <condition> then <command> - Conditional execution") # Added
-        print("  wait <seconds> - Pause execution") # Added
-        print("  # comment - Comments in script files") # Added
+        print("\nScript-specific features:")
+        print("  set <name> = <value> - Define a variable")
+        print("  ${name} - Reference a variable")
+        print("  if <condition> then <command> - Conditional execution")
+        print("  wait <seconds> - Pause execution")
+        print("  # comment - Comments in script files")
         return True
 
     elif cmd == "/prompt":
@@ -718,13 +708,35 @@ async def handle_escape_command(command: str) -> Union[bool, str]: # Changed to 
                 if directory and not os.path.exists(directory):
                     os.makedirs(directory, exist_ok=True)
                     print(f"Created directory path: '{directory}'")
+
                 with open(file_path, "w") as f:
                     f.write(last_response)
                 print(f"Last chat completion saved to '{file_path}'.")
+
+                # If note mode is on, process the file to extract code blocks
+                if NOTE_MODE:
+                    print(f"Note mode is ON. Processing file '{file_path}'...")
+                    process_file(file_path)
             except Exception as e:
                 print(f"Error saving file: {str(e)}")
         else:
             print("No chat history to save.")
+        return True
+
+    elif cmd == "/notemode":
+        if len(parts) < 2:
+            print(f"Note mode is currently {'ON' if NOTE_MODE else 'OFF'}")
+            return True
+
+        action = parts[1].lower()
+        if action == "on":
+            NOTE_MODE = True
+            print("Note mode enabled. Code blocks will be extracted when using /save.")
+        elif action == "off":
+            NOTE_MODE = False
+            print("Note mode disabled.")
+        else:
+            print("Invalid note mode action. Use 'on' or 'off'.")
         return True
 
     elif cmd == "/codeonly":
@@ -793,13 +805,13 @@ async def handle_escape_command(command: str) -> Union[bool, str]: # Changed to 
         list_models()
         return True
 
-    elif cmd == "/script": # New case for /script command
+    elif cmd == "/script":
         if len(parts) < 2:
             print("Usage: /script <file>")
             return True
 
         script_path = parts[1]
-        print("command /script with ", script_path )
+        print("command /script with ", script_path)
         # Execute script asynchronously so it doesn't block the main loop
         await execute_script(script_path)
         return True
@@ -866,7 +878,7 @@ async def main() -> None:
                 continue
 
             if prompt.startswith("/"):
-                result = await handle_escape_command(prompt) # Added await
+                result = await handle_escape_command(prompt)
                 if result == "EXECUTE_PROMPT":
                     # Execute the buffered prompt
                     temp_prompt = "Using the following prompt, please provide a response:\n" + PROMPT_BUFFER
