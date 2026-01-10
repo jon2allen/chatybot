@@ -118,6 +118,12 @@ def stop_logging() -> None:
         LOGGING_ACTIVE = False
         print("Logging stopped.")
 
+def format_datetime(dt: datetime) -> str:
+    """
+    Format datetime in local time with timezone.
+    """
+    return dt.strftime("%b %d, %Y, %I:%M:%S %p %Z")
+
 def log_message(message: str) -> None:
     """
     Log a message to the log file if logging is active.
@@ -268,7 +274,23 @@ async def chat_completion(prompt: str, stream: bool = False) -> str:
         if hasattr(response, 'usage'):
             print(f"Input tokens: {response.usage.prompt_tokens}, Output tokens: {response.usage.completion_tokens}")
 
+        # Log user entry with datetime and model info
+        if LOGGING_ACTIVE:
+            current_time = format_datetime(datetime.now())
+            log_message(f"Datetime: {current_time}")
+            log_message(f"Model: {ACTIVE_MODEL_ALIAS} ({model_name})")
+            log_message(f"User: {prompt}")
+
         CHAT_HISTORY.append((prompt, full_response))
+
+        # Log assistant entry with completion datetime and token count
+        if LOGGING_ACTIVE:
+            input_tokens = response.usage.prompt_tokens if hasattr(response, 'usage') else "N/A"
+            output_tokens = response.usage.completion_tokens if hasattr(response, 'usage') else "N/A"
+            log_message(f"\nExecution time: {elapsed_time:.2f} seconds")
+            log_message(f"Number of tokens: Input {input_tokens}, Output {output_tokens}")
+            log_message(f"Assistant: {full_response}\n")
+
         return full_response
     except Exception as e:
         return f"Error: {str(e)}"
@@ -883,12 +905,10 @@ async def main() -> None:
                     # Execute the buffered prompt
                     temp_prompt = "Using the following prompt, please provide a response:\n" + PROMPT_BUFFER
                     response = await chat_completion(temp_prompt, stream=STREAMING_ENABLED)
-                    log_message(f"User: {temp_prompt}\nAssistant: {response}\n")
                     PROMPT_BUFFER = ""  # Clear the buffer after execution
                 continue
 
             response = await chat_completion(prompt, stream=STREAMING_ENABLED)
-            log_message(f"User: {prompt}\nAssistant: {response}\n")
 
         except KeyboardInterrupt:
             print("\nGoodbye! Thanks for chatting.")
