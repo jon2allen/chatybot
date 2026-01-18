@@ -41,3 +41,6 @@ wait 2
 
 # Test Case 10: Error Handling
 /script ${test_dir}/test10_error_handling.chatdsl
+
+#finish
+/quit
