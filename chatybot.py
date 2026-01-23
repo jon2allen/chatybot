@@ -131,7 +131,8 @@ def log_message(message: str) -> None:
     global LOG_FILE, LOGGING_ACTIVE
 
     if LOGGING_ACTIVE and LOG_FILE:
-        LOG_FILE.write(f"{message}\n")
+        timestamp = format_datetime(datetime.now())
+        LOG_FILE.write(f"{timestamp} - {message}\n")
         LOG_FILE.flush()
 
 def list_models() -> None:
@@ -547,6 +548,8 @@ async def handle_escape_command(command: str) -> Union[bool, str]:
     global SYSTEM_MESSAGE, MAX_TOKENS, STREAMING_ENABLED, FILE_BANKS, NOTE_MODE
 
     parts = command.split(maxsplit=2)
+    if LOGGING_ACTIVE:
+        log_message(f"Escape command: {command}")
     cmd = parts[0].lower()
 
     if cmd == "/help":
