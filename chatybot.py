@@ -218,6 +218,54 @@ def replace_placeholders(prompt: str) -> str:
             
     return prompt
 
+def show_memory_usage() -> None:
+    """
+    Show size of the file buffer, filebanks, and script variables in KB.
+    """
+    print(f"\n{'Source':<20} {'Size (KB)':>10}")
+    print("-" * 32)
+    
+    # File Buffer
+    file_buffer_size = len(FILE_BUFFER.encode('utf-8')) / 1024
+    print(f"{'FILE_BUFFER':<20} {file_buffer_size:>10.2f}")
+    
+    # File Banks
+    for i in range(1, 6):
+        bank_name = f"filebank{i}"
+        bank_size = len(FILE_BANKS[bank_name].encode('utf-8')) / 1024
+        print(f"{bank_name:<20} {bank_size:>10.2f}")
+    
+    # Script Variables
+    for var_name, var_value in SCRIPT_VARS.items():
+        var_size = len(str(var_value).encode('utf-8')) / 1024
+        print(f"{var_name:<20} {var_size:>10.2f}")
+    print()
+
+def dump_variables(name: str = "all") -> None:
+    """
+    Print the contents of a variable or 'all' variables.
+    """
+    if name == "all":
+        print("\n--- DUMP ALL VARIABLES ---")
+        print(f"FILE_BUFFER: {FILE_BUFFER}")
+        for i in range(1, 6):
+            bank_name = f"filebank{i}"
+            print(f"{bank_name.upper()}: {FILE_BANKS[bank_name]}")
+        for var_name, var_value in SCRIPT_VARS.items():
+            print(f"SCRIPT_VAR '{var_name}': {var_value}")
+        print("--- END DUMP ---\n")
+    elif name == "file_buffer":
+        print(f"FILE_BUFFER: {FILE_BUFFER}")
+    elif name.startswith("filebank") and name[8:].isdigit():
+        if name in FILE_BANKS:
+            print(f"{name.upper()}: {FILE_BANKS[name]}")
+        else:
+            print(f"Error: {name} not found.")
+    elif name in SCRIPT_VARS:
+        print(f"SCRIPT_VAR '{name}': {SCRIPT_VARS[name]}")
+    else:
+        print(f"Error: Variable '{name}' not found.")
+
 async def chat_completion(prompt: str, stream: bool = False) -> str:
     """
     Send a prompt to the OpenAI API and return the response.
@@ -592,6 +640,8 @@ async def handle_escape_command(command: str) -> Union[bool, str]:
         print("  /loadvar <varname> - Load SEARCHBUFFER into a variable.")
         print("  /savevar <varname> <filename> - Save a variable's contents to a file.")
         print("  /setvar <varname> <value> - Set a script variable to a string.")
+        print("  /mem - Show size of buffers and script variables.")
+        print("  /dump [varname|all] - Print content of buffers or script variables.")
         print("\nScript-specific features:")
         print("  set <name> = <value> - Define a variable")
         print("  ${name} - Reference a variable")
@@ -808,6 +858,15 @@ async def handle_escape_command(command: str) -> Union[bool, str]:
         var_value = parts[2]
         SCRIPT_VARS[var_name] = var_value
         print(f"Variable '{var_name}' set.")
+        return True
+
+    elif cmd == "/mem":
+        show_memory_usage()
+        return True
+
+    elif cmd == "/dump":
+        var_name = parts[1] if len(parts) > 1 else "all"
+        dump_variables(var_name)
         return True
 
     elif cmd == "/notemode":
