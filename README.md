@@ -58,6 +58,8 @@ chatybot is an interactive command-line tool that enables seamless communication
 🚀 **File Banks** - Organize multiple context files
 🚀 **Prompt Templates** - Reusable prompt structures
 🚀 **Code-Only Mode** - Generate pure code without explanations
+🚀 **TinyDB Integration** - Persistent storage for search results and chat logs
+🚀 **Advanced Variable Linking** - Use database results in prompts via `${variables}`
 
 ---
 
@@ -115,6 +117,12 @@ Active escape commands:
   /maxtokens <value> - Set max tokens for the current model.
   /stream - Toggle streaming responses.
   /script <file> - Execute a script file containing multiple commands.
+  /setdb <dbname> - Create or select a TinyDB database.
+  /searchdb <query> - Search all docs in the current database.
+  /dblog - Log the last chat completion to the database.
+  /loadvar <varname> - Load SEARCHBUFFER into a variable.
+  /savevar <varname> <filename> - Save a variable's contents to a file.
+  /setvar <varname> <value> - Set a script variable to a string.
   /quit - Exit the program.
 
 Script-specific features:
@@ -155,6 +163,12 @@ chat --> Hello!      # Start a conversation
 | `/logging <start\|end>` | Start/stop logging | `/logging start` |
 | `/save <file>` | Save last response | `/save output.txt` |
 | `/script <path>` | Execute a script | `/script setup.dsl` |
+| `/setdb <name>` | Select TinyDB database | `/setdb knowledge` |
+| `/searchdb <q>` | Search current database | `/searchdb "python"` |
+| `/dblog` | Log last response to DB | `/dblog` |
+| `/loadvar <v>` | Store search in variable | `/loadvar results` |
+| `/savevar <v> <f>`| Save variable to file | `/savevar results log.txt` |
+| `/setvar <v> <val>`| Set a string variable | `/setvar user "Jon"` |
 | `/quit` | Exit the program | `/quit` |
 
 ---
@@ -189,10 +203,20 @@ Execute the script:
 /script setup.chatdsl
 ```
 
-### **Variable Substitution**
+### **Database & Variable Integration (New!)**
 ```bash
-set name = "Alice"
-chat --> Hello ${name}, how are you today?
+/setdb my_knowledge       # Open or create 'db/my_knowledge.json'
+/searchdb "linked list"   # Search content, results stored in SEARCHBUFFER
+/loadvar search_results   # Copy SEARCHBUFFER to ${search_results}
+chat --> Explain these: ${search_results}
+/dblog                    # Save the AI's explanation back to the database
+```
+
+### **Variable Substitution**
+Variables can be set manually, via search results, or in scripts:
+```bash
+/setvar username "Jon"
+chat --> Hello ${username}, show me ${search_results}
 ```
 
 ### **Conditional Logic**
@@ -403,6 +427,15 @@ Execution time: 50.25 seconds
 Number of tokens: Input 37, Output 3971
 Assistant: Here's a well-structured Bash script that uses the `cat` command to display the contents of all `.py` files located in a specified subdirectory. The script is designed to be flexible, robust, and user-friendly.
 ```
+
+Jan 24th, 2025
+-------------
+- **TinyDB Integration**: New database module (`chatydb.py`) for persistent storage.
+- **Persistent Search Buffer**: `/searchdb` results are cached in `SEARCHBUFFER`.
+- **Variable Linking**: `/loadvar` now bridges database results to `${variable}` placeholders.
+- **Prompt Injection**: All prompts now support `${variable}` substitution for dynamic context.
+- **Manual Variables**: Added `/setvar` for setting session variables via the CLI.
+- **Database Logging**: `/dblog` allows one-click archiving of AI responses to the active database.
 
 ---
 
