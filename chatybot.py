@@ -200,14 +200,22 @@ def input_history_completer(text: str, state: int) -> Optional[str]:
         return INPUT_HISTORY_MATCHES[INPUT_HISTORY_INDEX]
     return None
 
-def replace_filebank_placeholders(prompt: str) -> str:
+def replace_placeholders(prompt: str) -> str:
     """
-    Replace filebank placeholders in the prompt with their content.
+    Replace filebank and script variable placeholders in the prompt.
     """
+    # Replace filebank placeholders: {filebank1}
     for bank_name, content in FILE_BANKS.items():
         placeholder = f"{{{bank_name}}}"
         if placeholder in prompt:
             prompt = prompt.replace(placeholder, content)
+    
+    # Replace script variable placeholders: ${varname}
+    for var_name, var_value in SCRIPT_VARS.items():
+        placeholder = f"${{{var_name}}}"
+        if placeholder in prompt:
+            prompt = prompt.replace(placeholder, str(var_value))
+            
     return prompt
 
 async def chat_completion(prompt: str, stream: bool = False) -> str:
@@ -220,8 +228,8 @@ async def chat_completion(prompt: str, stream: bool = False) -> str:
     model_config = CONFIG["models"][ACTIVE_MODEL_ALIAS]
     model_name = model_config["name"]
 
-    # Replace filebank placeholders in the prompt
-    full_prompt = replace_filebank_placeholders(prompt)
+    # Replace placeholders in the prompt
+    full_prompt = replace_placeholders(prompt)
 
     # Prepare the prompt with file buffer and prompt buffer if available
     if PROMPT_BUFFER:
@@ -582,6 +590,7 @@ async def handle_escape_command(command: str) -> Union[bool, str]:
         print("  /dblog - Log the last chat completion to the database.")
         print("  /loadvar <varname> - Load SEARCHBUFFER into a variable.")
         print("  /savevar <varname> <filename> - Save a variable's contents to a file.")
+        print("  /setvar <varname> <value> - Set a script variable to a string.")
         print("\nScript-specific features:")
         print("  set <name> = <value> - Define a variable")
         print("  ${name} - Reference a variable")
@@ -785,6 +794,16 @@ async def handle_escape_command(command: str) -> Union[bool, str]:
         varname = parts[1].strip('"')
         filename = parts[2].strip('"')
         save_var(varname, filename)
+        return True
+
+    elif cmd == "/setvar":
+        if len(parts) < 3:
+            print("Usage: /setvar <varname> <value>")
+            return True
+        var_name = parts[1].strip('"')
+        var_value = parts[2]
+        SCRIPT_VARS[var_name] = var_value
+        print(f"Variable '{var_name}' set.")
         return True
 
     elif cmd == "/notemode":
