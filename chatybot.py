@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Dict, Any, List, Tuple, Optional, Callable, Union
 import logging
 import atexit
+from chatydb import set_db, search_db, dblog, load_var, save_var, SEARCHBUFFER
 
 # Add these imports at the top of the file
 import re
@@ -576,6 +577,11 @@ async def handle_escape_command(command: str) -> Union[bool, str]:
         print("  /stream - Toggle streaming responses.")
         print("  /script <file> - Execute a script file containing multiple commands.")
         print("  /quit - Exit the program.")
+        print("  /setdb <dbname> - Create or select a TinyDB database.")
+        print("  /searchdb <query> - Search all docs in the current database.")
+        print("  /dblog - Log the last chat completion to the database.")
+        print("  /loadvar <varname> - Load SEARCHBUFFER into a variable.")
+        print("  /savevar <varname> <filename> - Save a variable's contents to a file.")
         print("\nScript-specific features:")
         print("  set <name> = <value> - Define a variable")
         print("  ${name} - Reference a variable")
@@ -746,6 +752,39 @@ async def handle_escape_command(command: str) -> Union[bool, str]:
                 print(f"Error saving file: {str(e)}")
         else:
             print("No chat history to save.")
+        return True
+    # New database commands
+    elif cmd == "/setdb":
+        if len(parts) < 2:
+            print("Usage: /setdb <dbname>")
+            return True
+        dbname = parts[1].strip('"')
+        set_db(dbname)
+        return True
+    elif cmd == "/searchdb":
+        if len(parts) < 2:
+            print("Usage: /searchdb <query>")
+            return True
+        query = parts[1].strip('"')
+        search_db(query)
+        return True
+    elif cmd == "/dblog":
+        dblog()
+        return True
+    elif cmd == "/loadvar":
+        if len(parts) < 2:
+            print("Usage: /loadvar <varname>")
+            return True
+        varname = parts[1].strip('"')
+        load_var(varname)
+        return True
+    elif cmd == "/savevar":
+        if len(parts) < 3:
+            print("Usage: /savevar <varname> <filename>")
+            return True
+        varname = parts[1].strip('"')
+        filename = parts[2].strip('"')
+        save_var(varname, filename)
         return True
 
     elif cmd == "/notemode":
