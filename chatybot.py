@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Dict, Any, List, Tuple, Optional, Callable, Union
 import logging
 import atexit
-from chatydb import set_db, search_db, dblog, load_var, save_var, SEARCHBUFFER
+from chatydb import set_db, search_db, dblog, load_var, save_var, list_dbs, SEARCHBUFFER
 
 # Add these imports at the top of the file
 import re
@@ -586,6 +586,7 @@ async def handle_escape_command(command: str) -> Union[bool, str]:
         print("  /script <file> - Execute a script file containing multiple commands.")
         print("  /quit - Exit the program.")
         print("  /setdb <dbname> - Create or select a TinyDB database.")
+        print("  /dblist - List all TinyDB databases in the db directory.")
         print("  /searchdb <query> - Search all docs in the current database.")
         print("  /dblog - Log the last chat completion to the database.")
         print("  /loadvar <varname> - Load SEARCHBUFFER into a variable.")
@@ -769,6 +770,9 @@ async def handle_escape_command(command: str) -> Union[bool, str]:
             return True
         dbname = parts[1].strip('"')
         set_db(dbname)
+        return True
+    elif cmd == "/dblist":
+        list_dbs()
         return True
     elif cmd == "/searchdb":
         if len(parts) < 2:

@@ -28,6 +28,38 @@ def set_db(db_name: str) -> None:
     _manager = CorpusManager(db_path)
     print(f"Database set to '{db_path}'.")
 
+def list_dbs() -> None:
+    """List all TinyDB JSON files in the 'db' directory with details."""
+    db_dir = os.path.join(os.getcwd(), "db")
+    if not os.path.exists(db_dir):
+        print("No database directory found at 'db/'.")
+        return
+
+    json_files = [f for f in os.listdir(db_dir) if f.endswith(".json")]
+    if not json_files:
+        print("No database files found in 'db/'.")
+        return
+
+    print(f"\n{'DB Name':<20} {'Filename':<25} {'Entries':>8} {'Size (KB)':>10}")
+    print("-" * 65)
+
+    for filename in sorted(json_files):
+        db_path = os.path.join(db_dir, filename)
+        db_name = os.path.splitext(filename)[0]
+        size_kb = os.path.getsize(db_path) / 1024
+        
+        try:
+            with open(db_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                # Count items in the 'items' table if it exists, else count all documents in default table
+                # CorpusManager uses 'items' table
+                entries = len(data.get('items', {})) if 'items' in data else len(data.get('_default', {}))
+        except Exception:
+            entries = "ERR"
+
+        print(f"{db_name:<20} {filename:<25} {entries:>8} {size_kb:>10.2f}")
+    print()
+
 def search_db(query: str) -> None:
     """Search all items in the active database for *query*.
 
