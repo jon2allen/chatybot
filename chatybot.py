@@ -12,6 +12,7 @@ from chatydb import set_db, search_db, dblog, load_var, save_var, list_dbs, SEAR
 # Add these imports at the top of the file
 import re
 import shlex
+import random
 from extract_code import process_file  # Import the function from extract_code.py
 
 try:
@@ -48,6 +49,7 @@ TOP_P = None
 TOP_K = None
 FREQ_PENALTY = None
 PRES_PENALTY = None
+SEED_CONFIG = None
 
 def load_config() -> None:
     """
@@ -291,7 +293,7 @@ async def chat_completion(prompt: str, stream: bool = False) -> str:
     Send a prompt to the OpenAI API and return the response.
     """
     global ACTIVE_MODEL_ALIAS, CHAT_HISTORY, FILE_BUFFER, PROMPT_BUFFER, CODE_ONLY_FLAG, MAX_TOKENS
-    global TOP_P, TOP_K, FREQ_PENALTY, PRES_PENALTY
+    global TOP_P, TOP_K, FREQ_PENALTY, PRES_PENALTY, SEED_CONFIG
 
     client = get_openai_client(ACTIVE_MODEL_ALIAS)
     model_config = CONFIG["models"][ACTIVE_MODEL_ALIAS]
@@ -340,6 +342,7 @@ async def chat_completion(prompt: str, stream: bool = False) -> str:
     is_mistral = "mistral.ai" in model_config.get("base_url", "").lower()
     is_openai_official = "api.openai.com" in model_config.get("base_url", "").lower()
     is_google = "googleapis.com" in model_config.get("base_url", "").lower()
+    is_bytez = "bytez.com" in model_config.get("base_url", "").lower()
 
     tp = TOP_P if TOP_P is not None else model_config.get("top_p")
     if tp is not None:
@@ -358,10 +361,35 @@ async def chat_completion(prompt: str, stream: bool = False) -> str:
     if tk is not None:
         if is_nvidia:
             kwargs.setdefault("extra_body", {}).setdefault("nvext", {})["top_k"] = tk
-        elif not is_mistral and not is_openai_official and not is_google:
-            # Mistral, OpenAI official, and Google Gemini APIs reject top_k as an extra input.
-            # Only add for other providers (OpenRouter, Bytez, etc.)
+        elif not is_mistral and not is_openai_official and not is_google and not is_bytez:
+            # Mistral, OpenAI official, Google Gemini, and Bytez APIs reject top_k as an extra input.
+            # Only add for other providers (OpenRouter, etc.)
             kwargs.setdefault("extra_body", {})["top_k"] = tk
+
+    # Seed handling
+    current_seed = None
+    if SEED_CONFIG is not None:
+        if SEED_CONFIG == "time":
+            current_seed = int(time.time())
+        elif isinstance(SEED_CONFIG, tuple) and SEED_CONFIG[0] == "random":
+            current_seed = random.randint(SEED_CONFIG[1], SEED_CONFIG[2])
+        else:
+            try:
+                current_seed = int(SEED_CONFIG)
+            except (ValueError, TypeError):
+                current_seed = None
+
+    if current_seed is not None:
+        if is_google or is_bytez:
+            # Google Gemini and Bytez endpoints do not support 'seed' and reject it
+            print(f"Warning: Seed parameter is not supported by {'Google' if is_google else 'Bytez'} API. Skipping.")
+        else:
+            print(f"Using seed: {current_seed}")
+            if is_mistral:
+                # Mistral official API expects 'random_seed' instead of 'seed'
+                kwargs.setdefault("extra_body", {})["random_seed"] = current_seed
+            else:
+                kwargs["seed"] = current_seed
 
     try:
         start_time = time.time()
@@ -700,6 +728,7 @@ async def handle_escape_command(command: str) -> Union[bool, str]:
         print("  /freq_penalty <value> - Set frequency penalty (-2.0-2.0).")
         print("  /pres_penalty <value> - Set presence penalty (-2.0-2.0).")
         print("  /reasoning <on|off> - Toggle reasoning (thinking) for NVIDIA models.")
+        print("  /seed <value> - Set seed (int, 'time', or 'random <min>,<max>').")
         print("  /stream - Toggle streaming responses.")
         print("  /script <file> - Execute a script file containing multiple commands.")
         print("  /quit - Exit the program.")
@@ -1079,6 +1108,45 @@ async def handle_escape_command(command: str) -> Union[bool, str]:
             print("Reasoning mode DISABLED (detailed thinking off).")
         else:
             print("Usage: /reasoning <on|off>")
+        return True
+
+    elif cmd == "/seed":
+        global SEED_CONFIG
+        if len(parts) < 2:
+            print(f"Current seed setting: {SEED_CONFIG}")
+            return True
+        
+        arg = parts[1].lower()
+        if arg in ["clear", "none", "off"]:
+            SEED_CONFIG = None
+            print("Seed cleared.")
+        elif arg == "time":
+            SEED_CONFIG = "time"
+            print("Seed set to 'time' (uses Unix timestamp per completion).")
+        elif arg == "random":
+            if len(parts) < 3:
+                print("Usage: /seed random <min>, <max>")
+                return True
+            try:
+                # Handle both "random 1,999" and "random 1, 999"
+                range_str = parts[2]
+                if ',' not in range_str:
+                    print("Usage: /seed random <min>, <max>")
+                    return True
+                v1_str, v2_str = range_str.split(',', 1)
+                v1 = int(v1_str.strip())
+                v2 = int(v2_str.strip())
+                SEED_CONFIG = ("random", v1, v2)
+                print(f"Seed set to random range: {v1} to {v2}")
+            except ValueError:
+                print("Invalid range. Use: /seed random <min>, <max>")
+        else:
+            try:
+                seed_val = int(parts[1])
+                SEED_CONFIG = seed_val
+                print(f"Seed set to fixed value: {seed_val}")
+            except ValueError:
+                print("Invalid seed. Use an integer, 'time', or 'random <min>, <max>'.")
         return True
 
     elif cmd == "/stream":
