@@ -39,16 +39,22 @@ SYSTEM_MESSAGE = "You are a helpful assistant."
 MAX_TOKENS = None
 STREAMING_ENABLED = False
 NOTE_MODE = False  # New global variable for note mode
+REASONING_MODE = True  # New global variable for NVIDIA reasoning toggle
 
 # Add these global variables
 SCRIPT_VARS: Dict[str, str] = {}
 SCRIPT_CONTEXT = False
+TOP_P = None
+TOP_K = None
+FREQ_PENALTY = None
+PRES_PENALTY = None
 
 def load_config() -> None:
     """
     Load the configuration from chat_config.toml.
     """
     global CONFIG, DEFAULT_MODEL_ALIAS, ACTIVE_MODEL_ALIAS, SYSTEM_MESSAGE, MAX_TOKENS
+    global TOP_P, TOP_K, FREQ_PENALTY, PRES_PENALTY
 
     try:
         with open("chat_config.toml", "rb") as f:
@@ -69,6 +75,16 @@ def load_config() -> None:
     # Load max tokens if specified in config
     if "max_tokens" in CONFIG:
         MAX_TOKENS = CONFIG["max_tokens"]
+
+    # Load other parameters if specified in config
+    if "top_p" in CONFIG:
+        TOP_P = CONFIG["top_p"]
+    if "top_k" in CONFIG:
+        TOP_K = CONFIG["top_k"]
+    if "frequency_penalty" in CONFIG:
+        FREQ_PENALTY = CONFIG["frequency_penalty"]
+    if "presence_penalty" in CONFIG:
+        PRES_PENALTY = CONFIG["presence_penalty"]
 
 def get_openai_client(model_alias: str) -> AsyncOpenAI:
     """
@@ -148,7 +164,7 @@ def list_models() -> None:
     url_width = max(len("Base URL"), max(len(config.get("base_url", "Default OpenAI URL")) for config in CONFIG["models"].values()))
 
     # Print header
-    header = f"{'Alias':<{alias_width}} {'Model Name':<{name_width}} {'Base URL':<{url_width}} {'Temp':<6} {'Max Tokens':<10}"
+    header = f"{'Alias':<{alias_width}} {'Model Name':<{name_width}} {'Base URL':<{url_width}} {'Temp':<6} {'MaxT':<6} {'TopP':<6} {'TopK':<6} {'FreqP':<6} {'PresP':<6}"
     print(header)
     print("-" * len(header))
 
@@ -157,7 +173,11 @@ def list_models() -> None:
         base_url = config.get("base_url", "Default OpenAI URL")
         temp = config.get("temperature", 0.7)
         max_tokens = config.get("max_tokens", "Default")
-        print(f"{alias:<{alias_width}} {config['name']:<{name_width}} {base_url:<{url_width}} {temp:<6.2f} {str(max_tokens):<10}")
+        top_p = config.get("top_p", "Def")
+        top_k = config.get("top_k", "Def")
+        freq_p = config.get("frequency_penalty", "Def")
+        pres_p = config.get("presence_penalty", "Def")
+        print(f"{alias:<{alias_width}} {config['name']:<{name_width}} {base_url:<{url_width}} {temp:<6.2f} {str(max_tokens):<6} {str(top_p):<6} {str(top_k):<6} {str(freq_p):<6} {str(pres_p):<6}")
 
     print()
 
@@ -271,6 +291,7 @@ async def chat_completion(prompt: str, stream: bool = False) -> str:
     Send a prompt to the OpenAI API and return the response.
     """
     global ACTIVE_MODEL_ALIAS, CHAT_HISTORY, FILE_BUFFER, PROMPT_BUFFER, CODE_ONLY_FLAG, MAX_TOKENS
+    global TOP_P, TOP_K, FREQ_PENALTY, PRES_PENALTY
 
     client = get_openai_client(ACTIVE_MODEL_ALIAS)
     model_config = CONFIG["models"][ACTIVE_MODEL_ALIAS]
@@ -292,20 +313,61 @@ async def chat_completion(prompt: str, stream: bool = False) -> str:
     # Prepare messages for chat completion
     messages = [{"role": "user", "content": full_prompt}]
 
+    is_nvidia = "nvidia" in model_config.get("base_url", "").lower() or "nvidia" in model_name.lower()
+    
+    current_system_message = SYSTEM_MESSAGE
+    if is_nvidia and not REASONING_MODE:
+        if current_system_message:
+            current_system_message += "\ndetailed thinking off"
+        else:
+            current_system_message = "detailed thinking off"
+
     # Use system prompt unless the model name contains "gemma"
     if "gemma" not in model_name.lower():
-        messages.insert(0, {"role": "system", "content": SYSTEM_MESSAGE})
+        messages.insert(0, {"role": "system", "content": current_system_message})
+
+    # Prepare completion parameters
+    kwargs = {
+        "model": model_name,
+        "messages": messages,
+        "temperature": model_config.get("temperature", 0.7),
+    }
+
+    # Add optional parameters if defined globally or in model config
+    mt = MAX_TOKENS if MAX_TOKENS is not None else model_config.get("max_tokens")
+    if mt is not None: kwargs["max_tokens"] = mt
+
+    is_mistral = "mistral.ai" in model_config.get("base_url", "").lower()
+    is_openai_official = "api.openai.com" in model_config.get("base_url", "").lower()
+    is_google = "googleapis.com" in model_config.get("base_url", "").lower()
+
+    tp = TOP_P if TOP_P is not None else model_config.get("top_p")
+    if tp is not None:
+        if is_nvidia:
+            kwargs.setdefault("extra_body", {}).setdefault("nvext", {})["top_p"] = tp
+        else:
+            kwargs["top_p"] = tp
+    
+    fp = FREQ_PENALTY if FREQ_PENALTY is not None else model_config.get("frequency_penalty")
+    if fp is not None: kwargs["frequency_penalty"] = fp
+    
+    pp = PRES_PENALTY if PRES_PENALTY is not None else model_config.get("presence_penalty")
+    if pp is not None: kwargs["presence_penalty"] = pp
+
+    tk = TOP_K if TOP_K is not None else model_config.get("top_k")
+    if tk is not None:
+        if is_nvidia:
+            kwargs.setdefault("extra_body", {}).setdefault("nvext", {})["top_k"] = tk
+        elif not is_mistral and not is_openai_official and not is_google:
+            # Mistral, OpenAI official, and Google Gemini APIs reject top_k as an extra input.
+            # Only add for other providers (OpenRouter, Bytez, etc.)
+            kwargs.setdefault("extra_body", {})["top_k"] = tk
 
     try:
         start_time = time.time()
         if stream:
-            response = await client.chat.completions.create(
-                model=model_name,
-                messages=messages,
-                temperature=model_config.get("temperature", 0.7),
-                max_tokens=MAX_TOKENS if MAX_TOKENS else model_config.get("max_tokens"),
-                stream=True
-            )
+            kwargs["stream"] = True
+            response = await client.chat.completions.create(**kwargs)
 
             full_response = ""
             print("Assistant: ", end="", flush=True)
@@ -316,14 +378,12 @@ async def chat_completion(prompt: str, stream: bool = False) -> str:
                     full_response += content
             print()  # New line after streaming
         else:
-            response = await client.chat.completions.create(
-                model=model_name,
-                messages=messages,
-                temperature=model_config.get("temperature", 0.7),
-                max_tokens=MAX_TOKENS if MAX_TOKENS else model_config.get("max_tokens"),
-            )
-            full_response = response.choices[0].message.content
-            print(full_response)
+            response = await client.chat.completions.create(**kwargs)
+            full_response = response.choices[0].message.content or ""
+            if not full_response:
+                print("Warning: Received an empty response from the model.")
+            else:
+                print(full_response)
 
         # Calculate and display metrics
         elapsed_time = time.time() - start_time
@@ -351,6 +411,10 @@ async def chat_completion(prompt: str, stream: bool = False) -> str:
 
         return full_response
     except Exception as e:
+        error_msg = f"Error during chat completion: {str(e)}"
+        print(error_msg)
+        if LOGGING_ACTIVE:
+            log_message(error_msg)
         return f"Error: {str(e)}"
 
 async def execute_script_command(command: str, original_handler: Callable[[str], Union[bool, str]]) -> bool:
@@ -603,6 +667,7 @@ async def handle_escape_command(command: str) -> Union[bool, str]:
     """
     global ACTIVE_MODEL_ALIAS, FILE_BUFFER, PROMPT_BUFFER, CODE_ONLY_FLAG, LOGGING_ACTIVE, MULTI_LINE_MODE
     global SYSTEM_MESSAGE, MAX_TOKENS, STREAMING_ENABLED, FILE_BANKS, NOTE_MODE
+    global TOP_P, TOP_K, FREQ_PENALTY, PRES_PENALTY
 
     parts = command.split(maxsplit=2)
     if LOGGING_ACTIVE:
@@ -630,6 +695,11 @@ async def handle_escape_command(command: str) -> Union[bool, str]:
         print("  /system <message> - Set a custom system message.")
         print("  /temp <value> - Set temperature for the current model (0.0-2.0).")
         print("  /maxtokens <value> - Set max tokens for the current model.")
+        print("  /top_p <value> - Set top_p for the current model (0.0-1.0).")
+        print("  /top_k <value> - Set top_k for the current model.")
+        print("  /freq_penalty <value> - Set frequency penalty (-2.0-2.0).")
+        print("  /pres_penalty <value> - Set presence penalty (-2.0-2.0).")
+        print("  /reasoning <on|off> - Toggle reasoning (thinking) for NVIDIA models.")
         print("  /stream - Toggle streaming responses.")
         print("  /script <file> - Execute a script file containing multiple commands.")
         print("  /quit - Exit the program.")
@@ -928,7 +998,7 @@ async def handle_escape_command(command: str) -> Union[bool, str]:
 
     elif cmd == "/maxtokens":
         if len(parts) < 2:
-            current_max = CONFIG["models"][ACTIVE_MODEL_ALIAS].get("max_tokens", "Default")
+            current_max = MAX_TOKENS if MAX_TOKENS is not None else CONFIG["models"][ACTIVE_MODEL_ALIAS].get("max_tokens", "Default")
             print(f"Current max tokens: {current_max}")
             return True
 
@@ -940,6 +1010,75 @@ async def handle_escape_command(command: str) -> Union[bool, str]:
             print(f"Max tokens set to {max_tokens}")
         except ValueError:
             print("Invalid max tokens value. Please provide a positive integer.")
+        return True
+
+    elif cmd == "/top_p":
+        if len(parts) < 2:
+            current_tp = TOP_P if TOP_P is not None else CONFIG["models"][ACTIVE_MODEL_ALIAS].get("top_p", "Default")
+            print(f"Current top_p: {current_tp}")
+            return True
+        try:
+            val = float(parts[1])
+            TOP_P = val
+            print(f"top_p set to {val}")
+        except ValueError:
+            print("Invalid top_p value. Please enter a float.")
+        return True
+
+    elif cmd == "/top_k":
+        if len(parts) < 2:
+            current_tk = TOP_K if TOP_K is not None else CONFIG["models"][ACTIVE_MODEL_ALIAS].get("top_k", "Default")
+            print(f"Current top_k: {current_tk}")
+            return True
+        try:
+            val = int(parts[1])
+            TOP_K = val
+            print(f"top_k set to {val}")
+        except ValueError:
+            print("Invalid top_k value. Please enter an integer.")
+        return True
+
+    elif cmd == "/freq_penalty":
+        if len(parts) < 2:
+            current_fp = FREQ_PENALTY if FREQ_PENALTY is not None else CONFIG["models"][ACTIVE_MODEL_ALIAS].get("frequency_penalty", "Default")
+            print(f"Current frequency penalty: {current_fp}")
+            return True
+        try:
+            val = float(parts[1])
+            FREQ_PENALTY = val
+            print(f"Frequency penalty set to {val}")
+        except ValueError:
+            print("Invalid frequency penalty value. Please enter a float.")
+        return True
+
+    elif cmd == "/pres_penalty":
+        if len(parts) < 2:
+            current_pp = PRES_PENALTY if PRES_PENALTY is not None else CONFIG["models"][ACTIVE_MODEL_ALIAS].get("presence_penalty", "Default")
+            print(f"Current presence penalty: {current_pp}")
+            return True
+        try:
+            val = float(parts[1])
+            PRES_PENALTY = val
+            print(f"Presence penalty set to {val}")
+        except ValueError:
+            print("Invalid presence penalty value. Please enter a float.")
+        return True
+
+    elif cmd == "/reasoning":
+        global REASONING_MODE
+        if len(parts) < 2:
+            print(f"Reasoning mode is currently {'ON' if REASONING_MODE else 'OFF'}")
+            return True
+        
+        mode = parts[1].lower()
+        if mode == "on":
+            REASONING_MODE = True
+            print("Reasoning mode ENABLED (detailed thinking on).")
+        elif mode == "off":
+            REASONING_MODE = False
+            print("Reasoning mode DISABLED (detailed thinking off).")
+        else:
+            print("Usage: /reasoning <on|off>")
         return True
 
     elif cmd == "/stream":
