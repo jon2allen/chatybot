@@ -733,7 +733,7 @@ async def handle_escape_command(command: str) -> Union[bool, str]:
         print("  /stream - Toggle streaming responses.")
         print("  /script <file> - Execute a script file containing multiple commands.")
         print("  /quit - Exit the program.")
-        print("  /setdb <dbname> - Create or select a TinyDB database.")
+        print("  /setdb <dbname> - Create or select a TinyDB database. Use 'Null' to deactivate.")
         print("  /dblist - List all TinyDB databases in the db directory.")
         print("  /searchdb <query> - Search all docs in the current database.")
         print("  /dblog - Log the last chat completion to the database.")

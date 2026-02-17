@@ -163,7 +163,7 @@ chat --> Hello!      # Start a conversation
 | `/logging <start\|end>` | Start/stop logging | `/logging start` |
 | `/save <file>` | Save last response | `/save output.txt` |
 | `/script <path>` | Execute a script | `/script setup.dsl` |
-| `/setdb <name>` | Select TinyDB database | `/setdb knowledge` |
+| `/setdb <name>` | Select TinyDB database. Use `Null` to deactivate. | `/setdb knowledge` |
 | `/searchdb <q>` | Search current database | `/searchdb "python"` |
 | `/dblog` | Log last response to DB | `/dblog` |
 | `/loadvar <v>` | Store search in variable | `/loadvar results` |

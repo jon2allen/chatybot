@@ -22,8 +22,13 @@ def set_db(db_name: str) -> None:
     """Create (if needed) and activate a TinyDB database with the given name.
 
     The database file is placed under the project's ``db`` directory.
+    If db_name is 'Null' (case-insensitive), deactivate database support.
     """
     global _manager
+    if db_name.lower() == "null":
+        _manager = None
+        print("Database support deactivated.")
+        return
     db_path = _ensure_db_path(db_name)
     _manager = CorpusManager(db_path)
     print(f"Database set to '{db_path}'.")
