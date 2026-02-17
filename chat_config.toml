@@ -52,6 +52,15 @@ top_k = 1
 base_url = "https://openrouter.ai/api/v1"
 api_key = "OPENROUTER_API_KEY"
 
+[models.nvidia_mistral_nemotron]
+name = "mistralai/mistral-nemotron"
+temperature = 0.7
+top_k = 1
+base_url = "https://integrate.api.nvidia.com/v1"
+api_key = "NVIDIA_API"
+
+
+
 [models.nvidia_1]
 name = "nvidia/nemotron-nano-12b-v2-vl:free"
 temperature = 0.7
@@ -61,6 +70,13 @@ api_key = "OPENROUTER_API_KEY"
 
 [models.gpt_oss_20b]
 name = "openai/gpt-oss-20b:free"
+temperature = 0.7
+top_k = 1
+base_url = "https://openrouter.ai/api/v1"
+api_key = "OPENROUTER_API_KEY"
+
+[models.llama_3_3_openrt]
+name = "meta-llama/llama-3.3-70b-instruct:free"
 temperature = 0.7
 top_k = 1
 base_url = "https://openrouter.ai/api/v1"
