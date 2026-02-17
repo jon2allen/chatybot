@@ -737,7 +737,7 @@ async def handle_escape_command(command: str) -> Union[bool, str]:
         print("  /dblist - List all TinyDB databases in the db directory.")
         print("  /searchdb <query> - Search all docs in the current database.")
         print("  /dblog - Log the last chat completion to the database.")
-        print("  /loadvar <varname> - Load SEARCHBUFFER into a variable.")
+        print("  /loadvar <varname> [ALL|id|range] - Load search buffer, all docs, a doc ID, or a range (e.g. 1-5) into a variable.")
         print("  /savevar <varname> <filename> - Save a variable's contents to a file.")
         print("  /setvar <varname> <value> - Set a script variable to a string.")
         print("  /mem - Show size of buffers and script variables.")
@@ -936,10 +936,11 @@ async def handle_escape_command(command: str) -> Union[bool, str]:
         return True
     elif cmd == "/loadvar":
         if len(parts) < 2:
-            print("Usage: /loadvar <varname>")
+            print("Usage: /loadvar <varname> [ALL | id | range]")
             return True
         varname = parts[1].strip('"')
-        load_var(varname)
+        extra = parts[2] if len(parts) > 2 else None
+        load_var(varname, extra)
         return True
     elif cmd == "/savevar":
         if len(parts) < 3:

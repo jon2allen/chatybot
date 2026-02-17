@@ -166,7 +166,7 @@ chat --> Hello!      # Start a conversation
 | `/setdb <name>` | Select TinyDB database. Use `Null` to deactivate. | `/setdb knowledge` |
 | `/searchdb <q>` | Search current database | `/searchdb "python"` |
 | `/dblog` | Log last response to DB | `/dblog` |
-| `/loadvar <v>` | Store search in variable | `/loadvar results` |
+| `/loadvar <v> [p]` | Store search, ALL, ID, or range in variable | `/loadvar results 1-5` |
 | `/savevar <v> <f>`| Save variable to file | `/savevar results log.txt` |
 | `/setvar <v> <val>`| Set a string variable | `/setvar user "Jon"` |
 | `/quit` | Exit the program | `/quit` |
@@ -428,8 +428,22 @@ Number of tokens: Input 37, Output 3971
 Assistant: Here's a well-structured Bash script that uses the `cat` command to display the contents of all `.py` files located in a specified subdirectory. The script is designed to be flexible, robust, and user-friendly.
 ```
 
-Jan 24th, 2025
--------------
+Feb 17th, 2026
+--------------
+- **Enhanced Database Control**: Added `/setdb Null` to deactivate database support dynamically.
+- **Advanced `/loadvar`**: Now supports `ALL`, specific `id`, and `range` (e.g., `1-5`) for the database items.
+- **Improved Usability**: Added shebang to `chatybot.py` for direct execution.
+
+Jan 25th, 2026
+--------------
+- **LLM Parameter Tuning**: Added commands for `/seed`, `/top_k`, `/top_p`, `/freq_penalty`, and `/pres_penalty`.
+- **NVIDIA Reasoning**: Added `/reasoning <on|off>` to toggle detailed thinking for NVIDIA models.
+- **Debugging Suite**: New commands `/mem` and `/dump` for inspecting buffer sizes and variable contents.
+- **Database Management**: Added `/dblist` to view available TinyDB files.
+- **Provider Stability**: Improved compatibility for Mistral, Google Gemini, and Bytez APIs.
+
+Jan 24th, 2026
+--------------
 - **TinyDB Integration**: New database module (`chatydb.py`) for persistent storage.
 - **Persistent Search Buffer**: `/searchdb` results are cached in `SEARCHBUFFER`.
 - **Variable Linking**: `/loadvar` now bridges database results to `${variable}` placeholders.
@@ -453,5 +467,5 @@ For questions or issues:
 
 ---
 
-**Happy Chatting with ghatybot** 
+**Happy Chatting with chatybot** 
 

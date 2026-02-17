@@ -121,8 +121,13 @@ def dblog() -> None:
     print("Last chat completion logged to the database.")
     
 
-def load_var(var_name: str) -> None:
-    """Load the current ``SEARCHBUFFER`` content into a SCRIPT_VAR in chatybot.
+def load_var(var_name: str, extra: str = None) -> None:
+    """Load content into a SCRIPT_VAR in chatybot.
+    
+    If 'extra' is None, use current ``SEARCHBUFFER``.
+    If 'extra' is 'ALL', use all items from database.
+    If 'extra' is an ID (e.g. '1'), use that document.
+    If 'extra' is a range (e.g. '1-5'), use documents in that ID range.
     """
     import sys
     main_mod = sys.modules.get('__main__')
@@ -131,13 +136,51 @@ def load_var(var_name: str) -> None:
         print("Error: Could not access SCRIPT_VARS in chatybot.")
         return
 
-    if not SEARCHBUFFER:
-        print("SEARCHBUFFER is empty – nothing to load.")
+    data_to_load = []
+    if extra is None:
+        if not SEARCHBUFFER:
+            print("SEARCHBUFFER is empty – nothing to load.")
+            return
+        data_to_load = SEARCHBUFFER
+    else:
+        if _manager is None:
+            print("No database selected. Additional parameters for /loadvar require an active database.")
+            return
+        
+        arg = extra.strip().upper()
+        if arg == "ALL":
+            data_to_load = _manager.get_all_items()
+        elif "-" in arg:
+            try:
+                start_str, end_str = arg.split("-", 1)
+                s_id = int(start_str.strip())
+                e_id = int(end_str.strip())
+                all_items = _manager.get_all_items()
+                # TinyDB Document objects have a doc_id property
+                data_to_load = [item for item in all_items if s_id <= item.doc_id <= e_id]
+            except ValueError:
+                print(f"Invalid range format: '{extra}'. Use e.g. 1-5")
+                return
+        else:
+            try:
+                doc_id = int(arg)
+                item = _manager.items.get(doc_id=doc_id)
+                if item:
+                    data_to_load = [item]
+                else:
+                    print(f"Document with ID {doc_id} not found.")
+                    return
+            except ValueError:
+                print(f"Invalid parameter: '{extra}'. Use ALL, an ID, or a range (e.g. 1-5).")
+                return
+
+    if not data_to_load:
+        print("No records found to load.")
         return
 
     # Store a JSON representation for easy later retrieval
-    script_vars[var_name] = json.dumps(SEARCHBUFFER, ensure_ascii=False, indent=2)
-    print(f"Variable '{var_name}' loaded into SCRIPT_VARS with {len(SEARCHBUFFER)} record(s).")
+    script_vars[var_name] = json.dumps(data_to_load, ensure_ascii=False, indent=2)
+    print(f"Variable '{var_name}' loaded into SCRIPT_VARS with {len(data_to_load)} record(s).")
 
 def save_var(var_name: str, filename: str) -> None:
     """Save the contents of a SCRIPT_VAR to *filename*.
