@@ -64,11 +64,19 @@ def load_config() -> None:
     # Create the config directory if it doesn't exist
     os.makedirs(os.path.dirname(config_path), exist_ok=True)
     
+    # Check if config exists in ~/.config, otherwise try local and copy
+    if not os.path.exists(config_path):
+        local_config = "chat_config.toml"
+        if os.path.exists(local_config):
+            import shutil
+            shutil.copy2(local_config, config_path)
+            print(f"Copied local '{local_config}' to '{config_path}'")
+        else:
+            raise FileNotFoundError(f"Configuration file not found. Please create '{config_path}'.")
+
     try:
         with open(config_path, "rb") as f:
             CONFIG = tomllib.load(f)
-    except FileNotFoundError:
-        raise FileNotFoundError(f"Configuration file '{config_path}' not found.")
     except tomllib.TOMLDecodeError:
         raise ValueError(f"Invalid TOML format in '{config_path}'.")
 
