@@ -292,12 +292,18 @@ wait 1
 
 ## **Architecture**
 
-```
-chatdsl/
-├── chatybot.py          # Main application
-├── chat_config.toml    # Configuration file
-├── dsl_test/           # Script files
-├── logs               # Session logs
+```text
+chatybot/
+├── pyproject.toml       # Python package build configuration
+├── cleanhouse.sh        # Setup/Reinstall cleanup script
+├── src/chatybot/        # Main application package
+│   ├── main.py          # Primary application entry point
+│   ├── chatydb.py       # TinyDB database manager module
+│   ├── extract_code.py  # Utilities for isolating code blocks
+│   └── chat_config.toml # Default/Fallback LLM configuration
+├── dsl_test/            # Script examples and testing
+├── ~/.config/chatybot/  # Active user configuration directory (Auto-generated)
+└── ~/.local/share/chatybot/ # Active database and history storage (Auto-generated)
 ```
 
 ### **Core Components**
