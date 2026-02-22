@@ -66,7 +66,7 @@ def load_config() -> None:
     
     # Check if config exists in ~/.config, otherwise try local and copy
     if not os.path.exists(config_path):
-        local_config = "chat_config.toml"
+        local_config = os.path.join(os.path.dirname(__file__), "chat_config.toml")
         if os.path.exists(local_config):
             import shutil
             shutil.copy2(local_config, config_path)

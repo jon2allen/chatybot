@@ -17,3 +17,6 @@ dependencies = [
 
 [project.scripts]
 chatybot = "chatybot.main:run"
+
+[tool.setuptools.package-data]
+chatybot = ["*.toml"]
