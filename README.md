@@ -392,6 +392,29 @@ Feb 22nd, 2026
   - Migrated configuration files and databases from the active working directory into persistent `~/.config/chatybot/` and `~/.local/share/chatybot/` locations.
   - Built graceful config fallbacks and a cleanup script for straightforward deployments.
 
+Feb 17th, 2026
+--------------
+- **Enhanced Database Control**: Added `/setdb Null` to deactivate database support dynamically.
+- **Advanced `/loadvar`**: Now supports `ALL`, specific `id`, and `range` (e.g., `1-5`) for the database items.
+- **Improved Usability**: Added shebang to `chatybot.py` for direct execution.
+
+Jan 25th, 2026
+--------------
+- **LLM Parameter Tuning**: Added commands for `/seed`, `/top_k`, `/top_p`, `/freq_penalty`, and `/pres_penalty`.
+- **NVIDIA Reasoning**: Added `/reasoning <on|off>` to toggle detailed thinking for NVIDIA models.
+- **Debugging Suite**: New commands `/mem` and `/dump` for inspecting buffer sizes and variable contents.
+- **Database Management**: Added `/dblist` to view available TinyDB files.
+- **Provider Stability**: Improved compatibility for Mistral, Google Gemini, and Bytez APIs.
+
+Jan 24th, 2026
+--------------
+- **TinyDB Integration**: New database module (`chatydb.py`) for persistent storage.
+- **Persistent Search Buffer**: `/searchdb` results are cached in `SEARCHBUFFER`.
+- **Variable Linking**: `/loadvar` now bridges database results to `${variable}` placeholders.
+- **Prompt Injection**: All prompts now support `${variable}` substitution for dynamic context.
+- **Manual Variables**: Added `/setvar` for setting session variables via the CLI.
+- **Database Logging**: `/dblog` allows one-click archiving of AI responses to the active database.
+
 Jan 10th
 -------------
 
@@ -454,30 +477,6 @@ Execution time: 50.25 seconds
 Number of tokens: Input 37, Output 3971
 Assistant: Here's a well-structured Bash script that uses the `cat` command to display the contents of all `.py` files located in a specified subdirectory. The script is designed to be flexible, robust, and user-friendly.
 ```
-
-Feb 17th, 2026
---------------
-- **Enhanced Database Control**: Added `/setdb Null` to deactivate database support dynamically.
-- **Advanced `/loadvar`**: Now supports `ALL`, specific `id`, and `range` (e.g., `1-5`) for the database items.
-- **Improved Usability**: Added shebang to `chatybot.py` for direct execution.
-
-Jan 25th, 2026
---------------
-- **LLM Parameter Tuning**: Added commands for `/seed`, `/top_k`, `/top_p`, `/freq_penalty`, and `/pres_penalty`.
-- **NVIDIA Reasoning**: Added `/reasoning <on|off>` to toggle detailed thinking for NVIDIA models.
-- **Debugging Suite**: New commands `/mem` and `/dump` for inspecting buffer sizes and variable contents.
-- **Database Management**: Added `/dblist` to view available TinyDB files.
-- **Provider Stability**: Improved compatibility for Mistral, Google Gemini, and Bytez APIs.
-
-Jan 24th, 2026
---------------
-- **TinyDB Integration**: New database module (`chatydb.py`) for persistent storage.
-- **Persistent Search Buffer**: `/searchdb` results are cached in `SEARCHBUFFER`.
-- **Variable Linking**: `/loadvar` now bridges database results to `${variable}` placeholders.
-- **Prompt Injection**: All prompts now support `${variable}` substitution for dynamic context.
-- **Manual Variables**: Added `/setvar` for setting session variables via the CLI.
-- **Database Logging**: `/dblog` allows one-click archiving of AI responses to the active database.
-
 ---
 
 
