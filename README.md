@@ -82,6 +82,20 @@ pip install -r requirements.txt
 nano chat_config.toml  # Add your API keys and model configurations
 ```
 
+### **Troubleshooting**
+**macOS Permission Denied Error (`~/.config`)**
+On macOS, if you encounter a `Permission denied` error when `chatybot` attempts to access or create the `~/.config` directory, it usually means the folder is owned by `root` or another user. 
+
+To fix this, take ownership of your `.config` directory by running this command in your terminal:
+```bash
+sudo chown -R $(whoami) ~/.config
+```
+If the directory does not exist at all and errors persist, you can create it and then set the ownership:
+```bash
+mkdir -p ~/.config
+sudo chown -R $(whoami) ~/.config
+```
+
 ---
 
 ## **Quick Start**
