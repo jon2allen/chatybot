@@ -108,22 +108,31 @@ Active escape commands:
   /listmodels - List available models from toml.
   /logging <start|end> - Start or stop logging.
   /save <file> - Save the last chat completion to a file.
+  /notemode <on|off> - Toggle note mode for /save command.
   /codeonly - Set flag to generate code only without explanations.
   /codeoff - Reverse the code-only flag.
   /multiline - Toggle multi-line input mode (use ';;' to end input).
-  /notemode - when saving chat completion - split off code to file and LLM explaination to notes_code_file.c
   /system <message> - Set a custom system message.
   /temp <value> - Set temperature for the current model (0.0-2.0).
   /maxtokens <value> - Set max tokens for the current model.
+  /top_p <value> - Set top_p for the current model (0.0-1.0).
+  /top_k <value> - Set top_k for the current model.
+  /freq_penalty <value> - Set frequency penalty (-2.0-2.0).
+  /pres_penalty <value> - Set presence penalty (-2.0-2.0).
+  /reasoning <on|off> - Toggle reasoning (thinking) for NVIDIA models.
+  /seed <value> - Set seed (int, 'time', or 'random <min>,<max>').
   /stream - Toggle streaming responses.
   /script <file> - Execute a script file containing multiple commands.
-  /setdb <dbname> - Create or select a TinyDB database.
+  /quit - Exit the program.
+  /setdb <dbname> - Create or select a TinyDB database. Use 'Null' to deactivate.
+  /dblist - List all TinyDB databases in the db directory.
   /searchdb <query> - Search all docs in the current database.
   /dblog - Log the last chat completion to the database.
-  /loadvar <varname> - Load SEARCHBUFFER into a variable.
+  /loadvar <varname> [ALL|id|range] - Load search buffer, all docs, a doc ID, or a range (e.g. 1-5) into a variable.
   /savevar <varname> <filename> - Save a variable's contents to a file.
   /setvar <varname> <value> - Set a script variable to a string.
-  /quit - Exit the program.
+  /mem - Show size of buffers and script variables.
+  /dump [varname|all] - Print content of buffers or script variables.
 
 Script-specific features:
   set <name> = <value> - Define a variable
@@ -156,19 +165,29 @@ chat --> Hello!      # Start a conversation
 | `/system <msg>` | Set system message | `/system "You are an expert coder."` |
 | `/temp <value>` | Set temperature (0.0-2.0) | `/temp 0.7` |
 | `/maxtokens <value>` | Set max tokens | `/maxtokens 1000` |
+| `/top_p <value>` | Set top_p (0.0-1.0) | `/top_p 0.9` |
+| `/top_k <value>` | Set top_k | `/top_k 40` |
+| `/freq_penalty <value>` | Set freq penalty | `/freq_penalty 0.5` |
+| `/pres_penalty <value>` | Set presence penalty | `/pres_penalty 0.5` |
+| `/reasoning <on\|off>` | Toggle NVIDIA reasoning | `/reasoning off` |
+| `/seed <value>` | Set PRNG Seed | `/seed time` |
 | `/stream` | Toggle streaming | `/stream` |
 | `/codeonly` | Enable code-only mode | `/codeonly` |
 | `/codeoff` | Disable code-only mode | `/codeoff` |
+| `/notemode <on\|off>` | Toggle note block separation | `/notemode on` |
 | `/multiline` | Toggle multi-line input | `/multiline` |
 | `/logging <start\|end>` | Start/stop logging | `/logging start` |
 | `/save <file>` | Save last response | `/save output.txt` |
 | `/script <path>` | Execute a script | `/script setup.dsl` |
 | `/setdb <name>` | Select TinyDB database. Use `Null` to deactivate. | `/setdb knowledge` |
+| `/dblist` | List all TinyDB databases | `/dblist` |
 | `/searchdb <q>` | Search current database | `/searchdb "python"` |
 | `/dblog` | Log last response to DB | `/dblog` |
 | `/loadvar <v> [p]` | Store search, ALL, ID, or range in variable | `/loadvar results 1-5` |
 | `/savevar <v> <f>`| Save variable to file | `/savevar results log.txt` |
 | `/setvar <v> <val>`| Set a string variable | `/setvar user "Jon"` |
+| `/mem` | Show memory size of buffers/variables | `/mem` |
+| `/dump [v\|all]` | Dump variables | `/dump all` |
 | `/quit` | Exit the program | `/quit` |
 
 ---
@@ -364,6 +383,14 @@ chat --> Create a blog post outline about ${topic}
 ```
 
 ### Change log
+
+Feb 22nd, 2026
+--------------
+- **Packaging and Distribution**: 
+  - Restructured into `src/chatybot` module for PEP 517 compliance. 
+  - Added `pyproject.toml` enabling rapid `pip install` globally across the path via console script `chatybot`.
+  - Migrated configuration files and databases from the active working directory into persistent `~/.config/chatybot/` and `~/.local/share/chatybot/` locations.
+  - Built graceful config fallbacks and a cleanup script for straightforward deployments.
 
 Jan 10th
 -------------
