@@ -8,13 +8,13 @@ from datetime import datetime
 from typing import Dict, Any, List, Tuple, Optional, Callable, Union
 import logging
 import atexit
-from chatydb import set_db, search_db, dblog, load_var, save_var, list_dbs, SEARCHBUFFER
+from .chatydb import set_db, search_db, dblog, load_var, save_var, list_dbs, SEARCHBUFFER
 
 # Add these imports at the top of the file
 import re
 import shlex
 import random
-from extract_code import process_file  # Import the function from extract_code.py
+from .extract_code import process_file  # Import the function from extract_code.py
 
 try:
     import openai
@@ -59,13 +59,18 @@ def load_config() -> None:
     global CONFIG, DEFAULT_MODEL_ALIAS, ACTIVE_MODEL_ALIAS, SYSTEM_MESSAGE, MAX_TOKENS
     global TOP_P, TOP_K, FREQ_PENALTY, PRES_PENALTY
 
+    config_path = os.path.expanduser("~/.config/chatybot/chat_config.toml")
+    
+    # Create the config directory if it doesn't exist
+    os.makedirs(os.path.dirname(config_path), exist_ok=True)
+    
     try:
-        with open("chat_config.toml", "rb") as f:
+        with open(config_path, "rb") as f:
             CONFIG = tomllib.load(f)
     except FileNotFoundError:
-        raise FileNotFoundError("Configuration file 'chat_config.toml' not found.")
+        raise FileNotFoundError(f"Configuration file '{config_path}' not found.")
     except tomllib.TOMLDecodeError:
-        raise ValueError("Invalid TOML format in 'chat_config.toml'.")
+        raise ValueError(f"Invalid TOML format in '{config_path}'.")
 
     # Set the default model alias to the first model in the config
     DEFAULT_MODEL_ALIAS = next(iter(CONFIG["models"]))
@@ -184,12 +189,17 @@ def list_models() -> None:
 
     print()
 
+def get_history_path() -> str:
+    path = os.path.expanduser("~/.local/share/chatybot")
+    os.makedirs(path, exist_ok=True)
+    return os.path.join(path, ".chat_history")
+
 def save_input_history() -> None:
     """
     Save input history to a file before exiting.
     """
     if INPUT_HISTORY:
-        with open(".chat_history", "w") as f:
+        with open(get_history_path(), "w") as f:
             f.write("\n".join(INPUT_HISTORY))
 
 def load_input_history() -> None:
@@ -198,7 +208,7 @@ def load_input_history() -> None:
     """
     global INPUT_HISTORY
     try:
-        with open(".chat_history", "r") as f:
+        with open(get_history_path(), "r") as f:
             INPUT_HISTORY = [line.strip() for line in f.readlines() if line.strip()]
         # Set up readline history
         for line in INPUT_HISTORY:
@@ -1251,5 +1261,8 @@ async def main() -> None:
         except Exception as e:
             print(f"Error: {str(e)}")
 
+def run():
+    asyncio.run(main())
+
 if __name__ == "__main__":
-   asyncio.run(main())
+    run()

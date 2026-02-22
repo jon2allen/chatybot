@@ -1,0 +1,15 @@
+LICENSE.md
+README.md
+pyproject.toml
+src/chatybot/__init__.py
+src/chatybot/chatydb.py
+src/chatybot/extract_code.py
+src/chatybot/main.py
+src/chatybot.egg-info/PKG-INFO
+src/chatybot.egg-info/SOURCES.txt
+src/chatybot.egg-info/dependency_links.txt
+src/chatybot.egg-info/entry_points.txt
+src/chatybot.egg-info/requires.txt
+src/chatybot.egg-info/top_level.txt
+src/chatybot/tinydb1/__init__.py
+src/chatybot/tinydb1/corpus_manager.py

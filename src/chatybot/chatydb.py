@@ -3,7 +3,7 @@ import json
 from typing import List, Dict, Any
 
 # Import the CorpusManager from the provided tinydb implementation
-from tinydb1.corpus_manager import CorpusManager
+from .tinydb1.corpus_manager import CorpusManager
 
 # Global variables
 SEARCHBUFFER: List[Dict[str, Any]] = []  # Holds the last search results
@@ -13,7 +13,8 @@ _manager: CorpusManager = None
 
 def _ensure_db_path(db_name: str) -> str:
     """Ensure the database directory exists and return the full path to the TinyDB file."""
-    db_dir = os.path.join(os.getcwd(), "db")
+    base_dir = os.path.expanduser("~/.local/share/chatybot")
+    db_dir = os.path.join(base_dir, "db")
     os.makedirs(db_dir, exist_ok=True)
     # TinyDB stores data in a JSON file; we use the provided name with .json extension
     return os.path.join(db_dir, f"{db_name}.json")
@@ -35,9 +36,10 @@ def set_db(db_name: str) -> None:
 
 def list_dbs() -> None:
     """List all TinyDB JSON files in the 'db' directory with details."""
-    db_dir = os.path.join(os.getcwd(), "db")
+    base_dir = os.path.expanduser("~/.local/share/chatybot")
+    db_dir = os.path.join(base_dir, "db")
     if not os.path.exists(db_dir):
-        print("No database directory found at 'db/'.")
+        print(f"No database directory found at '{db_dir}'.")
         return
 
     json_files = [f for f in os.listdir(db_dir) if f.endswith(".json")]

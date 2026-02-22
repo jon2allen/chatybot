@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chatybot"
+version = "0.1.0"
+description = "A CLI-based AI chat assistant"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "Jon Allen" }]
+dependencies = [
+    "openai",
+    "tinydb",
+    "pygments"
+]
+
+[project.scripts]
+chatybot = "chatybot.main:run"
