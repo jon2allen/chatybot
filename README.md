@@ -411,6 +411,9 @@ Feb 22nd, 2026
   - Added `pyproject.toml` enabling rapid `pip install` globally across the path via console script `chatybot`.
   - Migrated configuration files and databases from the active working directory into persistent `~/.config/chatybot/` and `~/.local/share/chatybot/` locations.
   - Built graceful config fallbacks and a cleanup script for straightforward deployments.
+- **Model Compatibility**:
+  - Added dummy API key bypass logic for testing with local `localhost`/`Ollama` server endpoints natively.
+  - Expanded `/reasoning off` toggle support to also apply to Qwen (2.5/3) reasoning models.
 
 Feb 17th, 2026
 --------------
