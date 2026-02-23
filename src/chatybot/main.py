@@ -341,7 +341,8 @@ async def chat_completion(prompt: str, stream: bool = False) -> str:
     # Prepare messages for chat completion
     messages = [{"role": "user", "content": full_prompt}]
 
-    is_reasoning_model = "nvidia" in model_config.get("base_url", "").lower() or "nvidia" in model_name.lower() or "qwen" in model_name.lower()
+    is_nvidia = "nvidia" in model_config.get("base_url", "").lower() or "nvidia" in model_name.lower()
+    is_reasoning_model = is_nvidia or "qwen" in model_name.lower()
     
     current_system_message = SYSTEM_MESSAGE
     if is_reasoning_model and not REASONING_MODE:
