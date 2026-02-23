@@ -112,13 +112,19 @@ def get_openai_client(model_alias: str) -> AsyncOpenAI:
     if not model_config:
         raise ValueError(f"Model alias '{model_alias}' not found in configuration.")
 
-    api_key = os.environ.get(model_config["api_key"])
+    api_key_env = model_config.get("api_key", "")
+    api_key = os.environ.get(api_key_env)
 
+    # Bypass strict API key requirement for local models/Ollama
     if not api_key:
-        raise ValueError(
-            f"API key not found for model alias '{model_alias}'. "
-            f"Please set the '{model_config['api_key']}' environment variable."
-        )
+        base_url = model_config.get("base_url", "")
+        if api_key_env.upper() in ["OLLAMA", "NONE", "DUMMY", "LOCAL"] or "localhost" in base_url or "127.0.0.1" in base_url:
+            api_key = "dummy-key-for-local"
+        else:
+            raise ValueError(
+                f"API key not found for model alias '{model_alias}'. "
+                f"Please set the '{api_key_env}' environment variable."
+            )
 
     base_url = model_config.get("base_url")
 
