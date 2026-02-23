@@ -340,10 +340,10 @@ async def chat_completion(prompt: str, stream: bool = False) -> str:
     # Prepare messages for chat completion
     messages = [{"role": "user", "content": full_prompt}]
 
-    is_nvidia = "nvidia" in model_config.get("base_url", "").lower() or "nvidia" in model_name.lower()
+    is_reasoning_model = "nvidia" in model_config.get("base_url", "").lower() or "nvidia" in model_name.lower() or "qwen" in model_name.lower()
     
     current_system_message = SYSTEM_MESSAGE
-    if is_nvidia and not REASONING_MODE:
+    if is_reasoning_model and not REASONING_MODE:
         if current_system_message:
             current_system_message += "\ndetailed thinking off"
         else:
@@ -752,7 +752,7 @@ async def handle_escape_command(command: str) -> Union[bool, str]:
         print("  /top_k <value> - Set top_k for the current model.")
         print("  /freq_penalty <value> - Set frequency penalty (-2.0-2.0).")
         print("  /pres_penalty <value> - Set presence penalty (-2.0-2.0).")
-        print("  /reasoning <on|off> - Toggle reasoning (thinking) for NVIDIA models.")
+        print("  /reasoning <on|off> - Toggle reasoning (thinking) for NVIDIA and Qwen models.")
         print("  /seed <value> - Set seed (int, 'time', or 'random <min>,<max>').")
         print("  /stream - Toggle streaming responses.")
         print("  /script <file> - Execute a script file containing multiple commands.")
