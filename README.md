@@ -184,6 +184,7 @@ chat --> Hello!      # Start a conversation
 | `/freq_penalty <value>` | Set freq penalty | `/freq_penalty 0.5` |
 | `/pres_penalty <value>` | Set presence penalty | `/pres_penalty 0.5` |
 | `/reasoning <on\|off>` | Toggle NVIDIA reasoning | `/reasoning off` |
+| `/thinking <on\|off>` | Toggle `<think>` visibility | `/thinking off` |
 | `/seed <value>` | Set PRNG Seed | `/seed time` |
 | `/stream` | Toggle streaming | `/stream` |
 | `/codeonly` | Enable code-only mode | `/codeonly` |

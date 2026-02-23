@@ -42,6 +42,7 @@ MAX_TOKENS = None
 STREAMING_ENABLED = False
 NOTE_MODE = False  # New global variable for note mode
 REASONING_MODE = True  # New global variable for NVIDIA reasoning toggle
+SHOW_THINKING = True  # Toggle whether to show <think> tags / reasoning text
 
 # Add these global variables
 SCRIPT_VARS: Dict[str, str] = {}
@@ -424,19 +425,85 @@ async def chat_completion(prompt: str, stream: bool = False) -> str:
 
             full_response = ""
             print("Assistant: ", end="", flush=True)
+            
+            buffer = ""
+            in_think_block = False
+            
             async for chunk in response:
-                if chunk.choices[0].delta.content:
-                    content = chunk.choices[0].delta.content
-                    print(content, end="", flush=True)
+                if not chunk.choices: continue
+                delta = chunk.choices[0].delta
+                
+                reasoning = getattr(delta, "reasoning_content", None)
+                if reasoning:
+                    full_response += reasoning
+                    if SHOW_THINKING:
+                        print(f"\033[90m{reasoning}\033[0m", end="", flush=True)
+
+                if delta.content:
+                    content = delta.content
                     full_response += content
+                    
+                    if not SHOW_THINKING:
+                        buffer += content
+                        while buffer:
+                            if not in_think_block:
+                                think_idx = buffer.find("<think>")
+                                if think_idx != -1:
+                                    print(buffer[:think_idx], end="", flush=True)
+                                    buffer = buffer[think_idx + len("<think>"):]
+                                    in_think_block = True
+                                else:
+                                    match_len = 0
+                                    for i in range(len("<think>") - 1, 0, -1):
+                                        if buffer.endswith("<think>"[:i]):
+                                            match_len = i
+                                            break
+                                    if match_len > 0:
+                                        print(buffer[:-match_len], end="", flush=True)
+                                        buffer = buffer[-match_len:]
+                                        break
+                                    else:
+                                        print(buffer, end="", flush=True)
+                                        buffer = ""
+                            else:
+                                end_idx = buffer.find("</think>")
+                                if end_idx != -1:
+                                    buffer = buffer[end_idx + len("</think>"):]
+                                    in_think_block = False
+                                else:
+                                    if len(buffer) >= len("</think>"):
+                                        buffer = buffer[-(len("</think>") - 1):]
+                                    break
+                    else:
+                        print(content, end="", flush=True)
+                        
+            if buffer and not SHOW_THINKING and not in_think_block:
+                print(buffer, end="", flush=True)
             print()  # New line after streaming
         else:
             response = await client.chat.completions.create(**kwargs)
-            full_response = response.choices[0].message.content or ""
-            if not full_response:
-                print("Warning: Received an empty response from the model.")
+            message = response.choices[0].message
+            content = message.content or ""
+            reasoning = getattr(message, "reasoning_content", None) or ""
+            
+            full_response = ""
+            if reasoning:
+                if SHOW_THINKING:
+                    print(f"\033[90m{reasoning}\033[0m")
+                full_response += f"{reasoning}\n\n"
+            
+            full_response += content
+
+            if not SHOW_THINKING:
+                import re
+                print_content = re.sub(r'<think>.*?</think>\s*', '', content, flags=re.DOTALL)
             else:
-                print(full_response)
+                print_content = content
+                
+            if not print_content.strip() and not (reasoning and SHOW_THINKING):
+                print("Warning: Received an empty response from the model.")
+            elif print_content.strip():
+                print(print_content)
 
         # Calculate and display metrics
         elapsed_time = time.time() - start_time
@@ -753,6 +820,7 @@ async def handle_escape_command(command: str) -> Union[bool, str]:
         print("  /freq_penalty <value> - Set frequency penalty (-2.0-2.0).")
         print("  /pres_penalty <value> - Set presence penalty (-2.0-2.0).")
         print("  /reasoning <on|off> - Toggle reasoning (thinking) for NVIDIA and Qwen models.")
+        print("  /thinking <on|off> - Toggle display of <think> blocks and reasoning text.")
         print("  /seed <value> - Set seed (int, 'time', or 'random <min>,<max>').")
         print("  /stream - Toggle streaming responses.")
         print("  /script <file> - Execute a script file containing multiple commands.")
@@ -1120,20 +1188,27 @@ async def handle_escape_command(command: str) -> Union[bool, str]:
         return True
 
     elif cmd == "/reasoning":
-        global REASONING_MODE
-        if len(parts) < 2:
-            print(f"Reasoning mode is currently {'ON' if REASONING_MODE else 'OFF'}")
-            return True
-        
-        mode = parts[1].lower()
-        if mode == "on":
-            REASONING_MODE = True
-            print("Reasoning mode ENABLED (detailed thinking on).")
-        elif mode == "off":
-            REASONING_MODE = False
-            print("Reasoning mode DISABLED (detailed thinking off).")
+        if len(parts) > 1 and parts[1].lower() in ["on", "off"]:
+            global REASONING_MODE
+            if parts[1].lower() == "on":
+                REASONING_MODE = True
+            else:
+                REASONING_MODE = False
+            print(f"Reasoning mode is now {'ON' if REASONING_MODE else 'OFF'}")
         else:
-            print("Usage: /reasoning <on|off>")
+            print(f"Reasoning mode is currently {'ON' if getattr(sys.modules[__name__], 'REASONING_MODE', True) else 'OFF'}")
+        return True
+
+    elif cmd == "/thinking":
+        if len(parts) > 1 and parts[1].lower() in ["on", "off"]:
+            global SHOW_THINKING
+            if parts[1].lower() == "on":
+                SHOW_THINKING = True
+            else:
+                SHOW_THINKING = False
+            print(f"Thinking display is now {'ON' if SHOW_THINKING else 'OFF'}")
+        else:
+            print(f"Thinking display is currently {'ON' if getattr(sys.modules[__name__], 'SHOW_THINKING', True) else 'OFF'}")
         return True
 
     elif cmd == "/seed":
