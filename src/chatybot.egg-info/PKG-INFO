@@ -95,6 +95,20 @@ pip install -r requirements.txt
 nano chat_config.toml  # Add your API keys and model configurations
 ```
 
+### **Troubleshooting**
+**macOS Permission Denied Error (`~/.config`)**
+On macOS, if you encounter a `Permission denied` error when `chatybot` attempts to access or create the `~/.config` directory, it usually means the folder is owned by `root` or another user. 
+
+To fix this, take ownership of your `.config` directory by running this command in your terminal:
+```bash
+sudo chown -R $(whoami) ~/.config
+```
+If the directory does not exist at all and errors persist, you can create it and then set the ownership:
+```bash
+mkdir -p ~/.config
+sudo chown -R $(whoami) ~/.config
+```
+
 ---
 
 ## **Quick Start**
@@ -121,22 +135,31 @@ Active escape commands:
   /listmodels - List available models from toml.
   /logging <start|end> - Start or stop logging.
   /save <file> - Save the last chat completion to a file.
+  /notemode <on|off> - Toggle note mode for /save command.
   /codeonly - Set flag to generate code only without explanations.
   /codeoff - Reverse the code-only flag.
   /multiline - Toggle multi-line input mode (use ';;' to end input).
-  /notemode - when saving chat completion - split off code to file and LLM explaination to notes_code_file.c
   /system <message> - Set a custom system message.
   /temp <value> - Set temperature for the current model (0.0-2.0).
   /maxtokens <value> - Set max tokens for the current model.
+  /top_p <value> - Set top_p for the current model (0.0-1.0).
+  /top_k <value> - Set top_k for the current model.
+  /freq_penalty <value> - Set frequency penalty (-2.0-2.0).
+  /pres_penalty <value> - Set presence penalty (-2.0-2.0).
+  /reasoning <on|off> - Toggle reasoning (thinking) for NVIDIA models.
+  /seed <value> - Set seed (int, 'time', or 'random <min>,<max>').
   /stream - Toggle streaming responses.
   /script <file> - Execute a script file containing multiple commands.
-  /setdb <dbname> - Create or select a TinyDB database.
+  /quit - Exit the program.
+  /setdb <dbname> - Create or select a TinyDB database. Use 'Null' to deactivate.
+  /dblist - List all TinyDB databases in the db directory.
   /searchdb <query> - Search all docs in the current database.
   /dblog - Log the last chat completion to the database.
-  /loadvar <varname> - Load SEARCHBUFFER into a variable.
+  /loadvar <varname> [ALL|id|range] - Load search buffer, all docs, a doc ID, or a range (e.g. 1-5) into a variable.
   /savevar <varname> <filename> - Save a variable's contents to a file.
   /setvar <varname> <value> - Set a script variable to a string.
-  /quit - Exit the program.
+  /mem - Show size of buffers and script variables.
+  /dump [varname|all] - Print content of buffers or script variables.
 
 Script-specific features:
   set <name> = <value> - Define a variable
@@ -169,19 +192,30 @@ chat --> Hello!      # Start a conversation
 | `/system <msg>` | Set system message | `/system "You are an expert coder."` |
 | `/temp <value>` | Set temperature (0.0-2.0) | `/temp 0.7` |
 | `/maxtokens <value>` | Set max tokens | `/maxtokens 1000` |
+| `/top_p <value>` | Set top_p (0.0-1.0) | `/top_p 0.9` |
+| `/top_k <value>` | Set top_k | `/top_k 40` |
+| `/freq_penalty <value>` | Set freq penalty | `/freq_penalty 0.5` |
+| `/pres_penalty <value>` | Set presence penalty | `/pres_penalty 0.5` |
+| `/reasoning <on\|off>` | Toggle NVIDIA reasoning | `/reasoning off` |
+| `/thinking <on\|off>` | Toggle `<think>` visibility | `/thinking off` |
+| `/seed <value>` | Set PRNG Seed | `/seed time` |
 | `/stream` | Toggle streaming | `/stream` |
 | `/codeonly` | Enable code-only mode | `/codeonly` |
 | `/codeoff` | Disable code-only mode | `/codeoff` |
+| `/notemode <on\|off>` | Toggle note block separation | `/notemode on` |
 | `/multiline` | Toggle multi-line input | `/multiline` |
 | `/logging <start\|end>` | Start/stop logging | `/logging start` |
 | `/save <file>` | Save last response | `/save output.txt` |
 | `/script <path>` | Execute a script | `/script setup.dsl` |
 | `/setdb <name>` | Select TinyDB database. Use `Null` to deactivate. | `/setdb knowledge` |
+| `/dblist` | List all TinyDB databases | `/dblist` |
 | `/searchdb <q>` | Search current database | `/searchdb "python"` |
 | `/dblog` | Log last response to DB | `/dblog` |
 | `/loadvar <v> [p]` | Store search, ALL, ID, or range in variable | `/loadvar results 1-5` |
 | `/savevar <v> <f>`| Save variable to file | `/savevar results log.txt` |
 | `/setvar <v> <val>`| Set a string variable | `/setvar user "Jon"` |
+| `/mem` | Show memory size of buffers/variables | `/mem` |
+| `/dump [v\|all]` | Dump variables | `/dump all` |
 | `/quit` | Exit the program | `/quit` |
 
 ---
@@ -286,12 +320,18 @@ wait 1
 
 ## **Architecture**
 
-```
-chatdsl/
-├── chatybot.py          # Main application
-├── chat_config.toml    # Configuration file
-├── dsl_test/           # Script files
-├── logs               # Session logs
+```text
+chatybot/
+├── pyproject.toml       # Python package build configuration
+├── cleanhouse.sh        # Setup/Reinstall cleanup script
+├── src/chatybot/        # Main application package
+│   ├── main.py          # Primary application entry point
+│   ├── chatydb.py       # TinyDB database manager module
+│   ├── extract_code.py  # Utilities for isolating code blocks
+│   └── chat_config.toml # Default/Fallback LLM configuration
+├── dsl_test/            # Script examples and testing
+├── ~/.config/chatybot/  # Active user configuration directory (Auto-generated)
+└── ~/.local/share/chatybot/ # Active database and history storage (Auto-generated)
 ```
 
 ### **Core Components**
@@ -378,6 +418,40 @@ chat --> Create a blog post outline about ${topic}
 
 ### Change log
 
+Feb 22nd, 2026
+--------------
+- **Packaging and Distribution**: 
+  - Restructured into `src/chatybot` module for PEP 517 compliance. 
+  - Added `pyproject.toml` enabling rapid `pip install` globally across the path via console script `chatybot`.
+  - Migrated configuration files and databases from the active working directory into persistent `~/.config/chatybot/` and `~/.local/share/chatybot/` locations.
+  - Built graceful config fallbacks and a cleanup script for straightforward deployments.
+- **Model Compatibility**:
+  - Added dummy API key bypass logic for testing with local `localhost`/`Ollama` server endpoints natively.
+  - Expanded `/reasoning off` toggle support to also apply to Qwen (2.5/3) reasoning models.
+
+Feb 17th, 2026
+--------------
+- **Enhanced Database Control**: Added `/setdb Null` to deactivate database support dynamically.
+- **Advanced `/loadvar`**: Now supports `ALL`, specific `id`, and `range` (e.g., `1-5`) for the database items.
+- **Improved Usability**: Added shebang to `chatybot.py` for direct execution.
+
+Jan 25th, 2026
+--------------
+- **LLM Parameter Tuning**: Added commands for `/seed`, `/top_k`, `/top_p`, `/freq_penalty`, and `/pres_penalty`.
+- **NVIDIA Reasoning**: Added `/reasoning <on|off>` to toggle detailed thinking for NVIDIA models.
+- **Debugging Suite**: New commands `/mem` and `/dump` for inspecting buffer sizes and variable contents.
+- **Database Management**: Added `/dblist` to view available TinyDB files.
+- **Provider Stability**: Improved compatibility for Mistral, Google Gemini, and Bytez APIs.
+
+Jan 24th, 2026
+--------------
+- **TinyDB Integration**: New database module (`chatydb.py`) for persistent storage.
+- **Persistent Search Buffer**: `/searchdb` results are cached in `SEARCHBUFFER`.
+- **Variable Linking**: `/loadvar` now bridges database results to `${variable}` placeholders.
+- **Prompt Injection**: All prompts now support `${variable}` substitution for dynamic context.
+- **Manual Variables**: Added `/setvar` for setting session variables via the CLI.
+- **Database Logging**: `/dblog` allows one-click archiving of AI responses to the active database.
+
 Jan 10th
 -------------
 
@@ -440,30 +514,6 @@ Execution time: 50.25 seconds
 Number of tokens: Input 37, Output 3971
 Assistant: Here's a well-structured Bash script that uses the `cat` command to display the contents of all `.py` files located in a specified subdirectory. The script is designed to be flexible, robust, and user-friendly.
 ```
-
-Feb 17th, 2026
---------------
-- **Enhanced Database Control**: Added `/setdb Null` to deactivate database support dynamically.
-- **Advanced `/loadvar`**: Now supports `ALL`, specific `id`, and `range` (e.g., `1-5`) for the database items.
-- **Improved Usability**: Added shebang to `chatybot.py` for direct execution.
-
-Jan 25th, 2026
---------------
-- **LLM Parameter Tuning**: Added commands for `/seed`, `/top_k`, `/top_p`, `/freq_penalty`, and `/pres_penalty`.
-- **NVIDIA Reasoning**: Added `/reasoning <on|off>` to toggle detailed thinking for NVIDIA models.
-- **Debugging Suite**: New commands `/mem` and `/dump` for inspecting buffer sizes and variable contents.
-- **Database Management**: Added `/dblist` to view available TinyDB files.
-- **Provider Stability**: Improved compatibility for Mistral, Google Gemini, and Bytez APIs.
-
-Jan 24th, 2026
---------------
-- **TinyDB Integration**: New database module (`chatydb.py`) for persistent storage.
-- **Persistent Search Buffer**: `/searchdb` results are cached in `SEARCHBUFFER`.
-- **Variable Linking**: `/loadvar` now bridges database results to `${variable}` placeholders.
-- **Prompt Injection**: All prompts now support `${variable}` substitution for dynamic context.
-- **Manual Variables**: Added `/setvar` for setting session variables via the CLI.
-- **Database Logging**: `/dblog` allows one-click archiving of AI responses to the active database.
-
 ---
 
 

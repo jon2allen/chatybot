@@ -2,6 +2,7 @@ LICENSE.md
 README.md
 pyproject.toml
 src/chatybot/__init__.py
+src/chatybot/chat_config.toml
 src/chatybot/chatydb.py
 src/chatybot/extract_code.py
 src/chatybot/main.py

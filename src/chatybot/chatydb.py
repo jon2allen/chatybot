@@ -102,9 +102,9 @@ def dblog() -> None:
     if _manager is None:
         print("No database selected. Use /setdb <dbname> first.")
         return
-    # Retrieve CHAT_HISTORY from the running script (could be __main__ when executed directly)
+    # Retrieve CHAT_HISTORY from the running script
     import sys
-    chatybot_mod = sys.modules.get('chatybot') or sys.modules.get('__main__')
+    chatybot_mod = sys.modules.get('chatybot.main') or sys.modules.get('__main__')
     if not chatybot_mod:
         print("Unable to locate the chatybot module. Ensure this function is called after a chat has occurred.")
         return
@@ -132,7 +132,7 @@ def load_var(var_name: str, extra: str = None) -> None:
     If 'extra' is a range (e.g. '1-5'), use documents in that ID range.
     """
     import sys
-    main_mod = sys.modules.get('__main__')
+    main_mod = sys.modules.get('chatybot.main') or sys.modules.get('__main__')
     script_vars = getattr(main_mod, 'SCRIPT_VARS', None)
     if script_vars is None:
         print("Error: Could not access SCRIPT_VARS in chatybot.")
@@ -188,7 +188,7 @@ def save_var(var_name: str, filename: str) -> None:
     """Save the contents of a SCRIPT_VAR to *filename*.
     """
     import sys
-    main_mod = sys.modules.get('__main__')
+    main_mod = sys.modules.get('chatybot.main') or sys.modules.get('__main__')
     script_vars = getattr(main_mod, 'SCRIPT_VARS', None)
     if script_vars is None:
         print("Error: Could not access SCRIPT_VARS in chatybot.")
