@@ -1117,7 +1117,7 @@ async def handle_escape_command(command: str) -> Union[bool, str]:
             print(f"Current system message: {SYSTEM_MESSAGE}")
             return True
 
-        SYSTEM_MESSAGE = parts[1]
+        SYSTEM_MESSAGE = command.split(maxsplit=1)[1].strip(' "\'')
         print(f"System message updated: {SYSTEM_MESSAGE}")
         return True
 
