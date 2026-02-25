@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 authors = [{ name = "Jon Allen" }]
 dependencies = [
-    "openai",
+    "openai>=1.61.0",
     "tinydb",
     "pygments"
 ]

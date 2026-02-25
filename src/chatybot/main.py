@@ -444,42 +444,59 @@ async def chat_completion(prompt: str, stream: bool = False) -> str:
                     content = delta.content
                     full_response += content
                     
-                    if not SHOW_THINKING:
-                        buffer += content
-                        while buffer:
-                            if not in_think_block:
-                                think_idx = buffer.find("<think>")
-                                if think_idx != -1:
-                                    print(buffer[:think_idx], end="", flush=True)
-                                    buffer = buffer[think_idx + len("<think>"):]
-                                    in_think_block = True
-                                else:
-                                    match_len = 0
-                                    for i in range(len("<think>") - 1, 0, -1):
-                                        if buffer.endswith("<think>"[:i]):
-                                            match_len = i
-                                            break
-                                    if match_len > 0:
-                                        print(buffer[:-match_len], end="", flush=True)
-                                        buffer = buffer[-match_len:]
-                                        break
-                                    else:
-                                        print(buffer, end="", flush=True)
-                                        buffer = ""
+                    buffer += content
+                    while buffer:
+                        if not in_think_block:
+                            think_idx = buffer.find("<think>")
+                            if think_idx != -1:
+                                print(buffer[:think_idx], end="", flush=True)
+                                if SHOW_THINKING:
+                                    print("\033[90m<think>", end="", flush=True)
+                                buffer = buffer[think_idx + len("<think>"):]
+                                in_think_block = True
                             else:
-                                end_idx = buffer.find("</think>")
-                                if end_idx != -1:
-                                    buffer = buffer[end_idx + len("</think>"):]
-                                    in_think_block = False
-                                else:
-                                    if len(buffer) >= len("</think>"):
-                                        buffer = buffer[-(len("</think>") - 1):]
+                                match_len = 0
+                                for i in range(len("<think>") - 1, 0, -1):
+                                    if buffer.endswith("<think>"[:i]):
+                                        match_len = i
+                                        break
+                                if match_len > 0:
+                                    print(buffer[:-match_len], end="", flush=True)
+                                    buffer = buffer[-match_len:]
                                     break
-                    else:
-                        print(content, end="", flush=True)
+                                else:
+                                    print(buffer, end="", flush=True)
+                                    buffer = ""
+                        else:
+                            end_idx = buffer.find("</think>")
+                            if end_idx != -1:
+                                if SHOW_THINKING:
+                                    print(buffer[:end_idx] + "</think>\033[0m", end="", flush=True)
+                                buffer = buffer[end_idx + len("</think>"):]
+                                in_think_block = False
+                            else:
+                                match_len = 0
+                                for i in range(len("</think>") - 1, 0, -1):
+                                    if buffer.endswith("</think>"[:i]):
+                                        match_len = i
+                                        break
+                                if match_len > 0:
+                                    if SHOW_THINKING:
+                                        print(buffer[:-match_len], end="", flush=True)
+                                    buffer = buffer[-match_len:]
+                                    break
+                                else:
+                                    if SHOW_THINKING:
+                                        print(buffer, end="", flush=True)
+                                    buffer = ""
                         
-            if buffer and not SHOW_THINKING and not in_think_block:
-                print(buffer, end="", flush=True)
+            if buffer:
+                if in_think_block and SHOW_THINKING:
+                    print(buffer + "\033[0m", end="", flush=True)
+                elif not in_think_block:
+                    print(buffer, end="", flush=True)
+            elif in_think_block and SHOW_THINKING:
+                print("\033[0m", end="", flush=True)
             print()  # New line after streaming
         else:
             response = await client.chat.completions.create(**kwargs)
@@ -495,11 +512,11 @@ async def chat_completion(prompt: str, stream: bool = False) -> str:
             
             full_response += content
 
+            import re
             if not SHOW_THINKING:
-                import re
                 print_content = re.sub(r'<think>.*?</think>\s*', '', content, flags=re.DOTALL)
             else:
-                print_content = content
+                print_content = re.sub(r'(<think>.*?</think>)', r'\033[90m\1\033[0m', content, flags=re.DOTALL)
                 
             if not print_content.strip() and not (reasoning and SHOW_THINKING):
                 print("Warning: Received an empty response from the model.")
