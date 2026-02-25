@@ -434,7 +434,7 @@ async def chat_completion(prompt: str, stream: bool = False) -> str:
                 if not chunk.choices: continue
                 delta = chunk.choices[0].delta
                 
-                reasoning = getattr(delta, "reasoning_content", None)
+                reasoning = getattr(delta, "reasoning_content", getattr(delta, "reasoning", None))
                 if reasoning:
                     full_response += reasoning
                     if SHOW_THINKING:
@@ -502,7 +502,7 @@ async def chat_completion(prompt: str, stream: bool = False) -> str:
             response = await client.chat.completions.create(**kwargs)
             message = response.choices[0].message
             content = message.content or ""
-            reasoning = getattr(message, "reasoning_content", None) or ""
+            reasoning = getattr(message, "reasoning_content", getattr(message, "reasoning", None)) or ""
             
             full_response = ""
             if reasoning:
