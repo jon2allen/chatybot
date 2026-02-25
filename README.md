@@ -405,6 +405,13 @@ chat --> Create a blog post outline about ${topic}
 
 ### Change log
 
+Feb 24th, 2026
+--------------
+- **Version 0.1.2 Release**: Preparation and package bumping for PyPI publication.
+- **Enhanced Reasoning Display**: Added support to natively color and display `<think>` tags embedded within standard content streams (e.g., `nanbeige` or local Ollama usage).
+- **Backend Model Extractor Fixes**: Updated the openai dependency requirement to `>=1.61.0` and added fallbacks to capture both `reasoning_content` and `reasoning` delta fields for wider compatibility.
+- **System Commands Optimization**: Fixed a bug where `/system` would truncate inputs after the first word, properly capturing full multi-word system prompts.
+
 Feb 22nd, 2026
 --------------
 - **Packaging and Distribution**: 
