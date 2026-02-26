@@ -136,6 +136,7 @@ Active escape commands:
   /reasoning <on|off> - Toggle reasoning (thinking) for NVIDIA models.
   /seed <value> - Set seed (int, 'time', or 'random <min>,<max>').
   /stream - Toggle streaming responses.
+  /trace <rawpayload|tps|tpsperf> <on|off> - Debugging options
   /script <file> - Execute a script file containing multiple commands.
   /quit - Exit the program.
   /setdb <dbname> - Create or select a TinyDB database. Use 'Null' to deactivate.
@@ -187,6 +188,7 @@ chat --> Hello!      # Start a conversation
 | `/thinking <on\|off>` | Toggle `<think>` visibility | `/thinking off` |
 | `/seed <value>` | Set PRNG Seed | `/seed time` |
 | `/stream` | Toggle streaming | `/stream` |
+| `/trace <cmd> <state>`| Trace tokens/payload | `/trace rawpayload on` |
 | `/codeonly` | Enable code-only mode | `/codeonly` |
 | `/codeoff` | Disable code-only mode | `/codeoff` |
 | `/notemode <on\|off>` | Toggle note block separation | `/notemode on` |
@@ -404,6 +406,13 @@ chat --> Create a blog post outline about ${topic}
 ```
 
 ### Change log
+
+Feb 26th, 2026
+--------------
+- **Tracing & Debugging**: Added new `/trace` command options:
+  - `/trace rawpayload on`: Dumps the raw JSON string passed to the LLM completion API.
+  - `/trace tps on`: Calculates and outputs think tokens and regular tokens per second.
+  - `/trace tpsperf on`: Logs an in-memory bucketed tokens per second calculation, saved out to a quoted CSV on completion.
 
 Feb 24th, 2026
 --------------

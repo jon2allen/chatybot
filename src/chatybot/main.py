@@ -44,6 +44,11 @@ NOTE_MODE = False  # New global variable for note mode
 REASONING_MODE = True  # New global variable for NVIDIA reasoning toggle
 SHOW_THINKING = True  # Toggle whether to show <think> tags / reasoning text
 
+# Trace globals
+TRACE_RAW_PAYLOAD = False
+TRACE_TPS = False
+TRACE_TPS_PERF = False
+
 # Add these global variables
 SCRIPT_VARS: Dict[str, str] = {}
 SCRIPT_CONTEXT = False
@@ -320,6 +325,7 @@ async def chat_completion(prompt: str, stream: bool = False) -> str:
     """
     global ACTIVE_MODEL_ALIAS, CHAT_HISTORY, FILE_BUFFER, PROMPT_BUFFER, CODE_ONLY_FLAG, MAX_TOKENS
     global TOP_P, TOP_K, FREQ_PENALTY, PRES_PENALTY, SEED_CONFIG
+    global TRACE_RAW_PAYLOAD, TRACE_TPS, TRACE_TPS_PERF
 
     client = get_openai_client(ACTIVE_MODEL_ALIAS)
     model_config = CONFIG["models"][ACTIVE_MODEL_ALIAS]
@@ -420,6 +426,22 @@ async def chat_completion(prompt: str, stream: bool = False) -> str:
 
     try:
         start_time = time.time()
+        
+        if TRACE_RAW_PAYLOAD:
+            import json
+            print("Payload:")
+            print("-----------------------------")
+            # Don't fail if kwargs can't be JSON serialized completely, fallback handled
+            try:
+                print(json.dumps(kwargs, indent=2))
+            except TypeError:
+                print(str(kwargs))
+            print("---- end of payload ---")
+
+        tps_records = []
+        think_tokens_estimate = 0
+        regular_tokens_estimate = 0
+        
         if stream:
             kwargs["stream"] = True
             response = await client.chat.completions.create(**kwargs)
@@ -431,18 +453,31 @@ async def chat_completion(prompt: str, stream: bool = False) -> str:
             in_think_block = False
             
             async for chunk in response:
+                chunk_time = time.time()
                 if not chunk.choices: continue
                 delta = chunk.choices[0].delta
                 
                 reasoning = getattr(delta, "reasoning_content", getattr(delta, "reasoning", None))
                 if reasoning:
                     full_response += reasoning
+                    think_tokens_estimate += 1
+                    if TRACE_TPS_PERF:
+                        tps_records.append((chunk_time, "think", 1))
                     if SHOW_THINKING:
                         print(f"\033[90m{reasoning}\033[0m", end="", flush=True)
 
                 if delta.content:
                     content = delta.content
                     full_response += content
+                    
+                    if in_think_block or "<think>" in content:
+                        think_tokens_estimate += 1
+                        if TRACE_TPS_PERF:
+                            tps_records.append((chunk_time, "think", 1))
+                    else:
+                        regular_tokens_estimate += 1
+                        if TRACE_TPS_PERF:
+                            tps_records.append((chunk_time, "regular", 1))
                     
                     buffer += content
                     while buffer:
@@ -527,8 +562,47 @@ async def chat_completion(prompt: str, stream: bool = False) -> str:
         elapsed_time = time.time() - start_time
         print(f"\nExecution time: {elapsed_time:.2f} seconds")
 
-        if hasattr(response, 'usage'):
-            print(f"Input tokens: {response.usage.prompt_tokens}, Output tokens: {response.usage.completion_tokens}")
+        out_tokens = 0
+        if hasattr(response, 'usage') and response.usage:
+            out_tokens = response.usage.completion_tokens
+            print(f"Input tokens: {response.usage.prompt_tokens}, Output tokens: {out_tokens}")
+            
+        if think_tokens_estimate + regular_tokens_estimate > 0 and out_tokens > 0:
+            ratio_think = think_tokens_estimate / (think_tokens_estimate + regular_tokens_estimate)
+            think_t = int(out_tokens * ratio_think)
+            reg_t = out_tokens - think_t
+        else:
+            think_t = think_tokens_estimate
+            reg_t = regular_tokens_estimate
+
+        if TRACE_TPS:
+            tps_think = think_t / elapsed_time if elapsed_time > 0 else 0
+            tps_reg = reg_t / elapsed_time if elapsed_time > 0 else 0
+            tps_total = (think_t + reg_t) / elapsed_time if elapsed_time > 0 else 0
+            print(f"TPS (Total): {tps_total:.2f} (Think: {tps_think:.2f}, Regular: {tps_reg:.2f})")
+
+        if TRACE_TPS_PERF and tps_records:
+            buckets = {}
+            for t, typ, count in tps_records:
+                sec_offset = int(t - start_time)
+                if sec_offset not in buckets:
+                    buckets[sec_offset] = {"think": 0, "regular": 0}
+                buckets[sec_offset][typ] += count
+            
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            csv_filename = f"tps+{timestamp}.csv"
+            try:
+                import csv
+                with open(csv_filename, "w", newline="") as csvfile:
+                    writer = csv.writer(csvfile, quoting=csv.QUOTE_ALL)
+                    writer.writerow(["Second", "Think_Tokens", "Regular_Tokens", "Total_Tokens"])
+                    for sec in sorted(buckets.keys()):
+                        th = buckets[sec]["think"]
+                        rg = buckets[sec]["regular"]
+                        writer.writerow([sec, th, rg, th + rg])
+                print(f"TPS performance saved to '{csv_filename}'")
+            except Exception as e:
+                print(f"Error saving TPS performance: {e}")
 
         # Log user entry with datetime and model info
         if LOGGING_ACTIVE:
@@ -806,6 +880,7 @@ async def handle_escape_command(command: str) -> Union[bool, str]:
     global ACTIVE_MODEL_ALIAS, FILE_BUFFER, PROMPT_BUFFER, CODE_ONLY_FLAG, LOGGING_ACTIVE, MULTI_LINE_MODE
     global SYSTEM_MESSAGE, MAX_TOKENS, STREAMING_ENABLED, FILE_BANKS, NOTE_MODE
     global TOP_P, TOP_K, FREQ_PENALTY, PRES_PENALTY
+    global TRACE_RAW_PAYLOAD, TRACE_TPS, TRACE_TPS_PERF
 
     parts = command.split(maxsplit=2)
     if LOGGING_ACTIVE:
@@ -841,6 +916,7 @@ async def handle_escape_command(command: str) -> Union[bool, str]:
         print("  /thinking <on|off> - Toggle display of <think> blocks and reasoning text.")
         print("  /seed <value> - Set seed (int, 'time', or 'random <min>,<max>').")
         print("  /stream - Toggle streaming responses.")
+        print("  /trace <rawpayload|tps|tpsperf> <on|off> - Debugging options")
         print("  /script <file> - Execute a script file containing multiple commands.")
         print("  /quit - Exit the program.")
         print("  /setdb <dbname> - Create or select a TinyDB database. Use 'Null' to deactivate.")
@@ -858,6 +934,26 @@ async def handle_escape_command(command: str) -> Union[bool, str]:
         print("  if <condition> then <command> - Conditional execution")
         print("  wait <seconds> - Pause execution")
         print("  # comment - Comments in script files")
+        return True
+
+    elif cmd == "/trace":
+        if len(parts) >= 3:
+            subcmd = parts[1].lower()
+            state = parts[2].lower()
+            is_on = state == "on"
+            if subcmd == "rawpayload":
+                TRACE_RAW_PAYLOAD = is_on
+                print(f"Trace rawpayload set to {is_on}")
+            elif subcmd == "tps":
+                TRACE_TPS = is_on
+                print(f"Trace tps set to {is_on}")
+            elif subcmd == "tpsperf":
+                TRACE_TPS_PERF = is_on
+                print(f"Trace tpsperf set to {is_on}")
+            else:
+                print("Unknown /trace subcommand. Use rawpayload, tps, or tpsperf.")
+        else:
+            print("Usage: /trace <rawpayload|tps|tpsperf> <on|off>")
         return True
 
     elif cmd == "/prompt":
