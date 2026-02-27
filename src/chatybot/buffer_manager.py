@@ -1,0 +1,207 @@
+#! /usr/bin/env python3
+"""
+Buffer Manager Module
+Manages file buffers, file banks, and script variables
+"""
+
+from typing import Dict, List, Tuple
+
+
+class BufferManager:
+    """Manages file buffers, file banks, and script variables."""
+    
+    def __init__(self):
+        self.file_buffer: str = ""
+        self.prompt_buffer: str = ""
+        self.file_banks: Dict[str, str] = {f"filebank{i}": "" for i in range(1, 6)}
+        self.script_vars: Dict[str, str] = {}
+    
+    def load_file_to_buffer(self, file_path: str) -> None:
+        """
+        Load a file into the file buffer.
+        
+        Args:
+            file_path: Path to the file to load
+            
+        Raises:
+            Exception: If there's an error reading the file
+        """
+        try:
+            with open(file_path, "r") as f:
+                self.file_buffer = f.read()
+            print(f"File '{file_path}' loaded into buffer.")
+        except Exception as e:
+            print(f"Error reading file: {str(e)}")
+            raise
+    
+    def clear_file_buffer(self) -> None:
+        """Clear the file buffer."""
+        self.file_buffer = ""
+        print("File buffer cleared.")
+    
+    def show_file_buffer(self, show_all: bool = False) -> None:
+        """
+        Show the file buffer content.
+        
+        Args:
+            show_all: If True, show entire content. If False, show first 100 characters.
+        """
+        if self.file_buffer:
+            if show_all:
+                print(self.file_buffer)
+            else:
+                print(self.file_buffer[:100] + ("..." if len(self.file_buffer) > 100 else ""))
+        else:
+            print("File buffer is empty.")
+    
+    def load_file_to_bank(self, bank_num: int, file_path: str) -> None:
+        """
+        Load a file into a specific file bank.
+        
+        Args:
+            bank_num: File bank number (1-5)
+            file_path: Path to the file to load
+            
+        Raises:
+            ValueError: If bank_num is invalid
+            Exception: If there's an error reading the file
+        """
+        if bank_num < 1 or bank_num > 5:
+            raise ValueError("Invalid filebank number. Please use 1 through 5.")
+        
+        bank_name = f"filebank{bank_num}"
+        try:
+            with open(file_path, "r") as f:
+                self.file_banks[bank_name] = f.read()
+            print(f"File '{file_path}' loaded into {bank_name}.")
+        except Exception as e:
+            print(f"Error reading file: {str(e)}")
+            raise
+    
+    def clear_file_bank(self, bank_num: int) -> None:
+        """
+        Clear a specific file bank.
+        
+        Args:
+            bank_num: File bank number (1-5)
+            
+        Raises:
+            ValueError: If bank_num is invalid
+        """
+        if bank_num < 1 or bank_num > 5:
+            raise ValueError("Invalid filebank number. Please use 1 through 5.")
+        
+        bank_name = f"filebank{bank_num}"
+        self.file_banks[bank_name] = ""
+        print(f"{bank_name} cleared.")
+    
+    def show_file_bank(self, bank_num: int, show_all: bool = False) -> None:
+        """
+        Show the content of a specific file bank.
+        
+        Args:
+            bank_num: File bank number (1-5)
+            show_all: If True, show entire content. If False, show first 100 characters.
+            
+        Raises:
+            ValueError: If bank_num is invalid
+        """
+        if bank_num < 1 or bank_num > 5:
+            raise ValueError("Invalid filebank number. Please use 1 through 5.")
+        
+        bank_name = f"filebank{bank_num}"
+        content = self.file_banks[bank_name]
+        if not content:
+            print(f"{bank_name} is empty.")
+            return
+        
+        if show_all:
+            print(content)
+        else:
+            print(content[:100] + ("..." if len(content) > 100 else ""))
+    
+    def set_script_var(self, var_name: str, var_value: str) -> None:
+        """
+        Set a script variable.
+        
+        Args:
+            var_name: Name of the variable
+            var_value: Value of the variable
+        """
+        self.script_vars[var_name] = var_value
+        print(f"Variable '{var_name}' set.")
+    
+    def replace_placeholders(self, prompt: str) -> str:
+        """
+        Replace filebank and script variable placeholders in the prompt.
+        
+        Args:
+            prompt: The prompt string containing placeholders
+            
+        Returns:
+            Prompt with placeholders replaced
+        """
+        # Replace filebank placeholders: {filebank1}
+        for bank_name, content in self.file_banks.items():
+            placeholder = f"{{{bank_name}}}"
+            if placeholder in prompt:
+                prompt = prompt.replace(placeholder, content)
+        
+        # Replace script variable placeholders: ${varname}
+        for var_name, var_value in self.script_vars.items():
+            placeholder = f"${{{var_name}}}"
+            if placeholder in prompt:
+                prompt = prompt.replace(placeholder, str(var_value))
+        
+        return prompt
+    
+    def show_memory_usage(self) -> None:
+        """
+        Show size of the file buffer, filebanks, and script variables in KB.
+        """
+        print(f"\n{'Source':<20} {'Size (KB)':>10}")
+        print("-" * 32)
+        
+        # File Buffer
+        file_buffer_size = len(self.file_buffer.encode('utf-8')) / 1024
+        print(f"{'FILE_BUFFER':<20} {file_buffer_size:>10.2f}")
+        
+        # File Banks
+        for i in range(1, 6):
+            bank_name = f"filebank{i}"
+            bank_size = len(self.file_banks[bank_name].encode('utf-8')) / 1024
+            print(f"{bank_name:<20} {bank_size:>10.2f}")
+        
+        # Script Variables
+        for var_name, var_value in self.script_vars.items():
+            var_size = len(str(var_value).encode('utf-8')) / 1024
+            print(f"{var_name:<20} {var_size:>10.2f}")
+        print()
+    
+    def dump_variables(self, name: str = "all") -> None:
+        """
+        Print the contents of a variable or 'all' variables.
+        
+        Args:
+            name: Name of variable to dump, or 'all' for all variables
+        """
+        if name == "all":
+            print("\n--- DUMP ALL VARIABLES ---")
+            print(f"FILE_BUFFER: {self.file_buffer}")
+            for i in range(1, 6):
+                bank_name = f"filebank{i}"
+                print(f"{bank_name.upper()}: {self.file_banks[bank_name]}")
+            for var_name, var_value in self.script_vars.items():
+                print(f"SCRIPT_VAR '{var_name}': {var_value}")
+            print("--- END DUMP ---\n")
+        elif name == "file_buffer":
+            print(f"FILE_BUFFER: {self.file_buffer}")
+        elif name.startswith("filebank") and name[8:].isdigit():
+            if name in self.file_banks:
+                print(f"{name.upper()}: {self.file_banks[name]}")
+            else:
+                print(f"Error: {name} not found.")
+        elif name in self.script_vars:
+            print(f"SCRIPT_VAR '{name}': {self.script_vars[name]}")
+        else:
+            print(f"Error: Variable '{name}' not found.")
