@@ -26,6 +26,11 @@ from .config_manager import ConfigManager
 from .logging_manager import LoggingManager
 from .buffer_manager import BufferManager
 from .extract_code import process_file
+from .chatydb import set_db, search_db, dblog, load_var, save_var, list_dbs
+
+# Global variables needed for database functionality
+SEARCHBUFFER = []  # Holds the last search results
+app = None  # Global app instance for database functions to access
 
 
 class ChatybotApp:
@@ -66,6 +71,9 @@ class ChatybotApp:
         self.top_k: Optional[int] = None
         self.freq_penalty: Optional[float] = None
         self.pres_penalty: Optional[float] = None
+        
+        # Script variables for database operations
+        self.script_vars: Dict[str, str] = {}
     
     def initialize(self) -> None:
         """Initialize the application by loading configuration and setting up history."""
@@ -1077,8 +1085,43 @@ class ChatybotApp:
             self.save_input_history()
             exit(0)
         
-        # Database commands would go here
-        # For now, we'll leave them out to focus on the core refactoring
+        # Database commands
+        elif cmd == "/setdb":
+            if len(parts) < 2:
+                print("Usage: /setdb <dbname>")
+                return True
+            dbname = parts[1].strip('"')
+            set_db(dbname)
+            return True
+        elif cmd == "/dblist":
+            list_dbs()
+            return True
+        elif cmd == "/searchdb":
+            if len(parts) < 2:
+                print("Usage: /searchdb <query>")
+                return True
+            query = parts[1].strip('"')
+            search_db(query)
+            return True
+        elif cmd == "/dblog":
+            dblog()
+            return True
+        elif cmd == "/loadvar":
+            if len(parts) < 2:
+                print("Usage: /loadvar <varname> [ALL | id | range]")
+                return True
+            varname = parts[1].strip('"')
+            extra = parts[2] if len(parts) > 2 else None
+            load_var(varname, extra)
+            return True
+        elif cmd == "/savevar":
+            if len(parts) < 3:
+                print("Usage: /savevar <varname> <filename>")
+                return True
+            varname = parts[1].strip('"')
+            filename = parts[2].strip('"')
+            save_var(varname, filename)
+            return True
         
         elif cmd == "/mem":
             self.buffer_manager.show_memory_usage()
@@ -1215,7 +1258,12 @@ class ChatybotApp:
 
 def run():
     """Entry point for the application."""
+    global app
     app = ChatybotApp()
+    # Also set the module-level app variable
+    import sys
+    current_module = sys.modules[__name__]
+    current_module.app = app
     app.run()
 
 
