@@ -114,7 +114,7 @@ class ConfigManager:
         url_width = max(len("Base URL"), max(len(config.get("base_url", "Default OpenAI URL")) for config in self.config["models"].values()))
         
         # Print header
-        header = "{'Alias':<{}} {'Model Name':<{}} {'Base URL':<{}} {'Temp':<6} {'MaxT':<6} {'TopP':<6} {'TopK':<6} {'FreqP':<6} {'PresP':<6}}".format(alias_width, name_width, url_width)
+        header = f"{'Alias':<{alias_width}} {'Model Name':<{name_width}} {'Base URL':<{url_width}} {'Temp':<6} {'MaxT':<6} {'TopP':<6} {'TopK':<6} {'FreqP':<6} {'PresP':<6}"
         print(header)
         print("-" * len(header))
         
