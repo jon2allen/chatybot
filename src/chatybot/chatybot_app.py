@@ -66,6 +66,7 @@ class ChatybotApp:
         self.seed_config: Optional[Union[int, str, Tuple[str, int, int]]] = None
         
         # Top-level parameters
+        self.temperature: Optional[float] = None
         self.top_p: Optional[float] = None
         self.top_k: Optional[int] = None
         self.freq_penalty: Optional[float] = None
@@ -223,10 +224,11 @@ class ChatybotApp:
             messages.insert(0, {"role": "system", "content": current_system_message})
         
         # Prepare completion parameters
+        temp = self.temperature if self.temperature is not None else model_config.get("temperature", 0.7)
         kwargs = {
             "model": model_name,
             "messages": messages,
-            "temperature": model_config.get("temperature", 0.7),
+            "temperature": temp,
         }
         
         # Add optional parameters if defined globally or in model config
@@ -916,7 +918,7 @@ class ChatybotApp:
         
         elif cmd == "/temp":
             if len(parts) < 2:
-                current_temp = self.config_manager.get_model_config(self.config_manager.active_model_alias).get("temperature", 0.7)
+                current_temp = self.temperature if self.temperature is not None else self.config_manager.get_model_config(self.config_manager.active_model_alias).get("temperature", 0.7)
                 print(f"Current temperature: {current_temp}")
                 return True
             
@@ -924,8 +926,8 @@ class ChatybotApp:
                 temp = float(parts[1])
                 if not 0.0 <= temp <= 2.0:
                     raise ValueError
-                self.config_manager.get_model_config(self.config_manager.active_model_alias)["temperature"] = temp
-                print(f"Temperature set to {temp} for model {self.config_manager.active_model_alias}")
+                self.temperature = temp
+                print(f"Temperature set to {temp}")
             except ValueError:
                 print("Invalid temperature value. Please provide a number between 0.0 and 2.0.")
             return True
