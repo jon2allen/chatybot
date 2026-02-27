@@ -26,10 +26,9 @@ from .config_manager import ConfigManager
 from .logging_manager import LoggingManager
 from .buffer_manager import BufferManager
 from .extract_code import process_file
-from .chatydb import set_db, search_db, dblog, load_var, save_var, list_dbs
+from .chatydb import set_db, search_db, dblog, load_var, save_var, list_dbs, SEARCHBUFFER
 
 # Global variables needed for database functionality
-SEARCHBUFFER = []  # Holds the last search results
 app = None  # Global app instance for database functions to access
 
 
