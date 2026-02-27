@@ -44,22 +44,22 @@ chatybot is an interactive command-line tool that enables seamless communication
 ## **Key Features**
 
 ### **Core Functionality**
-✅ **Model Switching** - Easily switch between different LLMs
-✅ **File Buffer System** - Load files as context for prompts
-✅ **Multi-Line Input** - Compose complex prompts with ease
-✅ **Streaming Responses** - Real-time output from the model
-✅ **Session Logging** - Save and review chat sessions
-✅ **Input History** - Navigate previous inputs with Tab key
+- **Model Switching** - Easily switch between different LLMs
+- **File Buffer System** - Load files as context for prompts
+- **Multi-Line Input** - Compose complex prompts with ease
+- **Streaming Responses** - Real-time output from the model
+- **Session Logging** - Save and review chat sessions
+- **Input History** - Navigate previous inputs with Tab key
 
 ### **Advanced Features**
-🚀 **Scripting Engine** - Automate workflows with scripts
-🚀 **Variable Substitution** - Dynamic prompts with `${variables}`
-🚀 **Conditional Logic** - `if-then` statements in scripts
-🚀 **File Banks** - Organize multiple context files
-🚀 **Prompt Templates** - Reusable prompt structures
-🚀 **Code-Only Mode** - Generate pure code without explanations
-🚀 **TinyDB Integration** - Persistent storage for search results and chat logs
-🚀 **Advanced Variable Linking** - Use database results in prompts via `${variables}`
+- **Scripting Engine** - Automate workflows with scripts
+- **Variable Substitution** - Dynamic prompts with `${variables}`
+- **Conditional Logic** - `if-then` statements in scripts
+- **File Banks** - Organize multiple context files
+- **Prompt Templates** - Reusable prompt structures
+- **Code-Only Mode** - Generate pure code without explanations
+- **TinyDB Integration** - Persistent storage for search results and chat logs
+- **Advanced Variable Linking** - Use database results in prompts via `${variables}`
 
 ---
 
@@ -407,8 +407,8 @@ chat --> Create a blog post outline about ${topic}
 
 ### Change log
 
-Mar 1st, 2026
-------------
+Feb 27th, 2026
+-------------
 - **Complete OOP Refactoring**: Comprehensive architectural overhaul from procedural to object-oriented design:
   - Created ConfigManager class for centralized configuration management
   - Created LoggingManager class for logging functionality
@@ -489,7 +489,7 @@ Here's a well-structured C program that demonstrates the implementation and usag
 
 ---
 
-### ✅ C Program: Demonstrating a Singly Linked List
+### C Program: Demonstrating a Singly Linked List
 
 ```c
 #include <stdio.h>
