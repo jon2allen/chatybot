@@ -173,7 +173,7 @@ class BufferManager:
             print(f"{bank_name:<20} {bank_size:>10.2f}")
         
         # Search Buffer
-        if search_buffer:
+        if search_buffer is not None:
             import json
             sb_size = len(json.dumps(search_buffer).encode('utf-8')) / 1024
             print(f"{'SEARCH_BUFFER':<20} {sb_size:>10.2f}")
@@ -198,7 +198,7 @@ class BufferManager:
                 bank_name = f"filebank{i}"
                 print(f"{bank_name.upper()}: {self.file_banks[bank_name]}")
             
-            if search_buffer:
+            if search_buffer is not None:
                 print(f"SEARCH_BUFFER: {search_buffer}")
                 
             for var_name, var_value in self.script_vars.items():
@@ -207,7 +207,7 @@ class BufferManager:
         elif name == "file_buffer":
             print(f"FILE_BUFFER: {self.file_buffer}")
         elif name == "search_buffer":
-            if search_buffer:
+            if search_buffer is not None:
                 print(f"SEARCH_BUFFER: {search_buffer}")
             else:
                 print("SEARCH_BUFFER is empty or not available.")

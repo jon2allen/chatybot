@@ -85,7 +85,8 @@ def search_db(query: str) -> None:
         content = item.get('content', '')
         if q in name.lower() or q in content.lower():
             results.append(item)
-    SEARCHBUFFER = results
+    SEARCHBUFFER.clear()
+    SEARCHBUFFER.extend(results)
     if not results:
         print("No matches found.")
         return

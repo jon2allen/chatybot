@@ -1,5 +1,0 @@
-Feb 22, 2026, 05:09:03 PM  - Error during chat completion: list index out of range
-Feb 22, 2026, 05:09:03 PM  - User: chat --> Tell me a story.
-Assistant: Error: list index out of range
-
-Feb 22, 2026, 05:09:03 PM  - Escape command: /logging end
