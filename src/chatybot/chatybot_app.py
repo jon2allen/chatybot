@@ -508,7 +508,12 @@ class ChatybotApp:
             try:
                 _, var_part = command.split(maxsplit=1)
                 var_name, var_value = var_part.split("=", maxsplit=1)
-                self.buffer_manager.script_vars[var_name.strip()] = var_value.strip().strip('"\'')
+                # Replace variables in the value before storing
+                def replace_var(match):
+                    var_name_match = match.group(1)
+                    return self.buffer_manager.script_vars.get(var_name_match, "")
+                processed_value = re.sub(r'\$\{(\w+)\}', replace_var, var_value.strip().strip('"\''))
+                self.buffer_manager.script_vars[var_name.strip()] = processed_value
                 return True
             except ValueError:
                 print("Invalid set command. Usage: set <name> = <value>")
