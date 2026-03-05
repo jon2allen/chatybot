@@ -6,10 +6,10 @@ set model1 = "mistral_1"
 set model2 = "nvidia_1"
 set city = "Nanjing"
 set output_dir = ${city}_food_comparison
-set question_file = ${city}_questions.txt
-set results1 = "mistral_results.txt"
-set results2 = "nvidia_results.txt"
-set comparison = "comparison_report.txt"
+set question_file = "${output_dir}/${city}_questions.txt"
+set results1 = "${output_dir}/mistral_results.txt"
+set results2 = "${output_dir}/nvidia_results.txt"
+set comparison = "${output_dir}/comparison_report.txt"
 
 # Create question file
 /clearfile
@@ -48,6 +48,11 @@ Format as numbered questions, one per line.
 # Generate comparison report
 /clearfile
 /multiline
+
+# Load the questions and responses into file banks for the comparison
+/filebank1 ${results1}
+/filebank2 ${results2}
+
 Analyze the following two sets of responses about Nanjing street food from different AI models.
 Compare them for:
 
@@ -61,12 +66,13 @@ Compare them for:
 
 Model 1 (${model1}) responses:
 ---
-/filebank1 show all
+{filebank1} 
 ---
 
 Model 2 (${model2}) responses:
 ---
-/filebank2 show all
+
+{filebank2}
 ---
 
 Provide a detailed comparison with specific examples from each model's responses.
@@ -74,10 +80,8 @@ Also give an overall assessment of which model demonstrates better knowledge of 
 ;;
 /multiline
 
-# Load the questions and responses into file banks for the comparison
-/filebank1 ${results1}
-/filebank2 ${results2}
 /save ${comparison}
+/filebank3 ${comparison}
 
 /clearfile
 /multiline
@@ -88,10 +92,10 @@ Create a scoring table (1-10 scale) for each model across these categories:
 4. Regional expertise
 5. Overall knowledge depth
 
-Based on the comparison report in ${comparison}, fill in the scores and calculate totals.
+Based on the comparison report in {filebank3}, fill in the scores and calculate totals.
 ;;
 /multiline
-/save scores_${model1}_vs_${model2}.txt
+/save "${output_dir}/scores_${model1}_vs_${model2}.txt"
 
 # Final summary
 /clearfle
@@ -102,5 +106,5 @@ What are the key strengths of each model's responses?
 What recommendations would you make for someone seeking information about Nanjing street food?
 ;;
 /multiline
-/save final_verdict.txt
+/save "${output_dir}/final_verdict.txt"
 
