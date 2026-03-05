@@ -407,6 +407,11 @@ chat --> Create a blog post outline about ${topic}
 
 ### Change log
 
+Mar 5th, 2026 (v0.2.3)
+----------------------
+- **Bug Fixes**: Fixed `SEARCHBUFFER` reference issue by mutating the list in-place, ensuring visibility across modules for `/mem` and `/dump`.
+- **Maintenance**: Version bump for PyPI release.
+
 Mar 5th, 2026 (v0.2.2)
 ----------------------
 - **Bug Fixes**: Fixed `/savevar` and `/loadvar` to correctly use the buffer manager's variable storage.
