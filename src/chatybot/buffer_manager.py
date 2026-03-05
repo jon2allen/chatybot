@@ -155,7 +155,7 @@ class BufferManager:
         
         return prompt
     
-    def show_memory_usage(self) -> None:
+    def show_memory_usage(self, search_buffer: list = None) -> None:
         """
         Show size of the file buffer, filebanks, and script variables in KB.
         """
@@ -172,13 +172,19 @@ class BufferManager:
             bank_size = len(self.file_banks[bank_name].encode('utf-8')) / 1024
             print(f"{bank_name:<20} {bank_size:>10.2f}")
         
+        # Search Buffer
+        if search_buffer:
+            import json
+            sb_size = len(json.dumps(search_buffer).encode('utf-8')) / 1024
+            print(f"{'SEARCH_BUFFER':<20} {sb_size:>10.2f}")
+            
         # Script Variables
         for var_name, var_value in self.script_vars.items():
             var_size = len(str(var_value).encode('utf-8')) / 1024
             print(f"{var_name:<20} {var_size:>10.2f}")
         print()
     
-    def dump_variables(self, name: str = "all") -> None:
+    def dump_variables(self, name: str = "all", search_buffer: list = None) -> None:
         """
         Print the contents of a variable or 'all' variables.
         
@@ -191,11 +197,20 @@ class BufferManager:
             for i in range(1, 6):
                 bank_name = f"filebank{i}"
                 print(f"{bank_name.upper()}: {self.file_banks[bank_name]}")
+            
+            if search_buffer:
+                print(f"SEARCH_BUFFER: {search_buffer}")
+                
             for var_name, var_value in self.script_vars.items():
                 print(f"SCRIPT_VAR '{var_name}': {var_value}")
             print("--- END DUMP ---\n")
         elif name == "file_buffer":
             print(f"FILE_BUFFER: {self.file_buffer}")
+        elif name == "search_buffer":
+            if search_buffer:
+                print(f"SEARCH_BUFFER: {search_buffer}")
+            else:
+                print("SEARCH_BUFFER is empty or not available.")
         elif name.startswith("filebank") and name[8:].isdigit():
             if name in self.file_banks:
                 print(f"{name.upper()}: {self.file_banks[name]}")

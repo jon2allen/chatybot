@@ -147,7 +147,7 @@ def load_var(var_name: str, extra: str = None) -> None:
         # In refactored version, get the app instance
         app_instance = getattr(chatybot_mod, 'app', None)
         if app_instance:
-            script_vars = app_instance.script_vars
+            script_vars = app_instance.buffer_manager.script_vars
         else:
             # Fallback to old global variable for backward compatibility
             script_vars = getattr(chatybot_mod, 'SCRIPT_VARS', None)
@@ -214,7 +214,7 @@ def save_var(var_name: str, filename: str) -> None:
         # In refactored version, get the app instance
         app_instance = getattr(chatybot_mod, 'app', None)
         if app_instance:
-            script_vars = app_instance.script_vars
+            script_vars = app_instance.buffer_manager.script_vars
         else:
             # Fallback to old global variable for backward compatibility
             script_vars = getattr(chatybot_mod, 'SCRIPT_VARS', None)
