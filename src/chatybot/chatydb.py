@@ -104,11 +104,20 @@ def dblog() -> None:
         return
     # Retrieve CHAT_HISTORY from the running script
     import sys
-    chatybot_mod = sys.modules.get('chatybot.main') or sys.modules.get('__main__')
+    # Try to get the ChatybotApp instance first
+    chatybot_mod = sys.modules.get('chatybot.chatybot_app') or sys.modules.get('chatybot.main')
     if not chatybot_mod:
         print("Unable to locate the chatybot module. Ensure this function is called after a chat has occurred.")
         return
-    CHAT_HISTORY = getattr(chatybot_mod, 'CHAT_HISTORY', None)
+    
+    # In refactored version, get the app instance
+    app_instance = getattr(chatybot_mod, 'app', None)
+    if app_instance:
+        CHAT_HISTORY = app_instance.chat_history
+    else:
+        # Fallback to old global variable for backward compatibility
+        CHAT_HISTORY = getattr(chatybot_mod, 'CHAT_HISTORY', None)
+    
     if CHAT_HISTORY is None:
         print("Unable to access chat history. Ensure this function is called after a chat has occurred.")
         return
@@ -132,8 +141,19 @@ def load_var(var_name: str, extra: str = None) -> None:
     If 'extra' is a range (e.g. '1-5'), use documents in that ID range.
     """
     import sys
-    main_mod = sys.modules.get('chatybot.main') or sys.modules.get('__main__')
-    script_vars = getattr(main_mod, 'SCRIPT_VARS', None)
+    # Try to get the ChatybotApp instance first
+    chatybot_mod = sys.modules.get('chatybot.chatybot_app') or sys.modules.get('chatybot.main')
+    if chatybot_mod:
+        # In refactored version, get the app instance
+        app_instance = getattr(chatybot_mod, 'app', None)
+        if app_instance:
+            script_vars = app_instance.script_vars
+        else:
+            # Fallback to old global variable for backward compatibility
+            script_vars = getattr(chatybot_mod, 'SCRIPT_VARS', None)
+    else:
+        script_vars = None
+    
     if script_vars is None:
         print("Error: Could not access SCRIPT_VARS in chatybot.")
         return
@@ -188,8 +208,19 @@ def save_var(var_name: str, filename: str) -> None:
     """Save the contents of a SCRIPT_VAR to *filename*.
     """
     import sys
-    main_mod = sys.modules.get('chatybot.main') or sys.modules.get('__main__')
-    script_vars = getattr(main_mod, 'SCRIPT_VARS', None)
+    # Try to get the ChatybotApp instance first
+    chatybot_mod = sys.modules.get('chatybot.chatybot_app') or sys.modules.get('chatybot.main')
+    if chatybot_mod:
+        # In refactored version, get the app instance
+        app_instance = getattr(chatybot_mod, 'app', None)
+        if app_instance:
+            script_vars = app_instance.script_vars
+        else:
+            # Fallback to old global variable for backward compatibility
+            script_vars = getattr(chatybot_mod, 'SCRIPT_VARS', None)
+    else:
+        script_vars = None
+    
     if script_vars is None:
         print("Error: Could not access SCRIPT_VARS in chatybot.")
         return

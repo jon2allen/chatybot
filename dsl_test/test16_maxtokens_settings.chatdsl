@@ -1,0 +1,16 @@
+# Test Case 16: Max Tokens Settings
+# Description: Test setting and displaying max tokens parameter.
+
+set test_dir = "./dsl_test"
+
+# Test setting max tokens to a specific value
+/maxtokens 100
+
+# Test displaying current max tokens
+/maxtokens
+
+# Test setting to a different value
+/maxtokens 50
+
+# Display final max tokens setting
+/maxtokens

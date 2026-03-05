@@ -1,0 +1,6 @@
+# Test variable substitution in set commands
+set city = "Beijing"
+set output_dir = ${city}_food_comparison
+set question_file = ${city}_questions.txt
+/dump all
+/quit

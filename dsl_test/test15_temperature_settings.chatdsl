@@ -1,0 +1,19 @@
+# Test Case 15: Temperature Settings
+# Description: Test setting and displaying temperature parameter.
+
+set test_dir = "./dsl_test"
+
+# Test setting temperature to a specific value
+/temp 0.7
+
+# Test displaying current temperature
+/temp
+
+# Test setting to minimum
+/temp 0.0
+
+# Test setting to maximum
+/temp 2.0
+
+# Display final temperature setting
+/temp
