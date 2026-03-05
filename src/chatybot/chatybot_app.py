@@ -72,9 +72,7 @@ class ChatybotApp:
         self.freq_penalty: Optional[float] = None
         self.pres_penalty: Optional[float] = None
         
-        # Script variables for database operations
-        self.script_vars: Dict[str, str] = {}
-    
+        
     def initialize(self) -> None:
         """Initialize the application by loading configuration and setting up history."""
         # Load configuration
@@ -1130,12 +1128,12 @@ class ChatybotApp:
             return True
         
         elif cmd == "/mem":
-            self.buffer_manager.show_memory_usage()
+            self.buffer_manager.show_memory_usage(SEARCHBUFFER)
             return True
         
         elif cmd == "/dump":
             var_name = parts[1] if len(parts) > 1 else "all"
-            self.buffer_manager.dump_variables(var_name)
+            self.buffer_manager.dump_variables(var_name, SEARCHBUFFER)
             return True
         
         elif cmd == "/setvar":

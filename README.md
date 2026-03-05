@@ -407,8 +407,14 @@ chat --> Create a blog post outline about ${topic}
 
 ### Change log
 
-Mar 5th, 2026
--------------
+Mar 5th, 2026 (v0.2.2)
+----------------------
+- **Bug Fixes**: Fixed `/savevar` and `/loadvar` to correctly use the buffer manager's variable storage.
+- **Enhanced Debugging**: Added `SEARCHBUFFER` visibility to `/mem` and `/dump` commands.
+- **Maintenance**: Removed redundant script variable attributes from the main application class.
+
+Mar 5th, 2026 (v0.2.1)
+----------------------
 - **Testing**: Added test suite and increased coverage of dsl_test.
 - **Variable Substitution**: Update to substitution for variables.
 
