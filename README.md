@@ -407,8 +407,25 @@ chat --> Create a blog post outline about ${topic}
 
 ### Change log
 
+Mar 5th, 2026
+-------------
+- **Testing**: Added test suite and increased coverage of dsl_test.
+- **Variable Substitution**: Update to substitution for variables.
+
+Mar 3rd, 2026
+-------------
+- **Variables**: Updated variable substitution in set statement.
+
+Mar 2nd, 2026
+-------------
+- **Cleanup**: Removed sonnet test data and test fruit directory.
+- **Fixes**: Corrected nanjing chatdsl.
+
 Feb 27th, 2026
 -------------
+- **Bug Fixes**: Fixed temperature command to use instance variable, fixed `/listmodels` command formatting, and fixed SEARCHBUFFER issue in `search_db`.
+- **Database Features**: Added database commands to refactored version.
+- **Documentation**: Removed emojis from documentation and consolidated dates.
 - **Complete OOP Refactoring**: Comprehensive architectural overhaul from procedural to object-oriented design:
   - Created ConfigManager class for centralized configuration management
   - Created LoggingManager class for logging functionality
