@@ -95,7 +95,7 @@ Create a scoring table (1-10 scale) for each model across these categories:
 Based on the comparison report in {filebank3}, fill in the scores and calculate totals.
 ;;
 /multiline
-/save "${output_dir}/scores_${model1}_vs_${model2}.txt"
+/save ${output_dir}/scores_${model1}_vs_${model2}.txt
 
 # Final summary
 /clearfle
