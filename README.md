@@ -44,22 +44,22 @@ chatybot is an interactive command-line tool that enables seamless communication
 ## **Key Features**
 
 ### **Core Functionality**
-✅ **Model Switching** - Easily switch between different LLMs
-✅ **File Buffer System** - Load files as context for prompts
-✅ **Multi-Line Input** - Compose complex prompts with ease
-✅ **Streaming Responses** - Real-time output from the model
-✅ **Session Logging** - Save and review chat sessions
-✅ **Input History** - Navigate previous inputs with Tab key
+- **Model Switching** - Easily switch between different LLMs
+- **File Buffer System** - Load files as context for prompts
+- **Multi-Line Input** - Compose complex prompts with ease
+- **Streaming Responses** - Real-time output from the model
+- **Session Logging** - Save and review chat sessions
+- **Input History** - Navigate previous inputs with Tab key
 
 ### **Advanced Features**
-🚀 **Scripting Engine** - Automate workflows with scripts
-🚀 **Variable Substitution** - Dynamic prompts with `${variables}`
-🚀 **Conditional Logic** - `if-then` statements in scripts
-🚀 **File Banks** - Organize multiple context files
-🚀 **Prompt Templates** - Reusable prompt structures
-🚀 **Code-Only Mode** - Generate pure code without explanations
-🚀 **TinyDB Integration** - Persistent storage for search results and chat logs
-🚀 **Advanced Variable Linking** - Use database results in prompts via `${variables}`
+- **Scripting Engine** - Automate workflows with scripts
+- **Variable Substitution** - Dynamic prompts with `${variables}`
+- **Conditional Logic** - `if-then` statements in scripts
+- **File Banks** - Organize multiple context files
+- **Prompt Templates** - Reusable prompt structures
+- **Code-Only Mode** - Generate pure code without explanations
+- **TinyDB Integration** - Persistent storage for search results and chat logs
+- **Advanced Variable Linking** - Use database results in prompts via `${variables}`
 
 ---
 
@@ -407,6 +407,36 @@ chat --> Create a blog post outline about ${topic}
 
 ### Change log
 
+Mar 5th, 2026
+-------------
+- **Testing**: Added test suite and increased coverage of dsl_test.
+- **Variable Substitution**: Update to substitution for variables.
+
+Mar 3rd, 2026
+-------------
+- **Variables**: Updated variable substitution in set statement.
+
+Mar 2nd, 2026
+-------------
+- **Cleanup**: Removed sonnet test data and test fruit directory.
+- **Fixes**: Corrected nanjing chatdsl.
+
+Feb 27th, 2026
+-------------
+- **Bug Fixes**: Fixed temperature command to use instance variable, fixed `/listmodels` command formatting, and fixed SEARCHBUFFER issue in `search_db`.
+- **Database Features**: Added database commands to refactored version.
+- **Documentation**: Removed emojis from documentation and consolidated dates.
+- **Complete OOP Refactoring**: Comprehensive architectural overhaul from procedural to object-oriented design:
+  - Created ConfigManager class for centralized configuration management
+  - Created LoggingManager class for logging functionality
+  - Created BufferManager class for buffer and variable management
+  - Created ChatybotApp class as main application orchestrator
+  - Simplified main.py to be just an entry point
+  - Applied OOP best practices: encapsulation, single responsibility, composition
+  - Maintained all existing functionality while improving code structure
+  - Added comprehensive test suite and detailed refactoring documentation
+  - New architecture provides better maintainability, testability, and extensibility
+
 Feb 26th, 2026
 --------------
 - **Tracing & Debugging**: Added new `/trace` command options:
@@ -476,7 +506,7 @@ Here's a well-structured C program that demonstrates the implementation and usag
 
 ---
 
-### ✅ C Program: Demonstrating a Singly Linked List
+### C Program: Demonstrating a Singly Linked List
 
 ```c
 #include <stdio.h>

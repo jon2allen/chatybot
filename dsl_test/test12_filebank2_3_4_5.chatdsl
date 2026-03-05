@@ -1,0 +1,20 @@
+# Test Case 12: File Bank 2, 3, 4, 5 Operations
+# Description: Test all remaining file bank commands.
+
+set test_dir = "./dsl_test"
+
+# Test filebank2
+/filebank2 ${test_dir}/notes.txt
+/showfile all
+
+# Test filebank3
+/filebank3 ${test_dir}/template.txt
+/showfile all
+
+# Test filebank4
+/filebank4 ${test_dir}/test.txt
+/showfile all
+
+# Test filebank5
+/filebank5 ${test_dir}/chatbot_requirements.txt
+/showfile all

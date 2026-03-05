@@ -1,0 +1,11 @@
+# Test Case 13: Save Command
+# Description: Test saving LLM response to file.
+
+set test_dir = "./dsl_test"
+
+# Generate a response and save it
+chat --> What is the capital of France?
+/save ${test_dir}/test_save_output.txt
+
+# Verify file was created (this would need manual verification)
+# The file should contain the LLM's response about Paris

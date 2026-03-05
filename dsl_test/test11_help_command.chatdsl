@@ -1,0 +1,6 @@
+# Test Case 11: Help Command
+# Description: Test the help command displays available commands.
+
+set test_dir = "./dsl_test"
+
+/help
