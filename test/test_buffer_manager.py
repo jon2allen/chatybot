@@ -174,6 +174,21 @@ class TestBufferManager:
         captured = capsys.readouterr()
         assert "Error: Variable 'nonexistent' not found" in captured.out
 
+    def test_show_memory_usage_with_search_buffer(self, manager, capsys):
+        """Test showing memory usage with search buffer"""
+        search_buffer = [{"id": 1, "content": "test content"}]
+        manager.show_memory_usage(search_buffer=search_buffer)
+        captured = capsys.readouterr()
+        assert "SEARCH_BUFFER" in captured.out
+
+    def test_dump_variables_search_buffer(self, manager, capsys):
+        """Test dumping search buffer"""
+        search_buffer = [{"id": 1, "content": "test content"}]
+        manager.dump_variables("search_buffer", search_buffer=search_buffer)
+        captured = capsys.readouterr()
+        assert "SEARCH_BUFFER:" in captured.out
+        assert "test content" in captured.out
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
