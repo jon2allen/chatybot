@@ -251,6 +251,10 @@ class ChatybotApp:
         pp = self.pres_penalty if self.pres_penalty is not None else model_config.get("presence_penalty")
         if pp is not None: kwargs["presence_penalty"] = pp
         
+        # Add explicit reasoning control for models that support it (e.g. SiliconFlow Qwen)
+        if "qwen" in model_name.lower() and not self.reasoning_mode:
+            kwargs.setdefault("extra_body", {})["enable_reasoning"] = False
+            
         tk = self.top_k if self.top_k is not None else model_config.get("top_k")
         if tk is not None:
             if is_nvidia:
