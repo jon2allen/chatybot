@@ -1,0 +1,391 @@
+# ChatyBot ChatDSL Scripting Reference for LLM Assistance
+
+This guide helps LLMs create effective ChatyBot DSL (.chatdsl) scripts for automation workflows.
+
+## ChatDSL Script Format
+
+Scripts are plain text files with `.chatdsl` extension containing commands executed sequentially.
+
+### Basic Script Structure
+```
+# Comment explaining script purpose
+set variable_name = value
+if ${variable_name} then /command
+wait 2
+Natural language prompt to LLM 
+/save output.txt
+```
+
+## Core Script Commands
+
+### Variable Operations
+| Command | Syntax | Description |
+|---------|--------|-------------|
+| Set Variable | `set <name> = <value>` | Define string, number, or boolean variable |
+| Reference Variable | `${name}` | Substitute variable value in commands/paths |
+| Save Variable | `/savevar <varname> <file>` | Save variable contents to file |
+| Load Variable | `/setvar <varname> <value>` | Set variable from CLI (rarely used in scripts) |
+
+### Control Flow
+| Command | Syntax | Description |
+|---------|--------|-------------|
+| Conditional | `if <condition> then <command>` | Execute command if condition true |
+| Wait/Pause | `wait <seconds>` | Delay execution for N seconds |
+| Comment | `# <text>` | Ignored during execution |
+
+### File Operations
+| Command | Syntax | Description |
+|---------|--------|-------------|
+| Load Main Buffer | `/file <path>` | Load file into primary context buffer |
+| Load File Bank | `/filebank{N} <file>` | Load into filebank1-5 (N=1-5) |
+| Clear Main Buffer | `/clearfile` | Empty primary context buffer |
+| Clear File Bank | `/filebank{N} clear` | Empty specific filebank |
+| Show Buffer | `/showfile [all]` | Display buffer content (debug) |
+| Save Response | `/save <file>` | Save last LLM response to file |
+
+### LLM Interaction
+| Command | Syntax | Description |
+|---------|--------|-------------|
+| Chat Prompt | `  ` | text with no command automatically Send prompt to LLM with current context |
+| System Message | `/system <message>` | Set LLM behavior/context |
+| Model Switch | `/model <alias>` | Change active LLM model |
+| Temperature | `/temp <value>` | Set creativity (0.0-2.0) |
+| Max Tokens | `/maxtokens <value>` | Limit response length |
+| Streaming | `/stream` | Toggle real-time output |
+| Code Only | `/codeonly` | Suppress explanations, code only |
+| Note Mode | `/notemode <on|off>` | Auto-extract code on /save |
+
+### Database Integration (TinyDB)
+| Command | Syntax | Description |
+|---------|--------|-------------|
+| Select DB | `/setdb <name>` | Use/create database (Null to deactivate) |
+| Search DB | `/searchdb <query>` | Find documents, results in SEARCHBUFFER |
+| Load Search | `/loadvar <varname> [ALL\|id\|range]` | Move search results to variable |
+| Log Response | `/dblog` | Save last LLM response to DB |
+| List DBs | `/dblist` | Show available databases |
+
+## Variable Substitution Rules
+
+### In Chat Prompts
+```
+Explain ${topic} using examples from ${filebank1}
+```
+
+### In File Paths
+```
+/file ${topic}_research.txt
+/filebank2 ${data_source}.csv
+/save ${output_dir}/result.md
+```
+
+### In Database Operations
+```
+/setdb ${project_name}
+/searchdb "${query_phrase}"
+/loadvar results 1-5
+```
+
+## File Bank Usage
+
+Five persistent context buffers available:
+- `{filebank1}` through `{filebank5}` in chat prompts
+- Load with `/filebankN <path>`
+- Reference in prompts: ` Analyze {filebank3}`
+- Clear with `/filebankN clear`
+
+## Practical Script Examples from Existing .chatdsl Files
+
+### Basic Command Execution (from test1_basic_commands.chatdsl)
+```dsl
+# Test Case 1: Basic Command Execution
+# Description: Verify basic command processing and model switching.
+
+set test_dir = "./dsl_test"
+
+/model gpt4
+/listmodels
+/model
+```
+
+### File Handling (from test2_file_handling.chatdsl)
+```dsl
+# Test Case 2: File Handling
+# Description: Test file loading, display, and clearing.
+
+set test_dir = "./dsl_test"
+
+/file ${test_dir}/test.txt
+/showfile
+/clearfile
+/showfile
+```
+
+### Prompt Engineering (from test4_prompt_engineering.chatdsl)
+```dsl
+# Test Case 4: Prompt Engineering
+# Description: Test prompt template loading and system message override.
+
+set test_dir = "./dsl_test"
+
+/prompt ${test_dir}/template.txt
+/system "You are a helpful assistant."
+```
+
+### Multi-line Input (from test6_multiline_input.chatdsl)
+```dsl
+# Test Case 6: Multi-line Input
+# Description: Test multi-line prompt input.
+
+set test_dir = "./dsl_test"
+
+/multiline
+Write a Python function
+to reverse a string.
+;;
+/codeonly
+
+/multiline
+```
+
+### Variable Substitution (from test7_variable_substitution.chatdsl)
+```dsl
+# Test Case 7: Variable Substitution in Prompts
+# Description: Test dynamic variable substitution in prompts.
+
+set test_dir = "./dsl_test"
+
+set name = "Alice"
+Hello, ${name}! How are you?
+```
+
+### Conditional Logic (from test8_conditional_logic.chatdsl)
+```dsl
+# Test Case 8: Conditional Logic
+# Description: Test if-then conditional execution.
+
+set test_dir = "./dsl_test"
+set condition = true
+
+if ${condition} then /file ${test_dir}/conditional_true.txt
+if not ${condition} then /file ${test_dir}/conditional_false.txt
+
+/showfile
+```
+
+### Variable Substitution Advanced (from test7_variable_substitution.chatdsl)
+```dsl
+# Test Case 7: Variable Substitution in Prompts
+# Description: Test dynamic variable substitution in prompts.
+
+set test_dir = "./dsl_test"
+
+set name = "Alice"
+Hello, ${name}! How are you?
+```
+
+### Script Execution (from test5_script_execution.chatdsl)
+```dsl
+# Test Case 5: Script Execution
+# Description: Test executing another script file.
+
+set test_dir = "./dsl_test"
+set script_to_run = "${test_dir}/test1_basic_commands.chatdsl"
+
+/script ${script_to_run}
+```
+
+## Database Integration Examples
+
+### Search and Load Workflow
+```dsl
+# Search database and use results in LLM prompt
+/setdb knowledge_base
+/searchdb "machine learning algorithms"
+/loadvar results 1-3
+Explain these concepts: ${results}
+/save ml_explanation.txt
+```
+
+### Knowledge Building Pattern
+```dsl
+# Build knowledge base iteratively
+/setdb research_notes
+/searchdb "neural networks"
+/loadvar nn_results 1
+Summarize neural networks: ${nn_results}
+/savevar summary nn_summary.txt
+
+/searchdb "deep learning"
+/loadvar dl_results 1
+Explain deep learning: ${dl_results}
+/savevar summary dl_summary.txt
+
+Compare neural networks and deep learning:
+          Neural Networks: $(cat nn_summary.txt)
+          Deep Learning: $(cat dl_summary.txt)
+/save comparison.txt
+```
+
+### Session Logging
+```dsl
+# Perform research and log the session
+/setdb research_session
+/system "You are a thorough research assistant."
+/searchdb "quantum computing applications"
+/loadvar apps 1-5
+ List and describe these quantum computing applications: ${apps}
+/dblog
+```
+
+## Best Practices for LLM Script Creation
+
+### 1. Variable Naming
+- Use descriptive names: `${customer_query}` not `${x}`
+- Use underscores: `${file_path}` not `${filepath}`
+- Be consistent: stick to one naming convention per script
+
+### 2. Script Organization
+- Header comment: purpose, inputs, outputs
+- Group related commands: variable setup → file loading → processing → saving
+- Use whitespace to separate logical sections
+- Comment complex sections
+
+### 3. Error Prevention
+- Verify file paths exist before loading
+- Use default values: `set ${filename} = "default.txt"`
+- Check variable contents: `if ${var} then command`
+- Limit LLM context: clear buffers when no longer needed
+
+### 4. Optimization
+- Minimize LLM calls: batch related requests
+- Use filebanks for persistent context rather than reloading
+- Set appropriate temperature: lower for facts, higher for creativity
+- Use `/codeonly` when you need pure code output
+- Employ `/notemode` for code extraction workflows
+
+### 5. Database Patterns
+- Research pattern: `/setdb` → `/searchdb` → `/loadvar` → `chat` → `/save` or `/dblog`
+- Knowledge building: `/setdb` → `/searchdb` → `/loadvar` → `chat` → `/savevar` → repeat
+- Session logging: end scripts with `/dblog` to preserve conversation
+
+## Common Script Constructs
+
+### File Processing Loop Pattern (Conceptual - ChatDSL doesn't have native loops)
+```dsl
+# Process multiple files by repeating the pattern
+/file file1.txt
+Summarize this document
+/save file1_summary.txt
+
+/file file2.txt
+Summarize this document
+/save file2_summary.txt
+```
+
+### Template Filling Pattern
+```dsl
+# Fill template with data
+/setdb knowledge_base
+/searchdb "template: project_proposal"
+/loadvar template 1
+/setvar proposal_text ${template}
+
+/searchdb "technical_requirements"
+/loadvar tech_req 1-3
+
+Fill in the project proposal template: ${template}
+          With these requirements: ${tech_req}
+/save project_proposal.md
+```
+
+### Validation Workflow
+```dsl
+set input_file = "user_data.json"
+
+/file ${input_file}
+Validate this JSON structure and report any errors
+/ save validation_results.txt
+
+# Note: Actual conditional file operations would need OS command support
+# which ChatDSL doesn't have for security reasons
+```
+
+### Essential Commands
+- `set name = value` - Define variable
+- `${name}` - Use variable
+- `if ${x} then cmd` - Conditional
+- `wait N` - Pause N seconds
+- `/file path` - Load context
+- `/filebankN path` - Load to bank N
+- `no escape text - will be sent to LLM after <crlf> - Ask LLM
+- `/save file` - Save response
+- `/system msg` - Set LLM role
+- `/temp 0.7` - Set creativity
+- `/codeonly` - Code only output
+- `/notemode on` - Extract code on save
+- `/setdb name` - Select database
+- `/searchdb query` - Search DB
+- `/loadvar var ALL` - Load search results
+
+### Variable Sources
+- Script `set`: `set name = "value"`
+- CLI `/setvar`: Rare in scripts
+- Database `/loadvar`: From search results
+- File content: Implicit in chat prompts
+- Command output: Advanced usage
+
+### Context Sources
+- Main buffer: `/file path`
+- File banks: `{filebank1}`-{filebank5}
+- System message: `/system text`
+- Chat history: Previous exchanges
+- Variables: `${name}` substitution
+
+## Integration Notes
+
+###
+  - script uses special domain specific language
+   - Load script file and remove comments
+   - Split commands by newlines or semicolons
+   - Process each command sequentially
+   - Handle variables, conditionals, and delays
+   - set variable command does not support multiline strings - consider using /multiline
+   - a command must start on line1.  avoid putting /commands in variable.  use that for filenames or other data:
+   - a line with no /escape command or variable  will be sent to the the LLM of the last /model command
+   - multiline to be sent to LLM must be inline like this, important to disable it after sequence with another /multiline - boolean toggle
+     /multiline
+     Please give me details on pears
+     1.  varieties
+     2.  countries of origin of each variety.
+     ;;
+     /multiline
+   - questions or asks should be inline and not be in a file
+   - there is no way to save artibrary text to a file, only LLM command completions can be saved
+   - there are no subroutines, no loops, repeat commands if necessary
+   - all outputs from chat completion have to be saved to files, for later use
+   - favor filebank1, filebank2... filebank5 are like file memory buffers, and serve as special file text variable.
+   - do not use /file
+   - there are no conventions for filenames created, but prefer .txt
+   - any commentary should be commented with line 1 being a "#"
+   - /script invokes a new script and there is no return, it does not define or compile anything
+
+
+### With File System
+- Relative paths: from current working directory
+- Absolute paths: full path specification
+- directory and filenames should not contain spaces, underscore preferred
+- File banks are in memory persist until cleared or overwritten
+
+### With LLM
+- System message sets behavior for all subsequent chats
+- Temperature affects all generations until changed
+- Model stays active until switched
+- Context includes: system message + buffers + history
+
+### With Database
+- SEARCHBUFFER holds last `/searchdb` results
+- `/loadvar` moves data from SEARCHBUFFER to variables
+- Variables persist until overwritten or script ends
+- `/dblog` saves current LLM exchange to active DB
+
+This reference focuses specifically on enabling LLMs to create effective chatdsl scripts for chatybot automation workflows. For complete feature descriptions, see the main documentation.
