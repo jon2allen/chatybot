@@ -1,0 +1,38 @@
+# WWI Battles in 1917 Query Script
+# This script queries 5 different AI models about World War One battles that occurred in 1917
+# and logs responses to a database
+
+# Set up database
+/setdb ww1
+
+set query = "List the major World War One battles that took place in 1917, including dates and locations."
+
+# Query using NVIDIA Nemotron model
+/model nvidia_1
+chat --> ${query}
+/dblog
+
+# Query using Mistral model
+/model mistral_1
+chat --> ${query}
+/dblog
+
+# Query using Devstral model
+/model devstral_1
+chat --> ${query}
+/dblog
+
+# Query using Gemma model
+/model gemma_3
+chat --> ${query}
+/dblog
+
+# Query using Llama 3 model
+/model nemotron_super_49b 
+chat --> ${query}
+/dblog
+
+# Load all items from the database and show memory contents
+/loadvar ww1_results ALL
+/mem
+/dump ww1_results

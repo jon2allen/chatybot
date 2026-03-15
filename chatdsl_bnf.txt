@@ -9,9 +9,13 @@
 <escape-command> ::= "/" <escape-command-name> [ <whitespace> <escape-command-args> ]
 
 <escape-command-name> ::= "help" | "prompt" | "file" | "showfile" | "clearfile" | 
-                          "filebank" <digit_1_5> | "model" | "listmodels" | "logging" | 
-                          "save" | "codeonly" | "codeoff" | "multiline" | "system" | 
-                          "temp" | "maxtokens" | "stream" | "script" | "quit"
+                           "filebank" <digit_1_5> | "model" | "listmodels" | "logging" | 
+                           "save" | "codeonly" | "codeoff" | "multiline" | "system" | 
+                           "temp" | "maxtokens" | "top_p" | "top_k" | "freq_penalty" | 
+                           "pres_penalty" | "reasoning" | "seed" | "stream" | "script" | 
+                           "quit" | "setdb" | "dblist" | "searchdb" | "dblog" | 
+                           "loadvar" | "savevar" | "setvar" | "notemode" | "mem" | "dump" |
+                           "trace" | "thinking"
 
 <script-command> ::= <set-command> | <wait-command> | <if-command>
 
@@ -32,7 +36,11 @@
 <filebank-reference> ::= "{" "filebank" <digit_1_5> "}"
 
 <variable-name> ::= <identifier>
+
 <variable-value> ::= <string> | <number> | "true" | "false" | "yes" | "no"
+
 <digit_1_5> ::= "1" | "2" | "3" | "4" | "5"
+
 <newline> ::= "\n"
+
 <whitespace> ::= " " | "\t"
