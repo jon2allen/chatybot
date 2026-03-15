@@ -1,0 +1,38 @@
+# Vietnam War Battles in 1968 Query Script
+# This script queries 5 different AI models about Vietnam War battles that occurred in 1968
+# and logs responses to a database
+
+# Set up database
+/setdb viet_war
+
+set query = "What battles Vietnam war in 1968"
+
+# Query using NVIDIA Nemotron model
+/model nvidia_1
+chat --> ${query}
+/dblog
+
+# Query using Mistral model
+/model mistral_1
+chat --> ${query}
+/dblog
+
+# Query using Devstral model
+/model devstral_1
+chat --> ${query}
+/dblog
+
+# Query using Gemma model
+/model gemma_3
+chat --> ${query}
+/dblog
+
+# Query using Nemotron Super 49B model
+/model nemotron_super_49b 
+chat --> ${query}
+/dblog
+
+# Load all items from the database and show memory contents
+/loadvar viet_war_results ALL
+/mem
+/dump viet_war_results

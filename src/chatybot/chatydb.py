@@ -135,6 +135,8 @@ def dblog() -> None:
         print("Chat history is empty – nothing to log.")
         return
     last_response = CHAT_HISTORY[-1][1]
+
+    last_prompt  = CHAT_HISTORY[-1][0] 
     # Store with a simple metadata dict containing a timestamp
     
     metadata = {"timestamp": datetime.now().isoformat()}
@@ -142,6 +144,7 @@ def dblog() -> None:
     metadata["model_alias"] = app_instance.config_manager.active_model_alias
     model_config = app_instance.config_manager.get_model_config(app_instance.config_manager.active_model_alias)
     metadata["model_name"] = model_config["name"]
+    metadata["prompt"] = last_prompt  
     _manager.add_item("chat", "last_chat", last_response, metadata)
 
     print("Last chat completion logged to the database.")
