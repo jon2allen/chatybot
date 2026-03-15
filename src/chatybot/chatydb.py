@@ -1,6 +1,7 @@
 import os
 import json
 from typing import List, Dict, Any
+from datetime import datetime
 
 # Import the CorpusManager from the provided tinydb implementation
 from .tinydb1.corpus_manager import CorpusManager
@@ -99,6 +100,14 @@ def dblog() -> None:
     """Log the last chat completion into the active TinyDB as a ``chat`` item.
 
     The item stores the raw response text and a timestamp.
+
+    - type: "chat"
+    - name: "last_chat"
+    - content: The AI response text
+      - metadata: A dictionary containing:
+       - timestamp: When the chat occurred
+       - model_alias: The short alias used (e.g., "mistral_1")
+       - model_name: The full model name (e.g., "mistral-large-2512")
     """
     if _manager is None:
         print("No database selected. Use /setdb <dbname> first.")
@@ -127,9 +136,14 @@ def dblog() -> None:
         return
     last_response = CHAT_HISTORY[-1][1]
     # Store with a simple metadata dict containing a timestamp
-    from datetime import datetime
+    
     metadata = {"timestamp": datetime.now().isoformat()}
+    # gather model alias and name 
+    metadata["model_alias"] = app_instance.config_manager.active_model_alias
+    model_config = app_instance.config_manager.get_model_config(app_instance.config_manager.active_model_alias)
+    metadata["model_name"] = model_config["name"]
     _manager.add_item("chat", "last_chat", last_response, metadata)
+
     print("Last chat completion logged to the database.")
     
 
