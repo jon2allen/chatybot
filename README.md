@@ -133,7 +133,8 @@ Active escape commands:
   /top_k <value> - Set top_k for the current model.
   /freq_penalty <value> - Set frequency penalty (-2.0-2.0).
   /pres_penalty <value> - Set presence penalty (-2.0-2.0).
-  /reasoning <on|off> - Toggle reasoning (thinking) for NVIDIA models.
+  /reasoning <on|off> - Toggle reasoning (thinking) for NVIDIA and Qwen models.
+  /thinking <on|off> - Toggle display of <think> blocks and reasoning text.
   /seed <value> - Set seed (int, 'time', or 'random <min>,<max>').
   /stream - Toggle streaming responses.
   /trace <rawpayload|tps|tpsperf> <on|off> - Debugging options
@@ -143,6 +144,7 @@ Active escape commands:
   /dblist - List all TinyDB databases in the db directory.
   /searchdb <query> - Search all docs in the current database.
   /dblog - Log the last chat completion to the database.
+  /dbprint - Print the entire database contents in a formatted report.
   /loadvar <varname> [ALL|id|range] - Load search buffer, all docs, a doc ID, or a range (e.g. 1-5) into a variable.
   /savevar <varname> <filename> - Save a variable's contents to a file.
   /setvar <varname> <value> - Set a script variable to a string.
@@ -184,7 +186,7 @@ chat --> Hello!      # Start a conversation
 | `/top_k <value>` | Set top_k | `/top_k 40` |
 | `/freq_penalty <value>` | Set freq penalty | `/freq_penalty 0.5` |
 | `/pres_penalty <value>` | Set presence penalty | `/pres_penalty 0.5` |
-| `/reasoning <on\|off>` | Toggle NVIDIA reasoning | `/reasoning off` |
+| `/reasoning <on\|off>` | Toggle NVIDIA/Qwen reasoning | `/reasoning off` |
 | `/thinking <on\|off>` | Toggle `<think>` visibility | `/thinking off` |
 | `/seed <value>` | Set PRNG Seed | `/seed time` |
 | `/stream` | Toggle streaming | `/stream` |
@@ -199,7 +201,8 @@ chat --> Hello!      # Start a conversation
 | `/setdb <name>` | Select TinyDB database. Use `Null` to deactivate. | `/setdb knowledge` |
 | `/dblist` | List all TinyDB databases | `/dblist` |
 | `/searchdb <q>` | Search current database | `/searchdb "python"` |
-| `/dblog` | Log last response to DB | `/dblog` |
+| `/dblog` | Log last response (with prompt/model) to DB | `/dblog` |
+| `/dbprint [file]` | Print formatted DB report | `/dbprint report.txt` |
 | `/loadvar <v> [p]` | Store search, ALL, ID, or range in variable | `/loadvar results 1-5` |
 | `/savevar <v> <f>`| Save variable to file | `/savevar results log.txt` |
 | `/setvar <v> <val>`| Set a string variable | `/setvar user "Jon"` |
@@ -406,6 +409,13 @@ chat --> Create a blog post outline about ${topic}
 ```
 
 ### Change log
+
+Mar 15th, 2026 (v0.2.4)
+--------------
+- **Database Enhancements**: Added `/dbprint` command to generate high-quality formatted reports of database contents.
+- **Improved Logging**: Enhanced `/dblog` to capture the original prompt and detailed model metadata (name and alias) for better analysis.
+- **Qwen Support**: Added explicit reasoning control for Qwen (SiliconFlow) models via the `/reasoning` command.
+- **Documentation**: Updated ChatDSL BNF and technical specifications.
 
 Mar 5th, 2026 (v0.2.3)
 ----------------------
