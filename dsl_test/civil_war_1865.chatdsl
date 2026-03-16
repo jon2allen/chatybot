@@ -1,0 +1,28 @@
+# Civil War Battles in 1865 Query Script
+# This script queries the NVIDIA model about USA battles in 1865 during Civil War
+# and logs responses to a database
+
+# Set up database
+/setdb civil_war
+
+set query = "What battles of the USA occured in 1865 during civil war?"
+
+# Query using NVIDIA Nemotron model
+/model mistral_1
+chat --> ${query}
+/wait 10 
+/dblog
+# query 2
+/model mistral_1
+chat --> ${query}
+/wait 10
+/dblog
+#
+# Query 3 using NVIDIA Nemotron model
+/model mistral_1
+chat --> ${query}
+/dblog
+# Load all items from the database and show memory contents
+/loadvar civil_war_results ALL
+/mem
+/dump civil_war_results
