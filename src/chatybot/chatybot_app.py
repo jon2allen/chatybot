@@ -609,23 +609,53 @@ class ChatybotApp:
             True if the command was handled, False otherwise
         """
         # Handle script-specific commands
-        if command.startswith("set "):
+        # Handle script-specific commands (supporting multiline set)
+        if command.lstrip().startswith("set "):
             try:
-                _, var_part = command.split(maxsplit=1)
-                var_name, var_value = var_part.split("=", maxsplit=1)
+                set_stripped = command.lstrip()
+                # Use regex to parse "set var = value" supporting multiline (. matches anything with re.S)
+                match = re.match(r"set\s+(\w+)\s*=\s*(.*)", set_stripped, re.S)
+                if match:
+                    var_name = match.group(1)
+                    var_value = match.group(2).strip()
+                    
+                    # Handle quoted values
+                    if var_value.startswith('"') or var_value.startswith("'"):
+                        q = var_value[0]
+                        # Search for ending quote and error on escape characters as requested
+                        closing_idx = -1
+                        for i in range(1, len(var_value)):
+                            if var_value[i] == "\\":
+                                print(f"Error: Escape character '\\' is not allowed in set command for '{var_name}'.")
+                                return True
+                            if var_value[i] == q:
+                                closing_idx = i
+                                break
+                        
+                        if closing_idx != -1:
+                            var_value = var_value[1:closing_idx]
+                        else:
+                            print(f"Error: No closing quote found for variable '{var_name}'.")
+                            return True
+                    else:
+                        # Non-quoted value
+                        var_value = var_value.strip()
 
-                # Replace variables in the value before storing
-                def replace_var(match):
-                    var_name_match = match.group(1)
-                    return self.buffer_manager.script_vars.get(var_name_match, "")
+                    # Replace variables in the value before storing
+                    def replace_var_in_val(match):
+                        var_name_match = match.group(1)
+                        return self.buffer_manager.script_vars.get(var_name_match, "")
 
-                processed_value = re.sub(
-                    r"\$\{(\w+)\}", replace_var, var_value.strip().strip("\"'")
-                )
-                self.buffer_manager.script_vars[var_name.strip()] = processed_value
-                return True
-            except ValueError:
-                print("Invalid set command. Usage: set <name> = <value>")
+                    processed_value = re.sub(
+                        r"\$\{(\w+)\}", replace_var_in_val, var_value
+                    )
+                    self.buffer_manager.script_vars[var_name.strip()] = processed_value
+                    return True
+                else:
+                    print("Invalid set command format. Usage: set <name> = <value>")
+                    return True
+            except Exception as e:
+                print(f"Error parsing set command: {e}")
                 return True
 
         # Replace variables in the command
@@ -634,11 +664,14 @@ class ChatybotApp:
             return self.buffer_manager.script_vars.get(var_name, "")
 
         processed_command = re.sub(r"\$\{(\w+)\}", replace_var, command)
+        
+        # Strip whitespace for command detection (used by multiple handlers)
+        stripped_command = processed_command.lstrip()
 
         # Handle wait command
-        if processed_command.startswith("wait "):
+        if stripped_command.startswith("wait "):
             try:
-                _, seconds = processed_command.split(maxsplit=1)
+                _, seconds = stripped_command.split(maxsplit=1)
                 await asyncio.sleep(float(seconds))
                 return True
             except ValueError:
@@ -646,45 +679,77 @@ class ChatybotApp:
                 return True
 
         # Handle if-then commands
-        if processed_command.startswith("if "):
+        if stripped_command.startswith("if "):
             try:
-                # Simple condition checking for now (can be expanded)
-                if "then" in processed_command:
-                    condition, then_part = processed_command[3:].split(
-                        "then", maxsplit=1
-                    )
-                    condition = condition.strip()
-                    then_command = then_part.strip()
-
-                    # Simple condition evaluation (can be expanded)
-                    # Check if condition is a variable name and its value is truthy
-                    if condition in self.buffer_manager.script_vars:
-                        # More robust truthy check for string variables
-                        if self.buffer_manager.script_vars[condition].lower() in [
-                            "true",
-                            "1",
-                            "yes",
-                        ]:
-                            return await self.execute_script_command(
-                                then_command, original_handler
-                            )
-                        elif self.buffer_manager.script_vars[condition].lower() in [
-                            "false",
-                            "0",
-                            "no",
-                            "",
-                        ]:
-                            return True  # Condition is false, do nothing
-                    elif condition.lower() == "true":
+                # Use regex to split by whitespace-surrounded "then"
+                if " then " in stripped_command:
+                    # Find the first " then " to split correctly.
+                    parts = re.split(r"\s+then\s+", stripped_command[3:], maxsplit=1)
+                    if len(parts) < 2:
+                        print("Invalid if command format. Usage: if <condition> then <command>")
+                        return True
+                    
+                    condition_str = parts[0].strip()
+                    then_command = parts[1].strip()
+                    
+                    # Strip optional outer quotes from condition
+                    if condition_str.startswith('"') and condition_str.endswith('"'):
+                        condition_str = condition_str[1:-1].strip()
+                    elif condition_str.startswith("'") and condition_str.endswith("'"):
+                        condition_str = condition_str[1:-1].strip()
+                    
+                    # Handle "not" prefix
+                    is_negated = False
+                    if condition_str.startswith("not "):
+                        is_negated = True
+                        condition_str = condition_str[4:].strip()
+                    
+                    condition_met = False
+                    
+                    # Check for comparison operators
+                    if " == " in condition_str:
+                        left, right = condition_str.split(" == ", 1)
+                        # Strip operand quotes
+                        left = left.strip().strip("\"'")
+                        right = right.strip().strip("\"'")
+                        condition_met = (left == right)
+                    elif " != " in condition_str:
+                        left, right = condition_str.split(" != ", 1)
+                        left = left.strip().strip("\"'")
+                        right = right.strip().strip("\"'")
+                        condition_met = (left != right)
+                    else:
+                        # Truthy/Falsy check
+                        val = condition_str.lower()
+                        if val in ["true", "1", "yes", "on"]:
+                            condition_met = True
+                        elif val in ["false", "0", "no", "off", ""]:
+                            condition_met = False
+                        else:
+                            # Direct check of variable name if it wasn't replaced
+                            if condition_str in self.buffer_manager.script_vars:
+                                var_val = self.buffer_manager.script_vars[condition_str].lower()
+                                condition_met = var_val in ["true", "1", "yes", "on"]
+                            else:
+                                # Non-empty string is truthy
+                                condition_met = bool(condition_str)
+                    
+                    if is_negated:
+                        condition_met = not condition_met
+                        
+                    if condition_met:
                         return await self.execute_script_command(
                             then_command, original_handler
                         )
-                    elif condition.lower() == "false":
-                        return True
-            except ValueError:
-                print("Invalid if command. Usage: if <condition> then <command>")
+                    else:
+                        return True  # Handled but skipped
+            except Exception as e:
+                print(f"Error evaluating if condition: {e}")
                 return True
-
+            
+            # If we reached here without matching a 'then', it's still an if command but invalid
+            print("Invalid if command: missing 'then' or incorrect format.")
+            return True
         # For other commands, use the original handler
         if processed_command.startswith("/"):
             # The original_handler (handle_escape_command) is now async, so we must await it.
@@ -735,48 +800,60 @@ class ChatybotApp:
             with open(script_path, "r") as f:
                 script_content = f.read()
 
-            # Remove comments (lines starting with #)
-            script_content = "\n".join(
-                line
-                for line in script_content.split("\n")
-                if not line.strip().startswith("#")
-            )
-
-            # Split commands by newlines or semicolons
+            # Robust command extractor supporting multiline quotes and comments
             commands_list = []
-            for line in script_content.split("\n"):
-                line = line.strip()
-                if not line:
+            current_command = []
+            in_quotes = False
+            quote_char = None
+            
+            lines_content = script_content.split("\n")
+            for line in lines_content:
+                # If we're not inside quotes, skip full line comments
+                if not in_quotes and line.strip().startswith("#"):
                     continue
-                # Attempt to split by semicolon, but be aware of quotes
-                if ";" in line:
-                    # Split by semicolon but preserve quoted strings
-                    commands = []
-                    current = []
-                    in_quotes = False
-                    quote_char = None
-
-                    for char in line:
-                        if char in ('"', "'") and not in_quotes:
-                            in_quotes = True
-                            quote_char = char
-                            current.append(char)
-                        elif char == quote_char and in_quotes:
+                
+                i = 0
+                while i < len(line):
+                    char = line[i]
+                    
+                    if in_quotes:
+                        if char == quote_char:
                             in_quotes = False
                             quote_char = None
-                            current.append(char)
-                        elif char == ";" and not in_quotes:
-                            commands.append("".join(current).strip())
-                            current = []
+                            current_command.append(char)
                         else:
-                            current.append(char)
-
-                    if current:
-                        commands.append("".join(current).strip())
-
-                    commands_list.extend([cmd for cmd in commands if cmd])
+                            current_command.append(char)
+                    else:
+                        # Outside quotes, handle comments and command separators
+                        if char == "#":
+                            break # End of line comment
+                        
+                        if char in ('"', "'"):
+                            in_quotes = True
+                            quote_char = char
+                            current_command.append(char)
+                        elif char == ";":
+                            cmd = "".join(current_command).strip()
+                            if cmd:
+                                commands_list.append(cmd)
+                            current_command = []
+                        else:
+                            current_command.append(char)
+                    i += 1
+                
+                if not in_quotes:
+                    cmd = "".join(current_command).strip()
+                    if cmd:
+                        commands_list.append(cmd)
+                    current_command = []
                 else:
-                    commands_list.append(line)
+                    # Keep the newline as part of the quoted string
+                    current_command.append("\n")
+            
+            # Catch trailing command
+            cmd = "".join(current_command).strip()
+            if cmd:
+                commands_list.append(cmd)
 
             # Execute each command
             self.script_context = True
@@ -1292,13 +1369,45 @@ class ChatybotApp:
 
         elif cmd == "/script":
             if len(parts) < 2:
-                print("Usage: /script <file>")
+                print('Usage: /script <file> [x="value"] [y="value"] [z="value"]')
                 return True
 
+            # Extract script path and parameters
             script_path = parts[1]
-            print("command /script with ", script_path)
+            
+            # Parse parameters from the command
+            import re
+            param_pattern = r'(^|\s+)([xyz])\s*=\s*("[^"]*"|'"'"'[^'"'"']*'"'"'|\S+)'
+            
+            # Look for parameters in the original command string after the script path
+            # We need to handle the case where script_path might be quoted
+            remaining_command = command[len(cmd):].strip()  # Remove the "/script" part
+            
+            # Find the script path in the remaining command
+            # Handle both quoted and unquoted script paths
+            script_path_match = re.match(r'("[^"]*"|'"'"'[^'"'"']*'"'"'|\S+)', remaining_command)
+            if script_path_match:
+                actual_script_path = script_path_match.group(1).strip('"\'')
+                params_string = remaining_command[len(script_path_match.group(1)):].strip()
+            else:
+                actual_script_path = script_path
+                params_string = ""
+            
+            # Extract parameters using regex
+            params = {}
+            for match in re.finditer(param_pattern, params_string):
+                var_name = match.group(2)  # Group 2 is the variable name (group 1 is the separator)
+                var_value = match.group(3).strip('"\'')  # Remove surrounding quotes
+                params[var_name] = var_value
+                print(f"Setting parameter {var_name} = {var_value}")
+            
+            # Set parameters as script variables
+            for var_name, var_value in params.items():
+                self.buffer_manager.set_script_var(var_name, var_value)
+            
+            print("command /script with ", actual_script_path)
             # Execute script asynchronously so it doesn't block the main loop
-            await self.execute_script(script_path)
+            await self.execute_script(actual_script_path)
             return True
 
         elif cmd == "/quit":
@@ -1413,7 +1522,7 @@ class ChatybotApp:
         print("  /seed <value> - Set seed (int, 'time', or 'random <min>,<max>').")
         print("  /stream - Toggle streaming responses.")
         print("  /trace <rawpayload|tps|tpsperf> <on|off> - Debugging options")
-        print("  /script <file> - Execute a script file containing multiple commands.")
+        print("  /script <file> [x=value y=value z=value] - Execute a script file with optional parameters.")
         print("  /quit - Exit the program.")
         print(
             "  /setdb <dbname> - Create or select a TinyDB database. Use 'Null' to deactivate."
@@ -1433,6 +1542,8 @@ class ChatybotApp:
         print("  set <name> = <value> - Define a variable")
         print("  ${name} - Reference a variable")
         print("  if <condition> then <command> - Conditional execution")
+        print("    Supports: if ${var} then command, if not ${var} then command")
+        print('             if "${var} == value" then command, if "true" then command')
         print("  wait <seconds> - Pause execution")
         print("  # comment - Comments in script files")
 
