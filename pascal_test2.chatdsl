@@ -12,10 +12,9 @@ The program should include:
 3. A function to perform In-order Traversal.
 4. A simple main block to demonstrate the tree.
 ;;
-
+/multiline
 /save ./pascal2/${filename}
 
-/multiline
 Create a README.txt file for the binary tree program.
 Explain how to compile it using: fpc ${filename}
 ;;
