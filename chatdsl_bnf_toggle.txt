@@ -1,0 +1,101 @@
+tybot-dsl> ::= <opt-ws> <script> <opt-ws>
+
+<script> ::= { <script-unit> }
+
+<script-unit> ::= <multiline-block>
+                | <standard-line>
+
+<standard-line> ::= <script-line> [ <opt-ws> ]
+
+/* Updated: Added flexibility for how the block ends */
+<multiline-block> ::= "/multiline" <newline> <multiline-body> <multiline-terminator> <opt-ws> ( <newline> | <EOF> )
+
+/* Explicitly handles the toggle or the symbol */
+<multiline-terminator> ::= ";;" | "/multiline"
+
+<script-line> ::= <newline> 
+                | <comment-line>
+                | <statement-list>
+
+<comment-line> ::= "#" { <any-character-except-newline> } ( <newline> | <EOF> )
+
+<statement-list> ::= <statement> { <opt-ws> ";" <opt-ws> <statement> } [ <opt-ws> <comment> ] ( <newline> | <EOF> )
+
+<statement> ::= <command>
+
+<command> ::= <escape-command> | <script-command> | <chat-input>
+
+/* Added 'model' and ensure others are present */
+<escape-command> ::= "/" <escape-command-name> [ <whitespace> <escape-command-args> ]
+
+<escape-command-name> ::= "help" | "prompt" | "file" | "showfile" | "clearfile" | 
+                           "filebank" [ <digit_1_5> ] | "model" | "listmodels" | "logging" | 
+                           "save" | "codeonly" | "codeoff" | "system" | 
+                           "temp" | "maxtokens" | "top_p" | "top_k" | "freq_penalty" | 
+                           "pres_penalty" | "reasoning" | "seed" | "stream" | "script" | 
+                           "quit" | "setdb" | "dblist" | "searchdb" | "dblog" | "dbprint" |
+                           "loadvar" | "savevar" | "setvar" | "notemode" | "mem" | "dump" |
+                           "trace" | "thinking" | <filebank-n>
+
+<filebank-n> ::= "filebank1" | "filebank2" | "filebank3" | "filebank4" | "filebank5"
+
+<script-command> ::= <set-command> | <wait-command> | <if-command>
+
+<set-command> ::= "set" <whitespace> <variable-name> <opt-ws> "=" <opt-ws> <variable-value>
+
+<wait-command> ::= "wait" <whitespace> <number>
+
+<if-command> ::= "if" <whitespace> <condition> <whitespace> "then" <whitespace> <statement>
+
+/* Chat input can handle the variable interpolation seen in your prompt_intro */
+<chat-input> ::= [ "chat -->" <opt-ws> ] <text-content>
+
+<multiline-body> ::= { <multiline-content> }
+
+<multiline-content> ::= <text-content> | <newline> | <comment-line>
+
+<text-content> ::= { <text-element> }
+
+<text-element> ::= <text-char> | <variable-reference> | <filebank-reference> | <whitespace>
+
+/* IMPORTANT: This must NOT consume the terminator strings */
+<text-char> ::= <any-character-except-newline-hash-semicolon-dollar-brace>
+
+<variable-reference> ::= "${" <variable-name> "}"
+
+<filebank-reference> ::= "{" "filebank" <opt-ws> <digit_1_5> "}"
+
+<condition> ::= [ "not" <whitespace> ] ( <variable-reference> | <boolean-literal> | <variable-name> )
+
+<boolean-literal> ::= "true" | "false" | "yes" | "no"
+
+<variable-name> ::= <identifier>
+
+<variable-value> ::= <string> | <number> | <boolean-literal>
+
+<escape-command-args> ::= { <arg-content> [ <opt-ws> ] }
+
+<arg-content> ::= <variable-reference> | <string> | <number> | <identifier> | <symbol>
+
+<identifier> ::= ( <letter> | "_" ) { <letter> | <digit> | "_" }
+
+<string> ::= '"' { <string-char> | <variable-reference> } '"' 
+           | "'" { <string-char> | <variable-reference> } "'"
+
+<string-char> ::= <any-character-except-quote-and-newline>
+
+<number> ::= [ "-" ] { <digit> } [ "." { <digit> } ]
+
+<comment> ::= "#" { <any-character-except-newline> }
+
+<opt-ws> ::= { <whitespace> }
+
+<whitespace> ::= " " | "\t"
+
+<newline> ::= "\n" | "\r\n"
+
+<digit_1_5> ::= "1" | "2" | "3" | "4" | "5"
+
+<digit> ::= "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"
+
+<letter> ::= "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j" | "k" | "l" | "m" | "n" | "o" | "p" | "q" | "r" | "s" | "t" | "u" | "v" | "w" | "x" | "y" | "z" | "A" | "B" | "C" | "D" | "E" | "F" | "G" | "H" | "I" | "J" | "K" | "L" | "M" | "N" | "O" | "P" | "Q" | "R" | "S" | "T" | "U" | "V" | "W" | "X" | "Y" | "Z"
