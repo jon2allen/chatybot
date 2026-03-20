@@ -626,7 +626,7 @@ class ChatybotApp:
                         closing_idx = -1
                         for i in range(1, len(var_value)):
                             if var_value[i] == "\\":
-                                print(f"Error: Escape character '\\' is not allowed in set command for '{var_name}'.")
+                                print(f"Error: Escape character '\' is not allowed in set command for '{var_name}'.")
                                 return True
                             if var_value[i] == q:
                                 closing_idx = i
@@ -829,9 +829,15 @@ class ChatybotApp:
                             break # End of line comment
                         
                         if char in ('"', "'"):
-                            in_quotes = True
-                            quote_char = char
-                            current_command.append(char)
+                            # Only start a quote if it looks like the start of a token
+                            # This prevents apostrophes in words (e.g., Assyria's) from starting quotes
+                            is_start_of_token = (i == 0 or line[i-1].isspace() or line[i-1] in ('=', ',', '(', '{', '[', ':', '|', '&'))
+                            if is_start_of_token:
+                                in_quotes = True
+                                quote_char = char
+                                current_command.append(char)
+                            else:
+                                current_command.append(char)
                         elif char == ";":
                             cmd = "".join(current_command).strip()
                             if cmd:
@@ -974,7 +980,7 @@ class ChatybotApp:
                 print("Usage: /prompt <file>")
                 return True
 
-            file_path = parts[1]
+            file_path = command.split(maxsplit=1)[1].strip(" \"'")
             try:
                 with open(file_path, "r") as f:
                     self.buffer_manager.prompt_buffer = f.read()
@@ -1032,7 +1038,7 @@ class ChatybotApp:
                 return True
             else:
                 # Assume it's a file path
-                file_path = parts[1]
+                file_path = command.split(maxsplit=1)[1].strip(" \"'")
                 try:
                     self.buffer_manager.load_file_to_bank(bank_num_int, file_path)
                 except Exception as e:
@@ -1044,7 +1050,7 @@ class ChatybotApp:
                 print("Usage: /file <path>")
                 return True
 
-            file_path = parts[1]
+            file_path = command.split(maxsplit=1)[1].strip(" \"'")
             try:
                 self.buffer_manager.load_file_to_buffer(file_path)
             except Exception as e:
@@ -1096,7 +1102,7 @@ class ChatybotApp:
                 print("Usage: /save <file>")
                 return True
 
-            file_path = parts[1]
+            file_path = command.split(maxsplit=1)[1].strip(" \"'")
             if self.chat_history:
                 last_response = self.chat_history[-1][1]
                 try:
@@ -1356,6 +1362,26 @@ class ChatybotApp:
                     )
             return True
 
+        elif cmd == "/echo":
+            if len(parts) < 2:
+                print()
+                return True
+            
+            try:
+                text = command.split(maxsplit=1)[1]
+            except IndexError:
+                print()
+                return True
+            
+            processed_text = self.buffer_manager.replace_placeholders(text)
+            
+            if (processed_text.startswith('"') and processed_text.endswith('"')) or \
+               (processed_text.startswith("'") and processed_text.endswith("'")):
+                processed_text = processed_text[1:-1]
+            
+            print(processed_text)
+            return True
+
         elif cmd == "/stream":
             self.streaming_enabled = not self.streaming_enabled
             print(
@@ -1522,6 +1548,7 @@ class ChatybotApp:
         print("  /seed <value> - Set seed (int, 'time', or 'random <min>,<max>').")
         print("  /stream - Toggle streaming responses.")
         print("  /trace <rawpayload|tps|tpsperf> <on|off> - Debugging options")
+        print("  /echo <text> - Echo text to screen with variable substitution.")
         print("  /script <file> [x=value y=value z=value] - Execute a script file with optional parameters.")
         print("  /quit - Exit the program.")
         print(
