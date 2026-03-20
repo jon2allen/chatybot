@@ -1,5 +1,6 @@
 #
 #ChatDSL Recursive Descent Parser - parser_main2.py
+# Updated for compatibility with latest ChatDSL features (if/then, wait, multiline set)
 
 import argparse
 import dataclasses
@@ -78,6 +79,13 @@ class Tokenizer:
                 self.tokens.append(Token(TokenType.TERMINATOR, ';;', self.line, self.col, ';;'))
                 self.pos += 2; self.col += 2
                 continue
+            
+            # Comparison operators
+            if text[self.pos:self.pos+2] in ['==', '!=']:
+                op = text[self.pos:self.pos+2]
+                self.tokens.append(Token(TokenType.SYMBOL, op, self.line, self.col, op))
+                self.pos += 2; self.col += 2
+                continue
 
             if char == '/':
                 start_col = self.col
@@ -108,15 +116,21 @@ class Tokenizer:
 
             if char == '"':
                 start_col = self.col
+                start_line = self.line
                 start_pos = self.pos
                 self.pos += 1; self.col += 1
                 while self.pos < len(text) and text[self.pos] != '"':
-                    if text[self.pos] in '\r\n':
-                        raise ParseError("Unterminated string literal", self.line, self.col)
-                    self.pos += 1; self.col += 1
+                    if text[self.pos] == '\n':
+                        self.line += 1
+                        self.col = 1
+                    else:
+                        self.col += 1
+                    self.pos += 1
+                if self.pos >= len(text):
+                    raise ParseError("Unterminated string literal", start_line, start_col)
                 self.pos += 1; self.col += 1
                 val = text[start_pos:self.pos]
-                self.tokens.append(Token(TokenType.STRING, val[1:-1], self.line, start_col, val))
+                self.tokens.append(Token(TokenType.STRING, val[1:-1], start_line, start_col, val))
                 continue
 
             if char.isalpha() or char == '_' or char == "'":
@@ -149,7 +163,6 @@ class Tokenizer:
         return self.tokens
 
 class TParser:
-    # Explicit list of valid escape commands
     VALID_ESCAPE_COMMANDS: Set[str] = {
         "help", "prompt", "file", "showfile", "clearfile", "filebank",
         "model", "listmodels", "logging", "save", "codeonly", "codeoff",
@@ -158,7 +171,7 @@ class TParser:
         "setdb", "dblist", "searchdb", "dblog", "dbprint", "loadvar",
         "savevar", "setvar", "notemode", "mem", "dump", "trace", "thinking",
         "filebank1", "filebank2", "filebank3", "filebank4", "filebank5",
-        "multiline" # Handled specially but valid in vocabulary
+        "multiline", "echo"
     }
 
     def __init__(self, tokens: List[Token], verbose: bool = False):
@@ -195,7 +208,7 @@ class TParser:
             elif self.match(TokenType.NEWLINE) or self.match(TokenType.WHITESPACE):
                 self.advance()
             else:
-                units.append(self.parse_standard_line())
+                units.append(self.parse_line())
         return units
 
     def parse_multiline_block(self) -> Dict[str, Any]:
@@ -219,13 +232,19 @@ class TParser:
         self.expect(TokenType.ESCAPE, "/multiline")
         return {"type": "multiline_block", "content": body}
 
-    def parse_standard_line(self) -> Dict[str, Any]:
+    def parse_line(self) -> Dict[str, Any]:
         if self.match(TokenType.COMMENT):
             tok = self.expect(TokenType.COMMENT)
             return {"type": "comment", "val": tok.raw}
         
         if self.match(TokenType.IDENTIFIER, "set"):
             return self.parse_set()
+        
+        if self.match(TokenType.IDENTIFIER, "if"):
+            return self.parse_if()
+        
+        if self.match(TokenType.IDENTIFIER, "wait"):
+            return self.parse_wait()
             
         return self.parse_command_or_chat()
 
@@ -240,15 +259,32 @@ class TParser:
         self.advance()
         return {"type": "set_command", "var": var_name, "val": val}
 
+    def parse_wait(self) -> Dict[str, Any]:
+        self.expect(TokenType.IDENTIFIER, "wait")
+        self.expect(TokenType.WHITESPACE)
+        val = self.expect(TokenType.NUMBER).value
+        return {"type": "wait_command", "seconds": val}
+
+    def parse_if(self) -> Dict[str, Any]:
+        start_tok = self.expect(TokenType.IDENTIFIER, "if")
+        self.expect(TokenType.WHITESPACE)
+        condition_tokens = []
+        while not self.match(TokenType.IDENTIFIER, "then"):
+            if self.match(TokenType.EOF) or self.match(TokenType.NEWLINE):
+                    raise ParseError("Missing 'then' or unexpected end of line in if statement", start_tok.line, start_tok.column)
+            condition_tokens.append(self.current.raw)
+            self.advance()
+        self.expect(TokenType.IDENTIFIER, "then")
+        self.expect(TokenType.WHITESPACE)
+        then_command = self.parse_line()
+        return {"type": "if_command", "condition": " ".join(condition_tokens).strip(), "then": then_command}
+
     def parse_command_or_chat(self) -> Dict[str, Any]:
         if self.match(TokenType.ESCAPE):
             tok = self.expect(TokenType.ESCAPE)
-            
-            # VALIDATION STEP: Check if command name exists in set
-            cmd_name = tok.raw[1:].lower()  # Strip leading '/'
+            cmd_name = tok.raw[1:].lower() 
             if cmd_name not in self.VALID_ESCAPE_COMMANDS:
                 raise ParseError(f"Invalid escape command: /{cmd_name}", tok.line, tok.column)
-            
             args = []
             while not self.match(TokenType.NEWLINE) and not self.match(TokenType.EOF):
                 if self.match(TokenType.WHITESPACE): self.advance(); continue
@@ -280,25 +316,22 @@ def main():
     parser.add_argument("--file", help="Input .chatdsl file", required=True)
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args()
-
     try:
         with open(args.file, 'r', encoding='utf-8') as f:
             text = f.read()
-        
         tokenizer = Tokenizer()
         tokens = tokenizer.tokenize(text)
-        
         tparser = TParser(tokens, verbose=args.verbose)
         ast = tparser.parse()
-        
         print(json.dumps(ast, indent=2))
     except ParseError as e:
         print(f"Error: {e}")
         sys.exit(1)
     except Exception as e:
+        import traceback
+        if args.verbose: traceback.print_exc()
         print(f"Unexpected error: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":
     main()
-

@@ -1,4 +1,4 @@
-<chatybot-dsl> ::= <command> | <script>
+<chatybot-dsl> ::= <script>
 
 <script> ::= { <script-line> }
 
@@ -9,13 +9,15 @@
 <escape-command> ::= "/" <escape-command-name> [ <whitespace> <escape-command-args> ]
 
 <escape-command-name> ::= "help" | "prompt" | "file" | "showfile" | "clearfile" | 
-                           "filebank" <digit_1_5> | "model" | "listmodels" | "logging" | 
-                           "save" | "codeonly" | "codeoff" | "multiline" | "system" | 
-                           "temp" | "maxtokens" | "top_p" | "top_k" | "freq_penalty" | 
-                           "pres_penalty" | "reasoning" | "seed" | "stream" | "script" | 
-                           "quit" | "setdb" | "dblist" | "searchdb" | "dblog" | 
-                           "loadvar" | "savevar" | "setvar" | "notemode" | "mem" | "dump" |
-                           "trace" | "thinking"
+                           "filebank" | "filebank1" | "filebank2" | "filebank3" | 
+                           "filebank4" | "filebank5" | "model" | "listmodels" | 
+                           "logging" | "save" | "codeonly" | "codeoff" | "multiline" | 
+                           "system" | "temp" | "maxtokens" | "top_p" | "top_k" | 
+                           "freq_penalty" | "pres_penalty" | "reasoning" | "seed" | 
+                           "stream" | "script" | "quit" | "setdb" | "dblist" | 
+                           "searchdb" | "dblog" | "dbprint" | "loadvar" | "savevar" | 
+                           "setvar" | "notemode" | "mem" | "dump" | "trace" | 
+                           "thinking" | "echo"
 
 <script-command> ::= <set-command> | <wait-command> | <if-command>
 
@@ -23,11 +25,19 @@
 
 <wait-command> ::= "wait" <whitespace> <number>
 
-<if-command> ::= "if" <whitespace> <condition> <whitespace> "then" <whitespace> ( <escape-command> | <script-command> | <chat-input> )
+<if-command> ::= "if" <whitespace> <condition> <whitespace> "then" <whitespace> <command>
+
+<condition> ::= [ "not" <whitespace> ] <logical-expression>
+
+<logical-expression> ::= <operand> [ <whitespace> <operator> <whitespace> <operand> ]
+
+<operator> ::= "==" | "!="
+
+<operand> ::= <string> | <variable-reference> | <number> | <identifier>
 
 <chat-input> ::= <single-line-text> | <multiline-block>
 
-<multiline-block> ::= "/multiline" <newline> { <text-content> <newline> } ";;"
+<multiline-block> ::= "/multiline" <newline> { <text-content> <newline> } ";;" <newline> "/multiline"
 
 <text-content> ::= { <any-character> | <variable-reference> | <filebank-reference> }
 
@@ -37,7 +47,7 @@
 
 <variable-name> ::= <identifier>
 
-<variable-value> ::= <string> | <number> | "true" | "false" | "yes" | "no"
+<variable-value> ::= <string> | <number> | "true" | "false" | "yes" | "no" | <variable-reference>
 
 <digit_1_5> ::= "1" | "2" | "3" | "4" | "5"
 
