@@ -35,7 +35,7 @@ tybot-dsl> ::= <opt-ws> <script> <opt-ws>
                            "pres_penalty" | "reasoning" | "seed" | "stream" | "script" | 
                            "quit" | "setdb" | "dblist" | "searchdb" | "dblog" | "dbprint" |
                            "loadvar" | "savevar" | "setvar" | "notemode" | "mem" | "dump" |
-                           "trace" | "thinking" | <filebank-n>
+                           "trace" | "thinking" | <filebank-n> | "echo"
 
 <filebank-n> ::= "filebank1" | "filebank2" | "filebank3" | "filebank4" | "filebank5"
 
