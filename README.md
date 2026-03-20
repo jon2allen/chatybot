@@ -410,6 +410,25 @@ chat --> Create a blog post outline about ${topic}
 
 ### Change log
 
+Mar 20th, 2026 (v0.2.6)
+--------------
+- **Refacted Script Parser**: Migrated the execution engine from a simplistic line-based parser to a robust character-by-character lexical state machine.
+- **Apostrophe Recognition**: Resolved a critical bug where apostrophes in natural language (e.g., "Assyria's") were misinterpreted as opening quotes, incorrectly merging commands.
+- **Robust Path Capture**: Enhanced `/save`, `/prompt`, and `/file` handlers to support filenames with spaces by capturing the entire command remainder.
+- **Substitution Integrity**: Fixed a regression that caused variable substitution regexes to be double-escaped, ensuring `${varname}` tokens are correctly replaced.
+
+Mar 19th, 2026 (v0.2.5)
+--------------
+- **New Command `/echo`**: Implemented direct stdout printing with full variable substitution and automatic quote stripping.
+- **Multiline Variable Support**: Enabled the `set` command to capture values spanning multiple lines when wrapped in quotes.
+
+Mar 16th, 2026
+--------------
+- **Advanced Logic**: Significantly expanded `if-then` logic to support full string comparisons (`==`, `!=`) and logical negation (`not`).
+- **Parameterized Scripts**: Updated `/script` to allow passing inline variables (e.g., `/script file.chatdsl x="value"`).
+- **Security Sanitization**: Added a safety check to disallow escape characters (`\\`) within `set` variable assignments.
+- **Test Infrastructure**: Added test data, `CHATDSL_TECHNICAL_GUIDE.md`, and `civil_war_1865.chatdsl`.
+
 Mar 15th, 2026 (v0.2.4)
 --------------
 - **Database Enhancements**: Added `/dbprint` command to generate high-quality formatted reports of database contents.
@@ -585,4 +604,3 @@ For questions or issues:
 ---
 
 **Happy Chatting with chatybot** 
-

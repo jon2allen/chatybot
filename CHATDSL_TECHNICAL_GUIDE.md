@@ -18,7 +18,7 @@
 ## Core Concepts
 
 ### Line-Based Execution
-ChatDSL scripts are executed line-by-line. Each line is either a **Script Command** (set, if, wait), an **Escape Command** (starting with `/`), or **Chat Input** (to be sent to the LLM).
+ChatDSL scripts are executed via a robust lexical state machine. Each command is either a **Script Command** (set, if, wait), an **Escape Command** (starting with `/`), or **Chat Input** (to be sent to the LLM).
 
 ### The Buffer System
 Chatybot utilizes a dual-layer context system:
@@ -33,19 +33,22 @@ Variables are defined using `set name = value`. They are injected into commands,
 ## Language Specification
 
 ### Comments
-Any line starting with `#` is ignored. Use them generously to document your automation logic.
+Comments can be full-line or inline. Use `#` to document your logic.
 ```dsl
-# This is a comment
+# This is a full-line comment
+set x = 1  # This is an inline comment
 ```
 
 ### Variables
-- **Definition**: `set var_name = value`
+- **Definition**: `set var_name = "value"`
 - **Substitution**: `${var_name}`
-- **Note**: Values containing spaces should be quoted or handled via `/multiline`.
+- **Multiline Support**: Variable values can span multiple lines if wrapped in quotes (`"` or `'`).
+- **Safety**: Escape characters (`\`) are disallowed inside variable values to ensure prompt stability.
 
 ### Control Flow
 - **Conditional**: `if ${condition} then /command`
-- **Negation**: `if not ${condition} then /command`
+- **Comparison**: `if ${var1} == "expected" then /echo Match Found`
+- **Negation**: `if not ${condition} then /command` or `if ${var1} != "value" then ...`
 - **Delay**: `wait <seconds>` (useful for API rate limit management)
 
 ### Chat Input
@@ -85,10 +88,11 @@ Identify all endpoint security vulnerabilities in this file.
 ```
 
 ### Level 3: Advanced File Banks
-Using multiple file banks to compare two documents.
+Using multiple file banks and parameterized scripts:
 ```dsl
-/filebank1 original_v1.py
-/filebank2 refactored_v2.py
+# Usage: /script analyze.chatdsl x="original_v1.py" y="refactored_v2.py"
+/filebank1 ${x}
+/filebank2 ${y}
 
 Analyze the differences between {filebank1} and {filebank2}.
 List all performance optimizations made in the second version.
@@ -130,10 +134,12 @@ set results2 = "response_model_b.txt"
 /filebank2 ${results2}
 
 /model o1_pro
+/multiline
 Compare the following two responses for technical accuracy:
 Model A: {filebank1}
 Model B: {filebank2}
 Who provided a better explanation and why?
+;;
 /save final_comparison.txt
 ```
 
@@ -161,7 +167,7 @@ What is the recommended transition plan for RSA-2048?
 
 ## Best Practices
 
-1.  **Variable Hygeine**: Use underscores in variable names (`source_file`) rather than camelCase.
+1.  **Variable Hygiene**: Use underscores in variable names (`source_file`) rather than camelCase.
 2.  **State Management**: Always `/clearfile` before loading new context to prevent context "pollution" if your script is long.
 3.  **Wait for APIs**: Use `wait 1` or `wait 2` between intense bursts of activity to avoid hitting provider rate limits.
 4.  **Quote Paths**: If your file paths might contain variables that could expand to have spaces, use quotes: `/save "${output_dir}/${filename}.txt"`.
@@ -174,10 +180,12 @@ What is the recommended transition plan for RSA-2048?
 ### Scripting Commands
 | Command | Usage |
 |---------|-------|
-| `set` | Define a script variable. |
-| `if` | Conditional execution (supports `not`). |
+| `set` | Define a script variable (supports multiline). |
+| `if` | Conditional execution (supports `==`, `!=`, `not`). |
 | `wait` | Pause execution for N seconds. |
-| `#` | Line comment. |
+| `/echo` | Print text to stdout with variable expansion. |
+| `/script`| Run a script file (supports `x="val"` parameters). |
+| `#` | Line comment (supports inline comments). |
 
 ### System & Model Control
 | Command | Usage |
@@ -199,7 +207,7 @@ What is the recommended transition plan for RSA-2048?
 | `/clearfile`| Clear the main context buffer. |
 | `/showfile` | Print the current buffer (first 100 chars or 'all'). |
 | `/prompt` | Load a prompt from a file and execute it. |
-| `/save` | Write the last LLM response to a file. |
+| `/save` | Write the last LLM response to a file (supports spaces). |
 | `/codeonly` | Tell the LLM to skip conversational filler. |
 | `/notemode` | Automatically extract code blocks to separate files on save. |
 
@@ -213,3 +221,5 @@ What is the recommended transition plan for RSA-2048?
 | `/loadvar` | Map search results/IDs to a variable. |
 | `/savevar` | Export a variable's content to a file. |
 | `/setvar` | Hard-code a variable value (CLI version). |
+| `/mem` | Show memory size of buffers and variables. |
+| `/dump` | Print the content of a specific variable or 'all'. |
