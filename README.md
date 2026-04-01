@@ -242,6 +242,15 @@ Execute the script:
 /script setup.chatdsl
 ```
 
+### **ChatDSL Validation**
+For automated validation of `.chatdsl` files, use the `chatdsl_parse` utility:
+```bash
+chatdsl_parse --file my_script.chatdsl
+```
+- Returns exit code **0** on successful parse.
+- Returns exit code **1** on parse error or file error.
+- Use the `-v` flag for verbose error output.
+
 ### **Database & Variable Integration (New!)**
 ```bash
 /setdb my_knowledge       # Open or create 'db/my_knowledge.json'
@@ -410,9 +419,13 @@ chat --> Create a blog post outline about ${topic}
 
 ### Change log
 
-Mar 20th, 2026 (v0.2.6)
+Mar 31st, 2026 (v0.2.7)
 --------------
-- **Refacted Script Parser**: Migrated the execution engine from a simplistic line-based parser to a robust character-by-character lexical state machine.
+- **ChatDSL Parser CLI**: Added `chatdsl_parse` as a standalone executable script.
+- **Exit Codes**: Updated `chatdsl_parse` to return 0 on success and 1 on parse Failure/Exception.
+- **Packaging**: Integrated `chatdsl_parse` into `pyproject.toml` console scripts.
+
+Mar 20th, 2026 (v0.2.6)
 - **Apostrophe Recognition**: Resolved a critical bug where apostrophes in natural language (e.g., "Assyria's") were misinterpreted as opening quotes, incorrectly merging commands.
 - **Robust Path Capture**: Enhanced `/save`, `/prompt`, and `/file` handlers to support filenames with spaces by capturing the entire command remainder.
 - **Substitution Integrity**: Fixed a regression that caused variable substitution regexes to be double-escaped, ensuring `${varname}` tokens are correctly replaced.

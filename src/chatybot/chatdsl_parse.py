@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 #
 #ChatDSL Recursive Descent Parser - parser_main2.py
 # Updated for compatibility with latest ChatDSL features (if/then, wait, multiline set)
@@ -324,6 +325,7 @@ def main():
         tparser = TParser(tokens, verbose=args.verbose)
         ast = tparser.parse()
         print(json.dumps(ast, indent=2))
+        sys.exit(0)
     except ParseError as e:
         print(f"Error: {e}")
         sys.exit(1)

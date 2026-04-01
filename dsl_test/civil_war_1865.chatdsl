@@ -8,18 +8,18 @@
 set query = "What battles of the USA occured in 1865 during civil war?"
 
 # Query using NVIDIA Nemotron model
-/model mistral_1
+/model nvidia_mistral_small4 
 chat --> ${query}
 /wait 10 
 /dblog
 # query 2
-/model mistral_1
+/model nvidia_mistral_small4
 chat --> ${query}
 /wait 10
 /dblog
 #
 # Query 3 using NVIDIA Nemotron model
-/model mistral_1
+/model nvidia_mistral_small4 
 chat --> ${query}
 /dblog
 # Load all items from the database and show memory contents

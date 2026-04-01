@@ -100,7 +100,7 @@ Based on the comparison report in {filebank3}, \n fill in the scores and calcula
 /save ${output_dir}/scores_${model1}_vs_${model2}.txt
 
 # Final summary
-/clearfle
+/clearfile
 /multiline
 Based on all the previous analysis, provide a final verdict:
 Which model (${model1} or ${model2}) has superior knowledge of ${city} street food?
