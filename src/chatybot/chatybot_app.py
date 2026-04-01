@@ -1403,7 +1403,7 @@ class ChatybotApp:
             
             # Parse parameters from the command
             import re
-            param_pattern = r'(^|\s+)([xyz])\s*=\s*("[^"]*"|'"'"'[^'"'"']*'"'"'|\S+)'
+            param_pattern = r'(^|\s+)([xyz])\s*=\s*("[^"]*"|\'[^\']*\'|\S+)'
             
             # Look for parameters in the original command string after the script path
             # We need to handle the case where script_path might be quoted
@@ -1411,7 +1411,7 @@ class ChatybotApp:
             
             # Find the script path in the remaining command
             # Handle both quoted and unquoted script paths
-            script_path_match = re.match(r'("[^"]*"|'"'"'[^'"'"']*'"'"'|\S+)', remaining_command)
+            script_path_match = re.match(r'("[^"]*"|\'[^\']*\'|\S+)', remaining_command)
             if script_path_match:
                 actual_script_path = script_path_match.group(1).strip('"\'')
                 params_string = remaining_command[len(script_path_match.group(1)):].strip()
