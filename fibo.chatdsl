@@ -77,7 +77,7 @@ Follow these additional requirements:
 
 # Summary of generated programs
 /multiline
-Please provide a summary of the three Fibonacci sequence generator programs we've created:
+Please provide a summary of the three Fibonacci sequence generator programs we have created:
 1. Compare the implementations in C, Pascal, and Python
 2. Highlight language-specific features used in each implementation
 3. Discuss the performance characteristics of each approach
