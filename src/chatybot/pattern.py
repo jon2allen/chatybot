@@ -33,7 +33,10 @@ class PatternMatcher:
         # Combine all patterns
         all_patterns = escaped_words + multi_patterns
         pattern_str = r"\b(" + "|".join(all_patterns) + r")\b"
-        print("pattern_str: ", pattern_str )
+        ########################################## 
+        # print("pattern_str: ", pattern_str )
+        # debug print if needed 
+        ##########################################
         return re.compile(pattern_str, re.IGNORECASE)
 
     def add_word(self, word):
