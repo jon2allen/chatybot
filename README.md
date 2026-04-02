@@ -419,6 +419,12 @@ chat --> Create a blog post outline about ${topic}
 
 ### Change log
 
+Apr 1st, 2026 (v0.2.8)
+--------------
+- **Command Validation**: Added a safety check to detect command verbs sent without an escape character (e.g., `help`, `model`) at the start of a prompt, preventing unintentional LLM calls.
+- **Improved Responsiveness**: Reduced wait times by quickly identifying invalid command usage.
+- **PyPI Release**: Bumped version for publication to PyPI and synchronized startup display.
+
 Mar 31st, 2026 (v0.2.7)
 --------------
 - **ChatDSL Parser CLI**: Added `chatdsl_parse` as a standalone executable script.
@@ -426,6 +432,7 @@ Mar 31st, 2026 (v0.2.7)
 - **Packaging**: Integrated `chatdsl_parse` into `pyproject.toml` console scripts.
 
 Mar 20th, 2026 (v0.2.6)
+--------------
 - **Apostrophe Recognition**: Resolved a critical bug where apostrophes in natural language (e.g., "Assyria's") were misinterpreted as opening quotes, incorrectly merging commands.
 - **Robust Path Capture**: Enhanced `/save`, `/prompt`, and `/file` handlers to support filenames with spaces by capturing the entire command remainder.
 - **Substitution Integrity**: Fixed a regression that caused variable substitution regexes to be double-escaped, ensuring `${varname}` tokens are correctly replaced.
