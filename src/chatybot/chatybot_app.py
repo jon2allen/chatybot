@@ -15,6 +15,8 @@ from datetime import datetime
 from typing import Dict, Any, List, Tuple, Optional, Callable, Union
 import logging
 import atexit
+from .pattern import PatternMatcher
+
 
 try:
     import openai
@@ -94,7 +96,21 @@ class ChatybotApp:
         # Set up readline for command history
         readline.set_completer(self.input_history_completer)
         readline.parse_and_bind("tab: complete")
-        readline.set_completer_delims(" \t\n;")
+        readline.set_completer_delims(" \t\n;") 
+        self.matcher =  PatternMatcher(
+                 words=[
+                    "help", "prompt", "file", "showfile", "clearfile",
+                    "filebank", "filebank1", "filebank2", "filebank3", "filebank4",
+                    "filebank5", "model", "listmodels", "logging", "save",
+                    "codeonly", "codeoff", "multiline", "system", "temp", "maxtokens",
+                    "top_p", "top_k", "freq_penalty", "pres_penalty", "reasoning", "seed",
+                    "stream", "script", "quit", "setdb", "dblist",
+                    "searchdb", "dblog", "dbprint", "loadvar", "savevar",
+                    "setvar", "notemode", "mem", "dump", "trace",
+                    "thinking", "echo"
+                    ]
+
+                 )
 
         # Register save function to be called on exit
         atexit.register(self.save_input_history)
@@ -205,7 +221,9 @@ class ChatybotApp:
         client = self.get_openai_client(model_alias)
         model_config = self.config_manager.get_model_config(model_alias)
         model_name = model_config["name"]
-
+        if self.matcher.matches(prompt[:12]):
+           print( "Error command verb at beginning:  " + prompt[:9] + " - use escape / sequence")
+           return ""
         # Replace placeholders in the prompt
         full_prompt = self.buffer_manager.replace_placeholders(prompt)
 
@@ -1595,6 +1613,7 @@ class ChatybotApp:
         print("===========================")
         print("Chatybot.py                ")
         print("Created by Jon Allen - 2025")
+        print("Version: 0.2.7             ")
         print("===========================")
         print(
             f"Active model: {self.config_manager.get_model_config(self.config_manager.active_model_alias)['name']} (alias: {self.config_manager.active_model_alias})"
