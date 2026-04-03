@@ -256,9 +256,19 @@ class ChatybotApp:
             else:
                 current_system_message = "detailed thinking off"
 
-        # Use system prompt unless the model name contains "gemma"
-        if "gemma" not in model_name.lower():
-            messages.insert(0, {"role": "system", "content": current_system_message})
+        # Handle system prompts for Gemma models
+        # print("testing.... gemma4")
+        is_gemma_4 = "gemma-4" in model_name.lower()
+        is_old_gemma = "gemma" in model_name.lower() and not is_gemma_4
+
+        if is_old_gemma:
+            # Fallback: Prepend system message to the user message for older Gemma models
+            if current_system_message:
+                messages[0]["content"] = f"{current_system_message}\n\n{messages[0]['content']}"
+        else:
+            # Standard behavior: Use the system role (works for gemma-4 and all non-gemma models)
+            if current_system_message:
+                messages.insert(0, {"role": "system", "content": current_system_message})
 
         # Prepare completion parameters
         temp = (
