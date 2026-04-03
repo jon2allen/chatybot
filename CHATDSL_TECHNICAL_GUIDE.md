@@ -197,7 +197,7 @@ What is the recommended transition plan for RSA-2048?
 | `/maxtokens`| Set completion token limit. |
 | `/streaming`| Toggle real-time text output. |
 | `/reasoning`| Toggle internal "thinking" phases for support models. |
-| `/thinking` | Toggle visibility of `<think>` blocks. |
+| `/thinking` | Toggle visibility of `<think>` and `<thought>` blocks. |
 
 ### File & Buffer Management
 | Command | Usage |
