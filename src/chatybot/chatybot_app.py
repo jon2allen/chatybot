@@ -422,7 +422,7 @@ class ChatybotApp:
                         content = delta.content
                         full_response += content
 
-                        if in_think_block or "<think>" in content:
+                        if in_think_block or "<think>" in content or "<thought>" in content:
                             think_tokens_estimate += 1
                             if self.trace_tps_perf:
                                 tps_records.append((chunk_time, "think", 1))
@@ -435,18 +435,46 @@ class ChatybotApp:
                         while buffer:
                             if not in_think_block:
                                 think_idx = buffer.find("<think>")
-                                if think_idx != -1:
-                                    print(buffer[:think_idx], end="", flush=True)
+                                thought_idx = buffer.find("<thought>")
+                                
+                                # Find the earliest opening tag
+                                opening_tag = None
+                                opening_idx = -1
+                                if think_idx != -1 and thought_idx != -1:
+                                    opening_idx = min(think_idx, thought_idx)
+                                    opening_tag = "think" if think_idx < thought_idx else "thought"
+                                elif think_idx != -1:
+                                    opening_idx = think_idx
+                                    opening_tag = "think"
+                                elif thought_idx != -1:
+                                    opening_idx = thought_idx
+                                    opening_tag = "thought"
+                                
+                                if opening_idx != -1:
+                                    print(buffer[:opening_idx], end="", flush=True)
                                     if self.show_thinking:
-                                        print("\033[90m<think>", end="", flush=True)
-                                    buffer = buffer[think_idx + len("<think>") :]
+                                        if opening_tag == "think":
+                                            print("\033[90m<think>", end="", flush=True)
+                                        else:
+                                            print("\033[90m<thought>", end="", flush=True)
+                                    if opening_tag == "think":
+                                        buffer = buffer[opening_idx + len("<think>") :]
+                                    else:
+                                        buffer = buffer[opening_idx + len("<thought>") :]
                                     in_think_block = True
                                 else:
                                     match_len = 0
+                                    # Check for partial <think> tag
                                     for i in range(len("<think>") - 1, 0, -1):
                                         if buffer.endswith("<think>"[:i]):
                                             match_len = i
                                             break
+                                    # Check for partial <thought> tag
+                                    if match_len == 0:
+                                        for i in range(len("<thought>") - 1, 0, -1):
+                                            if buffer.endswith("<thought>"[:i]):
+                                                match_len = i
+                                                break
                                     if match_len > 0:
                                         print(buffer[:-match_len], end="", flush=True)
                                         buffer = buffer[-match_len:]
@@ -456,21 +484,53 @@ class ChatybotApp:
                                         buffer = ""
                             else:
                                 end_idx = buffer.find("</think>")
-                                if end_idx != -1:
+                                end_thought_idx = buffer.find("</thought>")
+                                
+                                # Find the earliest closing tag
+                                closing_tag = None
+                                closing_idx = -1
+                                if end_idx != -1 and end_thought_idx != -1:
+                                    closing_idx = min(end_idx, end_thought_idx)
+                                    closing_tag = "think" if end_idx < end_thought_idx else "thought"
+                                elif end_idx != -1:
+                                    closing_idx = end_idx
+                                    closing_tag = "think"
+                                elif end_thought_idx != -1:
+                                    closing_idx = end_thought_idx
+                                    closing_tag = "thought"
+                                
+                                if closing_idx != -1:
                                     if self.show_thinking:
-                                        print(
-                                            buffer[:end_idx] + "</think>\033[0m",
-                                            end="",
-                                            flush=True,
-                                        )
-                                    buffer = buffer[end_idx + len("</think>") :]
+                                        if closing_tag == "think":
+                                            print(
+                                                buffer[:closing_idx] + "</think>\033[0m",
+                                                end="",
+                                                flush=True,
+                                            )
+                                        else:
+                                            print(
+                                                buffer[:closing_idx] + "</thought>\033[0m",
+                                                end="",
+                                                flush=True,
+                                            )
+                                    if closing_tag == "think":
+                                        buffer = buffer[closing_idx + len("</think>") :]
+                                    else:
+                                        buffer = buffer[closing_idx + len("</thought>") :]
                                     in_think_block = False
                                 else:
                                     match_len = 0
+                                    # Check for partial </think> tag
                                     for i in range(len("</think>") - 1, 0, -1):
                                         if buffer.endswith("</think>"[:i]):
                                             match_len = i
                                             break
+                                    # Check for partial </thought> tag
+                                    if match_len == 0:
+                                        for i in range(len("</thought>") - 1, 0, -1):
+                                            if buffer.endswith("</thought>"[:i]):
+                                                match_len = i
+                                                break
                                     if match_len > 0:
                                         if self.show_thinking:
                                             print(
@@ -516,11 +576,11 @@ class ChatybotApp:
 
                 if not self.show_thinking:
                     print_content = re.sub(
-                        r"<think>.*?</think>\s*", "", content, flags=re.DOTALL
+                        r"<think>.*?</think>\s*|<thought>.*?</thought>\s*", "", content, flags=re.DOTALL
                     )
                 else:
                     print_content = re.sub(
-                        r"(<think>.*?</think>)",
+                        r"(<think>.*?</think>|<thought>.*?</thought>)",
                         r"\033[90m\1\033[0m",
                         content,
                         flags=re.DOTALL,
