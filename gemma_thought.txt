@@ -1,0 +1,25 @@
+t --> <no thought> give me a LISP program that mimics the hindu shuffle in cards
+testing.... gemma4
+Payload:
+-----------------------------
+{
+  "model": "gemma-4-26b-a4b-it",
+  "messages": [
+    {
+      "role": "system",
+      "content": "you are a helpful assitant. disable reasoning and thought. </thought off>"
+    },
+    {
+      "role": "user",
+      "content": "<no thought> give me a LISP program that mimics the hindu shuffle in cards"
+    }
+  ],
+  "temperature": 0.2
+}
+---- end of payload ---
+Assistant: To mimic a "Hindu Shuffle" in LISP, we need to represent a deck of cards as a list and implement the specific mechanic of the shuffle: **taking small packets from the top of the deck and placing them onto a new pile.**
+
+In a true Hindu shuffle, you don't take one card at a time; you take "chunks."
+
+Here is a implementation in Common Lisp.
+

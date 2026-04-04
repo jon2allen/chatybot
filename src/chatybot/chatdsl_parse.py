@@ -172,7 +172,7 @@ class TParser:
         "setdb", "dblist", "searchdb", "dblog", "dbprint", "loadvar",
         "savevar", "setvar", "notemode", "mem", "dump", "trace", "thinking",
         "filebank1", "filebank2", "filebank3", "filebank4", "filebank5",
-        "multiline", "echo"
+        "multiline", "echo", "thoughtstyle"
     }
 
     def __init__(self, tokens: List[Token], verbose: bool = False):

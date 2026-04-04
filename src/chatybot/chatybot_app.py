@@ -69,6 +69,7 @@ class ChatybotApp:
         self.show_thinking: bool = True
         self.multi_line_mode: bool = False
         self.script_context: bool = False
+        self.thoughtstyle: str = "none"
 
         # Trace settings
         self.trace_raw_payload: bool = False
@@ -260,6 +261,17 @@ class ChatybotApp:
         # print("testing.... gemma4")
         is_gemma_4 = "gemma-4" in model_name.lower()
         is_old_gemma = "gemma" in model_name.lower() and not is_gemma_4
+
+        # Check for gemma4 thoughtstyle with reasoning off
+        if (not self.reasoning_mode and self.thoughtstyle == "gemma4" and is_gemma_4):
+            # Append gemma4 specific instructions to existing system prompt
+            gemma4_suffix = " disable reasoning and thought. </thought off>"
+            if current_system_message:
+                current_system_message += gemma4_suffix
+            else:
+                current_system_message = "you are a helpful assitant." + gemma4_suffix
+            # Prefix user prompt with <no thought>
+            messages[0]["content"] = f"<no thought> {messages[0]['content']}"
 
         if is_old_gemma:
             # Fallback: Prepend system message to the user message for older Gemma models
@@ -1410,6 +1422,18 @@ class ChatybotApp:
                 )
             return True
 
+        elif cmd == "/thoughtstyle":
+            if len(parts) > 1:
+                style = parts[1].lower()
+                if style in ["none", "gemma4"]:
+                    self.thoughtstyle = style
+                    print(f"Thought style set to: {style}")
+                else:
+                    print("Invalid thought style. Use 'none' or 'gemma4'.")
+            else:
+                print(f"Current thought style: {self.thoughtstyle}")
+            return True
+
         elif cmd == "/seed":
             if len(parts) < 2:
                 print(f"Current seed setting: {self.seed_config}")
@@ -1632,6 +1656,9 @@ class ChatybotApp:
         )
         print(
             "  /thinking <on|off> - Toggle display of <think> blocks and reasoning text."
+        )
+        print(
+            "  /thoughtstyle <none|gemma4> - Set thought style for prompt formatting."
         )
         print("  /seed <value> - Set seed (int, 'time', or 'random <min>,<max>').")
         print("  /stream - Toggle streaming responses.")
