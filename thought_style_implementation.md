@@ -14,6 +14,7 @@ This document describes the implementation of the `/thoughtstyle` command for Ge
 - `none` - Default behavior, no special formatting (default)
 - `gemma4` - Enable Gemma-4 specific prompt formatting
 - `nanbeige` - Enable Nanbeige specific prompt formatting
+- `nanbeige_code` - Enable Nanbeige code-specific prompt formatting
 
 ### Examples
 ```bash
@@ -22,6 +23,9 @@ This document describes the implementation of the `/thoughtstyle` command for Ge
 
 # Enable Nanbeige formatting
 /thoughtstyle nanbeige
+
+# Enable Nanbeige code formatting
+/thoughtstyle nanbeige_code
 
 # Disable special formatting  
 /thoughtstyle none
@@ -76,6 +80,23 @@ Output: "<think> </think> describe Zhou enlai in 2 short paragraphs. response an
 - No changes to system prompt
 - Works with any model (no model-specific restrictions)
 - Always applied when thoughtstyle is set to "nanbeige"
+
+### Nanbeige Code Style
+When activated, wraps user prompts with Nanbeige code-specific formatting:
+
+#### User Prompt
+Transforms user messages as follows:
+```
+Input: "give me an Pascal language version of an array reverse"
+Output: "<think></think> give me an Pascal language version of an array reverse, no comentary or explaination. use response tokens only. code only, code only"
+```
+
+**Key characteristics:**
+- No changes to system prompt
+- Works with any model (no model-specific restrictions)
+- Always applied when thoughtstyle is set to "nanbeige_code"
+- Designed for code generation with minimal commentary
+- **Note:** May only generate thinking tokens - this is an artifact/quirk of the model
 
 ## Example Payload
 
