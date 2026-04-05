@@ -135,7 +135,7 @@ Active escape commands:
   /pres_penalty <value> - Set presence penalty (-2.0-2.0).
   /reasoning <on|off> - Toggle reasoning (thinking) for NVIDIA and Qwen models.
   /thinking <on|off> - Toggle display of <think> and <thought> blocks and reasoning text.
-  /thoughtstyle <none|gemma4|nanbeige> - Set thought style for prompt formatting.
+  /thoughtstyle <none|gemma4|nanbeige|nanbeige_code> - Set prompting format for negative prompt to disable reasoning - auto.
   /seed <value> - Set seed (int, 'time', or 'random <min>,<max>').
   /stream - Toggle streaming responses.
   /trace <rawpayload|tps|tpsperf> <on|off> - Debugging options
@@ -189,8 +189,10 @@ chat --> Hello!      # Start a conversation
 | `/pres_penalty <value>` | Set presence penalty | `/pres_penalty 0.5` |
 | `/reasoning <on\|off>` | Toggle NVIDIA/Qwen reasoning | `/reasoning off` |
 | `/thinking <on\|off>` | Toggle `<think>` and `<thought>` visibility | `/thinking off` |
-| `/thoughtstyle <none\|gemma4\|nanbeige>` | Set thought style formatting | `/thoughtstyle nanbeige` |
+| `/thoughtstyle <none\|gemma4\|nanbeige\|nanbeige_code>` | Set prompting format for negative prompt to disable reasoning - auto | `/thoughtstyle nanbeige_code` |
 | `/seed <value>` | Set PRNG Seed | `/seed time` |
+
+**Note:** `nanbeige_code` may only generate thinking tokens - this is an artifact/quirk of the model.
 | `/stream` | Toggle streaming | `/stream` |
 | `/trace <cmd> <state>`| Trace tokens/payload | `/trace rawpayload on` |
 | `/codeonly` | Enable code-only mode | `/codeonly` |
@@ -420,6 +422,14 @@ chat --> Create a blog post outline about ${topic}
 ```
 
 ### Change log
+
+Apr 5th, 2026 (v0.2.9)
+--------------
+- **New Thought Styles**: Added `nanbeige` and `nanbeige_code` thought styles for specialized prompt formatting.
+- **Nanbeige Style**: Implements `<think> </think>` wrapping with response-only instructions for concise answers.
+- **Nanbeige Code Style**: Implements `<think></think>` wrapping with code-only instructions for minimal commentary code generation.
+- **Documentation**: Updated help text and documentation to clarify thought style usage and model quirks.
+- **Command Enhancement**: Updated `/thoughtstyle` help to describe it as "prompting format for negative prompt to disable reasoning - auto".
 
 Apr 1st, 2026 (v0.2.8)
 --------------
