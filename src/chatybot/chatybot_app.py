@@ -273,6 +273,11 @@ class ChatybotApp:
             # Prefix user prompt with <no thought>
             messages[0]["content"] = f"<no thought> {messages[0]['content']}"
 
+        # Check for nanbeige thoughtstyle
+        if self.thoughtstyle == "nanbeige":
+            # Wrap user prompt with nanbeige specific formatting
+            messages[0]["content"] = f"<think> </think> {messages[0]['content']} response answer only, final answer only. skip thought generation /no_think /response"
+
         if is_old_gemma:
             # Fallback: Prepend system message to the user message for older Gemma models
             if current_system_message:
@@ -1425,11 +1430,11 @@ class ChatybotApp:
         elif cmd == "/thoughtstyle":
             if len(parts) > 1:
                 style = parts[1].lower()
-                if style in ["none", "gemma4"]:
+                if style in ["none", "gemma4", "nanbeige"]:
                     self.thoughtstyle = style
                     print(f"Thought style set to: {style}")
                 else:
-                    print("Invalid thought style. Use 'none' or 'gemma4'.")
+                    print("Invalid thought style. Use 'none', 'gemma4', or 'nanbeige'.")
             else:
                 print(f"Current thought style: {self.thoughtstyle}")
             return True
@@ -1658,7 +1663,7 @@ class ChatybotApp:
             "  /thinking <on|off> - Toggle display of <think> blocks and reasoning text."
         )
         print(
-            "  /thoughtstyle <none|gemma4> - Set thought style for prompt formatting."
+            "  /thoughtstyle <none|gemma4|nanbeige> - Set thought style for prompt formatting."
         )
         print("  /seed <value> - Set seed (int, 'time', or 'random <min>,<max>').")
         print("  /stream - Toggle streaming responses.")

@@ -135,7 +135,7 @@ Active escape commands:
   /pres_penalty <value> - Set presence penalty (-2.0-2.0).
   /reasoning <on|off> - Toggle reasoning (thinking) for NVIDIA and Qwen models.
   /thinking <on|off> - Toggle display of <think> and <thought> blocks and reasoning text.
-  /thoughtstyle <none|gemma4> - Set thought style for prompt formatting.
+  /thoughtstyle <none|gemma4|nanbeige> - Set thought style for prompt formatting.
   /seed <value> - Set seed (int, 'time', or 'random <min>,<max>').
   /stream - Toggle streaming responses.
   /trace <rawpayload|tps|tpsperf> <on|off> - Debugging options
@@ -189,7 +189,7 @@ chat --> Hello!      # Start a conversation
 | `/pres_penalty <value>` | Set presence penalty | `/pres_penalty 0.5` |
 | `/reasoning <on\|off>` | Toggle NVIDIA/Qwen reasoning | `/reasoning off` |
 | `/thinking <on\|off>` | Toggle `<think>` and `<thought>` visibility | `/thinking off` |
-| `/thoughtstyle <none\|gemma4>` | Set thought style formatting | `/thoughtstyle gemma4` |
+| `/thoughtstyle <none\|gemma4\|nanbeige>` | Set thought style formatting | `/thoughtstyle nanbeige` |
 | `/seed <value>` | Set PRNG Seed | `/seed time` |
 | `/stream` | Toggle streaming | `/stream` |
 | `/trace <cmd> <state>`| Trace tokens/payload | `/trace rawpayload on` |
