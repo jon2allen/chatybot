@@ -13,11 +13,15 @@ This document describes the implementation of the `/thoughtstyle` command for Ge
 ### Supported Values
 - `none` - Default behavior, no special formatting (default)
 - `gemma4` - Enable Gemma-4 specific prompt formatting
+- `nanbeige` - Enable Nanbeige specific prompt formatting
 
 ### Examples
 ```bash
 # Enable Gemma-4 formatting
 /thoughtstyle gemma4
+
+# Enable Nanbeige formatting
+/thoughtstyle nanbeige
 
 # Disable special formatting  
 /thoughtstyle none
@@ -36,9 +40,10 @@ The Gemma-4 specific formatting is applied when **ALL** of these conditions are 
 
 ## Effects When Activated
 
+### Gemma-4 Style
 When all conditions are met, the system modifies the prompt structure:
 
-### System Prompt
+#### System Prompt
 **Preserves existing system prompts and appends Gemma-4 specific instructions:**
 
 - **If no existing system prompt**: Creates default + gemma4 instructions
@@ -51,11 +56,26 @@ When all conditions are met, the system modifies the prompt structure:
   [existing_prompt] disable reasoning and thought. </thought off>
   ```
 
-### User Prompt
+#### User Prompt
 Prefixes user messages with:
 ```
 <no thought> 
 ```
+
+### Nanbeige Style
+When activated, wraps user prompts with Nanbeige-specific formatting:
+
+#### User Prompt
+Transforms user messages as follows:
+```
+Input: "describe Zhou enlai in 2 short paragraphs."
+Output: "<think> </think> describe Zhou enlai in 2 short paragraphs. response answer only, final answer only. skip thought generation /no_think /response"
+```
+
+**Key characteristics:**
+- No changes to system prompt
+- Works with any model (no model-specific restrictions)
+- Always applied when thoughtstyle is set to "nanbeige"
 
 ## Example Payload
 
