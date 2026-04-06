@@ -631,7 +631,30 @@ This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) f
 ## **Support**
 
 For questions or issues:
-- Open an issue on [GitHub](https://github.com/jon2allen/chatybot
+- Open an issue on [GitHub](https://github.com/jon2allen/chatybot)
+
+---
+
+## **Releasing to PyPI**
+
+To build and upload a new version to PyPI, follow these steps:
+
+1. **Clean previous builds:**
+   ```bash
+   rm -rf dist/ build/ *.egg-info
+   ```
+
+2. **Build the package:**
+   ```bash
+   python3 -m build
+   ```
+
+3. **Upload using Twine:**
+   ```bash
+   python3 -m twine upload dist/*
+   ```
+
+Note: Ensure you have bumped the version in `pyproject.toml` and synchronized the display version in `src/chatybot/chatybot_app.py` before building.
 
 ---
 
