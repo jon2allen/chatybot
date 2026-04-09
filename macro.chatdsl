@@ -1,0 +1,72 @@
+# Macro Definitions for Chat DSL
+# This file contains reusable macro definitions for common LLM prompts
+
+# Language expertise macros
+def language_expert(type) = "You are an expert in {type} programming language. Provide detailed technical answers about {type} concepts, syntax, and best practices."
+
+def language_comparison(lang1, lang2) = "Compare {lang1} and {lang2} programming languages. Discuss their similarities, differences, syntax variations, performance characteristics, and typical use cases."
+
+def language_learning_tips(language) = "Provide beginner-friendly learning tips for {language}. Include recommended resources, common pitfalls to avoid, and practical exercises."
+
+# Code review and analysis macros
+def code_review_language(language) = "Act as a senior {language} developer. Review the following code for best practices, potential bugs, performance issues, and suggest improvements."
+
+def code_explanation(language) = "Explain how this {language} code works line by line. Provide insights into the algorithms, data structures, and design patterns used."
+
+def debug_help(language, purpose, error) = "Help me debug this {language} code. The code is supposed to {purpose} but it's not working correctly. Here's the error message: {error}"
+
+# Project and architecture macros
+def system_design(project_type) = "Design a {project_type} system architecture. Include components, data flow, API design, database schema, and deployment considerations."
+
+def api_specification(api_name) = "Create a comprehensive API specification for {api_name}. Include endpoints, request/response formats, authentication, error handling, and example usage."
+
+def project_plan(project) = "Create a detailed project plan for {project}. Include timeline, milestones, resource requirements, risk assessment, and success metrics."
+
+# Documentation macros
+def doc_template(component) = "Create professional documentation for {component}. Include overview, installation, usage examples, configuration options, and troubleshooting guide."
+
+def readme_template(project) = "Generate a comprehensive README.md for {project}. Include project description, features, installation instructions, usage examples, contribution guidelines, and license information."
+
+def changelog_entry(version, changes) = "Create a changelog entry for version {version} with the following changes: {changes}"
+
+# Learning and tutorial macros
+def tutorial_outline(topic) = "Create a step-by-step tutorial outline for learning {topic}. Include prerequisites, learning objectives, hands-on exercises, and assessment criteria."
+
+def cheatsheet(technology) = "Generate a concise cheatsheet for {technology}. Include common commands, syntax examples, best practices, and useful tips."
+
+def interview_questions(technology) = "Provide a list of common interview questions for {technology} with detailed answers and code examples where applicable."
+
+# Business and product macros
+def business_plan(product) = "Create a comprehensive business plan for {product}. Include market analysis, target audience, competitive landscape, revenue model, marketing strategy, and financial projections."
+
+def product_specification(product) = "Write a detailed product specification for {product}. Include features, user stories, technical requirements, design considerations, and acceptance criteria."
+
+def market_analysis(product) = "Conduct a market analysis for {product}. Include industry trends, target market size, customer segments, competitive analysis, and market entry strategy."
+
+# Creative writing macros
+def story_ideas(genre) = "Generate creative story ideas for the {genre} genre. Include plot summaries, character descriptions, setting details, and potential twists."
+
+def character_profile(name, role) = "Create a detailed character profile for {name}, who is a {role}. Include physical appearance, personality traits, background story, motivations, and character arc."
+
+def worldbuilding_guide(setting) = "Develop a comprehensive worldbuilding guide for a {setting} setting. Include geography, history, cultures, political systems, magic/technology rules, and major conflicts."
+
+# General purpose macros
+def expert_prompt(topic) = "Act as an expert in {topic}. Provide detailed, accurate, and insightful information about {topic} with practical examples and real-world applications."
+
+def summary_request(content_type) = "Summarize this {content_type} in a concise yet comprehensive manner. Highlight key points, main arguments, and important details while maintaining the original meaning."
+
+def pros_cons_analysis(topic) = "Analyze the pros and cons of {topic}. Provide a balanced assessment with supporting evidence, real-world examples, and potential trade-offs to consider."
+
+# Technical writing macros
+def error_analysis(error_type) = "Analyze this {error_type} error. Explain the root cause, common scenarios where it occurs, debugging techniques, and step-by-step solutions."
+
+def performance_optimization(technology) = "Provide performance optimization techniques for {technology}. Include profiling methods, common bottlenecks, optimization strategies, and benchmarking approaches."
+
+def security_analysis(system) = "Conduct a security analysis for {system}. Identify potential vulnerabilities, threat vectors, mitigation strategies, and best practices for secure implementation."
+
+# Example usage comments (these would be in a separate chat script)
+# %language_expert(python)
+# %code_review_language(java)
+# %system_design(microservices)
+# %tutorial_outline(machine learning)
+# %business_plan(SaaS product)

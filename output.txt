@@ -1,0 +1,66 @@
+Loading macros from macro.chatdsl using Parsley...
+Traceback (most recent call last):
+  File "/home/jon2allen/github/chatybot/test_macro_harness_parsley_working.py", line 196, in <module>
+    main()
+  File "/home/jon2allen/github/chatybot/test_macro_harness_parsley_working.py", line 167, in main
+    processor = MacroProcessor()
+                ^^^^^^^^^^^^^^^^
+  File "/home/jon2allen/github/chatybot/test_macro_harness_parsley_working.py", line 27, in __init__
+    self.invocation_grammar = makeGrammar("""
+                              ^^^^^^^^^^^^^^^
+  File "/home/jon2allen/.local/lib/python3.11/site-packages/parsley.py", line 46, in makeGrammar
+    g = OMeta.makeGrammar(source, name).createParserClass(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jon2allen/.local/lib/python3.11/site-packages/ometa/runtime.py", line 847, in makeGrammar
+    source = writePython(tree, grammar)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jon2allen/.local/lib/python3.11/site-packages/ometa/builder.py", line 426, in writePython
+    pw.output(out)
+  File "/home/jon2allen/.local/lib/python3.11/site-packages/ometa/builder.py", line 49, in output
+    self._generate(out, self.tree)
+  File "/home/jon2allen/.local/lib/python3.11/site-packages/ometa/builder.py", line 42, in _generate
+    result = self._generateNode(out, expr, debugname=debugname)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jon2allen/.local/lib/python3.11/site-packages/ometa/builder.py", line 60, in _generateNode
+    return getattr(self, "generate_"+name)(out, *args, debugname=debugname)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jon2allen/.local/lib/python3.11/site-packages/ometa/builder.py", line 351, in generate_Grammar
+    self._generateNode(out, rule, debugname)
+  File "/home/jon2allen/.local/lib/python3.11/site-packages/ometa/builder.py", line 60, in _generateNode
+    return getattr(self, "generate_"+name)(out, *args, debugname=debugname)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jon2allen/.local/lib/python3.11/site-packages/ometa/builder.py", line 338, in generate_Rule
+    self._generate(prevOut.indent(), expr, retrn=True, debugname=name)
+  File "/home/jon2allen/.local/lib/python3.11/site-packages/ometa/builder.py", line 42, in _generate
+    result = self._generateNode(out, expr, debugname=debugname)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jon2allen/.local/lib/python3.11/site-packages/ometa/builder.py", line 60, in _generateNode
+    return getattr(self, "generate_"+name)(out, *args, debugname=debugname)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jon2allen/.local/lib/python3.11/site-packages/ometa/builder.py", line 233, in generate_Or
+    return self._generateNode(out, exprs.args[0], debugname)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jon2allen/.local/lib/python3.11/site-packages/ometa/builder.py", line 60, in _generateNode
+    return getattr(self, "generate_"+name)(out, *args, debugname=debugname)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jon2allen/.local/lib/python3.11/site-packages/ometa/builder.py", line 258, in generate_And
+    v = self._generateNode(out, ex, debugname)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jon2allen/.local/lib/python3.11/site-packages/ometa/builder.py", line 60, in _generateNode
+    return getattr(self, "generate_"+name)(out, *args, debugname=debugname)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jon2allen/.local/lib/python3.11/site-packages/ometa/builder.py", line 290, in generate_Action
+    return self.compilePythonExpr(out, expr.data, debugname)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jon2allen/.local/lib/python3.11/site-packages/ometa/builder.py", line 113, in compilePythonExpr
+    ast.literal_eval(expr)
+  File "/usr/local/lib/python3.11/ast.py", line 64, in literal_eval
+    node_or_string = parse(node_or_string.lstrip(" \t"), mode='eval')
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/ast.py", line 50, in parse
+    return compile(source, filename, mode, flags,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<unknown>", line 1
+    [a] + as
+          ^^
+SyntaxError: invalid syntax
