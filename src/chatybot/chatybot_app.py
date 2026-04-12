@@ -75,6 +75,8 @@ class ChatybotApp:
         self.trace_raw_payload: bool = False
         self.trace_tps: bool = False
         self.trace_tps_perf: bool = False
+        self.debug_payload_mode: bool = False
+        self.debug_payload_data: dict = {}
 
         # Seed configuration
         self.seed_config: Optional[Union[int, str, Tuple[str, int, int]]] = None
@@ -258,8 +260,9 @@ class ChatybotApp:
                 current_system_message = "detailed thinking off"
 
         # Handle system prompts for Gemma models
-        # print("testing.... gemma4")
-        is_gemma_4 = "gemma-4" in model_name.lower()
+        #print("testing.... gemma4")
+        
+        is_gemma_4 = "gemma4" in model_name.lower()
         is_old_gemma = "gemma" in model_name.lower() and not is_gemma_4
 
         # Check for gemma4 thoughtstyle with reasoning off
@@ -408,6 +411,58 @@ class ChatybotApp:
                 except TypeError:
                     print(str(kwargs))
                 print("---- end of payload ---")
+
+            # Capture payload for debug mode
+            if self.debug_payload_mode:
+                import json
+                import tempfile
+                import os
+                import subprocess
+                
+                self.debug_payload_data = kwargs.copy()
+                
+                # Create a temporary file with the payload
+                temp_file = tempfile.NamedTemporaryFile(
+                    mode='w+', 
+                    suffix='.json', 
+                    delete=False,
+                    encoding='utf-8'
+                )
+                
+                try:
+                    # Write the payload to the temp file
+                    json.dump(self.debug_payload_data, temp_file, indent=2)
+                    temp_file.flush()
+                    
+                    print(f"\nPayload captured and saved to: {temp_file.name}")
+                    print("Opening in editor...")
+                    
+                    # Determine the editor to use
+                    editor = os.environ.get('EDITOR', 'vi')
+                    
+                    # Open the file in the editor
+                    subprocess.run([editor, temp_file.name])
+                    
+                    # After editing, read the modified payload
+                    with open(temp_file.name, 'r', encoding='utf-8') as f:
+                        modified_payload = json.load(f)
+                    
+                    # Update kwargs with the modified payload
+                    kwargs.update(modified_payload)
+                    
+                    print(f"\nUsing modified payload from: {temp_file.name}")
+                    
+                except Exception as e:
+                    print(f"Error in debug payload mode: {str(e)}")
+                    self.debug_payload_mode = False
+                finally:
+                    # Clean up and reset debug mode
+                    temp_file.close()
+                    try:
+                        os.unlink(temp_file.name)
+                    except:
+                        pass
+                    self.debug_payload_mode = False
 
             tps_records = []
             think_tokens_estimate = 0
@@ -1085,6 +1140,16 @@ class ChatybotApp:
                 print("Usage: /trace <rawpayload|tps|tpsperf> <on|off>")
             return True
 
+        elif cmd == "/debug":
+            if len(parts) >= 2 and parts[1].lower() == "payload":
+                self.debug_payload_mode = True
+                print("Debug payload mode activated. Next prompt will capture payload for editing.")
+                print("After entering your prompt, the payload will be opened in your editor.")
+                return True
+            else:
+                print("Usage: /debug payload")
+            return True
+
         elif cmd == "/prompt":
             if len(parts) < 2:
                 print("Usage: /prompt <file>")
@@ -1673,6 +1738,7 @@ class ChatybotApp:
         print("  /seed <value> - Set seed (int, 'time', or 'random <min>,<max>').")
         print("  /stream - Toggle streaming responses.")
         print("  /trace <rawpayload|tps|tpsperf> <on|off> - Debugging options")
+        print("  /debug payload - Capture payload, edit in editor, and send to API")
         print("  /echo <text> - Echo text to screen with variable substitution.")
         print("  /script <file> [x=value y=value z=value] - Execute a script file with optional parameters.")
         print("  /quit - Exit the program.")
