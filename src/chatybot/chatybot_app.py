@@ -172,6 +172,76 @@ class ChatybotApp:
             return self.input_history_matches[self.input_history_index]
         return None
 
+    def search_input_history(self, search_term: str) -> List[str]:
+        """
+        Search input history for commands containing the search term.
+
+        Args:
+            search_term: Term to search for in history
+
+        Returns:
+            List of matching history items (last 5)
+        """
+        if not search_term:
+            return []
+
+        # Search for items containing the search term (case insensitive)
+        matches = [
+            item for item in reversed(self.input_history) 
+            if search_term.lower() in item.lower()
+        ][:5]  # Get last 5 matches
+
+        return list(reversed(matches))  # Return in original order (oldest first)
+
+    async def handle_history_command(self, command: str) -> Optional[str]:
+        """
+        Handle the history search command (!).
+
+        Args:
+            command: The full command starting with !
+
+        Returns:
+            The selected history item or None if cancelled
+        """
+        if not command.startswith("!"):
+            return None
+
+        # Extract search term (everything after the !)
+        search_term = command[1:].strip()
+
+        if not search_term:
+            print("Usage: ! <search_term>")
+            return None
+
+        # Search history
+        matches = self.search_input_history(search_term)
+
+        if not matches:
+            print(f"No history items found containing '{search_term}'")
+            return None
+
+        # Display matches
+        print(f"\nchat --> ! {search_term}")
+        print()
+        for i, match in enumerate(matches, 1):
+            print(f"   {i}. {match}")
+
+        # Get user selection
+        while True:
+            choice = input("pick num or q to cancel: ").strip().lower()
+            
+            if choice == 'q':
+                return None
+            
+            try:
+                choice_num = int(choice)
+                if 1 <= choice_num <= len(matches):
+                    return matches[choice_num - 1]
+                else:
+                    print(f"Please enter a number between 1 and {len(matches)} or 'q' to cancel.")
+            except ValueError:
+                print(f"Please enter a number between 1 and {len(matches)} or 'q' to cancel.")
+
     def get_openai_client(self, model_alias: str) -> AsyncOpenAI:
         """
         Creates an openai.AsyncOpenAI client instance based on the model's config.
@@ -1698,6 +1768,7 @@ class ChatybotApp:
         """Show help message with available commands."""
         print("Active escape commands:")
         print("  /help - Show this help message.")
+        print("  ! <search_term> - Search command history and select from last 5 matches.")
         print("  /prompt <file> - Load a prompt from a file.")
         print("  /file <path> - Read a text file into the buffer.")
         print(
@@ -1823,6 +1894,19 @@ class ChatybotApp:
                         self.buffer_manager.prompt_buffer = (
                             ""  # Clear the buffer after execution
                         )
+                    continue
+
+                # Handle history search command (!)
+                if prompt.startswith("!"):
+                    selected_command = await self.handle_history_command(prompt)
+                    if selected_command:
+                        # Execute the selected command
+                        if selected_command.startswith("/"):
+                            await self.handle_escape_command(selected_command)
+                        else:
+                            response = await self.chat_completion(
+                                selected_command, stream=self.streaming_enabled
+                            )
                     continue
 
                 response = await self.chat_completion(
