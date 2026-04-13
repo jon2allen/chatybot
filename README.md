@@ -172,6 +172,7 @@ chat --> Hello!      # Start a conversation
 
 | Command | Description | Example |
 |---------|-------------|---------|
+| `! <search>` | Search command history and select from last 5 matches | `! model` |
 | `/help` | Show help message | `/help` |
 | `/model <alias>` | Switch models | `/model gpt4` |
 | `/listmodels` | List available models | `/listmodels` |
@@ -195,6 +196,7 @@ chat --> Hello!      # Start a conversation
 **Note:** `nanbeige_code` may only generate thinking tokens - this is an artifact/quirk of the model.
 | `/stream` | Toggle streaming | `/stream` |
 | `/trace <cmd> <state>`| Trace tokens/payload | `/trace rawpayload on` |
+| `/debug payload` | Edit payload in editor and send to API | `/debug payload` |
 | `/codeonly` | Enable code-only mode | `/codeonly` |
 | `/codeoff` | Disable code-only mode | `/codeoff` |
 | `/notemode <on\|off>` | Toggle note block separation | `/notemode on` |
@@ -513,6 +515,7 @@ Feb 26th, 2026
 --------------
 - **Tracing & Debugging**: Added new `/trace` command options:
   - `/trace rawpayload on`: Dumps the raw JSON string passed to the LLM completion API.
+  - `/debug payload`: Captures the payload that would be sent to the LLM API, opens it in your system editor for modification, then sends the modified payload to the API and displays the response.
   - `/trace tps on`: Calculates and outputs think tokens and regular tokens per second.
   - `/trace tpsperf on`: Logs an in-memory bucketed tokens per second calculation, saved out to a quoted CSV on completion.
 
