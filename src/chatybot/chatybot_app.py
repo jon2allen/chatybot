@@ -1870,7 +1870,27 @@ class ChatybotApp:
                 else:
                     prompt = input("chat --> ")
 
-                # Add to input history
+                # Handle history search command (!) - must be checked before adding to history
+                if prompt.startswith("!"):
+                    selected_command = await self.handle_history_command(prompt)
+                    if selected_command:
+                        # Add the selected command to history, not the ! command
+                        if selected_command.strip() and (
+                            not self.input_history or selected_command != self.input_history[-1]
+                        ):
+                            self.input_history.append(selected_command)
+                            readline.add_history(selected_command)
+                        
+                        # Execute the selected command
+                        if selected_command.startswith("/"):
+                            await self.handle_escape_command(selected_command)
+                        else:
+                            response = await self.chat_completion(
+                                selected_command, stream=self.streaming_enabled
+                            )
+                    continue
+
+                # Add to input history (for non-history-search commands)
                 if prompt.strip() and (
                     not self.input_history or prompt != self.input_history[-1]
                 ):
@@ -1894,19 +1914,6 @@ class ChatybotApp:
                         self.buffer_manager.prompt_buffer = (
                             ""  # Clear the buffer after execution
                         )
-                    continue
-
-                # Handle history search command (!)
-                if prompt.startswith("!"):
-                    selected_command = await self.handle_history_command(prompt)
-                    if selected_command:
-                        # Execute the selected command
-                        if selected_command.startswith("/"):
-                            await self.handle_escape_command(selected_command)
-                        else:
-                            response = await self.chat_completion(
-                                selected_command, stream=self.streaming_enabled
-                            )
                     continue
 
                 response = await self.chat_completion(
