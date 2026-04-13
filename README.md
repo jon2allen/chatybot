@@ -172,6 +172,7 @@ chat --> Hello!      # Start a conversation
 
 | Command | Description | Example |
 |---------|-------------|---------|
+| `! <search>` | Search command history and select from last 5 matches | `! model` |
 | `/help` | Show help message | `/help` |
 | `/model <alias>` | Switch models | `/model gpt4` |
 | `/listmodels` | List available models | `/listmodels` |
