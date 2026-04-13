@@ -1,6 +1,14 @@
 # Macro Definitions for Chat DSL
 # This file contains reusable macro definitions for common LLM prompts
 
+# No-parameter macros
+# These are simple commands that don't require arguments
+def regen() = "Regenerate all source code"
+def build() = "Build the project with optimized settings"
+def test() = "Run comprehensive test suite with coverage analysis"
+def deploy() = "Deploy application to production environment"
+def cleanup() = "Remove temporary files and build artifacts"
+
 # Language expertise macros
 def language_expert(type) = "You are an expert in {type} programming language. Provide detailed technical answers about {type} concepts, syntax, and best practices."
 

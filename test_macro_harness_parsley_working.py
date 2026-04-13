@@ -13,7 +13,9 @@ class MacroProcessor:
         # Simple grammar for macro definitions using Parsley
         # Based on Parsley tutorial examples
         self.definition_grammar = makeGrammar("""
-        macro_def = 'def' ws ident:name ws '(' ws param_list?:params ws ')' ws '=' ws string:template -> (name, params or [], template)
+        macro_def = macro_def_with_params | macro_def_no_params
+        macro_def_with_params = 'def' ws ident:name ws '(' ws param_list?:params ws ')' ws '=' ws string:template -> (name, params or [], template)
+        macro_def_no_params = 'def' ws ident:name ws '(' ws ')' ws '=' ws string:template -> (name, [], template)
         param_list = param:p (ws ',' ws param)*:ps -> [p] + ps
         param = ident
         ident = <letter (letter | digit | '_')*>
@@ -25,9 +27,12 @@ class MacroProcessor:
         
         # Simple grammar for macro invocations using Parsley
         self.invocation_grammar = makeGrammar("""
-        macro_call = '%' ws ident:name ws '(' ws arg_list?:args ws ')' -> (name, args or [])
+        macro_call = macro_call_with_args | macro_call_no_args
+        macro_call_with_args = '%' ws ident:name ws '(' ws arg_list?:args ws ')' -> (name, args or [])
+        macro_call_no_args = '%' ws ident:name ws '(' ws ')' -> (name, [])
         arg_list = arg:a (ws ',' ws arg)*:rest -> [a] + rest
-        arg = string | version | ident | number
+        arg = variable_ref | string | version | ident | number
+        variable_ref = '${' <letter (letter | digit | '_')*>:var_name '}' -> var_name
         version = <digit+ ('.' (digit | ident))+>
         number = <digit+>
         string = '"' <(~'"' anything)*>:s '"' -> s
@@ -72,6 +77,24 @@ class MacroProcessor:
             parsed = self.invocation_grammar(macro_call).macro_call()
             name, args = parsed
             
+            # Resolve variables in arguments
+            resolved_args = []
+            for arg in args:
+                # Check if this argument looks like it came from a variable reference
+                # The Parsley grammar strips ${} and returns just the variable name
+                if isinstance(arg, str) and arg in self.variables:
+                    # This is a variable reference that was parsed by Parsley
+                    resolved_args.append(self.variables[arg])
+                elif isinstance(arg, str) and arg.startswith('${') and arg.endswith('}'):
+                    # This is a variable reference in ${var} format
+                    var_name = arg[2:-1]  # Remove ${ and }
+                    if var_name in self.variables:
+                        resolved_args.append(self.variables[var_name])
+                    else:
+                        return f"ERROR: Variable '{var_name}' not defined"
+                else:
+                    resolved_args.append(arg)
+            
             # Get macro definition
             if name not in self.macros:
                 return f"ERROR: Macro '{name}' not defined"
@@ -79,12 +102,12 @@ class MacroProcessor:
             macro = self.macros[name]
             
             # Check argument count
-            if len(args) != len(macro['params']):
-                return f"ERROR: Macro '{name}' expects {len(macro['params'])} arguments, got {len(args)}"
+            if len(resolved_args) != len(macro['params']):
+                return f"ERROR: Macro '{name}' expects {len(macro['params'])} arguments, got {len(resolved_args)}"
             
             # Create parameter mapping
             param_mapping = {}
-            for param, arg in zip(macro['params'], args):
+            for param, arg in zip(macro['params'], resolved_args):
                 param_mapping[param] = arg
             
             # Format the template
