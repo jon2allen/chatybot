@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "chatybot"
-version = "0.2.9"
+version = "0.3.0"
 description = "A CLI-based AI chat assistant"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -13,7 +13,8 @@ authors = [{ name = "Jon Allen" }]
 dependencies = [
     "openai>=1.61.0",
     "tinydb",
-    "pygments"
+    "pygments",
+    "parsley"
 ]
 
 [project.scripts]
@@ -21,4 +22,4 @@ chatybot = "chatybot.main:run"
 chatdsl_parse = "chatybot.chatdsl_parse:main"
 
 [tool.setuptools.package-data]
-chatybot = ["*.toml"]
+chatybot = ["*.toml", "*.chatdsl"]

@@ -117,7 +117,7 @@ class ChatybotApp:
                     "stream", "script", "quit", "setdb", "dblist",
                     "searchdb", "dblog", "dbprint", "loadvar", "savevar",
                     "setvar", "notemode", "mem", "dump", "trace",
-                    "thinking", "echo"
+                    "thinking", "echo", "def", "reloadmacros"
                     ]
 
                  )
@@ -1045,6 +1045,24 @@ class ChatybotApp:
                     return True
             except Exception as e:
                 print(f"Error parsing set command: {e}")
+                return True
+
+        # Handle macro definitions (supporting multiline def)
+        if command.lstrip().startswith("def "):
+            try:
+                # Use Parsley to parse the macro definition
+                # We need to strip leading whitespace for Parsley
+                definition_line = command.lstrip()
+                parsed = self.definition_grammar(definition_line).macro_def()
+                name, params, template = parsed
+                self.macros[name] = {'params': params, 'template': template}
+                print(f"Defined macro: {name} with {len(params)} parameters")
+                return True
+            except Exception as e:
+                # If Parsley fails, it might be because the template spans multiple lines
+                # and our Parsley grammar for string is simple.
+                # However, for now let's just report the error.
+                print(f"Error defining macro: {e}")
                 return True
 
         # Replace variables in the command
@@ -2116,7 +2134,7 @@ class ChatybotApp:
         print("===========================")
         print("Chatybot.py                ")
         print("Created by Jon Allen - 2025")
-        print("Version: 0.2.9             ")
+        print("Version: 0.3.0             ")
         print("===========================")
         print(
             f"Active model: {self.config_manager.get_model_config(self.config_manager.active_model_alias)['name']} (alias: {self.config_manager.active_model_alias})"
@@ -2174,6 +2192,19 @@ class ChatybotApp:
                             ""  # Clear the buffer after execution
                         )
                     continue
+
+                # Handle macro definitions for regular prompts
+                if prompt.lstrip().startswith("def "):
+                    try:
+                        definition_line = prompt.lstrip()
+                        parsed = self.definition_grammar(definition_line).macro_def()
+                        name, params, template = parsed
+                        self.macros[name] = {"params": params, "template": template}
+                        print(f"Defined macro: {name} with {len(params)} parameters")
+                        continue
+                    except Exception:
+                        # If it's not a valid macro definition, treat it as regular text
+                        pass
 
                 # Handle macro expansion for regular prompts
                 if prompt.lstrip().startswith("%"):
