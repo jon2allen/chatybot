@@ -159,7 +159,7 @@ class ChatybotApp:
         version = <digit+ ('.' (digit | ident))+>
         number = <digit+>
         string = '"' <(~'"' anything)*>:s '"' -> s
-        ident = <letter (letter | digit | '_')*>
+        ident = <letter (letter | digit | '_' | ' ' | '-')*>  # Allow spaces and hyphens in identifiers for multi-word args
         letter = 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'g' | 'h' | 'i' | 'j' | 'k' | 'l' | 'm' | 'n' | 'o' | 'p' | 'q' | 'r' | 's' | 't' | 'u' | 'v' | 'w' | 'x' | 'y' | 'z' | 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'I' | 'J' | 'K' | 'L' | 'M' | 'N' | 'O' | 'P' | 'Q' | 'R' | 'S' | 'T' | 'U' | 'V' | 'W' | 'X' | 'Y' | 'Z'
         digit = '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'
         ws = ' '*
@@ -2174,6 +2174,16 @@ class ChatybotApp:
                             ""  # Clear the buffer after execution
                         )
                     continue
+
+                # Handle macro expansion for regular prompts
+                if prompt.lstrip().startswith("%"):
+                    expanded_prompt = self.process_macro_line(prompt)
+                    if expanded_prompt.startswith("ERROR:"):
+                        print(expanded_prompt)
+                        continue
+                    else:
+                        print(f"Expanded macro: {expanded_prompt}")
+                        prompt = expanded_prompt
 
                 response = await self.chat_completion(
                     prompt, stream=self.streaming_enabled
