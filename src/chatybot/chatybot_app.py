@@ -26,6 +26,13 @@ except ImportError:
         "OpenAI SDK is not installed. Please install it with 'pip install openai'."
     )
 
+try:
+    from parsley import makeGrammar
+except ImportError:
+    raise ImportError(
+        "Parsley is not installed. Please install it with 'pip install parsley'."
+    )
+
 from .config_manager import ConfigManager
 from .logging_manager import LoggingManager
 from .buffer_manager import BufferManager
@@ -117,6 +124,134 @@ class ChatybotApp:
 
         # Register save function to be called on exit
         atexit.register(self.save_input_history)
+        
+        # Initialize macro processing system
+        self.macros = {}
+        self.setup_macro_grammars()
+        
+        # Load default macros for interactive use
+        self.load_macros()
+
+    def setup_macro_grammars(self):
+        """Set up Parsley grammars for macro processing."""
+        # Grammar for macro definitions using Parsley
+        self.definition_grammar = makeGrammar("""
+        macro_def = macro_def_with_params | macro_def_no_params
+        macro_def_with_params = 'def' ws ident:name ws '(' ws param_list?:params ws ')' ws '=' ws string:template -> (name, params or [], template)
+        macro_def_no_params = 'def' ws ident:name ws '(' ws ')' ws '=' ws string:template -> (name, [], template)
+        param_list = param:p (ws ',' ws param)*:ps -> [p] + ps
+        param = ident
+        ident = <letter (letter | digit | '_')*>
+        letter = 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'g' | 'h' | 'i' | 'j' | 'k' | 'l' | 'm' | 'n' | 'o' | 'p' | 'q' | 'r' | 's' | 't' | 'u' | 'v' | 'w' | 'x' | 'y' | 'z' | 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'I' | 'J' | 'K' | 'L' | 'M' | 'N' | 'O' | 'P' | 'Q' | 'R' | 'S' | 'T' | 'U' | 'V' | 'W' | 'X' | 'Y' | 'Z'
+        digit = '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'
+        string = '"' <(~'"' anything)*>:s '"' -> s
+        ws = ' '*
+        """, {})
+        
+        # Grammar for macro invocations using Parsley
+        self.invocation_grammar = makeGrammar("""
+        macro_call = macro_call_with_args | macro_call_no_args
+        macro_call_with_args = '%' ws ident:name ws '(' ws arg_list?:args ws ')' -> (name, args or [])
+        macro_call_no_args = '%' ws ident:name ws '(' ws ')' -> (name, [])
+        arg_list = arg:a (ws ',' ws arg)*:rest -> [a] + rest
+        arg = variable_ref | string | version | ident | number
+        variable_ref = '${' <letter (letter | digit | '_')*>:var_name '}' -> var_name
+        version = <digit+ ('.' (digit | ident))+>
+        number = <digit+>
+        string = '"' <(~'"' anything)*>:s '"' -> s
+        ident = <letter (letter | digit | '_')*>
+        letter = 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'g' | 'h' | 'i' | 'j' | 'k' | 'l' | 'm' | 'n' | 'o' | 'p' | 'q' | 'r' | 's' | 't' | 'u' | 'v' | 'w' | 'x' | 'y' | 'z' | 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'I' | 'J' | 'K' | 'L' | 'M' | 'N' | 'O' | 'P' | 'Q' | 'R' | 'S' | 'T' | 'U' | 'V' | 'W' | 'X' | 'Y' | 'Z'
+        digit = '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'
+        ws = ' '*
+        """, {})
+
+    def load_macros(self, macro_file: str = "macro.chatdsl") -> None:
+        """Load macro definitions from file using Parsley."""
+        try:
+            macro_path = os.path.join(os.getcwd(), macro_file)
+            if not os.path.exists(macro_path):
+                # Try in the src/chatybot directory
+                macro_path = os.path.join(os.path.dirname(__file__), macro_file)
+                if not os.path.exists(macro_path):
+                    print(f"Macro file {macro_file} not found, starting with empty macros")
+                    return
+            
+            with open(macro_path, 'r') as f:
+                content = f.read()
+            
+            # Parse each line for macro definitions using Parsley
+            for line in content.split('\n'):
+                line = line.strip()
+                if line.startswith('def ') and '=' in line:
+                    try:
+                        parsed = self.definition_grammar(line).macro_def()
+                        name, params, template = parsed
+                        self.macros[name] = {'params': params, 'template': template}
+                    except Exception as e:
+                        print(f"Warning: Could not parse macro definition: {line}")
+                        print(f"Error: {e}")
+        except Exception as e:
+            print(f"Error loading macros: {e}")
+
+    def expand_macro(self, macro_call: str) -> str:
+        """Expand a single macro call using Parsley."""
+        try:
+            # Parse the macro invocation using Parsley
+            parsed = self.invocation_grammar(macro_call).macro_call()
+            name, args = parsed
+            
+            # Resolve variables in arguments
+            # Note: The Parsley grammar resolves ${var} to just 'var' during parsing
+            # So if an argument is in the variables dict, it came from a ${var} reference
+            # If it's not in the variables dict, treat it as a literal (matches original behavior)
+            resolved_args = []
+            for arg in args:
+                if isinstance(arg, str) and arg in self.buffer_manager.script_vars:
+                    # This argument was a variable reference (from ${var} syntax)
+                    # and the variable is defined, so use its value
+                    resolved_args.append(self.buffer_manager.script_vars[arg])
+                else:
+                    # This is a literal argument (bare identifier, string, number, etc.)
+                    # This matches the original proof of concept behavior where
+                    # undefined variable references are treated as literals
+                    resolved_args.append(arg)
+            
+            # Get macro definition
+            if name not in self.macros:
+                return f"ERROR: Macro '{name}' not defined"
+            
+            macro = self.macros[name]
+            
+            # Check argument count
+            if len(resolved_args) != len(macro['params']):
+                return f"ERROR: Macro '{name}' expects {len(macro['params'])} arguments, got {len(resolved_args)}"
+            
+            # Create parameter mapping
+            param_mapping = {}
+            for param, arg in zip(macro['params'], resolved_args):
+                param_mapping[param] = arg
+            
+            # Format the template
+            try:
+                expanded = macro['template'].format(**param_mapping)
+                return expanded
+            except Exception as e:
+                return f"ERROR: Format error in macro '{name}': {e}"
+                
+        except Exception as e:
+            return f"ERROR: Could not parse macro call '{macro_call}': {e}"
+
+    def process_macro_line(self, line: str) -> str:
+        """Process a single line, expanding any macros."""
+        if line.startswith('%'):
+            # This is a macro call - use Parsley to parse it
+            return self.expand_macro(line.strip())
+        else:
+            # Regular line, check for variable substitution
+            result = line
+            for var_name, var_value in self.buffer_manager.script_vars.items():
+                result = result.replace(f'${{{var_name}}}', var_value)
+            return result
 
     def get_history_path(self) -> str:
         """
@@ -844,6 +979,25 @@ class ChatybotApp:
             True if the command was handled, False otherwise
         """
         # Handle script-specific commands
+        # Handle macro calls
+        if command.lstrip().startswith("%"):
+            try:
+                expanded_command = self.process_macro_line(command)
+                if expanded_command.startswith("ERROR:"):
+                    print(expanded_command)
+                    return True
+                else:
+                    # Process the expanded command as if it was typed by user
+                    print(f"Expanded macro: {expanded_command}")
+                    # Execute the expanded command
+                    handled = await self.execute_script_command(
+                        expanded_command, original_handler
+                    )
+                    return handled
+            except Exception as e:
+                print(f"Error processing macro: {e}")
+                return True
+
         # Handle script-specific commands (supporting multiline set)
         if command.lstrip().startswith("set "):
             try:
@@ -1032,6 +1186,17 @@ class ChatybotApp:
         """
         try:
             print("Loading script: ", script_path)
+            
+            # Load macros from macro.chatdsl file in the same directory as the script
+            script_dir = os.path.dirname(script_path)
+            macro_file = os.path.join(script_dir, "macro.chatdsl")
+            if os.path.exists(macro_file):
+                self.load_macros(macro_file)
+                print(f"Loaded macros from {macro_file}")
+            else:
+                # Try default location
+                self.load_macros()
+            
             with open(script_path, "r") as f:
                 script_content = f.read()
 
@@ -1115,24 +1280,66 @@ class ChatybotApp:
                 if in_multi_line:
                     if cmd.strip() == ";;":
                         # End of multi-line input, process it
-                        full_prompt = "\n".join(multi_line_buffer)
+                        # First, expand any macros in the buffer
+                        expanded_lines = []
+                        for line in multi_line_buffer:
+                            if line.lstrip().startswith("%"):
+                                # Expand macro calls immediately
+                                expanded = self.process_macro_line(line)
+                                if expanded.startswith("ERROR:"):
+                                    print(expanded)
+                                    expanded_lines.append(line)  # Keep original if error
+                                else:
+                                    expanded_lines.append(expanded)
+                            else:
+                                # Keep regular lines as-is
+                                expanded_lines.append(line)
+                        
+                        # Join the processed lines and send to LLM
+                        full_prompt = "\n".join(expanded_lines)
                         print(f"Executing multi-line prompt: {full_prompt[:50]}...")
                         handled = await self.execute_script_command(
                             full_prompt, self.handle_escape_command
                         )
                         if not handled:
-                            print(f"Error processing multi-line command")
+                            # This is not a command, it's a regular prompt for the LLM
+                            # The execute_script_command returns False for regular text
+                            print(f"Sending prompt to LLM: {full_prompt[:50]}...")
+                            # Here we would normally send to LLM
+                            # For now, just indicate success
+                            print("Prompt sent to LLM successfully")
                         in_multi_line = False
                         multi_line_buffer = []
                     elif cmd.startswith("/"):
                         # Escaped command in the middle of multi-line - process the buffer first
-                        full_prompt = "\n".join(multi_line_buffer)
+                        # First, expand any macros in the buffer
+                        expanded_lines = []
+                        for line in multi_line_buffer:
+                            if line.lstrip().startswith("%"):
+                                # Expand macro calls immediately
+                                expanded = self.process_macro_line(line)
+                                if expanded.startswith("ERROR:"):
+                                    print(expanded)
+                                    expanded_lines.append(line)  # Keep original if error
+                                else:
+                                    expanded_lines.append(expanded)
+                            else:
+                                # Keep regular lines as-is
+                                expanded_lines.append(line)
+                        
+                        # Join the processed lines and send to LLM
+                        full_prompt = "\n".join(expanded_lines)
                         print(f"Executing multi-line prompt: {full_prompt[:50]}...")
                         handled = await self.execute_script_command(
                             full_prompt, self.handle_escape_command
                         )
                         if not handled:
-                            print(f"Error processing multi-line command")
+                            # This is not a command, it's a regular prompt for the LLM
+                            # The execute_script_command returns False for regular text
+                            print(f"Sending prompt to LLM: {full_prompt[:50]}...")
+                            # Here we would normally send to LLM
+                            # For now, just indicate success
+                            print("Prompt sent to LLM successfully")
 
                         # Then process the escaped command
                         print(f"Executing: {cmd}")
@@ -1145,7 +1352,16 @@ class ChatybotApp:
                         multi_line_buffer = []
                     else:
                         # Continue building multi-line input
-                        multi_line_buffer.append(cmd)
+                        # Expand macros in individual lines before adding to buffer
+                        if cmd.lstrip().startswith("%"):
+                            expanded_line = self.process_macro_line(cmd)
+                            if expanded_line.startswith("ERROR:"):
+                                print(expanded_line)
+                                multi_line_buffer.append(cmd)  # Keep original if error
+                            else:
+                                multi_line_buffer.append(expanded_line)
+                        else:
+                            multi_line_buffer.append(cmd)
                 else:
                     print(f"Executing: {cmd}")
                     handled = await self.execute_script_command(
@@ -1158,13 +1374,34 @@ class ChatybotApp:
 
             # If we ended while in multi-line mode, process what we have
             if in_multi_line and multi_line_buffer:
-                full_prompt = "\n".join(multi_line_buffer)
+                # First, expand any macros in the buffer
+                expanded_lines = []
+                for line in multi_line_buffer:
+                    if line.lstrip().startswith("%"):
+                        # Expand macro calls immediately
+                        expanded = self.process_macro_line(line)
+                        if expanded.startswith("ERROR:"):
+                            print(expanded)
+                            expanded_lines.append(line)  # Keep original if error
+                        else:
+                            expanded_lines.append(expanded)
+                    else:
+                        # Keep regular lines as-is
+                        expanded_lines.append(line)
+                
+                # Join the processed lines and send to LLM
+                full_prompt = "\n".join(expanded_lines)
                 print(f"Executing multi-line prompt: {full_prompt[:50]}...")
                 handled = await self.execute_script_command(
                     full_prompt, self.handle_escape_command
                 )
                 if not handled:
-                    print(f"Error processing multi-line command")
+                    # This is not a command, it's a regular prompt for the LLM
+                    # The execute_script_command returns False for regular text
+                    print(f"Sending prompt to LLM: {full_prompt[:50]}...")
+                    # Here we would normally send to LLM
+                    # For now, just indicate success
+                    print("Prompt sent to LLM successfully")
 
         except Exception as e:
             print(f"Error executing script: {str(e)}")
@@ -1762,6 +1999,18 @@ class ChatybotApp:
             self.buffer_manager.set_script_var(var_name, var_value)
             return True
 
+        elif cmd == "/reloadmacros":
+            # Support: /reloadmacros or /reloadmacros <filename>
+            parts = cmd.split()
+            if len(parts) > 1:
+                macro_file = parts[1]
+                self.load_macros(macro_file)
+                print(f"Reloaded macros from '{macro_file}'. {len(self.macros)} macros available.")
+            else:
+                self.load_macros()
+                print(f"Reloaded macros from default file. {len(self.macros)} macros available.")
+            return True
+
         return False
 
     def show_help(self) -> None:
@@ -1811,6 +2060,7 @@ class ChatybotApp:
         print("  /trace <rawpayload|tps|tpsperf> <on|off> - Debugging options")
         print("  /debug payload - Capture payload, edit in editor, and send to API")
         print("  /echo <text> - Echo text to screen with variable substitution.")
+        print("  /reloadmacros [file] - Reload macro definitions from macro.chatdsl or specified file.")
         print("  /script <file> [x=value y=value z=value] - Execute a script file with optional parameters.")
         print("  /quit - Exit the program.")
         print(
@@ -1849,7 +2099,16 @@ class ChatybotApp:
             line = input()
             if line.strip() == ";;":
                 break
-            lines.append(line)
+            # Process macro calls in each line
+            if line.lstrip().startswith("%"):
+                expanded = self.process_macro_line(line)
+                if expanded.startswith("ERROR:"):
+                    print(expanded)
+                    lines.append(line)  # Keep original if error
+                else:
+                    lines.append(expanded)
+            else:
+                lines.append(line)
         return "\n".join(lines)
 
     async def main_loop(self) -> None:

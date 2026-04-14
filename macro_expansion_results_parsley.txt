@@ -1,0 +1,70 @@
+# Test Script for Macro Expansion
+# This script exercises all macros defined in macro.chatdsl
+
+# Language expertise macros
+You are an expert in python programming language. Provide detailed technical answers about python concepts, syntax, and best practices.
+Compare java and csharp programming languages. Discuss their similarities, differences, syntax variations, performance characteristics, and typical use cases.
+Provide beginner-friendly learning tips for rust. Include recommended resources, common pitfalls to avoid, and practical exercises.
+
+# Code review and analysis macros
+Act as a senior javascript developer. Review the following code for best practices, potential bugs, performance issues, and suggest improvements.
+Explain how this python code works line by line. Provide insights into the algorithms, data structures, and design patterns used.
+Help me debug this cpp code. The code is supposed to segmentation fault but it's not working correctly. Here's the error message: process image data
+
+# Project and architecture macros
+Design a microservices system architecture. Include components, data flow, API design, database schema, and deployment considerations.
+Create a comprehensive API specification for user_management. Include endpoints, request/response formats, authentication, error handling, and example usage.
+Create a detailed project plan for ecommerce_platform. Include timeline, milestones, resource requirements, risk assessment, and success metrics.
+
+# Documentation macros
+Create professional documentation for api_endpoint. Include overview, installation, usage examples, configuration options, and troubleshooting guide.
+Generate a comprehensive README.md for open_source_library. Include project description, features, installation instructions, usage examples, contribution guidelines, and license information.
+Create a changelog entry for version 2.0.0 with the following changes: Added new authentication module, fixed memory leaks, improved performance
+
+# Learning and tutorial macros
+Create a step-by-step tutorial outline for learning machine_learning. Include prerequisites, learning objectives, hands-on exercises, and assessment criteria.
+Generate a concise cheatsheet for docker. Include common commands, syntax examples, best practices, and useful tips.
+Provide a list of common interview questions for react with detailed answers and code examples where applicable.
+
+# Business and product macros
+Create a comprehensive business plan for saas_product. Include market analysis, target audience, competitive landscape, revenue model, marketing strategy, and financial projections.
+Write a detailed product specification for mobile_app. Include features, user stories, technical requirements, design considerations, and acceptance criteria.
+Conduct a market analysis for cloud_storage. Include industry trends, target market size, customer segments, competitive analysis, and market entry strategy.
+
+# Creative writing macros
+Generate creative story ideas for the science_fiction genre. Include plot summaries, character descriptions, setting details, and potential twists.
+Create a detailed character profile for John_Smith, who is a detective. Include physical appearance, personality traits, background story, motivations, and character arc.
+Develop a comprehensive worldbuilding guide for a fantasy_kingdom setting. Include geography, history, cultures, political systems, magic/technology rules, and major conflicts.
+
+# General purpose macros
+Act as an expert in quantum_computing. Provide detailed, accurate, and insightful information about quantum_computing with practical examples and real-world applications.
+Summarize this research_paper in a concise yet comprehensive manner. Highlight key points, main arguments, and important details while maintaining the original meaning.
+Analyze the pros and cons of remote_work. Provide a balanced assessment with supporting evidence, real-world examples, and potential trade-offs to consider.
+
+# Technical writing macros
+Analyze this null_pointer_exception error. Explain the root cause, common scenarios where it occurs, debugging techniques, and step-by-step solutions.
+Provide performance optimization techniques for database_queries. Include profiling methods, common bottlenecks, optimization strategies, and benchmarking approaches.
+Conduct a security analysis for web_application. Identify potential vulnerabilities, threat vectors, mitigation strategies, and best practices for secure implementation.
+
+# Test with multiline command
+You are an expert in python programming language. Provide detailed technical answers about python concepts, syntax, and best practices.
+Design a microservices system architecture. Include components, data flow, API design, database schema, and deployment considerations.
+Create a comprehensive business plan for saas_product. Include market analysis, target audience, competitive landscape, revenue model, marketing strategy, and financial projections.
+
+# Test variable substitution with macros
+# SET lang = javascript
+You are an expert in javascript programming language. Provide detailed technical answers about javascript concepts, syntax, and best practices.
+
+# SET tech = kubernetes
+Act as an expert in kubernetes. Provide detailed, accurate, and insightful information about kubernetes with practical examples and real-world applications.
+
+# Test multiple macros in sequence
+Compare python and java programming languages. Discuss their similarities, differences, syntax variations, performance characteristics, and typical use cases.
+Act as a senior javascript developer. Review the following code for best practices, potential bugs, performance issues, and suggest improvements.
+Provide performance optimization techniques for database. Include profiling methods, common bottlenecks, optimization strategies, and benchmarking approaches.
+
+# Test macros with special characters
+Create a changelog entry for version 1.5.2 with the following changes: Fixed bug #123: $100 discount not applied, Added 20% performance improvement
+Analyze the pros and cons of work-from-home. Provide a balanced assessment with supporting evidence, real-world examples, and potential trade-offs to consider.
+
+# End of test script
