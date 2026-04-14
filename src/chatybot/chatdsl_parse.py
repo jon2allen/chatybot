@@ -172,7 +172,7 @@ class TParser:
         "setdb", "dblist", "searchdb", "dblog", "dbprint", "loadvar",
         "savevar", "setvar", "notemode", "mem", "dump", "trace", "thinking",
         "filebank1", "filebank2", "filebank3", "filebank4", "filebank5",
-        "multiline", "echo", "thoughtstyle"
+        "multiline", "echo", "thoughtstyle", "def"
     }
 
     def __init__(self, tokens: List[Token], verbose: bool = False):
@@ -241,6 +241,12 @@ class TParser:
         if self.match(TokenType.IDENTIFIER, "set"):
             return self.parse_set()
         
+        if self.match(TokenType.IDENTIFIER, "def"):
+            return self.parse_macro_def()
+        
+        if self.match(TokenType.SYMBOL, "%"):
+            return self.parse_macro_call()
+        
         if self.match(TokenType.IDENTIFIER, "if"):
             return self.parse_if()
         
@@ -248,6 +254,53 @@ class TParser:
             return self.parse_wait()
             
         return self.parse_command_or_chat()
+
+    def parse_macro_def(self) -> Dict[str, Any]:
+        self.expect(TokenType.IDENTIFIER, "def")
+        self.expect(TokenType.WHITESPACE)
+        name = self.expect(TokenType.IDENTIFIER).raw
+        self.expect(TokenType.SYMBOL, "(")
+        params = []
+        if not self.match(TokenType.SYMBOL, ")"):
+            params.append(self.expect(TokenType.IDENTIFIER).raw)
+            while self.match(TokenType.SYMBOL, ","):
+                self.advance()
+                self.parse_opt_ws()
+                params.append(self.expect(TokenType.IDENTIFIER).raw)
+        self.expect(TokenType.SYMBOL, ")")
+        self.parse_opt_ws()
+        self.expect(TokenType.SYMBOL, "=")
+        self.parse_opt_ws()
+        template = self.expect(TokenType.STRING).value
+        return {"type": "macro_definition", "name": name, "params": params, "template": template}
+
+    def parse_macro_call(self) -> Dict[str, Any]:
+        self.expect(TokenType.SYMBOL, "%")
+        name = self.expect(TokenType.IDENTIFIER).raw
+        self.expect(TokenType.SYMBOL, "(")
+        args = []
+        if not self.match(TokenType.SYMBOL, ")"):
+            args.append(self.parse_macro_arg())
+            while self.match(TokenType.SYMBOL, ","):
+                self.advance()
+                self.parse_opt_ws()
+                args.append(self.parse_macro_arg())
+        self.expect(TokenType.SYMBOL, ")")
+        return {"type": "macro_call", "name": name, "args": args}
+
+    def parse_macro_arg(self) -> Any:
+        if self.match(TokenType.SYMBOL, "${"):
+            return self.parse_var_ref()
+        if self.match(TokenType.STRING):
+            tok = self.expect(TokenType.STRING)
+            return {"type": "string", "val": tok.raw}
+        if self.match(TokenType.NUMBER):
+            tok = self.expect(TokenType.NUMBER)
+            return {"type": "number", "val": tok.value}
+        if self.match(TokenType.IDENTIFIER):
+            tok = self.expect(TokenType.IDENTIFIER)
+            return {"type": "literal", "val": tok.raw}
+        raise ParseError(f"Unexpected token in macro argument: {self.current.type.value}", self.current.line, self.current.column)
 
     def parse_set(self) -> Dict[str, Any]:
         self.expect(TokenType.IDENTIFIER, "set")

@@ -66,20 +66,28 @@ chatybot is an interactive command-line tool that enables seamless communication
 ## **Installation**
 
 ### **Prerequisites**
-- Python 3.8+
+- Python 3.11+
 - `pip` package manager
+- `parsley` library
 - API keys for your preferred LLMs (OpenAI, Anthropic, etc.)
 
 ### **Installation Steps**
+
+#### **From PyPI**
+```bash
+pip install chatybot
+```
+
+#### **From Source**
 ```bash
 # Clone the repository
 git clone https://github.com/jon2allen/chatybot.git
 cd chatybot
 
-# Install dependencies
-pip install -r requirements.txt
+# Install in editable mode
+pip install -e .
 
-nano chat_config.toml  # Add your API keys and model configurations
+nano src/chatybot/chat_config.toml  # Add your API keys and model configurations
 ```
 
 ### **Troubleshooting**
@@ -280,6 +288,22 @@ if ${debug} then /temp 0.1
 if not ${debug} then /temp 0.7
 ```
 
+### **Macro System (New!)**
+Chatybot now features a powerful macro system based on Parsley. Macros allow you to define reusable prompt templates with parameters.
+
+**Defining Macros** (in `src/chatybot/macro.chatdsl`):
+```dsl
+def expert(topic) = "You are an expert in {topic}. Provide detailed information about {topic}."
+def compare(a, b) = "Compare {a} and {b} and discuss their differences."
+```
+
+**Using Macros**:
+```bash
+%expert(Python)
+%compare("GPT-4", "Claude 3")
+```
+Macros can be called from the interactive prompt or within scripts. Inline variable substitution is supported in macro arguments: `%expert(${current_topic})`.
+
 ---
 
 ## **Test Cases**
@@ -335,7 +359,8 @@ chatybot/
 │   ├── main.py          # Primary application entry point
 │   ├── chatydb.py       # TinyDB database manager module
 │   ├── extract_code.py  # Utilities for isolating code blocks
-│   └── chat_config.toml # Default/Fallback LLM configuration
+│   ├── chat_config.toml # Default/Fallback LLM configuration
+│   └── macro.chatdsl    # Default macro definitions
 ├── dsl_test/            # Script examples and testing
 ├── ~/.config/chatybot/  # Active user configuration directory (Auto-generated)
 └── ~/.local/share/chatybot/ # Active database and history storage (Auto-generated)
@@ -424,6 +449,15 @@ chat --> Create a blog post outline about ${topic}
 ```
 
 ### Change log
+
+Apr 14th, 2026 (v0.3.0)
+--------------
+- **Parsley Macro System**: Integrated a robust macro expansion system using Parsley grammars.
+- **Macro Definitions**: Supports `def name(params) = "template"` syntax with multi-parameter support.
+- **Macro Invocations**: Use `%name(args)` to expand templates in prompts and scripts.
+- **Variable Integration**: Macro arguments support `${variable}` substitution.
+- **Packaging**: Relocated `macro.chatdsl` to the package source and updated `pyproject.toml` to include it in distribution.
+- **Dependencies**: Added `parsley` as a core dependency.
 
 Apr 5th, 2026 (v0.2.9)
 --------------
