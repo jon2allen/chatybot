@@ -8,16 +8,21 @@
 
 <escape-command> ::= "/" <escape-command-name> [ <whitespace> <escape-command-args> ]
 
-<escape-command-name> ::= "help" | "prompt" | "file" | "showfile" | "clearfile" | 
+<escape_command-name> ::= "help" | "prompt" | "file" | "showfile" | "clearfile" | 
                            "filebank" | "filebank1" | "filebank2" | "filebank3" | 
-                           "filebank4" | "filebank5" | "model" | "listmodels" | 
+                           "filebank4" | "filebank5" | "imagebank" | "imagebank1" | 
+                           "imagebank2" | "imagebank3" | "imagebank4" | "imagebank5" | 
+                           "model" | "listmodels" | 
                            "logging" | "save" | "codeonly" | "codeoff" | "multiline" | 
                            "system" | "temp" | "maxtokens" | "top_p" | "top_k" | 
                            "freq_penalty" | "pres_penalty" | "reasoning" | "seed" | 
                            "stream" | "script" | "quit" | "setdb" | "dblist" | 
                            "searchdb" | "dblog" | "dbprint" | "loadvar" | "savevar" | 
                            "setvar" | "notemode" | "mem" | "dump" | "trace" | 
-                           "thinking" | "echo"
+                           "thinking" | "echo" | 
+                           # Phase 2: Image generation
+                           "imagine" | "imagesize" | "imagequality" | "saveimage" | 
+                           "imagedir" | "listimages" | "showimage" | "loadimage"
 
 <script-command> ::= <set-command> | <wait-command> | <if-command>
 
@@ -39,11 +44,13 @@
 
 <multiline-block> ::= "/multiline" <newline> { <text-content> <newline> } ";;" <newline> "/multiline"
 
-<text-content> ::= { <any-character> | <variable-reference> | <filebank-reference> }
+<text-content> ::= { <any-character> | <variable-reference> | <filebank-reference> | <imagebank-reference> }
 
 <variable-reference> ::= "${" <variable-name> "}"
 
 <filebank-reference> ::= "{" "filebank" <digit_1_5> "}"
+
+<imagebank-reference> ::= "{" "imagebank" <digit_1_5> "}"
 
 <variable-name> ::= <identifier>
 

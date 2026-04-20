@@ -36,6 +36,8 @@ except ImportError:
 from .config_manager import ConfigManager
 from .logging_manager import LoggingManager
 from .buffer_manager import BufferManager
+from .image_generator import ImageGenerator
+from .image_manager import ImageManager
 from .extract_code import process_file
 from .chatydb import (
     set_db,
@@ -61,6 +63,13 @@ class ChatybotApp:
         self.config_manager = ConfigManager()
         self.logging_manager = LoggingManager()
         self.buffer_manager = BufferManager()
+        self.image_generator = ImageGenerator()
+        self.image_manager = ImageManager()
+
+        # Image generation settings
+        self.image_size = "1024x1024"
+        self.image_quality = "standard"
+        self.image_debug_mode = False
 
         # Chat state
         self.chat_history: List[Tuple[str, str]] = []
@@ -111,13 +120,16 @@ class ChatybotApp:
                  words=[
                     "help", "prompt", "file", "showfile", "clearfile",
                     "filebank", "filebank1", "filebank2", "filebank3", "filebank4",
-                    "filebank5", "model", "listmodels", "logging", "save",
+                    "filebank5", "imagebank", "imagebank1", "imagebank2", "imagebank3",
+                    "imagebank4", "imagebank5", "model", "listmodels", "logging", "save",
                     "codeonly", "codeoff", "multiline", "system", "temp", "maxtokens",
                     "top_p", "top_k", "freq_penalty", "pres_penalty", "reasoning", "seed",
                     "stream", "script", "quit", "setdb", "dblist",
                     "searchdb", "dblog", "dbprint", "loadvar", "savevar",
                     "setvar", "notemode", "mem", "dump", "trace",
-                    "thinking", "echo", "def", "reloadmacros"
+                    "thinking", "echo", "def", "reloadmacros",
+                    "imagine", "imagesize", "imagequality", "saveimage", "imagedir",
+                    "listimages", "showimage", "loadimage"
                     ]
 
                  )
@@ -432,8 +444,8 @@ class ChatybotApp:
         if self.matcher.matches(prompt[:12]):
            print( "Error command verb at beginning:  " + prompt[:9] + " - use escape / sequence")
            return ""
-        # Replace placeholders in the prompt
-        full_prompt = self.buffer_manager.replace_placeholders(prompt)
+        # Replace placeholders in the prompt - returns (text, image_list)
+        full_prompt, image_list = self.buffer_manager.replace_placeholders(prompt)
 
         # Prepare the prompt with file buffer and prompt buffer if available
         if self.buffer_manager.prompt_buffer:
@@ -449,7 +461,13 @@ class ChatybotApp:
             )
 
         # Prepare messages for chat completion
-        messages = [{"role": "user", "content": full_prompt}]
+        # For multimodal (vision) models, use content array with text + images
+        if image_list:
+            content_parts = [{"type": "text", "text": full_prompt}]
+            content_parts.extend(image_list)
+            messages = [{"role": "user", "content": content_parts}]
+        else:
+            messages = [{"role": "user", "content": full_prompt}]
 
         is_nvidia = (
             "nvidia" in model_config.get("base_url", "").lower()
@@ -1459,10 +1477,13 @@ class ChatybotApp:
                 elif subcmd == "tpsperf":
                     self.trace_tps_perf = is_on
                     print(f"Trace tpsperf set to {is_on}")
+                elif subcmd == "imagedbg":
+                    self.image_debug_mode = is_on
+                    print(f"Trace imagedbg set to {is_on}")
                 else:
-                    print("Unknown /trace subcommand. Use rawpayload, tps, or tpsperf.")
+                    print("Unknown /trace subcommand. Use rawpayload, tps, tpsperf, or imagedbg.")
             else:
-                print("Usage: /trace <rawpayload|tps|tpsperf> <on|off>")
+                print("Usage: /trace <rawpayload|tps|tpsperf|imagedbg> <on|off>")
             return True
 
         elif cmd == "/debug":
@@ -1545,6 +1566,39 @@ class ChatybotApp:
                     print(f"Error reading file: {str(e)}")
                 return True
 
+        elif cmd.startswith("/imagebank"):
+            # Handle imagebank commands
+            bank_num = cmd[10:]  # Extract the number after /imagebank
+            if not bank_num.isdigit() or int(bank_num) < 1 or int(bank_num) > 5:
+                print(
+                    "Invalid imagebank number. Please use /imagebank1 through /imagebank5."
+                )
+                return True
+
+            bank_num_int = int(bank_num)
+
+            if len(parts) < 2:
+                print(f"Usage: {cmd} <file> or {cmd} clear or {cmd} show")
+                return True
+
+            subcommand = parts[1].lower()
+
+            if subcommand == "clear":
+                self.buffer_manager.clear_image_bank(bank_num_int)
+                return True
+            elif subcommand == "show":
+                show_all = len(parts) > 2 and parts[2].lower() == "all"
+                self.buffer_manager.show_image_bank(bank_num_int, show_all)
+                return True
+            else:
+                # Assume it's a file path
+                file_path = command.split(maxsplit=1)[1].strip(" \"'")
+                try:
+                    self.buffer_manager.load_image_to_bank(bank_num_int, file_path)
+                except Exception as e:
+                    print(f"Error reading image file: {str(e)}")
+                return True
+
         elif cmd == "/file":
             if len(parts) < 2:
                 print("Usage: /file <path>")
@@ -1555,6 +1609,316 @@ class ChatybotApp:
                 self.buffer_manager.load_file_to_buffer(file_path)
             except Exception as e:
                 print(f"Error reading file: {str(e)}")
+            return True
+
+        # ================ Phase 2: Image Generation Commands ================
+
+        elif cmd == "/imagine":
+            """Generate image from text prompt."""
+            if len(parts) < 2:
+                print("Usage: /imagine <prompt>")
+                print(f"  Current settings: size={self.image_size}, quality={self.image_quality}")
+                print(f"  Current model: {self.config_manager.active_model_alias}")
+                return True
+            
+            prompt = command.split(maxsplit=1)[1].strip()
+            
+            # Setup debug output if imagedbg trace is enabled
+            debug_file = None
+            debug_fd = None
+            if self.image_debug_mode:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                debug_file = os.path.abspath(f"imagine_debug_{timestamp}.txt")
+                try:
+                    debug_fd = open(debug_file, "w")
+                    print(f"[IMAGE_DEBUG] Started debug logging to {debug_file}")
+                    debug_fd.write(f"[IMAGE_DEBUG] Started debug logging to {debug_file}\n")
+                    debug_fd.write(f"[IMAGE_DEBUG] Prompt: {prompt}\n")
+                    debug_fd.flush()
+                except Exception as e:
+                    print(f"[IMAGE_DEBUG] ERROR: Failed to open debug file: {e}")
+                    debug_file = None
+                    debug_fd = None
+            
+            try:
+                # Get current model config
+                model_alias = self.config_manager.active_model_alias
+                if debug_file:
+                    print(f"[IMAGE_DEBUG] Model alias: {model_alias}")
+                    debug_fd.write(f"[IMAGE_DEBUG] Model alias: {model_alias}\n")
+                try:
+                    model_config = self.config_manager.get_model_config(model_alias)
+                except ValueError as e:
+                    print(f"Error: {str(e)}")
+                    return True
+                
+                if debug_file:
+                    print(f"[IMAGE_DEBUG] Vendor: {model_config.get('vendor')}")
+                    print(f"[IMAGE_DEBUG] Model: {model_config.get('name')}")
+                    debug_fd.write(f"[IMAGE_DEBUG] Vendor: {model_config.get('vendor')}\n")
+                    debug_fd.write(f"[IMAGE_DEBUG] Model: {model_config.get('name')}\n")
+                    debug_fd.flush()
+                
+                # Check if model supports image generation
+                if not model_config.get("image_generation", False):
+                    image_models = self.config_manager.list_image_capable_models()
+                    if image_models:
+                        print(f"Error: Current model '{model_alias}' does not support image generation.")
+                        print(f"  Image-capable models: {', '.join(image_models)}")
+                        print(f"  Switch to one of these first, e.g.: /model {image_models[0]}")
+                    else:
+                        print(f"Error: Current model '{model_alias}' does not support image generation.")
+                        print("  No image-capable models configured in chat_config.toml")
+                    return True
+                
+                try:
+                    # Get vendor info from model config
+                    vendor = model_config.get("vendor", "openai")
+                    model_name = model_config.get("name", model_alias)
+                    base_url = model_config.get("base_url", None)
+                    api_key_env = model_config.get("api_key", "")
+                    api_key = os.environ.get(api_key_env) if api_key_env else None
+                    image_endpoint = model_config.get("image_endpoint", "/images/generations")
+                    modalities = model_config.get("image_modalities", ["image", "text"])
+                    
+                    if debug_file:
+                        print(f"[IMAGE_DEBUG] Starting image generation")
+                        print(f"[IMAGE_DEBUG] Vendor: {vendor}, Model: {model_name}")
+                        print(f"[IMAGE_DEBUG] Size: {self.image_size}, Quality: {self.image_quality}")
+                        print(f"[IMAGE_DEBUG] Modalities: {modalities}")
+                        debug_fd.write(f"[IMAGE_DEBUG] Starting image generation\n")
+                        debug_fd.write(f"[IMAGE_DEBUG] Vendor: {vendor}, Model: {model_name}\n")
+                        debug_fd.write(f"[IMAGE_DEBUG] Size: {self.image_size}, Quality: {self.image_quality}\n")
+                        debug_fd.write(f"[IMAGE_DEBUG] Modalities: {modalities}\n")
+                        debug_fd.flush()
+                    
+                    file_path, image_data = await self.image_generator.generate_image(
+                        prompt,
+                        vendor=vendor,
+                        model_name=model_name,
+                        size=self.image_size,
+                        quality=self.image_quality,
+                        endpoint=image_endpoint,
+                        api_key=api_key,
+                        base_url=base_url,
+                        modalities=modalities,
+                    )
+                    self.image_generator.last_generated_image = (file_path, image_data)
+                    
+                    if debug_file:
+                        print(f"[IMAGE_DEBUG] Image generated successfully")
+                        print(f"[IMAGE_DEBUG] File path: {file_path}")
+                        print(f"[IMAGE_DEBUG] Image data length: {len(image_data)} bytes")
+                        debug_fd.write(f"[IMAGE_DEBUG] Image generated successfully\n")
+                        debug_fd.write(f"[IMAGE_DEBUG] File path: {file_path}\n")
+                        debug_fd.write(f"[IMAGE_DEBUG] Image data length: {len(image_data)} bytes\n")
+                        debug_fd.flush()
+                    
+                    print(f"Image generated and saved to: {file_path}")
+                    
+                except Exception as e:
+                    if debug_file:
+                        import traceback
+                        print(f"[IMAGE_DEBUG] ERROR: {str(e)}")
+                        debug_fd.write(f"[IMAGE_DEBUG] ERROR: {str(e)}\n")
+                        traceback.print_exc()
+                        debug_fd.write(f"[IMAGE_DEBUG] Traceback:\n")
+                        traceback.print_exc(file=debug_fd)
+                        debug_fd.flush()
+                    print(f"Error generating image: {str(e)}")
+                finally:
+                    if debug_fd:
+                        debug_fd.close()
+                        print(f"[IMAGE_DEBUG] Debug output saved to {os.path.abspath(debug_file)}")
+                        
+            except Exception as e:
+                if debug_fd:
+                    debug_fd.close()
+                if debug_file:
+                    print(f"[IMAGE_DEBUG] Debug output saved to {os.path.abspath(debug_file)}")
+                print(f"Error generating image: {str(e)}")
+            return True
+
+        elif cmd == "/saveimage":
+            """Save the last generated image to a custom path."""
+            file_path = None
+            image_data = None
+            
+            # First try /imagine generated image
+            if hasattr(self.image_generator, 'last_generated_image') and self.image_generator.last_generated_image is not None:
+                file_path, image_data = self.image_generator.last_generated_image
+            # Then try to extract from last chat response
+            elif self.chat_history:
+                import json
+                last_response = self.chat_history[-1][1]
+                try:
+                    # Try to parse as JSON to find images
+                    response_data = json.loads(last_response)
+                    if response_data.get("choices"):
+                        for choice in response_data["choices"]:
+                            message = choice.get("message", {})
+                            if message.get("images"):
+                                # Get first image
+                                first_image = message["images"][0]
+                                if first_image.get("image_url", {}).get("url"):
+                                    image_url = first_image["image_url"]["url"]
+                                    if image_url.startswith("data:image"):
+                                        # Extract base64 data
+                                        image_data = image_url.split(",", 1)[1]
+                                        break
+                except (json.JSONDecodeError, KeyError, IndexError):
+                    pass
+                
+                if image_data is None:
+                    print("No image found in last chat response or /imagine output. Use /imagine to generate an image first.")
+                    return True
+            else:
+                print("No generated image to save. Use /imagine first.")
+                return True
+            
+            if len(parts) < 2:
+                if file_path:
+                    print(f"Image already saved to: {file_path}")
+                else:
+                    # For chat response images, we need to generate a filename
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    file_path = os.path.join("~", f"chat_response_image_{timestamp}.png")
+                    print(f"Image extracted from chat response. Suggested save path: {file_path}")
+                    print("Please specify a path: /saveimage <filename.png>")
+                return True
+            else:
+                custom_path = command.split(maxsplit=1)[1].strip(" \"'")
+                try:
+                    import base64
+                    # Expand ~ in path
+                    custom_path = os.path.expanduser(custom_path)
+                    os.makedirs(os.path.dirname(custom_path), exist_ok=True) if os.path.dirname(custom_path) else None
+                    image_bytes = base64.b64decode(image_data)
+                    with open(custom_path, "wb") as f:
+                        f.write(image_bytes)
+                    print(f"Image saved to: {custom_path}")
+                    # Update last_generated_image so future /saveimage without args works
+                    self.image_generator.last_generated_image = (custom_path, image_data)
+                except Exception as e:
+                    print(f"Error saving image: {str(e)}")
+            return True
+
+        elif cmd == "/imagesize":
+            """Set image resolution."""
+            if len(parts) < 2:
+                print(f"Current image size: {self.image_size}")
+                return True
+            self.image_size = parts[1]
+            print(f"Image size set to: {self.image_size}")
+            return True
+
+        elif cmd == "/imagequality":
+            """Set image quality level."""
+            if len(parts) < 2:
+                print(f"Current image quality: {self.image_quality}")
+                return True
+            self.image_quality = parts[1]
+            print(f"Image quality set to: {self.image_quality}")
+            return True
+
+        elif cmd == "/imagedir":
+            """Set or get the default image directory."""
+            if len(parts) < 2:
+                print(f"Current image directory: {self.image_generator.get_image_directory()}")
+            else:
+                new_dir = command.split(maxsplit=1)[1].strip(" \"'")
+                self.image_generator.set_directory(new_dir)
+                self.image_manager.set_directory(new_dir)
+                print(f"Image directory set to: {new_dir}")
+            return True
+
+        elif cmd == "/listimages":
+            """List all saved images."""
+            images = self.image_generator.list_images()
+            if not images:
+                print("No images found.")
+                return True
+            
+            for date, date_images in images.items():
+                print(f"\n{date}:")
+                for filename, info in date_images.items():
+                    prompt = info.get("prompt", "(external)")
+                    if len(prompt) > 60:
+                        prompt = prompt[:57] + "..."
+                    model = info.get("model", "unknown")
+                    vendor = info.get("vendor", "unknown")
+                    print(f"  {filename:25} | {vendor:10} | {model:20} | {prompt}")
+            return True
+
+        elif cmd == "/showimage":
+            """Show info about a specific image."""
+            if len(parts) < 2:
+                print("Usage: /showimage <date>/<filename> or /showimage <filename>")
+                return True
+            
+            image_path = command.split(maxsplit=1)[1].strip(" \"'")
+            
+            # Parse date/filename
+            if "/" in image_path:
+                date, filename = image_path.split("/", 1)
+            else:
+                # Search for image across all dates
+                all_images = self.image_generator.list_images()
+                found = None
+                for date, date_images in all_images.items():
+                    if image_path in date_images:
+                        found = (date, image_path)
+                        break
+                if not found:
+                    print(f"Image not found: {image_path}")
+                    return True
+                date, filename = found
+            
+            info = self.image_generator.get_image_info(date, filename)
+            if not info:
+                print(f"Image not found: {image_path}")
+                return True
+            
+            print(f"\nImage: {filename}")
+            print(f"  Date: {date}")
+            print(f"  Prompt: {info.get('prompt', 'N/A')}")
+            print(f"  Vendor: {info.get('vendor', 'N/A')}")
+            print(f"  Model: {info.get('model', 'N/A')}")
+            print(f"  Timestamp: {info.get('timestamp', 'N/A')}")
+            if info.get("size"):
+                print(f"  Size: {info.get('size')}")
+            if info.get("quality"):
+                print(f"  Quality: {info.get('quality')}")
+            
+            file_path = os.path.join(self.image_generator.image_dir, date, filename)
+            if os.path.exists(file_path):
+                file_size_kb = os.path.getsize(file_path) / 1024
+                print(f"  File size: {file_size_kb:.2f} KB")
+            return True
+
+        elif cmd.startswith("/loadimage"):
+            """Load an image file into an image bank."""
+            if len(parts) < 3:
+                print("Usage: /loadimage <path> <imagebank1-5>")
+                return True
+            
+            file_path = parts[1]
+            bank_name = parts[2]
+            
+            # Extract bank number
+            if bank_name.startswith("imagebank") and bank_name[9:].isdigit():
+                bank_num = int(bank_name[9:])
+            else:
+                print("Invalid imagebank. Use imagebank1 through imagebank5.")
+                return True
+            
+            try:
+                mime_type, base64_data = self.image_manager.load_image_data(file_path)
+                data_url = f"data:{mime_type};base64,{base64_data}"
+                self.buffer_manager.image_banks[f"imagebank{bank_num}"] = data_url
+                print(f"Image '{file_path}' loaded into {bank_name}.")
+            except Exception as e:
+                print(f"Error loading image: {str(e)}")
             return True
 
         elif cmd == "/clearfile":
@@ -2001,6 +2365,11 @@ class ChatybotApp:
 
         elif cmd == "/mem":
             self.buffer_manager.show_memory_usage(SEARCHBUFFER)
+            # Also show last generated image memory usage
+            if hasattr(self.image_generator, 'last_generated_image') and self.image_generator.last_generated_image is not None:
+                file_path, image_data = self.image_generator.last_generated_image
+                image_size_kb = len(image_data.encode('utf-8')) / 1024
+                print(f"{'LAST_IMAGE':<20} {image_size_kb:>10.2f}")
             return True
 
         elif cmd == "/dump":
@@ -2049,6 +2418,14 @@ class ChatybotApp:
         print(
             "  /filebank{1..5} show [all] - Show the first 100 characters of the filebank or all if 'all' is specified."
         )
+        print("  /imagebank{1..5} <file> - Load an image file into imagebank1 through imagebank5.")
+        print("  /imagebank{1..5} clear - Clear the specified imagebank.")
+        print("  /imagebank{1..5} show - Show info about the imagebank.")
+        print("  /imagine <prompt> - Generate image from text (requires vision model)")
+        print("  /imagesize <WxH> - Set image resolution (default: 1024x1024)")
+        print("  /imagequality <q> - Set quality: standard, high")
+        print("  /saveimage [path] - Save last generated image to custom path")
+        print("  /imagedir [path] - Set/get default image save directory")
         print("  /model [alias] - Switch to a different model or show current model.")
         print("  /listmodels - List available models from toml.")
         print("  /logging <start|end> - Start or stop logging.")
@@ -2075,7 +2452,7 @@ class ChatybotApp:
         )
         print("  /seed <value> - Set seed (int, 'time', or 'random <min>,<max>').")
         print("  /stream - Toggle streaming responses.")
-        print("  /trace <rawpayload|tps|tpsperf> <on|off> - Debugging options")
+        print("  /trace <rawpayload|tps|tpsperf|imagedbg> <on|off> - Debugging options")
         print("  /debug payload - Capture payload, edit in editor, and send to API")
         print("  /echo <text> - Echo text to screen with variable substitution.")
         print("  /reloadmacros [file] - Reload macro definitions from macro.chatdsl or specified file.")

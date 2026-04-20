@@ -110,23 +110,36 @@ class TestBufferManager:
         assert manager.script_vars["test_var"] == "test_value"
     
     def test_replace_placeholders(self, manager, temp_file):
-        """Test replacing placeholders in prompt"""
+        """Test replacing placeholders in prompt - returns (text, image_list)"""
         manager.load_file_to_bank(1, temp_file)
         manager.set_script_var("test_var", "variable_value")
         
         prompt = "Content: {filebank1}, Variable: ${test_var}"
-        result = manager.replace_placeholders(prompt)
+        text, images = manager.replace_placeholders(prompt)
         
-        assert "Test content for buffer manager" in result
-        assert "variable_value" in result
-        assert "{filebank1}" not in result
-        assert "${test_var}" not in result
+        assert "Test content for buffer manager" in text
+        assert "variable_value" in text
+        assert "{filebank1}" not in text
+        assert "${test_var}" not in text
+        assert images == []  # No images in this test
     
     def test_replace_placeholders_no_placeholders(self, manager):
-        """Test replacing placeholders when none exist"""
+        """Test replacing placeholders when none exist - returns (text, [])"""
         prompt = "Regular prompt without placeholders"
-        result = manager.replace_placeholders(prompt)
-        assert result == prompt
+        text, images = manager.replace_placeholders(prompt)
+        assert text == prompt
+        assert images == []
+    
+    def test_replace_placeholders_legacy(self, manager, temp_file):
+        """Test legacy method returns string only"""
+        manager.load_file_to_bank(1, temp_file)
+        
+        prompt = "Content: {filebank1}"
+        result = manager.replace_placeholders_legacy(prompt)
+        
+        assert isinstance(result, str)
+        assert "Test content for buffer manager" in result
+        assert "{filebank1}" not in result
     
     def test_show_memory_usage(self, manager, temp_file, capsys):
         """Test showing memory usage"""
@@ -188,6 +201,150 @@ class TestBufferManager:
         captured = capsys.readouterr()
         assert "SEARCH_BUFFER:" in captured.out
         assert "test content" in captured.out
+
+
+class TestImageBanks:
+    """Test suite for Image Bank functionality"""
+    
+    @pytest.fixture
+    def manager(self):
+        """Create a fresh BufferManager instance for each test"""
+        return BufferManager()
+    
+    @pytest.fixture
+    def jpeg_image(self):
+        """Path to a sample JPEG image"""
+        return "test_images/test1.jpg"
+    
+    @pytest.fixture
+    def png_image(self):
+        """Path to a sample PNG image"""
+        return "test_images/test5.png"
+    
+    def test_image_banks_initialization(self, manager):
+        """Test that image banks are initialized"""
+        assert len(manager.image_banks) == 5
+        assert all(name == f"imagebank{i}" for i, name in enumerate(manager.image_banks, 1))
+        assert all(content == "" for content in manager.image_banks.values())
+    
+    def test_detect_image_format_jpg(self, manager):
+        """Test JPEG format detection"""
+        assert manager.detect_image_format("test.jpg") == "image/jpeg"
+        assert manager.detect_image_format("test.JPG") == "image/jpeg"
+    
+    def test_detect_image_format_jpeg(self, manager):
+        """Test JPEG format detection with .jpeg extension"""
+        assert manager.detect_image_format("test.jpeg") == "image/jpeg"
+    
+    def test_detect_image_format_png(self, manager):
+        """Test PNG format detection"""
+        assert manager.detect_image_format("test.png") == "image/png"
+        assert manager.detect_image_format("test.PNG") == "image/png"
+    
+    def test_detect_image_format_invalid(self, manager):
+        """Test invalid format raises error"""
+        with pytest.raises(ValueError) as exc_info:
+            manager.detect_image_format("test.gif")
+        assert "Unsupported image format" in str(exc_info.value)
+    
+    def test_load_image_to_bank(self, manager, jpeg_image):
+        """Test loading image to bank"""
+        manager.load_image_to_bank(1, jpeg_image)
+        assert manager.image_banks["imagebank1"].startswith("data:image/jpeg;base64,")
+    
+    def test_load_image_to_bank_invalid_bank(self, manager, jpeg_image):
+        """Test loading image with invalid bank number"""
+        with pytest.raises(ValueError) as exc_info:
+            manager.load_image_to_bank(0, jpeg_image)
+        assert "Invalid imagebank number" in str(exc_info.value)
+        
+        with pytest.raises(ValueError) as exc_info:
+            manager.load_image_to_bank(6, jpeg_image)
+        assert "Invalid imagebank number" in str(exc_info.value)
+    
+    def test_load_png_image(self, manager, png_image):
+        """Test loading PNG image"""
+        manager.load_image_to_bank(1, png_image)
+        assert manager.image_banks["imagebank1"].startswith("data:image/png;base64,")
+    
+    def test_clear_image_bank(self, manager, jpeg_image):
+        """Test clearing image bank"""
+        manager.load_image_to_bank(1, jpeg_image)
+        assert manager.image_banks["imagebank1"] != ""
+        manager.clear_image_bank(1)
+        assert manager.image_banks["imagebank1"] == ""
+    
+    def test_clear_image_bank_invalid(self, manager):
+        """Test clearing invalid image bank"""
+        with pytest.raises(ValueError) as exc_info:
+            manager.clear_image_bank(0)
+        assert "Invalid imagebank number" in str(exc_info.value)
+    
+    def test_show_image_bank_empty(self, manager, capsys):
+        """Test showing empty image bank"""
+        manager.show_image_bank(1)
+        captured = capsys.readouterr()
+        assert "imagebank1 is empty" in captured.out
+    
+    def test_show_image_bank_with_image(self, manager, jpeg_image, capsys):
+        """Test showing image bank with loaded image"""
+        manager.load_image_to_bank(1, jpeg_image)
+        manager.show_image_bank(1)
+        captured = capsys.readouterr()
+        assert "imagebank1:" in captured.out
+        assert "image/jpeg" in captured.out
+        assert "KB" in captured.out
+    
+    def test_replace_placeholders_with_images(self, manager, jpeg_image, png_image):
+        """Test placeholder replacement with image banks"""
+        manager.load_image_to_bank(1, jpeg_image)
+        manager.load_image_to_bank(2, png_image)
+        
+        prompt = "Describe {imagebank1} and {imagebank2}"
+        text, images = manager.replace_placeholders(prompt)
+        
+        assert "Describe" in text
+        assert "{imagebank1}" not in text
+        assert "{imagebank2}" not in text
+        assert len(images) == 2
+        assert images[0]["type"] == "image_url"
+        assert images[1]["type"] == "image_url"
+        assert "image/jpeg" in images[0]["image_url"]["url"]
+        assert "image/png" in images[1]["image_url"]["url"]
+    
+    def test_replace_placeholders_include_images_false(self, manager, jpeg_image):
+        """Test placeholder replacement with include_images=False"""
+        manager.load_image_to_bank(1, jpeg_image)
+        
+        prompt = "Describe {imagebank1}"
+        text, images = manager.replace_placeholders(prompt, include_images=False)
+        
+        assert "Describe {imagebank1}" == text
+        assert images == []
+    
+    def test_memory_usage_with_image_banks(self, manager, jpeg_image, capsys):
+        """Test memory usage shows image banks"""
+        manager.load_image_to_bank(1, jpeg_image)
+        manager.show_memory_usage()
+        captured = capsys.readouterr()
+        assert "imagebank1" in captured.out
+        assert "imagebank2" in captured.out
+    
+    def test_dump_variables_with_image_banks(self, manager, jpeg_image, capsys):
+        """Test dump variables shows image banks"""
+        manager.load_image_to_bank(1, jpeg_image)
+        manager.dump_variables("all")
+        captured = capsys.readouterr()
+        assert "IMAGEBANK1:" in captured.out
+        assert "<image data>" in captured.out
+    
+    def test_dump_single_image_bank(self, manager, jpeg_image, capsys):
+        """Test dumping single image bank"""
+        manager.load_image_to_bank(1, jpeg_image)
+        manager.dump_variables("imagebank1")
+        captured = capsys.readouterr()
+        assert "IMAGEBANK1:" in captured.out
+        assert "<image data>" in captured.out
 
 
 if __name__ == "__main__":
