@@ -6,7 +6,7 @@ Handles loading and managing application configuration
 
 import os
 import tomllib
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 
 class ConfigManager:
@@ -69,6 +69,20 @@ class ConfigManager:
             self.freq_penalty = self.config["frequency_penalty"]
         if "presence_penalty" in self.config:
             self.pres_penalty = self.config["presence_penalty"]
+        
+        # Image generation settings
+        self.image_dir = os.path.expanduser("~/chatybot_images")
+        self.image_size = "1024x1024"
+        self.image_quality = "standard"
+        
+        if "image_generation" in self.config:
+            image_config = self.config["image_generation"]
+            if "default_dir" in image_config:
+                self.image_dir = os.path.expanduser(image_config["default_dir"])
+            if "default_size" in image_config:
+                self.image_size = image_config["default_size"]
+            if "default_quality" in image_config:
+                self.image_quality = image_config["default_quality"]
     
     def get_model_config(self, model_alias: str) -> Dict[str, Any]:
         """
@@ -130,3 +144,25 @@ class ConfigManager:
             print(f"{alias:<{alias_width}} {config['name']:<{name_width}} {base_url:<{url_width}} {temp:<6.2f} {str(max_tokens):<6} {str(top_p):<6} {str(top_k):<6} {str(freq_p):<6} {str(pres_p):<6}")
         
         print()
+    
+    def list_image_capable_models(self) -> List[str]:
+        """
+        List all models that support image generation.
+        
+        Returns:
+            List of model aliases that have image_generation enabled
+        """
+        image_models = []
+        for alias, config in self.config.get("models", {}).items():
+            if config.get("image_generation", False):
+                image_models.append(alias)
+        return image_models
+    
+    def get_image_config(self) -> Dict[str, Any]:
+        """
+        Get image generation configuration.
+        
+        Returns:
+            Dictionary with image generation settings
+        """
+        return self.config.get("image_generation", {})

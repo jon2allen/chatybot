@@ -172,6 +172,10 @@ class TParser:
         "setdb", "dblist", "searchdb", "dblog", "dbprint", "loadvar",
         "savevar", "setvar", "notemode", "mem", "dump", "trace", "thinking",
         "filebank1", "filebank2", "filebank3", "filebank4", "filebank5",
+        "imagebank", "imagebank1", "imagebank2", "imagebank3", "imagebank4", "imagebank5",
+        # Phase 2: Image generation commands
+        "imagine", "imagesize", "imagequality", "saveimage", "imagedir",
+        "listimages", "showimage", "loadimage",
         "multiline", "echo", "thoughtstyle", "def"
     }
 

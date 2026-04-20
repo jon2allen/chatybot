@@ -1,9 +1,30 @@
+# ============================================================================
+# IMAGE GENERATION SETTINGS
+# ============================================================================
+
+[image_generation]
+# Default directory for saving generated images
+default_dir = "~/chatybot_images"
+
+# Default image size - 1024x1024 is supported by ALL major image models
+default_size = "1024x1024"
+
+# Default quality
+default_quality = "standard"
+
+# ============================================================================
+# CHAT MODELS
+# ============================================================================
+
 [models.mistral_1]
 name = "mistral-large-2512"
 temperature = 0.7
 top_k = 1
 base_url = "https://api.mistral.ai/v1"
 api_key = "MISTRAL_API_KEY"
+image_generation = true
+image_endpoint = "/images/generations"
+vendor = "mistral"
 
 [models.devstral_1]
 name = "devstral-2512"
@@ -19,7 +40,9 @@ temperature = 0.0
 top_k = 1
 base_url = "https://generativelanguage.googleapis.com/v1beta/openai/"
 api_key = "GEMINI_API_KEY"
-# API key is now strictly read from the LLM_API_KEY environment variable.
+image_generation = true
+image_endpoint = "/images/generations"
+vendor = "google"
 
 [models.gemini_pro]
 # Another Gemini model
@@ -28,6 +51,9 @@ temperature = 0.0
 top_k = 1
 base_url = "https://generativelanguage.googleapis.com/v1beta/openai/"
 api_key = "GEMINI_API_KEY"
+image_generation = true
+image_endpoint = "/images/generations"
+vendor = "google"
 
 [models.gemma_3]
 # Another model, same endpoint
@@ -41,9 +67,39 @@ api_key = "GEMINI_API_KEY"
 # Example of a different vendor (OpenAI)
 name = "gpt-4o"
 temperature = 0.1
-top_k = 1 # Ignored by OpenAI, kept for consistency
+top_k = 1
 base_url = "https://api.openai.com/v1"
 api_key = "OPENAI_API_KEY"
+image_generation = true
+image_endpoint = "/images/generations"
+vendor = "openai"
+
+# ============================================================================
+# OPENROUTER MODELS
+# ============================================================================
+
+# OpenRouter image generation model - uses chat/completions with modalities
+[models.openrouter_image]
+name = "google/gemini-2.5-flash-image"
+temperature = 0.0
+top_k = 1
+base_url = "https://openrouter.ai/api/v1"
+api_key = "OPENROUTER_API_KEY"
+image_generation = true
+image_endpoint = "/chat/completions"
+vendor = "openrouter"
+
+# Flux.2 image generation model via OpenRouter
+[models.flux_1]
+name = "black-forest-labs/flux.2-max"
+temperature = 0.0
+top_k = 1
+base_url = "https://openrouter.ai/api/v1"
+api_key = "OPENROUTER_API_KEY"
+image_generation = true
+image_endpoint = "/chat/completions"
+image_modalities = ["image"]
+vendor = "openrouter"
 
 [models.nova_2]
 name = "amazon/nova-2-lite-v1:free"
@@ -52,21 +108,14 @@ top_k = 1
 base_url = "https://openrouter.ai/api/v1"
 api_key = "OPENROUTER_API_KEY"
 
-[models.nvidia_mistral_nemotron]
-name = "mistralai/mistral-nemotron"
-temperature = 0.7
-top_k = 1
-base_url = "https://integrate.api.nvidia.com/v1"
-api_key = "NVIDIA_API"
-
-
-
 [models.nvidia_1]
 name = "nvidia/nemotron-nano-12b-v2-vl:free"
 temperature = 0.7
 top_k = 1
 base_url = "https://openrouter.ai/api/v1"
 api_key = "OPENROUTER_API_KEY"
+image_endpoint = "/chat/completions"
+vendor = "openrouter"
 
 [models.gpt_oss_20b]
 name = "openai/gpt-oss-20b:free"
@@ -82,18 +131,16 @@ top_k = 1
 base_url = "https://openrouter.ai/api/v1"
 api_key = "OPENROUTER_API_KEY"
 
-[models.qwen2_5_instruct]
-name = "Qwen/Qwen2.5-3B-Instruct"
-temperature = 0.5
-top_k = 1
-base_url = "https://api.bytez.com/models/v2/openai/v1"
-api_key = "BYTEZ_API_KEY"
+# ============================================================================
+# NVIDIA NIM MODELS
+# ============================================================================
 
-[models.Jan_v1_4b]
-name = "janhq/Jan-v1-4B"
-temprature = 0.9
-base_url = "https://api.bytez.com/models/v2/openai/v1"
-api_key = "BYTEZ_API_KEY"
+[models.nvidia_mistral_nemotron]
+name = "mistralai/mistral-nemotron"
+temperature = 0.7
+top_k = 1
+base_url = "https://integrate.api.nvidia.com/v1"
+api_key = "NVIDIA_API"
 
 [models.llama1]
 name = "meta/llama-3.1-405b-instruct"
@@ -109,13 +156,16 @@ top_k = 1
 base_url = "https://integrate.api.nvidia.com/v1"
 api_key = "NVIDIA_API"
 
-
 [models.nemotron_super_49b]
 name = "nvidia/llama-3.3-nemotron-super-49b-v1"
 temperature = 0.5
 top_k = 1
 base_url = "https://integrate.api.nvidia.com/v1"
 api_key = "NVIDIA_API"
+
+# ============================================================================
+# PUBLICAI MODELS
+# ============================================================================
 
 [models.eurollm]
 name = "utter-project/EuroLLM-22B-Instruct-2512"
@@ -137,6 +187,28 @@ temperature = 0.7
 top_k = 1
 base_url = "https://api.publicai.co/v1"
 api_key = "SWISS_API_KEY"
+
+# ============================================================================
+# BYTEZ MODELS
+# ============================================================================
+
+[models.qwen2_5_instruct]
+name = "Qwen/Qwen2.5-3B-Instruct"
+temperature = 0.5
+top_k = 1
+base_url = "https://api.bytez.com/models/v2/openai/v1"
+api_key = "BYTEZ_API_KEY"
+
+[models.Jan_v1_4b]
+name = "janhq/Jan-v1-4B"
+temperature = 0.9
+top_k = 1
+base_url = "https://api.bytez.com/models/v2/openai/v1"
+api_key = "BYTEZ_API_KEY"
+
+# ============================================================================
+# OLLAMA MODELS
+# ============================================================================
 
 [models.ollama_llama3]
 name = "llama3.2"
