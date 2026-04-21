@@ -2013,7 +2013,7 @@ class ChatybotApp:
                 print("Usage: /setvar <varname> <value>")
                 return True
             var_name = parts[1].strip('"')
-            var_value = self.buffer_manager.replace_placeholders_legacy(parts[2])
+            var_value = self.buffer_manager.replace_placeholders(parts[2])
             self.buffer_manager.set_script_var(var_name, var_value)
             return True
 
