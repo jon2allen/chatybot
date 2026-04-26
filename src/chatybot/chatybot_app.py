@@ -2373,6 +2373,13 @@ class ChatybotApp:
                 file_path, image_data = self.image_generator.last_generated_image
                 image_size_kb = len(image_data.encode('utf-8')) / 1024
                 print(f"{'LAST_IMAGE':<20} {image_size_kb:>10.2f}")
+            # Show chat history memory usage
+            if self.chat_history:
+                total_ch_size = sum(
+                    len(p.encode('utf-8')) + len(r.encode('utf-8'))
+                    for p, r in self.chat_history
+                ) / 1024
+                print(f"{'CHAT_HISTORY':<20} {total_ch_size:>10.2f}")
             return True
 
         elif cmd == "/dump":
