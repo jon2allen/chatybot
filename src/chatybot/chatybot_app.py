@@ -70,6 +70,7 @@ class ChatybotApp:
         self.image_size = "1024x1024"
         self.image_quality = "standard"
         self.image_debug_mode = False
+        self.image_size_manual = False
 
         # Chat state
         self.chat_history: List[Tuple[str, str]] = []
@@ -1702,6 +1703,7 @@ class ChatybotApp:
                         api_key=api_key,
                         base_url=base_url,
                         modalities=modalities,
+                        size_manual=self.image_size_manual,
                     )
                     self.image_generator.last_generated_image = (file_path, image_data)
                     
@@ -1809,6 +1811,7 @@ class ChatybotApp:
                 print(f"Current image size: {self.image_size}")
                 return True
             self.image_size = parts[1]
+            self.image_size_manual = True
             print(f"Image size set to: {self.image_size}")
             return True
 
