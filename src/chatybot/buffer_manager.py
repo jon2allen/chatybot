@@ -351,12 +351,14 @@ class BufferManager:
             print(f"{var_name:<20} {var_size:>10.2f}")
         print()
     
-    def dump_variables(self, name: str = "all", search_buffer: list = None) -> None:
+    def dump_variables(self, name: str = "all", search_buffer: list = None, chat_history: list = None) -> None:
         """
         Print the contents of a variable or 'all' variables.
         
         Args:
             name: Name of variable to dump, or 'all' for all variables
+            search_buffer: Optional search buffer to dump
+            chat_history: Optional chat history list to dump
         """
         if name == "all":
             print("\n--- DUMP ALL VARIABLES ---")
@@ -371,6 +373,12 @@ class BufferManager:
             
             if search_buffer is not None:
                 print(f"SEARCH_BUFFER: {search_buffer}")
+            
+            if chat_history is not None and chat_history:
+                print("CHAT_HISTORY:")
+                for i, (prompt, response) in enumerate(chat_history, 1):
+                    print(f"  [{i}] PROMPT: {prompt[:100]}{'...' if len(prompt) > 100 else ''}")
+                    print(f"      RESPONSE: {response[:100]}{'...' if len(response) > 100 else ''}")
                 
             for var_name, var_value in self.script_vars.items():
                 print(f"SCRIPT_VAR '{var_name}': {var_value}")
@@ -382,6 +390,17 @@ class BufferManager:
                 print(f"SEARCH_BUFFER: {search_buffer}")
             else:
                 print("SEARCH_BUFFER is empty or not available.")
+        elif name == "chat_history" or name == "CHAT_HISTORY":
+            if chat_history is not None and chat_history:
+                print("\n--- CHAT_HISTORY ---")
+                for i, (prompt, response) in enumerate(chat_history, 1):
+                    print(f"[{i}]")
+                    print(f"  PROMPT: {prompt}")
+                    print(f"  RESPONSE: {response}")
+                    print()
+                print("--- END CHAT_HISTORY ---\n")
+            else:
+                print("CHAT_HISTORY is empty.")
         elif name.startswith("filebank") and name[8:].isdigit():
             if name in self.file_banks:
                 print(f"{name.upper()}: {self.file_banks[name]}")

@@ -1966,18 +1966,42 @@ class ChatybotApp:
 
         elif cmd == "/save":
             if len(parts) < 2:
-                print("Usage: /save <file>")
+                print("Usage: /save <file> [all]")
+                print("  /save file.txt - Save last response")
+                print("  /save file.txt all - Save all chat history")
                 return True
 
             file_path = command.split(maxsplit=1)[1].strip(" \"'")
-            if self.chat_history:
-                last_response = self.chat_history[-1][1]
-                try:
-                    directory = os.path.dirname(file_path)
-                    if directory and not os.path.exists(directory):
-                        os.makedirs(directory, exist_ok=True)
-                        print(f"Created directory path: '{directory}'")
-
+            
+            # Check if 'all' modifier is present
+            save_all = False
+            parts_list = file_path.rsplit(" ", 1)
+            if len(parts_list) > 1 and parts_list[1].lower() == "all":
+                file_path = parts_list[0]
+                save_all = True
+            
+            if not self.chat_history:
+                print("No chat history to save.")
+                return True
+            
+            try:
+                directory = os.path.dirname(file_path)
+                if directory and not os.path.exists(directory):
+                    os.makedirs(directory, exist_ok=True)
+                    print(f"Created directory path: '{directory}'")
+                
+                if save_all:
+                    # Save all chat history
+                    with open(file_path, "w") as f:
+                        for i, (prompt, response) in enumerate(self.chat_history, 1):
+                            f.write(f"=== Conversation {i} ===\n")
+                            f.write(f"PROMPT: {prompt}\n\n")
+                            f.write(f"RESPONSE: {response}\n\n")
+                            f.write("---\n\n")
+                    print(f"All chat history ({len(self.chat_history)} conversations) saved to '{file_path}'.")
+                else:
+                    # Save last response only (default behavior)
+                    last_response = self.chat_history[-1][1]
                     with open(file_path, "w") as f:
                         f.write(last_response)
                     print(f"Last chat completion saved to '{file_path}'.")
@@ -1986,10 +2010,8 @@ class ChatybotApp:
                     if self.note_mode:
                         print(f"Note mode is ON. Processing file '{file_path}'...")
                         process_file(file_path)
-                except Exception as e:
-                    print(f"Error saving file: {str(e)}")
-            else:
-                print("No chat history to save.")
+            except Exception as e:
+                print(f"Error saving file: {str(e)}")
             return True
 
         elif cmd == "/notemode":
@@ -2384,7 +2406,7 @@ class ChatybotApp:
 
         elif cmd == "/dump":
             var_name = parts[1] if len(parts) > 1 else "all"
-            self.buffer_manager.dump_variables(var_name, SEARCHBUFFER)
+            self.buffer_manager.dump_variables(var_name, SEARCHBUFFER, self.chat_history)
             return True
 
         elif cmd == "/setvar":
