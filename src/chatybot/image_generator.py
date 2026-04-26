@@ -51,6 +51,7 @@ class ImageGenerator:
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
         modalities: Optional[list] = None,
+        size_manual: bool = False,
     ) -> Tuple[str, str]:
         """
         Generate an image from a text prompt.
@@ -65,6 +66,7 @@ class ImageGenerator:
             api_key: API key for authentication
             base_url: Base URL for the API
             modalities: List of modalities for the model (e.g., ["image", "text"] or ["image"])
+            size_manual: Whether the size was explicitly set by the user
             
         Returns:
             Tuple of (file_path, base64_data)
@@ -83,7 +85,7 @@ class ImageGenerator:
         # OpenRouter uses chat/completions with modalities for image generation
         if "openrouter" in vendor_lower or endpoint_lower in ["/api/v1/chat/completions", "/chat/completions"]:
             return await self._generate_openrouter(
-                prompt, model_name, size, quality, endpoint, api_key, base_url, modalities
+                prompt, model_name, size, quality, endpoint, api_key, base_url, modalities, size_manual
             )
         elif "openai" in vendor_lower or vendor_lower == "default":
             return await self._generate_openai(
@@ -187,6 +189,7 @@ class ImageGenerator:
         api_key: Optional[str],
         base_url: Optional[str],
         modalities: Optional[list] = None,
+        size_manual: bool = False,
     ) -> Tuple[str, str]:
         """
         Generate image using OpenRouter's API with direct HTTP calls.
@@ -223,19 +226,56 @@ class ImageGenerator:
             "modalities": effective_modalities
         }
         
-        # Add image_config only if size is specified
-        # Note: OpenRouter uses image_config, not standard OpenAI parameters
-        if size:
-            if width == height:
-                aspect_ratio = "1:1"
-            elif width > height:
-                aspect_ratio = f"{width}:{height}"
+        # Add image_config based on model type and manual setting
+        # For Google models: map pixel sizes to K-based format (0.5K, 1K, 2K, 4K)
+        # For other models: use aspect_ratio + image_size in pixel format
+        if size and size_manual:
+            # User explicitly set size - map appropriately
+            if "google" in effective_model.lower() and "gemini" in effective_model.lower():
+                # Map pixel sizes to Google's K-based format
+                size_map = {
+                    "512x512": "0.5K",
+                    "1024x1024": "1K",
+                    "1792x1024": "1K",  # Close to 1K
+                    "1024x1792": "1K",
+                    "2048x2048": "2K",
+                    "4096x4096": "4K",
+                }
+                google_size = size_map.get(size)
+                if google_size:
+                    request_body["image_config"] = {"image_size": google_size}
+                else:
+                    # Custom size - try to parse dimensions and approximate
+                    try:
+                        w, h = size.lower().split("x")
+                        w, h = int(w), int(h)
+                        # Use largest dimension to pick K size
+                        max_dim = max(w, h)
+                        if max_dim <= 512:
+                            request_body["image_config"] = {"image_size": "0.5K"}
+                        elif max_dim <= 1024:
+                            request_body["image_config"] = {"image_size": "1K"}
+                        elif max_dim <= 2048:
+                            request_body["image_config"] = {"image_size": "2K"}
+                        else:
+                            request_body["image_config"] = {"image_size": "4K"}
+                    except:
+                        # If parsing fails, skip for Google
+                        pass
             else:
-                aspect_ratio = f"{height}:{width}"
-            request_body["image_config"] = {
-                "aspect_ratio": aspect_ratio,
-                "image_size": size
-            }
+                # Non-Google models - use pixel format
+                if width == height:
+                    aspect_ratio = "1:1"
+                elif width > height:
+                    aspect_ratio = f"{width}:{height}"
+                else:
+                    aspect_ratio = f"{height}:{width}"
+                request_body["image_config"] = {
+                    "aspect_ratio": aspect_ratio,
+                    "image_size": size
+                }
+        # If size not manually set and it's a Google model, skip image_config entirely
+        # (Google models have sensible defaults)
         
         try:
             async with aiohttp.ClientSession() as session:
