@@ -2392,7 +2392,19 @@ class ChatybotApp:
                 print("Usage: /setvar <varname> <value>")
                 return True
             var_name = parts[1].strip('"')
-            var_value = self.buffer_manager.replace_placeholders_legacy(parts[2])
+            # Use full placeholder replacement to support image banks
+            value_with_images = parts[2]
+            # Check if value contains imagebank placeholders
+            for i in range(1, 6):
+                placeholder = f"{{imagebank{i}}}"
+                if placeholder in value_with_images:
+                    # Replace with actual image data
+                    bank_name = f"imagebank{i}"
+                    if bank_name in self.buffer_manager.image_banks:
+                        image_data = self.buffer_manager.image_banks[bank_name]
+                        if image_data:
+                            value_with_images = value_with_images.replace(placeholder, image_data)
+            var_value = self.buffer_manager.replace_placeholders_legacy(value_with_images)
             self.buffer_manager.set_script_var(var_name, var_value)
             return True
 
@@ -2479,7 +2491,7 @@ class ChatybotApp:
             "  /loadvar <varname> [ALL|id|range] - Load search buffer, all docs, a doc ID, or a range (e.g. 1-5) into a variable."
         )
         print("  /savevar <varname> <filename> - Save a variable's contents to a file.")
-        print("  /setvar <varname> <value> - Set a script variable to a string.")
+        print("  /setvar <varname> <value> - Set a script variable to a string (text only, not image data).")
         print("  /mem - Show size of buffers and script variables.")
         print("  /dump [varname|all] - Print content of buffers or script variables.")
         print("\nScript-specific features:")

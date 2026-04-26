@@ -219,7 +219,10 @@ chat --> Hello!      # Start a conversation
 | `/dbprint [file]` | Print formatted DB report | `/dbprint report.txt` |
 | `/loadvar <v> [p]` | Store search, ALL, ID, or range in variable | `/loadvar results 1-5` |
 | `/savevar <v> <f>`| Save variable to file | `/savevar results log.txt` |
-| `/setvar <v> <val>`| Set a string variable | `/setvar user "Jon"` |
+| `/setvar <v> <val>`| Set a string variable (text only) | `/setvar user "Jon"` |
+| `/imagebank{1-5} <file>` | Load image into bank for vision analysis | `/imagebank1 cat.jpg` |
+| `/imagebank{1-5} clear` | Clear an image bank | `/imagebank1 clear` |
+| `/imagebank{1-5} show` | Show image bank info | `/imagebank1 show` |
 | `/mem` | Show memory size of buffers/variables | `/mem` |
 | `/dump [v\|all]` | Dump variables | `/dump all` |
 | `/quit` | Exit the program | `/quit` |
@@ -280,6 +283,8 @@ Variables can be set manually, via search results, or in scripts:
 /setvar username "Jon"
 chat --> Hello ${username}, show me ${search_results}
 ```
+
+**Note:** Script variables (`/setvar`) are for **text substitution only**. For image analysis with vision models, use image banks instead. Load images with `/imagebank1 <file>` and reference them with `{imagebank1}` syntax in your prompts. The `{imagebank1}` placeholder sends the image as a proper multimodal attachment, while `${var}` substitution inserts text only.
 
 ### **Conditional Logic**
 ```dsl
