@@ -33,6 +33,11 @@ top_k = 1
 base_url = "https://api.mistral.ai/v1"
 api_key = "MISTRAL_API_KEY"
 
+[models.mistral_pixtral]
+name = "mistralai/pixtral-large-2411"
+base_url = "https://openrouter.ai/api/v1"
+api_key = "OPENROUTER_API_KEY"
+
 [models.gemini_flash]
 # Gemini Model running on Google's OpenAI-compatible endpoint
 name = "gemini-2.5-flash"
@@ -87,11 +92,12 @@ base_url = "https://openrouter.ai/api/v1"
 api_key = "OPENROUTER_API_KEY"
 image_generation = true
 image_endpoint = "/chat/completions"
+image_modalities = ["image", "text"]
 vendor = "openrouter"
 
 # Flux.2 image generation model via OpenRouter
 [models.flux_1]
-name = "black-forest-labs/flux.2-max"
+name = "black-forest-labs/flux.2-klein-4b"
 temperature = 0.0
 top_k = 1
 base_url = "https://openrouter.ai/api/v1"
@@ -104,6 +110,14 @@ vendor = "openrouter"
 [models.nova_2]
 name = "amazon/nova-2-lite-v1:free"
 temperature = 0.9
+top_k = 1
+base_url = "https://openrouter.ai/api/v1"
+api_key = "OPENROUTER_API_KEY"
+
+[models.elephant]
+#name = "openrouter/elephant-alpha"
+name = "inclusionai/ling-2.6-flash:free"
+temperature = 0.1
 top_k = 1
 base_url = "https://openrouter.ai/api/v1"
 api_key = "OPENROUTER_API_KEY"
