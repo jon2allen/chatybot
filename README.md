@@ -286,6 +286,63 @@ chat --> Hello ${username}, show me ${search_results}
 
 **Note:** Script variables (`/setvar`) are for **text substitution only**. For image analysis with vision models, use image banks instead. Load images with `/imagebank1 <file>` and reference them with `{imagebank1}` syntax in your prompts. The `{imagebank1}` placeholder sends the image as a proper multimodal attachment, while `${var}` substitution inserts text only.
 
+### **Image Generation**
+chatybot supports **text-to-image generation** and **image-to-text (vision) analysis** for supported models.
+
+#### **Image Output Directory**
+Generated images are saved to a date-organized directory structure:
+```
+~/chatybot_images/
+└── YYYY-MM-DD/
+    ├── prompt_001.png
+    ├── prompt_002.png
+    └── ...
+```
+
+**Configuration:**
+- Default: `~/chatybot_images/` (set in `chat_config.toml` under `[image_generation].default_dir`)
+- Override at runtime: `/imagedir /custom/path/to/images`
+- Override in config: Edit `default_dir` in `src/chatybot/chat_config.toml`
+
+**Path Resolution:**
+1. Config file `default_dir` (if set)
+2. Hardcoded fallback: `~/chatybot_images`
+
+#### **Text-to-Image Generation**
+Generate images from text prompts using supported models (OpenAI, Mistral, Google, OpenRouter):
+```bash
+/model openrouter_image
+/imagine "a red toyota corolla 1980s on a mountain road"
+```
+
+**Supported Models:**
+- `openrouter_image`: Google gemini-2.5-flash-image (OpenRouter)
+- `flux_1`: Flux.2 models (OpenRouter)
+- `mistral_1`: Mistral image models
+- `gemini_flash`, `gemini_pro`: Google image models
+
+**Image Size Options:**
+```bash
+/imagesize 1024x1024      # Default
+/imagesize 1920x1080      # Wide
+/imagesize 1K            # Google format for gemini models
+```
+
+#### **Image-to-Text (Vision) Analysis**
+Load images into image banks and query vision models:
+```bash
+/imagebank1 my_photo.jpg     # Load image into bank 1
+/model openrouter_image     # Switch to vision model
+Describe this image: {imagebank1}
+```
+
+**Image Bank Commands:**
+| Command | Description | Example |
+|---------|-------------|---------|
+| `/imagebank{1-5} <file>` | Load image into bank | `/imagebank1 cat.jpg` |
+| `/imagebank{1-5} clear` | Clear an image bank | `/imagebank1 clear` |
+| `/imagebank{1-5} show` | Show image bank info | `/imagebank1 show` |
+
 ### **Conditional Logic**
 ```dsl
 set debug = true
@@ -454,6 +511,16 @@ chat --> Create a blog post outline about ${topic}
 ```
 
 ### Change log
+
+Apr 20th, 2026
+--------------
+- **Image Generation Configuration**: Synchronized `chat_config.toml` with local additions (mistral_pixtral, elephant models) and updated flux_1 to flux.2-klein-4b
+- **OpenRouter Size Fix**: Resolved Google model image generation error by mapping pixel sizes to K-based format (1024x1024→"1K") when manually set via `/imagesize`
+- **Hybrid Size Handling**: Implemented smart size handling that skips `image_config` for Google models when using default size
+- **Echo Command Bug Fix**: Fixed `'tuple' object has no attribute 'startswith'` error by unpacking tuple from `replace_placeholders()`
+- **Memory & History**: Added CHAT_HISTORY to `/mem` display, enabled `/dump CHAT_HISTORY`, added `/save <file> all` for full chat history export
+- **Documentation**: Updated `/help` text to clarify `/setvar` is for text-only variables, added Image Generation section to README, documented image bank requirements for vision models
+- **Test Assets**: Added 15 test images with corresponding .txt files containing `subject:` and `color:` for accuracy testing, created comprehensive `accuracytest.chatdsl` script
 
 Apr 14th, 2026 (v0.3.0)
 --------------
