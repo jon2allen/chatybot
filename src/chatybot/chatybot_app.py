@@ -2427,6 +2427,35 @@ class ChatybotApp:
                         if image_data:
                             value_with_images = value_with_images.replace(placeholder, image_data)
             var_value = self.buffer_manager.replace_placeholders_legacy(value_with_images)
+            
+            # Check if variable already exists and contains image data or JSON
+            if var_name in self.buffer_manager.script_vars:
+                existing_value = self.buffer_manager.script_vars[var_name]
+                if existing_value:
+                    # Check if existing value is image data (starts with data:image or is base64)
+                    is_existing_image = (
+                        existing_value.startswith("data:image/") or 
+                        (existing_value.strip().startswith("iVBOR") or  # PNG base64
+                         existing_value.strip().startswith("/9j/") or   # JPEG base64
+                         existing_value.strip().startswith("UklGR"))    # WebP base64
+                    )
+                    # Check if existing value is JSON
+                    is_existing_json = existing_value.strip().startswith("{") or existing_value.strip().startswith("[")
+                    
+                    if is_existing_image or is_existing_json:
+                        # Check if new value is also image/json - if both are, allow overwrite
+                        is_new_image = (
+                            var_value.startswith("data:image/") or 
+                            (var_value.strip().startswith("iVBOR") or
+                             var_value.strip().startswith("/9j/") or
+                             var_value.strip().startswith("UklGR"))
+                        )
+                        is_new_json = var_value.strip().startswith("{") or var_value.strip().startswith("[")
+                        
+                        if not (is_new_image or is_new_json):
+                            print(f"Warning: Variable '{var_name}' already contains {'image data' if is_existing_image else 'JSON'}. Not overwritten.")
+                            return True
+            
             self.buffer_manager.set_script_var(var_name, var_value)
             return True
 
