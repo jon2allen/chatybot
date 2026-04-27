@@ -30,11 +30,40 @@ class ImageGenerator:
         
         # Per-session state
         self.last_generated_image: Optional[Tuple[str, str]] = None  # (file_path, base64_data)
+        
+        # Load existing counters from index.json files to avoid overwriting on restart
+        self._load_existing_counters()
+    
+    def _load_existing_counters(self) -> None:
+        """Load existing counter values from index.json files to avoid overwriting on restart."""
+        from pathlib import Path
+        
+        image_dir = Path(self.image_dir)
+        if not image_dir.exists():
+            return
+        
+        for date_dir in image_dir.iterdir():
+            if not date_dir.is_dir():
+                continue
+            
+            index_path = date_dir / "index.json"
+            if index_path.exists():
+                try:
+                    with open(index_path, "r") as f:
+                        data = json.load(f)
+                    counter = data.get("counter", 0)
+                    if counter > 0:
+                        self.counters[date_dir.name] = counter
+                except (json.JSONDecodeError, IOError):
+                    # If index.json is corrupted, skip it
+                    pass
     
     def set_directory(self, path: str) -> None:
         """Set the default image save directory."""
         self.image_dir = os.path.expanduser(path)
         os.makedirs(self.image_dir, exist_ok=True)
+        # Reload counters for the new directory
+        self._load_existing_counters()
     
     def get_image_directory(self) -> str:
         """Get the current image directory."""
@@ -446,6 +475,16 @@ class ImageGenerator:
         # Generate filename
         filename = f"prompt_{counter:03d}{format_ext}"
         file_path = os.path.join(date_dir, filename)
+        
+        # Check if file already exists to prevent overwriting
+        # This is a safety check in case counter loading failed
+        if os.path.exists(file_path):
+            # Increment counter until we find a unique filename
+            while os.path.exists(file_path):
+                self.counters[date_str] += 1
+                counter = self.counters[date_str]
+                filename = f"prompt_{counter:03d}{format_ext}"
+                file_path = os.path.join(date_dir, filename)
         
         # Decode and save
         image_bytes = base64.b64decode(image_data)
