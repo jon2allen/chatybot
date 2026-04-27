@@ -1,0 +1,2 @@
+subject: dog
+color: yellow
