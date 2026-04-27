@@ -2414,6 +2414,7 @@ class ChatybotApp:
                 print("Usage: /setvar <varname> <value>")
                 return True
             var_name = parts[1].strip('"')
+<<<<<<< HEAD
             # Use full placeholder replacement to support image banks
             value_with_images = parts[2]
             # Check if value contains imagebank placeholders
@@ -2456,6 +2457,9 @@ class ChatybotApp:
                             print(f"Warning: Variable '{var_name}' already contains {'image data' if is_existing_image else 'JSON'}. Not overwritten.")
                             return True
             
+=======
+            var_value = self.buffer_manager.replace_placeholders(parts[2])
+>>>>>>> origin/master
             self.buffer_manager.set_script_var(var_name, var_value)
             return True
 
