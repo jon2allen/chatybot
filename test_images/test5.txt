@@ -1,0 +1,2 @@
+subject: transparent
+color: none

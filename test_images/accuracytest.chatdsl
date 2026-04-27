@@ -1,0 +1,924 @@
+# Image Accuracy Test Script
+# Tests vision model (openrouter_image) accuracy against expected .txt files
+# Uses elephant for comparison and summarization
+# All context passed via filebanks and variables (no reliance on chat history)
+
+# ============================================
+# CONFIGURATION
+# ============================================
+set output_dir = "test_images/accuracy_results"
+set vision_model = "openrouter_image"
+set judge_model = "elephant"
+set num_images = 15
+set results_prefix = "${output_dir}/result_"
+set comparison_prefix = "${output_dir}/comparison_"
+set summary_file = "${output_dir}/final_summary.txt"
+
+# ============================================
+# PHASE 1: Vision Model Analysis
+# Query each image with openrouter_image to identify subject and color
+# ============================================
+
+# --- Test Images ---
+
+# Image: test1.jpg
+/imagebank1 test_images/test1.jpg
+/model ${vision_model}
+/multiline
+Examine this image carefully: {imagebank1}
+
+Identify only these two things:
+1. The main subject or feature (be specific, one or two words)
+2. The primary/dominant color (one word only)
+
+Format your response as exactly:
+subject: <subject>
+color: <color>
+;;
+/multiline
+/save ${results_prefix}test1_vision.txt
+wait 2
+
+# Image: test2.jpg
+/imagebank1 test_images/test2.jpg
+/model ${vision_model}
+/multiline
+Examine this image carefully: {imagebank1}
+
+Identify only these two things:
+1. The main subject or feature (be specific, one or two words)
+2. The primary/dominant color (one word only)
+
+Format your response as exactly:
+subject: <subject>
+color: <color>
+;;
+/multiline
+/save ${results_prefix}test2_vision.txt
+wait 2
+
+# Image: test3.jpg
+/imagebank1 test_images/test3.jpg
+/model ${vision_model}
+/multiline
+Examine this image carefully: {imagebank1}
+
+Identify only these two things:
+1. The main subject or feature (be specific, one or two words)
+2. The primary/dominant color (one word only)
+
+Format your response as exactly:
+subject: <subject>
+color: <color>
+;;
+/multiline
+/save ${results_prefix}test3_vision.txt
+wait 2
+
+# Image: test4.jpg
+/imagebank1 test_images/test4.jpg
+/model ${vision_model}
+/multiline
+Examine this image carefully: {imagebank1}
+
+Identify only these two things:
+1. The main subject or feature (be specific, one or two words)
+2. The primary/dominant color (one word only)
+
+Format your response as exactly:
+subject: <subject>
+color: <color>
+;;
+/multiline
+/save ${results_prefix}test4_vision.txt
+wait 2
+
+# Image: test5.png
+/imagebank1 test_images/test5.png
+/model ${vision_model}
+/multiline
+Examine this image carefully: {imagebank1}
+
+Identify only these two things:
+1. The main subject or feature (be specific, one or two words)
+2. The primary/dominant color (one word only)
+
+Format your response as exactly:
+subject: <subject>
+color: <color>
+;;
+/multiline
+/save ${results_prefix}test5_vision.txt
+wait 2
+
+# --- Animal and Object Images ---
+
+# Image: bird1.jpg
+/imagebank1 test_images/bird1.jpg
+/model ${vision_model}
+/multiline
+Examine this image carefully: {imagebank1}
+
+Identify only these two things:
+1. The main subject or feature (be specific, one or two words)
+2. The primary/dominant color (one word only)
+
+Format your response as exactly:
+subject: <subject>
+color: <color>
+;;
+/multiline
+/save ${results_prefix}bird1_vision.txt
+wait 2
+
+# Image: cat1.jpg
+/imagebank1 test_images/cat1.jpg
+/model ${vision_model}
+/multiline
+Examine this image carefully: {imagebank1}
+
+Identify only these two things:
+1. The main subject or feature (be specific, one or two words)
+2. The primary/dominant color (one word only)
+
+Format your response as exactly:
+subject: <subject>
+color: <color>
+;;
+/multiline
+/save ${results_prefix}cat1_vision.txt
+wait 2
+
+# Image: dog1.jpg
+/imagebank1 test_images/dog1.jpg
+/model ${vision_model}
+/multiline
+Examine this image carefully: {imagebank1}
+
+Identify only these two things:
+1. The main subject or feature (be specific, one or two words)
+2. The primary/dominant color (one word only)
+
+Format your response as exactly:
+subject: <subject>
+color: <color>
+;;
+/multiline
+/save ${results_prefix}dog1_vision.txt
+wait 2
+
+# Image: elephant1.jpg
+/imagebank1 test_images/elephant1.jpg
+/model ${vision_model}
+/multiline
+Examine this image carefully: {imagebank1}
+
+Identify only these two things:
+1. The main subject or feature (be specific, one or two words)
+2. The primary/dominant color (one word only)
+
+Format your response as exactly:
+subject: <subject>
+color: <color>
+;;
+/multiline
+/save ${results_prefix}elephant1_vision.txt
+wait 2
+
+# Image: horse1.jpg
+/imagebank1 test_images/horse1.jpg
+/model ${vision_model}
+/multiline
+Examine this image carefully: {imagebank1}
+
+Identify only these two things:
+1. The main subject or feature (be specific, one or two words)
+2. The primary/dominant color (one word only)
+
+Format your response as exactly:
+subject: <subject>
+color: <color>
+;;
+/multiline
+/save ${results_prefix}horse1_vision.txt
+wait 2
+
+# Image: kid.jpg
+/imagebank1 test_images/kid.jpg
+/model ${vision_model}
+/multiline
+Examine this image carefully: {imagebank1}
+
+Identify only these two things:
+1. The main subject or feature (be specific, one or two words)
+2. The primary/dominant color (one word only)
+
+Format your response as exactly:
+subject: <subject>
+color: <color>
+;;
+/multiline
+/save ${results_prefix}kid_vision.txt
+wait 2
+
+# Image: logo.jpg
+/imagebank1 test_images/logo.jpg
+/model ${vision_model}
+/multiline
+Examine this image carefully: {imagebank1}
+
+Identify only these two things:
+1. The main subject or feature (be specific, one or two words)
+2. The primary/dominant color (one word only)
+
+Format your response as exactly:
+subject: <subject>
+color: <color>
+;;
+/multiline
+/save ${results_prefix}logo_vision.txt
+wait 2
+
+# Image: ocean.jpg
+/imagebank1 test_images/ocean.jpg
+/model ${vision_model}
+/multiline
+Examine this image carefully: {imagebank1}
+
+Identify only these two things:
+1. The main subject or feature (be specific, one or two words)
+2. The primary/dominant color (one word only)
+
+Format your response as exactly:
+subject: <subject>
+color: <color>
+;;
+/multiline
+/save ${results_prefix}ocean_vision.txt
+wait 2
+
+# Image: toys.jpg
+/imagebank1 test_images/toys.jpg
+/model ${vision_model}
+/multiline
+Examine this image carefully: {imagebank1}
+
+Identify only these two things:
+1. The main subject or feature (be specific, one or two words)
+2. The primary/dominant color (one word only)
+
+Format your response as exactly:
+subject: <subject>
+color: <color>
+;;
+/multiline
+/save ${results_prefix}toys_vision.txt
+wait 2
+
+# Image: zebra1.jpg
+/imagebank1 test_images/zebra1.jpg
+/model ${vision_model}
+/multiline
+Examine this image carefully: {imagebank1}
+
+Identify only these two things:
+1. The main subject or feature (be specific, one or two words)
+2. The primary/dominant color (one word only)
+
+Format your response as exactly:
+subject: <subject>
+color: <color>
+;;
+/multiline
+/save ${results_prefix}zebra1_vision.txt
+wait 2
+
+# ============================================
+# PHASE 2: Compare Vision Output with Expected .txt Files
+# Uses elephant to evaluate accuracy of each vision result
+# All context passed via filebanks (no chat history reliance)
+# ============================================
+
+# --- test1 ---
+/filebank1 ${results_prefix}test1_vision.txt
+/filebank2 test_images/test1.txt
+/model ${judge_model}
+/multiline
+Compare the vision model output with the expected answer.
+
+Vision model output:
+---
+{filebank1}
+---
+
+Expected answer:
+---
+{filebank2}
+---
+
+Determine if the vision model correctly identified:
+1. The subject (exact match or synonym)
+2. The color (exact match or close enough)
+
+Respond in exactly this format:
+subject_match: <yes|no|partial>
+color_match: <yes|no|partial>
+explanation: <brief reason>
+;;
+/multiline
+/save ${comparison_prefix}test1.txt
+wait 2
+
+# --- test2 ---
+/filebank1 ${results_prefix}test2_vision.txt
+/filebank2 test_images/test2.txt
+/model ${judge_model}
+/multiline
+Compare the vision model output with the expected answer.
+
+Vision model output:
+---
+{filebank1}
+---
+
+Expected answer:
+---
+{filebank2}
+---
+
+Determine if the vision model correctly identified:
+1. The subject (exact match or synonym)
+2. The color (exact match or close enough)
+
+Respond in exactly this format:
+subject_match: <yes|no|partial>
+color_match: <yes|no|partial>
+explanation: <brief reason>
+;;
+/multiline
+/save ${comparison_prefix}test2.txt
+wait 2
+
+# --- test3 ---
+/filebank1 ${results_prefix}test3_vision.txt
+/filebank2 test_images/test3.txt
+/model ${judge_model}
+/multiline
+Compare the vision model output with the expected answer.
+
+Vision model output:
+---
+{filebank1}
+---
+
+Expected answer:
+---
+{filebank2}
+---
+
+Determine if the vision model correctly identified:
+1. The subject (exact match or synonym)
+2. The color (exact match or close enough)
+
+Respond in exactly this format:
+subject_match: <yes|no|partial>
+color_match: <yes|no|partial>
+explanation: <brief reason>
+;;
+/multiline
+/save ${comparison_prefix}test3.txt
+wait 2
+
+# --- test4 ---
+/filebank1 ${results_prefix}test4_vision.txt
+/filebank2 test_images/test4.txt
+/model ${judge_model}
+/multiline
+Compare the vision model output with the expected answer.
+
+Vision model output:
+---
+{filebank1}
+---
+
+Expected answer:
+---
+{filebank2}
+---
+
+Determine if the vision model correctly identified:
+1. The subject (exact match or synonym)
+2. The color (exact match or close enough)
+
+Respond in exactly this format:
+subject_match: <yes|no|partial>
+color_match: <yes|no|partial>
+explanation: <brief reason>
+;;
+/multiline
+/save ${comparison_prefix}test4.txt
+wait 2
+
+# --- test5 ---
+/filebank1 ${results_prefix}test5_vision.txt
+/filebank2 test_images/test5.txt
+/model ${judge_model}
+/multiline
+Compare the vision model output with the expected answer.
+
+Vision model output:
+---
+{filebank1}
+---
+
+Expected answer:
+---
+{filebank2}
+---
+
+Determine if the vision model correctly identified:
+1. The subject (exact match or synonym)
+2. The color (exact match or close enough)
+
+Respond in exactly this format:
+subject_match: <yes|no|partial>
+color_match: <yes|no|partial>
+explanation: <brief reason>
+;;
+/multiline
+/save ${comparison_prefix}test5.txt
+wait 2
+
+# --- bird1 ---
+/filebank1 ${results_prefix}bird1_vision.txt
+/filebank2 test_images/bird1.txt
+/model ${judge_model}
+/multiline
+Compare the vision model output with the expected answer.
+
+Vision model output:
+---
+{filebank1}
+---
+
+Expected answer:
+---
+{filebank2}
+---
+
+Determine if the vision model correctly identified:
+1. The subject (exact match or synonym)
+2. The color (exact match or close enough)
+
+Respond in exactly this format:
+subject_match: <yes|no|partial>
+color_match: <yes|no|partial>
+explanation: <brief reason>
+;;
+/multiline
+/save ${comparison_prefix}bird1.txt
+wait 2
+
+# --- cat1 ---
+/filebank1 ${results_prefix}cat1_vision.txt
+/filebank2 test_images/cat1.txt
+/model ${judge_model}
+/multiline
+Compare the vision model output with the expected answer.
+
+Vision model output:
+---
+{filebank1}
+---
+
+Expected answer:
+---
+{filebank2}
+---
+
+Determine if the vision model correctly identified:
+1. The subject (exact match or synonym)
+2. The color (exact match or close enough)
+
+Respond in exactly this format:
+subject_match: <yes|no|partial>
+color_match: <yes|no|partial>
+explanation: <brief reason>
+;;
+/multiline
+/save ${comparison_prefix}cat1.txt
+wait 2
+
+# --- dog1 ---
+/filebank1 ${results_prefix}dog1_vision.txt
+/filebank2 test_images/dog1.txt
+/model ${judge_model}
+/multiline
+Compare the vision model output with the expected answer.
+
+Vision model output:
+---
+{filebank1}
+---
+
+Expected answer:
+---
+{filebank2}
+---
+
+Determine if the vision model correctly identified:
+1. The subject (exact match or synonym)
+2. The color (exact match or close enough)
+
+Respond in exactly this format:
+subject_match: <yes|no|partial>
+color_match: <yes|no|partial>
+explanation: <brief reason>
+;;
+/multiline
+/save ${comparison_prefix}dog1.txt
+wait 2
+
+# --- elephant1 ---
+/filebank1 ${results_prefix}elephant1_vision.txt
+/filebank2 test_images/elephant1.txt
+/model ${judge_model}
+/multiline
+Compare the vision model output with the expected answer.
+
+Vision model output:
+---
+{filebank1}
+---
+
+Expected answer:
+---
+{filebank2}
+---
+
+Determine if the vision model correctly identified:
+1. The subject (exact match or synonym)
+2. The color (exact match or close enough)
+
+Respond in exactly this format:
+subject_match: <yes|no|partial>
+color_match: <yes|no|partial>
+explanation: <brief reason>
+;;
+/multiline
+/save ${comparison_prefix}elephant1.txt
+wait 2
+
+# --- horse1 ---
+/filebank1 ${results_prefix}horse1_vision.txt
+/filebank2 test_images/horse1.txt
+/model ${judge_model}
+/multiline
+Compare the vision model output with the expected answer.
+
+Vision model output:
+---
+{filebank1}
+---
+
+Expected answer:
+---
+{filebank2}
+---
+
+Determine if the vision model correctly identified:
+1. The subject (exact match or synonym)
+2. The color (exact match or close enough)
+
+Respond in exactly this format:
+subject_match: <yes|no|partial>
+color_match: <yes|no|partial>
+explanation: <brief reason>
+;;
+/multiline
+/save ${comparison_prefix}horse1.txt
+wait 2
+
+# --- kid ---
+/filebank1 ${results_prefix}kid_vision.txt
+/filebank2 test_images/kid.txt
+/model ${judge_model}
+/multiline
+Compare the vision model output with the expected answer.
+
+Vision model output:
+---
+{filebank1}
+---
+
+Expected answer:
+---
+{filebank2}
+---
+
+Determine if the vision model correctly identified:
+1. The subject (exact match or synonym)
+2. The color (exact match or close enough)
+
+Respond in exactly this format:
+subject_match: <yes|no|partial>
+color_match: <yes|no|partial>
+explanation: <brief reason>
+;;
+/multiline
+/save ${comparison_prefix}kid.txt
+wait 2
+
+# --- logo ---
+/filebank1 ${results_prefix}logo_vision.txt
+/filebank2 test_images/logo.txt
+/model ${judge_model}
+/multiline
+Compare the vision model output with the expected answer.
+
+Vision model output:
+---
+{filebank1}
+---
+
+Expected answer:
+---
+{filebank2}
+---
+
+Determine if the vision model correctly identified:
+1. The subject (exact match or synonym)
+2. The color (exact match or close enough)
+
+Respond in exactly this format:
+subject_match: <yes|no|partial>
+color_match: <yes|no|partial>
+explanation: <brief reason>
+;;
+/multiline
+/save ${comparison_prefix}logo.txt
+wait 2
+
+# --- ocean ---
+/filebank1 ${results_prefix}ocean_vision.txt
+/filebank2 test_images/ocean.txt
+/model ${judge_model}
+/multiline
+Compare the vision model output with the expected answer.
+
+Vision model output:
+---
+{filebank1}
+---
+
+Expected answer:
+---
+{filebank2}
+---
+
+Determine if the vision model correctly identified:
+1. The subject (exact match or synonym)
+2. The color (exact match or close enough)
+
+Respond in exactly this format:
+subject_match: <yes|no|partial>
+color_match: <yes|no|partial>
+explanation: <brief reason>
+;;
+/multiline
+/save ${comparison_prefix}ocean.txt
+wait 2
+
+# --- toys ---
+/filebank1 ${results_prefix}toys_vision.txt
+/filebank2 test_images/toys.txt
+/model ${judge_model}
+/multiline
+Compare the vision model output with the expected answer.
+
+Vision model output:
+---
+{filebank1}
+---
+
+Expected answer:
+---
+{filebank2}
+---
+
+Determine if the vision model correctly identified:
+1. The subject (exact match or synonym)
+2. The color (exact match or close enough)
+
+Respond in exactly this format:
+subject_match: <yes|no|partial>
+color_match: <yes|no|partial>
+explanation: <brief reason>
+;;
+/multiline
+/save ${comparison_prefix}toys.txt
+wait 2
+
+# --- zebra1 ---
+/filebank1 ${results_prefix}zebra1_vision.txt
+/filebank2 test_images/zebra1.txt
+/model ${judge_model}
+/multiline
+Compare the vision model output with the expected answer.
+
+Vision model output:
+---
+{filebank1}
+---
+
+Expected answer:
+---
+{filebank2}
+---
+
+Determine if the vision model correctly identified:
+1. The subject (exact match or synonym)
+2. The color (exact match or close enough)
+
+Respond in exactly this format:
+subject_match: <yes|no|partial>
+color_match: <yes|no|partial>
+explanation: <brief reason>
+;;
+/multiline
+/save ${comparison_prefix}zebra1.txt
+wait 2
+
+# ============================================
+# PHASE 3: Final Summary
+# Load all comparison results and create comprehensive summary
+# ============================================
+
+# Batch 1: test1-test5
+/filebank1 ${comparison_prefix}test1.txt
+/filebank2 ${comparison_prefix}test2.txt
+/filebank3 ${comparison_prefix}test3.txt
+/filebank4 ${comparison_prefix}test4.txt
+/filebank5 ${comparison_prefix}test5.txt
+
+/model ${judge_model}
+/multiline
+Analyze these 5 comparison results for vision model accuracy.
+
+Comparison 1 (test1):
+{filebank1}
+
+Comparison 2 (test2):
+{filebank2}
+
+Comparison 3 (test3):
+{filebank3}
+
+Comparison 4 (test4):
+{filebank4}
+
+Comparison 5 (test5):
+{filebank5}
+
+Count the total number of:
+- subject_match: yes
+- color_match: yes
+- subject_match: partial
+- color_match: partial
+- subject_match: no
+- color_match: no
+
+Provide a summary of these 5 in this format:
+Batch 1 (images 1-5):
+Subject correct: X/5 (X%)
+Color correct: Y/5 (Y%)
+;;
+/multiline
+/save ${output_dir}/summary_batch1.txt
+wait 2
+
+# Batch 2: bird1-horse1
+/filebank1 ${comparison_prefix}bird1.txt
+/filebank2 ${comparison_prefix}cat1.txt
+/filebank3 ${comparison_prefix}dog1.txt
+/filebank4 ${comparison_prefix}elephant1.txt
+/filebank5 ${comparison_prefix}horse1.txt
+
+/model ${judge_model}
+/multiline
+Analyze these 5 comparison results for vision model accuracy.
+
+Comparison 6 (bird1):
+{filebank1}
+
+Comparison 7 (cat1):
+{filebank2}
+
+Comparison 8 (dog1):
+{filebank3}
+
+Comparison 9 (elephant1):
+{filebank4}
+
+Comparison 10 (horse1):
+{filebank5}
+
+Count the total number of:
+- subject_match: yes
+- color_match: yes
+- subject_match: partial
+- color_match: partial
+- subject_match: no
+- color_match: no
+
+Provide a summary of these 5 in this format:
+Batch 2 (images 6-10):
+Subject correct: X/5 (X%)
+Color correct: Y/5 (Y%)
+;;
+/multiline
+/save ${output_dir}/summary_batch2.txt
+wait 2
+
+# Batch 3: kid-zebra1
+/filebank1 ${comparison_prefix}kid.txt
+/filebank2 ${comparison_prefix}logo.txt
+/filebank3 ${comparison_prefix}ocean.txt
+/filebank4 ${comparison_prefix}toys.txt
+/filebank5 ${comparison_prefix}zebra1.txt
+
+/model ${judge_model}
+/multiline
+Analyze these 5 comparison results for vision model accuracy.
+
+Comparison 11 (kid):
+{filebank1}
+
+Comparison 12 (logo):
+{filebank2}
+
+Comparison 13 (ocean):
+{filebank3}
+
+Comparison 14 (toys):
+{filebank4}
+
+Comparison 15 (zebra1):
+{filebank5}
+
+Count the total number of:
+- subject_match: yes
+- color_match: yes
+- subject_match: partial
+- color_match: partial
+- subject_match: no
+- color_match: no
+
+Provide a summary of these 5 in this format:
+Batch 3 (images 11-15):
+Subject correct: X/5 (X%)
+Color correct: Y/5 (Y%)
+;;
+/multiline
+/save ${output_dir}/summary_batch3.txt
+wait 2
+
+# ============================================
+# FINAL OVERALL SUMMARY
+# Combine all batch summaries for overall accuracy
+# ============================================
+
+/filebank1 ${output_dir}/summary_batch1.txt
+/filebank2 ${output_dir}/summary_batch2.txt
+/filebank3 ${output_dir}/summary_batch3.txt
+
+/model ${judge_model}
+/multiline
+Combine the three summary batches below to create a FINAL overall summary.
+
+Batch 1 (images 1-5):
+{filebank1}
+
+Batch 2 (images 6-10):
+{filebank2}
+
+Batch 3 (images 11-15):
+{filebank3}
+
+Calculate the OVERALL totals across all 15 images:
+- Total subject matches: X/15 (X%)
+- Total color matches: Y/15 (Y%)
+- Overall accuracy: Z% (average of subject and color)
+
+Also identify:
+- Which image types were most accurately identified
+- Which image types had the most errors
+- Common patterns in errors (e.g., color confusion, subject misidentification)
+
+Provide a comprehensive final report.
+;;
+/multiline
+/save ${summary_file}
+
+/echo "Accuracy test complete! Summary saved to ${summary_file}"
+/echo "All results are in directory: ${output_dir}/"

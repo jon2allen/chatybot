@@ -1,0 +1,2 @@
+subject: twitter bird logo
+color: blue - several shades of blue

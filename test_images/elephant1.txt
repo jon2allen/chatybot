@@ -1,0 +1,2 @@
+subject: elephant
+color: grey

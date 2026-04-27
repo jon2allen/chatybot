@@ -1,0 +1,2 @@
+subject: toys
+color: multi-color

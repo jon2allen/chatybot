@@ -1,0 +1,2 @@
+subject: testpattern/text
+color: multicolor
