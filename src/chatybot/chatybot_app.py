@@ -2274,7 +2274,7 @@ class ChatybotApp:
                 print()
                 return True
             
-            processed_text = self.buffer_manager.replace_placeholders(text, include_images=False)
+            processed_text, _ = self.buffer_manager.replace_placeholders(text, include_images=False)
             
             if (processed_text.startswith('"') and processed_text.endswith('"')) or \
                (processed_text.startswith("'") and processed_text.endswith("'")):
