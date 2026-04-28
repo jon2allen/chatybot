@@ -176,6 +176,12 @@ class TParser:
         # Phase 2: Image generation commands
         "imagine", "imagesize", "imagequality", "saveimage", "imagedir",
         "listimages", "showimage", "loadimage",
+        # Audio commands
+        "audialize", "transcribe", "transcribemirror",
+        "audiocap", "audiomodel", "audiodir", "listaudio",
+        "loadaudio", "play", "audiobank",
+        "audiobank1", "audiobank2", "audiobank3", "audiobank4", "audiobank5",
+        "audiomirror",
         "multiline", "echo", "thoughtstyle", "def"
     }
 

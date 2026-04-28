@@ -6,18 +6,22 @@ Manages file buffers, file banks, script variables, and image banks
 
 import base64
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 
 class BufferManager:
-    """Manages file buffers, file banks, script variables, and image banks."""
+    """Manages file buffers, file banks, script variables, image banks, and audio banks."""
     
     def __init__(self):
         self.file_buffer: str = ""
         self.prompt_buffer: str = ""
         self.file_banks: Dict[str, str] = {f"filebank{i}": "" for i in range(1, 6)}
         self.image_banks: Dict[str, str] = {f"imagebank{i}": "" for i in range(1, 6)}
+        self.audio_banks: Dict[str, str] = {f"audiobank{i}": "" for i in range(1, 6)}
         self.script_vars: Dict[str, str] = {}
+        
+        # Audio file manager for audio operations
+        self.audio_file_manager = None
     
     def load_file_to_buffer(self, file_path: str) -> None:
         """
@@ -240,20 +244,167 @@ class BufferManager:
         else:
             print(f"{bank_name}: Invalid data format")
     
-    def replace_placeholders(self, prompt: str, include_images: bool = True) -> Tuple[str, List[Dict]]:
+    # ============================================================================
+    # Audio Bank Methods
+    # ============================================================================
+    
+    def detect_audio_format(self, file_path: str) -> str:
         """
-        Replace filebank, script variable, and imagebank placeholders in the prompt.
+        Detect audio MIME type from file extension.
+        
+        Args:
+            file_path: Path to the audio file
+            
+        Returns:
+            MIME type string (e.g., 'audio/mpeg', 'audio/wav')
+        """
+        ext = Path(file_path).suffix.lower().lstrip('.')
+        format_map = {
+            'mp3': 'audio/mpeg',
+            'wav': 'audio/wav',
+            'flac': 'audio/flac',
+            'ogg': 'audio/ogg',
+            'm4a': 'audio/m4a',
+            'webm': 'audio/webm',
+            'opus': 'audio/opus',
+            'aac': 'audio/aac',
+            'pcm': 'audio/pcm',
+        }
+        return format_map.get(ext, f"audio/{ext}")
+    
+    def load_audio_to_bank(self, bank_num: int, file_path: str) -> None:
+        """
+        Load an audio file into a specific audio bank as base64 data URL.
+        
+        Args:
+            bank_num: Audio bank number (1-5)
+            file_path: Path to the audio file to load
+            
+        Raises:
+            ValueError: If bank_num is invalid or audio format is unsupported
+            Exception: If there's an error reading the file
+        """
+        if bank_num < 1 or bank_num > 5:
+            raise ValueError("Invalid audiobank number. Please use 1 through 5.")
+        
+        bank_name = f"audiobank{bank_num}"
+        
+        # Detect format
+        mime_type = self.detect_audio_format(file_path)
+        
+        # Load and encode
+        try:
+            with open(file_path, "rb") as f:
+                audio_data = f.read()
+            
+            base64_data = base64.b64encode(audio_data).decode('utf-8')
+            data_url = f"data:{mime_type};base64,{base64_data}"
+            self.audio_banks[bank_name] = data_url
+            print(f"Audio '{file_path}' loaded into {bank_name}.")
+        except Exception as e:
+            print(f"Error reading audio file: {str(e)}")
+            raise
+    
+    def clear_audio_bank(self, bank_num: int) -> None:
+        """
+        Clear a specific audio bank.
+        
+        Args:
+            bank_num: Audio bank number (1-5)
+            
+        Raises:
+            ValueError: If bank_num is invalid
+        """
+        if bank_num < 1 or bank_num > 5:
+            raise ValueError("Invalid audiobank number. Please use 1 through 5.")
+        
+        bank_name = f"audiobank{bank_num}"
+        self.audio_banks[bank_name] = ""
+        print(f"{bank_name} cleared.")
+    
+    def show_audio_bank(self, bank_num: int, show_all: bool = False) -> None:
+        """
+        Show info about an audio bank (not the actual audio data).
+        
+        Args:
+            bank_num: Audio bank number (1-5)
+            show_all: Currently unused, for future expansion
+            
+        Raises:
+            ValueError: If bank_num is invalid
+        """
+        if bank_num < 1 or bank_num > 5:
+            raise ValueError("Invalid audiobank number. Please use 1 through 5.")
+        
+        bank_name = f"audiobank{bank_num}"
+        content = self.audio_banks[bank_name]
+        if not content:
+            print(f"{bank_name} is empty.")
+            return
+        
+        # Extract MIME type and approximate size from data URL
+        if content.startswith("data:audio/"):
+            mime_end = content.find(";")
+            mime_type = content[11:mime_end] if mime_end > 0 else "unknown"  # "data:audio/" = 11 chars
+            # Approximate size from base64 length (4 chars = 3 bytes)
+            data_start = content.find(",") + 1
+            if data_start > 0:
+                base64_len = len(content) - data_start
+                approx_size_kb = (base64_len * 3) / 4 / 1024
+                print(f"{bank_name}: {mime_type}, ~{approx_size_kb:.2f}KB")
+            else:
+                print(f"{bank_name}: {mime_type}")
+        else:
+            print(f"{bank_name}: Invalid data format")
+    
+    def is_audio_variable(self, var_value: str) -> bool:
+        """
+        Check if a variable value is an audio data URL.
+        
+        Args:
+            var_value: Variable value to check
+            
+        Returns:
+            True if value starts with 'data:audio/'
+        """
+        return var_value.startswith("data:audio/")
+    
+    def get_audio_format_from_variable(self, var_value: str) -> Optional[str]:
+        """
+        Extract audio format from a data URL variable.
+        
+        Args:
+            var_value: Audio data URL
+            
+        Returns:
+            Format string (e.g., 'mp3', 'wav') or None
+        """
+        if not self.is_audio_variable(var_value):
+            return None
+        
+        # Format is between "data:audio/" and ";base64,"
+        parts = var_value.split(";")
+        if len(parts) >= 1:
+            format_part = parts[0].replace("data:audio/", "")
+            return format_part
+        return None
+    
+    def replace_placeholders(self, prompt: str, include_images: bool = True, include_audio: bool = True) -> Tuple[str, List[Dict]]:
+        """
+        Replace filebank, script variable, imagebank, and audiobank placeholders in the prompt.
         
         For image banks, returns separated text and images for proper OpenAI multimodal format.
+        For audio banks, placeholders are replaced with descriptive text.
         
         Args:
             prompt: The prompt string containing placeholders
             include_images: If True, include image banks in search (for chat completion)
                           If False, images are ignored (for echo command)
+            include_audio: If True, include audio banks in search
             
         Returns:
             Tuple of (text_prompt, image_list) where:
-            - text_prompt: Prompt with filebank and script var placeholders replaced
+            - text_prompt: Prompt with filebank, script var, and audio bank placeholders replaced
             - image_list: List of image content dicts for OpenAI format
         """
         # First, handle text placeholders (filebanks and script vars)
@@ -267,6 +418,28 @@ class BufferManager:
             placeholder = f"${{{var_name}}}"
             if placeholder in text_prompt:
                 text_prompt = text_prompt.replace(placeholder, str(var_value))
+        
+        # Handle audio banks (always replace with descriptive text)
+        if include_audio:
+            for bank_name, content in self.audio_banks.items():
+                placeholder = f"{{{bank_name}}}"
+                if placeholder in text_prompt:
+                    if content and content.startswith("data:audio/"):
+                        # Extract format and size info
+                        mime_end = content.find(";")
+                        mime_type = content[11:mime_end] if mime_end > 0 else "unknown"
+                        data_start = content.find(",") + 1
+                        if data_start > 0:
+                            base64_len = len(content) - data_start
+                            approx_size_kb = (base64_len * 3) / 4 / 1024
+                            text_prompt = text_prompt.replace(
+                                placeholder,
+                                f"[Audio: {mime_type}, ~{approx_size_kb:.1f}KB]"
+                            )
+                        else:
+                            text_prompt = text_prompt.replace(placeholder, "[Audio]")
+                    else:
+                        text_prompt = text_prompt.replace(placeholder, "[Audio Bank Empty]")
         
         # Collect images only if requested
         image_list = []

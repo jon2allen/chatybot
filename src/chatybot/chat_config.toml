@@ -230,3 +230,290 @@ temperature = 0.7
 top_k = 1
 base_url = "http://localhost:11434/v1"
 api_key = "OLLAMA"
+
+# ============================================================================
+# AUDIO SETTINGS
+# ============================================================================
+
+[audio]
+# Default audio directory
+default_dir = "~/chatybot_audio"
+
+# Default audio format for generation
+default_format = "mp3"
+
+# Default STT model (must match a model alias below)
+default_stt_model = "voxtral-mini-3b"
+
+# Default TTS model
+default_tts_model = "voxtral-tts"
+
+# ============================================================================
+# AUDIO MODELS - STT (Speech-to-Text)
+# ============================================================================
+
+# Mistral Voxtral STT Models (local)
+[audio.models.voxtral-mini-3b]
+name = "Voxtral Mini 3B"
+provider = "mistralai"
+type = "stt"
+description = "State-of-the-art multilingual STT with speech understanding"
+huggingface_id = "mistralai/Voxtral-Mini-3B-2507"
+requires_api_key = false
+license = "Apache 2.0"
+capabilities = ["stt", "transcription", "speech_understanding", "qa", "summarization", "multilingual"]
+max_audio_length = 40
+supported_formats = ["mp3", "wav", "m4a", "ogg", "flac", "webm"]
+languages = ["en", "fr", "de", "es", "nl", "pt", "it", "hi", "ar"]
+parameters = 3000000000
+vram_bf16 = "9.5 GB"
+vram_int4 = "3.7-4 GB"
+is_default = true
+
+[audio.models.voxtral-small-24b]
+name = "Voxtral Small 24B"
+provider = "mistralai"
+type = "stt"
+description = "Production-scale STT with highest accuracy"
+huggingface_id = "mistralai/Voxtral-Small-24B-2507"
+requires_api_key = false
+license = "Apache 2.0"
+capabilities = ["stt", "transcription", "speech_understanding", "qa", "summarization", "multilingual"]
+max_audio_length = 60
+parameters = 24000000000
+vram_bf16 = "55 GB"
+vram_int8 = "16-24 GB"
+
+[audio.models.voxtral-mini-4b-realtime]
+name = "Voxtral Mini 4B Realtime"
+provider = "mistralai"
+type = "stt"
+description = "Real-time optimized STT with low latency"
+huggingface_id = "mistralai/Voxtral-Mini-4B-Realtime-2602"
+requires_api_key = false
+license = "Apache 2.0"
+capabilities = ["stt", "transcription", "realtime", "streaming", "low_latency"]
+streaming = true
+vram_bf16 = "16 GB"
+vram_int4 = "3.7-4 GB"
+
+# Mistral cloud STT (API-based)
+[audio.models.voxtral-mini-latest]
+name = "voxtral-mini-latest"
+provider = "mistralai"
+type = "stt"
+description = "Mistral's latest STT model via API"
+api_endpoint = "/chat/completions"
+api_key_env = "MISTRAL_API_KEY"
+base_url = "https://api.mistral.ai/v1"
+requires_api_key = true
+license = "proprietary"
+capabilities = ["stt", "transcription", "speaker_diarization", "multilingual"]
+supported_formats = ["mp3", "wav", "m4a", "ogg", "flac", "webm", "opus"]
+languages = ["en", "fr", "de", "es", "nl", "pt", "it", "hi", "ar", "zh", "ja", "ko", "ru"]
+
+# Alias for voxtral-mini-latest
+[audio.models.voxtral-transcribe-2]
+name = "voxtral-mini-latest"
+provider = "mistralai"
+type = "stt"
+description = "Latest transcription model (alias of voxtral-mini-latest)"
+api_endpoint = "/chat/completions"
+api_key_env = "MISTRAL_API_KEY"
+base_url = "https://api.mistral.ai/v1"
+requires_api_key = true
+license = "proprietary"
+capabilities = ["stt", "transcription", "speaker_diarization", "multilingual"]
+
+[audio.models.gpt-4o-transcribe]
+name = "GPT-4o Transcribe"
+provider = "openai"
+type = "stt"
+description = "Advanced speech-to-text with speaker diarization"
+api_endpoint = "/v1/audio/transcriptions"
+api_key_env = "OPENAI_API_KEY"
+base_url = "https://api.openai.com/v1"
+requires_api_key = true
+capabilities = ["stt", "transcription", "sound_recognition", "speaker_diarization"]
+max_file_size = 26214400
+supported_formats = ["mp3", "wav", "m4a", "ogg", "flac", "webm"]
+languages = ["100+"]
+pricing_per_minute = 0.006
+
+[audio.models.whisper-1]
+name = "Whisper 1"
+provider = "openai"
+type = "stt"
+description = "General-purpose speech-to-text"
+api_endpoint = "/v1/audio/transcriptions"
+api_key_env = "OPENAI_API_KEY"
+base_url = "https://api.openai.com/v1"
+requires_api_key = true
+capabilities = ["stt", "transcription"]
+max_file_size = 26214400
+supported_formats = ["mp3", "wav", "m4a", "ogg", "flac", "webm", "Opus"]
+languages = ["99+"]
+pricing_per_minute = 0.006
+
+# Chinese STT Models
+[audio.models.canary-qwen-2.5b]
+name = "Canary-Qwen 2.5B"
+provider = "nvidia"
+type = "stt"
+description = "Best overall Chinese ASR"
+huggingface_id = "nvidia/canary-qwen-2.5b"
+requires_api_key = false
+license = "Apache 2.0"
+capabilities = ["stt", "transcription", "multilingual"]
+languages = ["zh", "en", "de", "fr", "es"]
+
+[audio.models.firered-asr]
+name = "FireRed ASR"
+provider = "firered"
+type = "stt"
+description = "Mandarin-optimized industrial-grade ASR"
+huggingface_id = "FireRedTeam/FireRedASR"
+requires_api_key = false
+capabilities = ["stt", "transcription"]
+languages = ["zh", "mandarin", "cantonese"]
+
+# ============================================================================
+# AUDIO MODELS - TTS (Text-to-Speech)
+# ============================================================================
+
+[audio.models.voxstral-tts]
+name = "Voxtral TTS"
+provider = "mistralai"
+type = "tts"
+description = "State-of-the-art TTS with zero-shot voice cloning"
+huggingface_id = "mistralai/Voxtral-TTS-4B"
+requires_api_key = false
+license = "Apache 2.0"
+capabilities = ["tts", "speech_synthesis", "voice_cloning", "zero_shot_cloning", "multilingual", "emotional_delivery", "cross_language_voice"]
+languages = ["en", "fr", "de", "es", "nl", "pt", "it", "hi", "ar"]
+supports_voice_cloning = true
+cloning_min_audio = 3.0
+cloning_max_audio = 25.0
+vram_bf16 = "16 GB"
+vram_int4 = "3.7-4 GB"
+parameters = 4100000000
+
+# Mistral Voxtral TTS Models (API)
+[audio.models.voxtral-mini-tts-2603]
+name = "voxtral-mini-tts-latest"
+provider = "mistralai"
+type = "tts"
+description = "Mistral's TTS model via API with zero-shot voice cloning"
+api_endpoint = "/v1/audio/speech"
+api_key_env = "MISTRAL_API_KEY"
+base_url = "https://api.mistral.ai/v1"
+requires_api_key = true
+license = "proprietary"
+capabilities = ["tts", "speech_synthesis", "voice_cloning", "zero_shot_cloning", "multilingual"]
+supported_formats = ["mp3"]
+languages = ["en", "fr", "de", "es", "nl", "pt", "it", "hi", "ar", "zh", "ja", "ko", "ru"]
+supports_voice_cloning = true
+pricing_per_1k_chars = 0.016
+
+[audio.models.gpt-4o-mini-tts]
+name = "GPT-4o Mini TTS"
+provider = "openai"
+type = "tts"
+description = "Natural text-to-speech with style control"
+api_endpoint = "/v1/audio/speech"
+api_key_env = "OPENAI_API_KEY"
+base_url = "https://api.openai.com/v1"
+requires_api_key = true
+capabilities = ["tts", "speech_synthesis", "streaming"]
+voices = ["alloy", "echo", "fable", "onyx", "nova", "shimmer", "coral", "verse", "ballad", "ash", "sage", "marin", "cedar", "amuch", "aster", "brook", "clover", "dan", "elan", "marilyn", "meadow", "jazz", "rio"]
+supported_formats = ["mp3", "wav", "opus", "aac", "flac", "pcm"]
+pricing_per_1k_chars = 0.015
+
+[audio.models.tts-1-hd]
+name = "TTS-1 HD"
+provider = "openai"
+type = "tts"
+description = "High definition text-to-speech"
+api_endpoint = "/v1/audio/speech"
+api_key_env = "OPENAI_API_KEY"
+base_url = "https://api.openai.com/v1"
+requires_api_key = true
+capabilities = ["tts", "speech_synthesis"]
+voices = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"]
+supported_formats = ["mp3", "wav", "opus", "aac", "flac", "pcm"]
+pricing_per_1k_chars = 0.015
+
+[audio.models.parler-tts-md-beat]
+name = "Parler-TTS Medium Beat"
+provider = "local"
+type = "tts"
+description = "High-quality local TTS with ASR conditioning"
+huggingface_id = "parler-tts/parler-tts-md-beat"
+requires_api_key = false
+capabilities = ["tts", "speech_synthesis"]
+vram_bf16 = "8 GB"
+
+[audio.models.coqui-tts]
+name = "Coqui TTS"
+provider = "local"
+type = "tts"
+description = "Free open-source TTS"
+requires_api_key = false
+capabilities = ["tts", "speech_synthesis"]
+
+[audio.models.fish-speech-v1-5]
+name = "Fish Speech V1.5"
+provider = "fish-audio"
+type = "tts"
+description = "Best overall Chinese TTS quality (1.3% CER)"
+requires_api_key = false
+capabilities = ["tts", "speech_synthesis", "multilingual", "code_switching"]
+languages = ["zh", "en"]
+supports_voice_cloning = false
+
+[audio.models.qwen3-tts-1.7b]
+name = "Qwen3-TTS 1.7B"
+provider = "alibaba"
+type = "tts"
+description = "Alibaba TTS with stable/expressive/streaming modes, voice cloning"
+requires_api_key = false
+capabilities = ["tts", "speech_synthesis", "voice_cloning", "streaming", "multilingual"]
+languages = ["zh", "en", "fr", "de", "es", "nl", "pt", "it"]
+supports_voice_cloning = true
+
+# ============================================================================
+# AUDIO MODELS - Music & SFX Generation
+# ============================================================================
+
+[audio.models.stable-audio-2.5]
+name = "Stable Audio 2.5"
+provider = "stability"
+type = "music"
+description = "High-quality music and sound effect generation"
+api_endpoint = "/v2beta/stable-audio/generate"
+api_key_env = "STABILITY_API_KEY"
+base_url = "https://api.stability.ai"
+requires_api_key = true
+capabilities = ["music_generation", "sfx_generation"]
+max_duration = 180
+supported_formats = ["wav"]
+
+[audio.models.musicgen-small]
+name = "MusicGen Small"
+provider = "local"
+type = "music"
+description = "Text-to-music generation model"
+huggingface_id = "facebook/musicgen-small"
+requires_api_key = false
+capabilities = ["music_generation"]
+vram_bf16 = "12 GB"
+max_duration = 30
+
+[audio.models.diffrhythm]
+name = "DiffRhythm"
+provider = "local"
+type = "music"
+description = "Open-source music generator"
+requires_api_key = false
+capabilities = ["music_generation"]
+vram_bf16 = "8 GB"
