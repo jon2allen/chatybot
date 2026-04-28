@@ -65,6 +65,9 @@ class ChatybotApp:
         self.buffer_manager = BufferManager()
         self.image_generator = ImageGenerator()
         self.image_manager = ImageManager()
+        
+        # Initialize audio engine
+        self.audio_engine = None
 
         # Image generation settings
         self.image_size = "1024x1024"
@@ -109,6 +112,13 @@ class ChatybotApp:
         """Initialize the application by loading configuration and setting up history."""
         # Load configuration
         self.config_manager.load_config()
+        
+        # Initialize audio engine with config
+        from chatybot.audio_engine import get_audio_engine
+        self.audio_engine = get_audio_engine(self.config_manager.config, self.config_manager)
+        
+        # Link audio file manager to buffer manager
+        self.buffer_manager.audio_file_manager = self.audio_engine.file_manager
 
         # Set up input history
         self.load_input_history()
@@ -130,7 +140,13 @@ class ChatybotApp:
                     "setvar", "notemode", "mem", "dump", "trace",
                     "thinking", "echo", "def", "reloadmacros",
                     "imagine", "imagesize", "imagequality", "saveimage", "imagedir",
-                    "listimages", "showimage", "loadimage"
+                    "listimages", "showimage", "loadimage",
+                    # Audio commands
+                    "audialize", "transcribe", "transcribemirror",
+                    "audiocap", "audiomodel", "audiodir", "listaudio",
+                    "loadaudio", "play", "audiobank",
+                    "audiobank1", "audiobank2", "audiobank3", "audiobank4", "audiobank5",
+                    "audiomirror",
                     ]
 
                  )
@@ -1936,18 +1952,46 @@ class ChatybotApp:
         elif cmd == "/model":
             if len(parts) < 2:
                 # Show current model
-                model_config = self.config_manager.get_model_config(
-                    self.config_manager.active_model_alias
-                )
-                print(
-                    f"Current model: {model_config['name']} (alias: {self.config_manager.active_model_alias})"
-                )
+                if self.config_manager.active_model_alias:
+                    model_type = self.config_manager.active_model_type or "text"
+                    model_alias = self.config_manager.active_model_alias
+                    if model_type == "audio":
+                        # Get audio model info from registry
+                        if self.audio_engine and hasattr(self.audio_engine, 'registry'):
+                            audio_config = self.audio_engine.registry.models.get(model_alias)
+                            if audio_config:
+                                print(f"Current audio model: {model_alias} ({audio_config.name})")
+                                return True
+                        print(f"Current audio model: {model_alias}")
+                    else:
+                        # Text model
+                        model_config = self.config_manager.get_model_config(model_alias)
+                        print(f"Current text model: {model_config['name']} (alias: {model_alias})")
+                else:
+                    print("No model set.")
                 return True
 
-            model_alias = parts[1]
-            self.config_manager.set_active_model(model_alias)
+            model_alias = parts[1].strip().strip('"').strip("'")
+            model_type = "text"
+            
+            # Check if it's an audio model
+            if self.audio_engine and hasattr(self.audio_engine, 'registry'):
+                audio_models = self.audio_engine.registry.models
+                if model_alias in audio_models:
+                    model_type = "audio"
+                    self.audio_engine.set_model(model_alias)
+                    self.config_manager.set_active_model(model_alias, model_type)
+                    model_config = audio_models[model_alias]
+                    print(f"Model set to: {model_alias} ({model_config.name}) [audio]")
+                    return True
+            
+            # Text model
+            self.config_manager.set_active_model(model_alias, model_type)
             model_config = self.config_manager.get_model_config(model_alias)
-            print(f"Switched to model: {model_config['name']} (alias: {model_alias})")
+            print(f"Model set to: {model_alias} ({model_config['name']}) [text]")
+            # Clear audio model since we're switching to text
+            if self.audio_engine:
+                self.audio_engine.current_model_alias = None
             return True
 
         elif cmd == "/logging":
@@ -2471,7 +2515,396 @@ class ChatybotApp:
                 self.load_macros()
                 print(f"Reloaded macros from default file. {len(self.macros)} macros available.")
             return True
-
+        
+        # ============================================================================
+        # AUDIO COMMANDS
+        # ============================================================================
+        
+        elif cmd.startswith("/audiobank"):
+            # Handle audiobank commands: /audiobank1, /audiobank2, etc.
+            # Syntax: /audiobank1 <file> | /audiobank1 clear | /audiobank1 show
+            bank_num = cmd[10:]  # Extract the number after /audiobank
+            if not bank_num.isdigit() or int(bank_num) < 1 or int(bank_num) > 5:
+                print("Invalid audiobank number. Please use /audiobank1 through /audiobank5.")
+                return True
+            
+            bank_num_int = int(bank_num)
+            
+            if len(parts) < 2:
+                print(f"Usage: {cmd} <file> or {cmd} clear or {cmd} show")
+                return True
+            
+            subcommand = parts[1].lower()
+            
+            if subcommand == "clear":
+                self.buffer_manager.clear_audio_bank(bank_num_int)
+                return True
+            elif subcommand == "show":
+                self.buffer_manager.show_audio_bank(bank_num_int)
+                return True
+            else:
+                # Assume it's a file path
+                file_path = command.split(maxsplit=1)[1].strip(" \"'")
+                try:
+                    self.buffer_manager.load_audio_to_bank(bank_num_int, file_path)
+                except Exception as e:
+                    print(f"Error reading audio file: {str(e)}")
+                return True
+        
+        elif cmd == "/audiobank":
+            # List all audio banks
+            print("Audio Banks:")
+            for i in range(1, 6):
+                bank_name = f"audiobank{i}"
+                content = self.buffer_manager.audio_banks[bank_name]
+                if content:
+                    print(f"  {bank_name}: <audio data>")
+                else:
+                    print(f"  {bank_name}: empty")
+            return True
+        
+        elif cmd.startswith("/transcribe"):
+            # /transcribe <file> [options]
+            # Check if audio model is active
+            if self.config_manager.active_model_type != "audio":
+                print("Error: Audio command requires an audio model. Set one with /model <audio_model_alias>")
+                return True
+            
+            if len(parts) < 2:
+                print("Usage: /transcribe <file> [model=X] [language=XX] [diarization=true]")
+                return True
+            
+            file_path = parts[1].strip(" \"'")
+            
+            # Parse options from remaining parts
+            options = {}
+            for part in parts[2:]:
+                if "=" in part:
+                    key, value = part.split("=", 1)
+                    # Try to convert value to appropriate type
+                    if value.lower() in ["true", "false"]:
+                        options[key] = value.lower() == "true"
+                    elif value.isdigit():
+                        options[key] = int(value)
+                    elif value.replace(".", "").replace("-", "").isdigit():
+                        options[key] = float(value)
+                    else:
+                        options[key] = value
+            
+            # Use audio engine for transcription
+            result = await self.audio_engine.transcribe(file_path, **options)
+            if result.success:
+                print(f"Transcription: {result.text}")
+                if result.file_path:
+                    print(f"Saved: {result.file_path}")
+                if result.model:
+                    print(f"Model: {result.model} | Language: {result.language or 'auto'} | Duration: {result.duration or 0:.1f}s")
+            else:
+                print(f"Error: {result.error}")
+            return True
+        
+        elif cmd.startswith("/transcribemirror"):
+            # /transcribemirror <varname> - Capture last transcription to variable
+            if self.config_manager.active_model_type != "audio":
+                print("Error: Audio command requires an audio model. Set one with /model <audio_model_alias>")
+                return True
+            if len(parts) < 2:
+                print("Usage: /transcribemirror <variable_name>")
+                return True
+            
+            var_name = parts[1].strip()
+            if hasattr(self.audio_engine, 'last_transcription') and self.audio_engine.last_transcription:
+                self.buffer_manager.set_script_var(var_name, self.audio_engine.last_transcription)
+                print(f"Variable '{var_name}' set to transcription text.")
+            else:
+                print("No transcription available. Run /transcribe first.")
+            return True
+        
+        elif cmd.startswith("/audiomirror"):
+            # /audiomirror <varname> - Capture last generated audio to variable (base64)
+            if len(parts) < 2:
+                print("Usage: /audiomirror <variable_name>")
+                return True
+            
+            var_name = parts[1].strip()
+            if hasattr(self.audio_engine, 'last_generated_audio') and self.audio_engine.last_generated_audio:
+                file_path, base64_data = self.audio_engine.last_generated_audio
+                self.buffer_manager.set_script_var(var_name, base64_data)
+                print(f"Variable '{var_name}' set to audio data.")
+            else:
+                print("No audio available. Run /audialize or /tts first.")
+            return True
+        
+        elif cmd.startswith("/audialize"):
+            # /audialize "<action>: <content>" [options]
+            # Check if audio model is active
+            if self.config_manager.active_model_type != "audio":
+                print("Error: Audio command requires an audio model. Set one with /model <audio_model_alias>")
+                return True
+            
+            # Parse the command
+            import re
+            # Match /audialize "action: content" [options...]
+            match = re.match(r'/audialize\s+"([^:]+):\s*(.+?)"\s*(.*)', command)
+            if not match:
+                print("Usage: /audialize \"<action>: <content>\" [options]")
+                print("  Actions: speak/tts, transcribe/stt, generate/sfx/music, analyze/recognize")
+                return True
+            
+            action = match.group(1).strip().lower()
+            content = match.group(2).strip()
+            options_str = match.group(3).strip()
+            
+            # Parse options
+            options = {}
+            if options_str:
+                for opt in options_str.split():
+                    if "=" in opt:
+                        key, value = opt.split("=", 1)
+                        if value.lower() in ["true", "false"]:
+                            options[key] = value.lower() == "true"
+                        elif value.isdigit():
+                            options[key] = int(value)
+                        elif value.replace(".", "").replace("-", "").isdigit():
+                            options[key] = float(value)
+                        else:
+                            options[key] = value
+            
+            # Use audio engine
+            result = await self.audio_engine.audialize(action, content, options)
+            
+            if result.success:
+                if result.text:
+                    print(f"Result: {result.text[:100]}{'...' if len(result.text) > 100 else ''}")
+                if result.file_path:
+                    print(f"Saved: {result.file_path}")
+                if result.model:
+                    print(f"Model: {result.model} | Provider: {result.provider}")
+                if result.duration:
+                    print(f"Duration: {result.duration:.1f}s")
+            else:
+                print(f"Error: {result.error}")
+            return True
+        
+        elif cmd == "/audiocap":
+            # /audiocap - Show audio capabilities
+            capabilities = self.audio_engine.get_capabilities()
+            print("\nAudio Capabilities:")
+            print(f"  Audio enabled: True")
+            print(f"\n  Generation:")
+            print(f"    Sound effects: {capabilities.get('sfx', {}).get('available', False)}")
+            print(f"    Music: {capabilities.get('music', {}).get('available', False)}")
+            print(f"    Speech (TTS): {capabilities.get('tts', {}).get('available', False)}")
+            print(f"    Voice cloning: {capabilities.get('tts', {}).get('voice_cloning', False)}")
+            print(f"\n  Analysis:")
+            print(f"    Transcription (STT): {capabilities.get('stt', {}).get('available', False)}")
+            print(f"    Real-time: {capabilities.get('stt', {}).get('realtime', False)}")
+            print(f"    Multilingual: {capabilities.get('stt', {}).get('multilingual', False)}")
+            print(f"    Diarization: {capabilities.get('stt', {}).get('diarization', False)}")
+            print(f"    Sound recognition: {capabilities.get('recognition', {}).get('available', False)}")
+            
+            # Show models
+            models_by_type = {}
+            for model_info in self.audio_engine.list_models():
+                model_type = model_info.get('type', 'unknown')
+                if model_type not in models_by_type:
+                    models_by_type[model_type] = []
+                models_by_type[model_type].append(model_info['alias'])
+            
+            print(f"\n  Models by type:")
+            for model_type, models in models_by_type.items():
+                print(f"    {model_type}: {', '.join(models)}")
+            return True
+        
+        elif cmd == "/audiomodel":
+            # /audiomodel - List all audio models
+            models = self.audio_engine.list_models()
+            
+            if not models:
+                print("No audio models configured.")
+                return True
+            
+            from tabulate import tabulate
+            table_data = []
+            for model in models:
+                table_data.append([
+                    model['alias'],
+                    model['name'],
+                    model['provider'],
+                    model['type'],
+                    model['description'][:40] + '...' if len(model['description']) > 40 else model['description'],
+                    'API' if model['requires_api_key'] else 'Local',
+                ])
+            
+            print("\nAvailable Audio Models:")
+            print(tabulate(table_data, headers=['Alias', 'Name', 'Provider', 'Type', 'Description', 'Source'], tablefmt='grid'))
+            return True
+        
+        elif cmd.startswith("/audiodir"):
+            # /audiodir [path] - Get or set audio directory
+            if len(parts) >= 2:
+                new_dir = parts[1].strip().strip(" \"'")
+                self.audio_engine.set_audio_directory(new_dir)
+                print(f"Audio directory set to: {new_dir}")
+            else:
+                print(f"Current audio directory: {self.audio_engine.file_manager.get_audio_directory()}")
+            return True
+        
+        elif cmd.startswith("/listaudio"):
+            # /listaudio [filter] - List audio files
+            filter_arg = parts[1] if len(parts) > 1 else None
+            
+            # Parse filter
+            date_filter = None
+            category_filter = None
+            subtype_filter = None
+            format_filter = None
+            
+            if filter_arg:
+                if filter_arg.startswith("date="):
+                    date_filter = filter_arg[5:]
+                elif filter_arg.startswith("category="):
+                    category_filter = filter_arg[10:]
+                elif filter_arg.startswith("subtype="):
+                    subtype_filter = filter_arg[9:]
+                elif filter_arg.startswith("format="):
+                    format_filter = filter_arg[7:]
+                elif "." in filter_arg:
+                    format_filter = filter_arg.split(".")[-1]
+                elif filter_arg in ["generate", "analyze"]:
+                    category_filter = filter_arg
+                else:
+                    subtype_filter = filter_arg
+            
+            files = self.audio_engine.list_audio_files(
+                date_filter=date_filter,
+                category_filter=category_filter,
+                subtype_filter=subtype_filter,
+                format_filter=format_filter
+            )
+            
+            if not files:
+                print("No audio files found.")
+                return True
+            
+            from tabulate import tabulate
+            table_data = []
+            for f in files:
+                table_data.append([
+                    f['date'],
+                    f['category'],
+                    f['subtype'],
+                    f['format'],
+                    f['filename'],
+                    f"{f['size_kb']:.2f}KB"
+                ])
+            
+            print(f"\nAudio Files ({len(files)} total):")
+            print(tabulate(table_data, headers=['Date', 'Category', 'Type', 'Format', 'Filename', 'Size'], tablefmt='grid'))
+            return True
+        
+        elif cmd.startswith("/loadaudio"):
+            # /loadaudio <file> [varname] - Load external audio file
+            if len(parts) < 2:
+                print("Usage: /loadaudio <file> [variable_name]")
+                return True
+            
+            file_path = parts[1].strip(" \"'")
+            var_name = parts[2] if len(parts) > 2 else None
+            
+            try:
+                audio_bytes, metadata = self.audio_engine.file_manager.load_external_audio(file_path)
+                
+                # Create base64 data URL
+                import base64
+                base64_data = base64.b64encode(audio_bytes).decode('utf-8')
+                mime_type = self.audio_engine.file_manager.detect_audio_format(file_path)
+                data_url = f"data:{mime_type};base64,{base64_data}"
+                
+                if var_name:
+                    self.buffer_manager.set_script_var(var_name, data_url)
+                    print(f"Audio loaded to variable '{var_name}'")
+                else:
+                    print(f"Audio loaded: {metadata['filename']} ({metadata['format']}, {len(audio_bytes)} bytes)")
+                    
+                # Also save to last_generated for /audiomirror
+                self.audio_engine.last_generated_audio = (file_path, data_url)
+                
+            except Exception as e:
+                print(f"Error loading audio: {str(e)}")
+            return True
+        
+        elif cmd.startswith("/play"):
+            # /play <file_or_var> [volume=X] - Play audio file or variable
+            if len(parts) < 2:
+                print("Usage: /play <file_or_variable> [volume=0-100]")
+                return True
+            
+            target = parts[1].strip(" \"'")
+            
+            # Parse volume option
+            volume = 100
+            for part in parts[2:]:
+                if part.startswith("volume="):
+                    try:
+                        volume = int(part.split("=")[1])
+                        volume = max(0, min(100, volume))
+                    except ValueError:
+                        pass
+            
+            # Check if it's a variable
+            is_var = target.startswith("[") and target.endswith("]")
+            var_name = target[1:-1] if is_var else None
+            
+            if is_var and var_name in self.buffer_manager.script_vars:
+                var_value = self.buffer_manager.script_vars[var_name]
+                if self.buffer_manager.is_audio_variable(var_value):
+                    target_path = f"/tmp/audio_play_{var_name}.mp3"
+                    # Extract and save audio bytes
+                    audio_bytes = self.buffer_manager.get_audio_bytes_from_variable(var_value)
+                    if audio_bytes:
+                        with open(target_path, "wb") as f:
+                            f.write(audio_bytes)
+                        target = target_path
+                    else:
+                        print(f"Error: Could not extract audio from variable '{var_name}'")
+                        return True
+            
+            # Use platform-appropriate playback
+            import platform
+            system = platform.system()
+            
+            if system == "Darwin":  # macOS
+                import subprocess
+                try:
+                    subprocess.run(["afplay", target, "-v", str(volume / 100.0)])
+                except FileNotFoundError:
+                    print("afplay not found. Try installing it or use a different playback method.")
+            elif system == "Windows":
+                # Use Windows media player or similar
+                import subprocess
+                try:
+                    subprocess.run(["start", target], shell=True)
+                except Exception as e:
+                    print(f"Could not play audio: {str(e)}")
+            else:  # Linux and others
+                import subprocess
+                try:
+                    # Try multiple players
+                    players = ["mpg123", "aplay", "paplay", "mpv", "vlc"]
+                    for player in players:
+                        try:
+                            subprocess.run([player, target])
+                            break
+                        except FileNotFoundError:
+                            continue
+                    else:
+                        print("No audio player found. Try installing mpg123, aplay, or mpv.")
+                except Exception as e:
+                    print(f"Could not play audio: {str(e)}")
+            
+            return True
+        
         return False
 
     def show_help(self) -> None:
@@ -2546,6 +2979,26 @@ class ChatybotApp:
         print("  /setvar <varname> <value> - Set a script variable to a string (text only, not image data).")
         print("  /mem - Show size of buffers and script variables.")
         print("  /dump [varname|all] - Print content of buffers or script variables.")
+        print("\nAudio commands:")
+        print("  /model <audio_model_alias> - Set active audio model (e.g., voxtral-mini-3b, voxtral-tts)")
+        print("  /audialize \"<action>: <content>\" [options] - Unified audio command")
+        print("    Actions: speak/tts, transcribe/stt, generate/sfx/music, analyze/recognize")
+        print("    Example: /audialize \"speak: Hello world\" voice=alloy")
+        print("    Example: /audialize \"transcribe: speech.wav\" language=en")
+        print("  /transcribe <file> [options] - Transcribe audio file to text")
+        print("    Options: model=X, language=XX, diarization=true")
+        print("  /transcribemirror <var> - Save last transcription to variable")
+        print("  /audiomirror <var> - Save last generated audio to variable (base64)")
+        print("  /audiocap - Show audio processing capabilities")
+        print("  /audiomodel - List available audio models")
+        print("  /audiodir [path] - Get or set audio output directory")
+        print("  /listaudio [filter] - List audio files (filter: date=X, category=X, subtype=X)")
+        print("  /loadaudio <file> [var] - Load external audio file, optionally to variable")
+        print("  /play <file|var> [volume=X] - Play audio file or variable (volume 0-100)")
+        print("  /audiobank{1..5} <file> - Load audio into audio bank")
+        print("  /audiobank{1..5} clear - Clear audio bank")
+        print("  /audiobank{1..5} show - Show audio bank info")
+        print("  /audiobank - List all audio banks")
         print("\nScript-specific features:")
         print("  set <name> = <value> - Define a variable")
         print("  ${name} - Reference a variable")
@@ -2613,6 +3066,10 @@ class ChatybotApp:
                         if selected_command.startswith("/"):
                             await self.handle_escape_command(selected_command)
                         else:
+                            # Check if audio model is active - text chat not available
+                            if self.config_manager.active_model_type == "audio":
+                                print("Error: Text chat requires a text model. Set one with /model <text_model_alias>")
+                                continue
                             response = await self.chat_completion(
                                 selected_command, stream=self.streaming_enabled
                             )
@@ -2631,6 +3088,10 @@ class ChatybotApp:
                 if prompt.startswith("/"):
                     result = await self.handle_escape_command(prompt)
                     if result == "EXECUTE_PROMPT":
+                        # Check if audio model is active - text chat not available
+                        if self.config_manager.active_model_type == "audio":
+                            print("Error: Text chat requires a text model. Set one with /model <text_model_alias>")
+                            continue
                         # Execute the buffered prompt
                         temp_prompt = (
                             "Using the following prompt, please provide a response:\n"
@@ -2646,6 +3107,10 @@ class ChatybotApp:
 
                 # Handle macro definitions for regular prompts
                 if prompt.lstrip().startswith("def "):
+                    # Check if audio model is active - text operations not available
+                    if self.config_manager.active_model_type == "audio":
+                        print("Error: Macro definitions require a text model. Set one with /model <text_model_alias>")
+                        continue
                     try:
                         definition_line = prompt.lstrip()
                         parsed = self.definition_grammar(definition_line).macro_def()
@@ -2659,6 +3124,10 @@ class ChatybotApp:
 
                 # Handle macro expansion for regular prompts
                 if prompt.lstrip().startswith("%"):
+                    # Check if audio model is active - text operations not available
+                    if self.config_manager.active_model_type == "audio":
+                        print("Error: Macro expansion requires a text model. Set one with /model <text_model_alias>")
+                        continue
                     expanded_prompt = self.process_macro_line(prompt)
                     if expanded_prompt.startswith("ERROR:"):
                         print(expanded_prompt)
@@ -2667,6 +3136,11 @@ class ChatybotApp:
                         print(f"Expanded macro: {expanded_prompt}")
                         prompt = expanded_prompt
 
+                # Check if audio model is active - text chat not available
+                if self.config_manager.active_model_type == "audio":
+                    print("Error: Text chat requires a text model. Set one with /model <text_model_alias>")
+                    continue
+                
                 response = await self.chat_completion(
                     prompt, stream=self.streaming_enabled
                 )
