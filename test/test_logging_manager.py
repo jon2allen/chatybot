@@ -13,6 +13,11 @@ from src.chatybot.logging_manager import LoggingManager
 class TestLoggingManager:
     """Test suite for LoggingManager class"""
     
+    @pytest.fixture(autouse=True)
+    def change_dir(self, tmp_path, monkeypatch):
+        """Change to a temporary directory for the duration of the test"""
+        monkeypatch.chdir(tmp_path)
+    
     @pytest.fixture
     def manager(self):
         """Create a fresh LoggingManager instance for each test"""
@@ -97,7 +102,8 @@ class TestLoggingManager:
             log_content = f.read()
         
         assert test_message in log_content
-        assert "Jan" in log_content or "Feb" in log_content or "Mar" in log_content  # Month
+        current_month = datetime.now().strftime("%b")
+        assert current_month in log_content  # Month
         
         manager.stop_logging()
         

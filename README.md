@@ -2,7 +2,7 @@
 # chatybot - Interactive AI Chatbot Interface
 
 
-**chatybot ** is a powerful command-line interface for interacting with language models, featuring a custom domain-specific language (DSL) for advanced prompt engineering, scripting, and automation.
+**chatybot** is a powerful command-line interface for interacting with language models, featuring a custom domain-specific language (DSL) for advanced prompt engineering, scripting, and automation.
 
 ---
 
@@ -286,8 +286,8 @@ chat --> Hello ${username}, show me ${search_results}
 
 **Note:** Script variables (`/setvar`) are for **text substitution only**. For image analysis with vision models, use image banks instead. Load images with `/imagebank1 <file>` and reference them with `{imagebank1}` syntax in your prompts. The `{imagebank1}` placeholder sends the image as a proper multimodal attachment, while `${var}` substitution inserts text only.
 
-### **Image Generation**
-chatybot supports **text-to-image generation** and **image-to-text (vision) analysis** for supported models.
+### **Image Support (Beta)**
+chatybot supports **text-to-image generation** and **image-to-text (vision) analysis** for supported models. This feature is currently in **Beta**.
 
 #### **Image Output Directory**
 Generated images are saved to a date-organized directory structure:
@@ -512,8 +512,14 @@ chat --> Create a blog post outline about ${topic}
 
 ### Change log
 
-Apr 20th, 2026
+Apr 28th, 2026 (v0.4.1)
 --------------
+- **Hotfix**: Added missing `image_manager.py` module and declared explicit `aiohttp` requirement in dependencies.
+
+Apr 28th, 2026 (v0.4.0)
+--------------
+- **Image Support (Beta)**: Officially designated text-to-image generation and vision analysis as Beta features.
+- **Test Stability**: Resolved brittle test assertions and isolated test execution environments.
 - **Image Generation Configuration**: Synchronized `chat_config.toml` with local additions (mistral_pixtral, elephant models) and updated flux_1 to flux.2-klein-4b
 - **OpenRouter Size Fix**: Resolved Google model image generation error by mapping pixel sizes to K-based format (1024x1024→"1K") when manually set via `/imagesize`
 - **Hybrid Size Handling**: Implemented smart size handling that skips `image_config` for Google models when using default size
@@ -669,16 +675,16 @@ Jan 24th, 2026
 Jan 10th
 -------------
 
-  - added /notemode - this will split code from explaination.  but only first block.
+  - added /notemode - this will split code from explanation.  but only first block.
 
-   Warning:  should not be used for marddown, readme or other such docs.
+   Warning:  should not be used for markdown, readme or other such docs.
 
 ```
 ===========================
 Active model: mistral-large-2512 (alias: mistral_1)
 chat --> /model nvidia_1
 Switched to model: nvidia/nemotron-nano-12b-v2-vl:free (alias: nvidia_1)
-chat --> create a C program that demostrates a linked list
+chat --> create a C program that demonstrates a linked list
 Here's a well-structured C program that demonstrates the implementation and usage of a **singly linked list**. This program includes basic operations such as:
 
 - **Appending** elements to the end of the list.
