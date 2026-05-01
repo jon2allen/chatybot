@@ -142,6 +142,7 @@ Active escape commands:
   /freq_penalty <value> - Set frequency penalty (-2.0-2.0).
   /pres_penalty <value> - Set presence penalty (-2.0-2.0).
   /reasoning <on|off> - Toggle reasoning (thinking) for NVIDIA and Qwen models.
+  /effort <low|medium|high|none> - Set reasoning effort for OpenAI (o1, o3) and Mistral (mistral-small-latest, mistral-medium-3.5) models.
   /thinking <on|off> - Toggle display of <think> and <thought> blocks and reasoning text.
   /thoughtstyle <none|gemma4|nanbeige|nanbeige_code> - Set prompting format for negative prompt to disable reasoning - auto.
   /seed <value> - Set seed (int, 'time', or 'random <min>,<max>').
@@ -197,6 +198,7 @@ chat --> Hello!      # Start a conversation
 | `/freq_penalty <value>` | Set freq penalty | `/freq_penalty 0.5` |
 | `/pres_penalty <value>` | Set presence penalty | `/pres_penalty 0.5` |
 | `/reasoning <on\|off>` | Toggle NVIDIA/Qwen reasoning | `/reasoning off` |
+| `/effort <low\|medium\|high\|none>` | Set reasoning effort for OpenAI (o1, o3) and Mistral (mistral-small-latest, mistral-medium-3.5) models | `/effort high` |
 | `/thinking <on\|off>` | Toggle `<think>` and `<thought>` visibility | `/thinking off` |
 | `/thoughtstyle <none\|gemma4\|nanbeige\|nanbeige_code>` | Set prompting format for negative prompt to disable reasoning - auto | `/thoughtstyle nanbeige_code` |
 | `/seed <value>` | Set PRNG Seed | `/seed time` |
