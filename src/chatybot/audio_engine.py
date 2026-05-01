@@ -182,6 +182,10 @@ class AudioEngine:
                     # Local Mistral model (HuggingFace)
                     from .audio_providers.local_provider import LocalAudioProvider
                     return LocalAudioProvider(model_config)
+            elif model_config.provider == "openrouter":
+                # OpenRouter models (routes to various providers)
+                from .audio_providers.openrouter_provider import OpenRouterAudioProvider
+                return OpenRouterAudioProvider(model_config)
             elif model_config.provider == "local" or model_config.huggingface_id:
                 # Local models (HuggingFace) - use local provider
                 from .audio_providers.local_provider import LocalAudioProvider

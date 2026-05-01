@@ -517,3 +517,77 @@ description = "Open-source music generator"
 requires_api_key = false
 capabilities = ["music_generation"]
 vram_bf16 = "8 GB"
+
+# ============================================================================
+# OPENROUTER AUDIO MODELS
+# ============================================================================
+# Models available via OpenRouter API (routes to various providers)
+# IMPORTANT: openai/whisper-1 is NOT available on OpenRouter
+# Use gpt-4o-audio-preview or deepgram/nova-3 for STT
+
+# ============================================================================
+# OPENROUTER STT MODELS
+# ============================================================================
+
+# OpenAI GPT-4o Audio Preview via OpenRouter (supports audio input)
+[audio.models.openrouter-gpt-4o-audio]
+name = "openai/gpt-4o-audio-preview"
+provider = "openrouter"
+type = "stt"
+description = "OpenAI GPT-4o Audio Preview STT via OpenRouter"
+api_endpoint = "/chat/completions"
+api_key_env = "OPENROUTER_API_KEY"
+base_url = "https://openrouter.ai/api/v1"
+requires_api_key = true
+capabilities = ["stt", "transcription", "audio_understanding", "multilingual"]
+supported_formats = ["mp3", "wav", "m4a", "ogg", "flac", "webm", "opus"]
+languages = ["50+"]
+
+# Deepgram Nova-3 via OpenRouter
+[audio.models.openrouter-deepgram-nova-3]
+name = "deepgram/nova-3"
+provider = "openrouter"
+type = "stt"
+description = "Deepgram Nova-3 STT via OpenRouter"
+api_endpoint = "/chat/completions"
+api_key_env = "OPENROUTER_API_KEY"
+base_url = "https://openrouter.ai/api/v1"
+requires_api_key = true
+capabilities = ["stt", "transcription", "realtime", "speaker_diarization", "multilingual"]
+supported_formats = ["mp3", "wav", "m4a", "ogg", "flac", "webm", "opus"]
+languages = ["100+"]
+pricing_per_minute = 0.0043
+
+# ============================================================================
+# OPENROUTER TTS MODELS
+# ============================================================================
+
+# OpenAI GPT-4o Mini TTS via OpenRouter
+[audio.models.openrouter-gpt-4o-mini-tts]
+name = "openai/gpt-4o-mini-tts"
+provider = "openrouter"
+type = "tts"
+description = "OpenAI GPT-4o Mini TTS via OpenRouter"
+api_endpoint = "/audio/speech"
+api_key_env = "OPENROUTER_API_KEY"
+base_url = "https://openrouter.ai/api/v1"
+requires_api_key = true
+capabilities = ["tts", "speech_synthesis", "multilingual"]
+voices = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"]
+supported_formats = ["mp3", "wav", "opus", "aac", "flac", "pcm"]
+languages = ["50+"]
+pricing_per_1k_chars = 0.015
+
+# Google Gemini 3.1 Flash TTS Preview via OpenRouter
+[audio.models.openrouter-gemini-3.1-flash-tts]
+name = "google/gemini-3.1-flash-tts-preview"
+provider = "openrouter"
+type = "tts"
+description = "Google Gemini 3.1 Flash TTS Preview via OpenRouter"
+api_endpoint = "/audio/speech"
+api_key_env = "OPENROUTER_API_KEY"
+base_url = "https://openrouter.ai/api/v1"
+requires_api_key = true
+capabilities = ["tts", "speech_synthesis", "multilingual"]
+supported_formats = ["mp3", "wav"]
+languages = ["100+"]

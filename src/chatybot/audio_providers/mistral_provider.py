@@ -6,6 +6,11 @@ Handles Mistral Voxtral STT and TTS via API
 
 import aiohttp
 import base64
+import json
+import struct
+import subprocess
+import tempfile
+import textwrap
 from typing import Any, Dict, Optional, Union
 import os
 
@@ -16,10 +21,9 @@ from chatybot.audio_provider import AudioModelConfig
 class MistralAudioProvider(AudioProvider):
     """
     Provider for Mistral audio APIs (Voxtral STT and TTS).
-    
-    Supports:
-    - STT: voxtral-mini-latest (offline batch transcription)
-    - TTS: voxtral-mini-tts-2603 (text-to-speech with voice cloning)
+
+    STT uses the dedicated /v1/audio/transcriptions endpoint with raw binary upload.
+    TTS uses /v1/audio/speech with JSON.
     """
     
     def __init__(self, config: AudioModelConfig):
@@ -74,17 +78,17 @@ class MistralAudioProvider(AudioProvider):
         options: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
-        Perform speech-to-text using Mistral API.
+        Perform speech-to-text using Mistral /v1/audio/transcriptions endpoint.
         
-        Mistral audio transcription uses the chat completions endpoint with input_audio content type.
-        Documentation: https://platform-docs-public.pages.dev/capabilities/audio/
+        Sends as multipart/form-data with 'file' and 'model' fields.
+        Pattern: -F model="voxtral-mini-latest" -F file=@file.mp3
         
         Args:
             input_data: Dict with 'audio' (bytes) and 'filename'
-            options: Options like language, diarization, timestamps
+            options: Options like language, diarize, timestamp_granularities
             
         Returns:
-            Dict with 'text', 'language', 'duration', etc.
+            Dict with 'text', 'language', 'duration'
         """
         audio_bytes = input_data.get("audio")
         filename = input_data.get("filename", "input_audio")
@@ -92,62 +96,50 @@ class MistralAudioProvider(AudioProvider):
         if not audio_bytes:
             raise ValueError("No audio data provided for transcription")
         
-        # Encode audio as base64
-        audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
+        url = f"{self.base_url}{self.api_endpoint}"
         
-        # Mistral uses chat completions endpoint for audio transcription
-        # Send audio as input_audio content type in messages
-        url = f"{self.base_url}/chat/completions"
+        model_name = self.config.name
+        
+        # Build multipart form data (Mistral requires this format)
+        form_data = aiohttp.FormData()
+        form_data.add_field('file', audio_bytes, filename=filename)
+        form_data.add_field('model', model_name)
+        
+        # Add optional parameters
+        if "language" in options and options["language"]:
+            form_data.add_field('language', options["language"])
+        if "diarize" in options:
+            form_data.add_field('diarize', str(options["diarize"]).lower())
+        if "timestamp_granularities" in options:
+            granularities = options["timestamp_granularities"]
+            if isinstance(granularities, list):
+                for g in granularities:
+                    form_data.add_field('timestamp_granularities[]', g)
+            else:
+                form_data.add_field('timestamp_granularities[]', granularities)
+        
         headers = {
             "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
+            # No Content-Type header - aiohttp.FormData sets it automatically
         }
-        
-        # Build request body with audio as input_audio
-        # Use the model alias/API model ID, not the display name
-        model_name = self.config.name
-        request_body = {
-            "model": model_name,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "input_audio",
-                            "input_audio": audio_base64,
-                        }
-                    ]
-                }
-            ],
-            "stream": False,
-        }
-        
-        # Add optional parameters if supported
-        # Note: The chat completions API may not support all transcription options
-        if "language" in options and options["language"]:
-            request_body["language"] = options["language"]
-        if "temperature" in options:
-            request_body["temperature"] = options["temperature"]
         
         async with aiohttp.ClientSession() as session:
-            async with session.post(url, json=request_body, headers=headers) as response:
+            async with session.post(url, data=form_data, headers=headers) as response:
                 if response.status != 200:
                     error_text = await response.text()
                     raise Exception(f"Mistral STT API error: {response.status} - {error_text}")
                 
                 result = await response.json()
+                text = result.get("text", "")
                 
-                # Extract text from chat response
-                # The transcription is in choices[0].message.content
-                text = ""
-                if result.get("choices"):
-                    text = result["choices"][0].get("message", {}).get("content", "")
+                # Format to 80 chars per line for easy reading
+                formatted_text = textwrap.fill(text, width=80)
                 
                 return {
-                    "text": text,
-                    "language": options.get("language"),
-                    "duration": None,  # Duration not provided by this API
-                    "chunks": None,
+                    "text": formatted_text,
+                    "language": result.get("language"),
+                    "duration": result.get("duration"),
+                    "chunks": 1,
                 }
     
     async def _text_to_speech(
@@ -157,7 +149,7 @@ class MistralAudioProvider(AudioProvider):
     ) -> Dict[str, Any]:
         """
         Generate speech using Mistral TTS API.
-        
+
         API: POST /v1/audio/speech
         https://docs.mistral.ai/studio-api/audio/text_to_speech
         
@@ -210,7 +202,6 @@ class MistralAudioProvider(AudioProvider):
                 result = await response.json()
                 
                 # Decode base64 audio data
-                # Mistral returns "audio" field with base64-encoded MP3
                 audio_data = result.get("audio", "")
                 audio_bytes = base64.b64decode(audio_data) if audio_data else b""
                 
