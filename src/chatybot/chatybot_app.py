@@ -743,15 +743,53 @@ class ChatybotApp:
                         delta, "reasoning_content", getattr(delta, "reasoning", None)
                     )
                     if reasoning:
-                        full_response += reasoning
-                        think_tokens_estimate += 1
-                        if self.trace_tps_perf:
-                            tps_records.append((chunk_time, "think", 1))
-                        if self.show_thinking:
-                            print(f"\033[90m{reasoning}\033[0m", end="", flush=True)
+                        # Handle structured content in reasoning field
+                        if isinstance(reasoning, list):
+                            for item in reasoning:
+                                if isinstance(item, dict):
+                                    if item.get("type") == "text":
+                                        full_response += item.get("text", "")
+                                    elif item.get("type") == "thinking" and self.show_thinking:
+                                        thinking_text = item.get("thinking", "")
+                                        if isinstance(thinking_text, list):
+                                            for t in thinking_text:
+                                                if isinstance(t, dict):
+                                                    full_response += t.get("text", "")
+                                                    print(f"\033[90m{t.get('text', '')}\033[0m", end="", flush=True)
+                                        elif isinstance(thinking_text, str):
+                                            full_response += thinking_text
+                                            print(f"\033[90m{thinking_text}\033[0m", end="", flush=True)
+                        else:
+                            full_response += reasoning
+                            think_tokens_estimate += 1
+                            if self.trace_tps_perf:
+                                tps_records.append((chunk_time, "think", 1))
+                            if self.show_thinking:
+                                print(f"\033[90m{reasoning}\033[0m", end="", flush=True)
 
                     if delta.content:
                         content = delta.content
+                        # Handle Mistral's structured content (list of dicts) in streaming
+                        if isinstance(content, list):
+                            # Extract text from structured content with color coding
+                            for item in content:
+                                if isinstance(item, dict):
+                                    if item.get("type") == "text":
+                                        text_content = item.get("text", "")
+                                        full_response += text_content
+                                        print(text_content, end="", flush=True)
+                                    elif item.get("type") == "thinking" and self.show_thinking:
+                                        thinking_text = item.get("thinking", "")
+                                        if isinstance(thinking_text, list):
+                                            for t in thinking_text:
+                                                if isinstance(t, dict):
+                                                    think_content = t.get("text", "")
+                                                    full_response += think_content
+                                                    print(f"\033[90m{think_content}\033[0m", end="", flush=True)
+                                        elif isinstance(thinking_text, str):
+                                            full_response += thinking_text
+                                            print(f"\033[90m{thinking_text}\033[0m", end="", flush=True)
+                            continue  # Skip the rest of the processing for structured content
                         full_response += content
 
                         if in_think_block or "<think>" in content or "<thought>" in content:
