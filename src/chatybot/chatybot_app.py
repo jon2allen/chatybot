@@ -11,6 +11,7 @@ import time
 import re
 import shlex
 import random
+import json
 from datetime import datetime
 from typing import Dict, Any, List, Tuple, Optional, Callable, Union
 import logging
@@ -97,6 +98,8 @@ class ChatybotApp:
         self.trace_tps: bool = False
         self.trace_tps_perf: bool = False
         self.debug_payload_mode: bool = False
+        self.debug_response_mode: bool = False
+        self.debug_response_raw: bool = False
         self.debug_payload_data: dict = {}
 
         # Seed configuration
@@ -656,7 +659,7 @@ class ChatybotApp:
             start_time = time.time()
 
             if self.trace_raw_payload:
-                import json
+
 
                 print("Payload:")
                 print("-----------------------------")
@@ -669,7 +672,7 @@ class ChatybotApp:
 
             # Capture payload for debug mode
             if self.debug_payload_mode:
-                import json
+
                 import tempfile
                 import os
                 import subprocess
@@ -726,6 +729,12 @@ class ChatybotApp:
             if stream:
                 kwargs["stream"] = True
                 response = await client.chat.completions.create(**kwargs)
+                
+                # Reset debug response flags in streaming mode (not supported for streams)
+                if self.debug_response_mode or self.debug_response_raw:
+                    print("\n[DEBUG] Response debugging is only supported in non-streaming mode.")
+                    self.debug_response_mode = False
+                    self.debug_response_raw = False
 
                 full_response = ""
                 print("Assistant: ", end="", flush=True)
@@ -924,7 +933,26 @@ class ChatybotApp:
             else:
                 response = await client.chat.completions.create(**kwargs)
                 message = response.choices[0].message
-                print(response)
+                if self.debug_response_mode:
+
+                    print("\n--- DEBUG RESPONSE (JSON) ---")
+                    try:
+                        if hasattr(response, "model_dump"):
+                            print(json.dumps(response.model_dump(), indent=2))
+                        elif hasattr(response, "model_dump_json"):
+                            print(response.model_dump_json(indent=2))
+                        else:
+                            print(json.dumps(response, indent=2, default=str))
+                    except Exception as e:
+                        print(f"Error dumping JSON: {e}")
+                        print(response)
+                    print("--- END DEBUG RESPONSE ---\n")
+                    self.debug_response_mode = False
+                elif self.debug_response_raw:
+                    print("\n--- DEBUG RESPONSE (RAW) ---")
+                    print(response)
+                    print("--- END DEBUG RESPONSE ---\n")
+                    self.debug_response_raw = False
                 content = message.content or ""
                 reasoning = (
                     getattr(
@@ -1576,13 +1604,27 @@ class ChatybotApp:
             return True
 
         elif cmd == "/debug":
-            if len(parts) >= 2 and parts[1].lower() == "payload":
-                self.debug_payload_mode = True
-                print("Debug payload mode activated. Next prompt will capture payload for editing.")
-                print("After entering your prompt, the payload will be opened in your editor.")
-                return True
+            if len(parts) >= 2:
+                subcmd = parts[1].lower()
+                if subcmd == "payload":
+                    self.debug_payload_mode = True
+                    print("Debug payload mode activated. Next prompt will capture payload for editing.")
+                    print("After entering your prompt, the payload will be opened in your editor.")
+                elif subcmd == "response":
+                    if len(parts) >= 3 and parts[2].lower() == "raw":
+                        self.debug_response_raw = True
+                        self.debug_response_mode = False # Mutual exclusion or should they both be true? 
+                        # User said "in default it will attempt to print json dump... if it is 'response raw' it will just do a print"
+                        # I'll set a specific flag for raw.
+                        print("Debug response raw mode activated. Next completion will print the raw response.")
+                    else:
+                        self.debug_response_mode = True
+                        self.debug_response_raw = False
+                        print("Debug response mode activated. Next completion will print a JSON dump of the response.")
+                else:
+                    print("Unknown /debug subcommand. Use payload, response, or response raw.")
             else:
-                print("Usage: /debug payload")
+                print("Usage: /debug <payload|response [raw]>")
             return True
 
         elif cmd == "/prompt":
@@ -1839,7 +1881,7 @@ class ChatybotApp:
                 file_path, image_data = self.image_generator.last_generated_image
             # Then try to extract from last chat response
             elif self.chat_history:
-                import json
+
                 last_response = self.chat_history[-1][1]
                 try:
                     # Try to parse as JSON to find images
@@ -3048,7 +3090,7 @@ class ChatybotApp:
         print("  /seed <value> - Set seed (int, 'time', or 'random <min>,<max>').")
         print("  /stream - Toggle streaming responses.")
         print("  /trace <rawpayload|tps|tpsperf|imagedbg> <on|off> - Debugging options")
-        print("  /debug payload - Capture payload, edit in editor, and send to API")
+        print("  /debug <payload|response [raw]> - Activate debug mode for the next prompt.")
         print("  /echo <text> - Echo text to screen with variable substitution.")
         print("  /reloadmacros [file] - Reload macro definitions from macro.chatdsl or specified file.")
         print("  /script <file> [x=value y=value z=value] - Execute a script file with optional parameters.")
