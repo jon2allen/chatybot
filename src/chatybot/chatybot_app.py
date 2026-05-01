@@ -86,6 +86,7 @@ class ChatybotApp:
         self.streaming_enabled: bool = False
         self.note_mode: bool = False
         self.reasoning_mode: bool = True
+        self.reasoning_effort: Optional[str] = None
         self.show_thinking: bool = True
         self.multi_line_mode: bool = False
         self.script_context: bool = False
@@ -134,7 +135,7 @@ class ChatybotApp:
                     "filebank5", "imagebank", "imagebank1", "imagebank2", "imagebank3",
                     "imagebank4", "imagebank5", "model", "listmodels", "logging", "save",
                     "codeonly", "codeoff", "multiline", "system", "temp", "maxtokens",
-                    "top_p", "top_k", "freq_penalty", "pres_penalty", "reasoning", "seed",
+                    "top_p", "top_k", "freq_penalty", "pres_penalty", "reasoning", "effort", "seed",
                     "stream", "script", "quit", "setdb", "dblist",
                     "searchdb", "dblog", "dbprint", "loadvar", "savevar",
                     "setvar", "notemode", "mem", "dump", "trace",
@@ -592,6 +593,20 @@ class ChatybotApp:
         if "qwen" in model_name.lower() and not self.reasoning_mode:
             kwargs.setdefault("extra_body", {})["enable_reasoning"] = False
 
+        # Add reasoning_effort if set (for OpenAI o1/o3, Mistral models with adjustable reasoning)
+        # Supported by: OpenAI official API, OpenRouter, Mistral AI API for reasoning models
+        # Mistral models: mistral-small-latest, mistral-medium-3.5 (includes mistral-medium-2604)
+        # OpenAI models: o1, o3, etc.
+        if self.reasoning_effort is not None:
+            if is_openai_official or "openrouter" in model_config.get("base_url", "").lower():
+                # OpenAI and OpenRouter support reasoning_effort at top level
+                kwargs["reasoning_effort"] = self.reasoning_effort
+            elif is_mistral:
+                # Mistral supports reasoning_effort at top level for reasoning models
+                # Check if model name suggests it's a reasoning model
+                if any(x in model_name.lower() for x in ["mistral-small-latest", "mistral-medium-3.5", "mistral-medium-2604", "magistral"]):
+                    kwargs["reasoning_effort"] = self.reasoning_effort
+
         tk = self.top_k if self.top_k is not None else model_config.get("top_k")
         if tk is not None:
             if is_nvidia:
@@ -871,6 +886,7 @@ class ChatybotApp:
             else:
                 response = await client.chat.completions.create(**kwargs)
                 message = response.choices[0].message
+                print(response)
                 content = message.content or ""
                 reasoning = (
                     getattr(
@@ -886,6 +902,25 @@ class ChatybotApp:
                     if self.show_thinking:
                         print(f"\033[90m{reasoning}\033[0m")
                     full_response += f"{reasoning}\n\n"
+
+                # Handle Mistral's structured content (list of dicts with type: 'thinking' or 'text')
+                if isinstance(content, list):
+                    # Extract text content from the list
+                    text_parts = []
+                    for item in content:
+                        if isinstance(item, dict):
+                            if item.get("type") == "text":
+                                text_parts.append(item.get("text", ""))
+                            elif item.get("type") == "thinking" and self.show_thinking:
+                                thinking_text = item.get("thinking", "")
+                                if isinstance(thinking_text, list):
+                                    # Handle nested thinking list
+                                    for t in thinking_text:
+                                        if isinstance(t, dict):
+                                            text_parts.append(t.get("text", ""))
+                                elif isinstance(thinking_text, str):
+                                    text_parts.append(thinking_text)
+                    content = "".join(text_parts)
 
                 full_response += content
 
@@ -1200,10 +1235,9 @@ class ChatybotApp:
                 # This means a /prompt command was executed and confirmed.
                 # The prompt buffer is already set by handle_escape_command.
                 # We need to trigger the chat completion here.
-                temp_prompt = (
-                    "Using the following prompt, please provide a response:\n"
-                    + self.buffer_manager.prompt_buffer
-                )
+                # Use the prompt buffer directly, then clear it to avoid duplication
+                temp_prompt = self.buffer_manager.prompt_buffer
+                self.buffer_manager.prompt_buffer = ""
                 response = await self.chat_completion(
                     temp_prompt, stream=self.streaming_enabled
                 )
@@ -2240,6 +2274,21 @@ class ChatybotApp:
                 )
             return True
 
+        elif cmd == "/effort":
+            if len(parts) > 1:
+                effort = parts[1].lower()
+                if effort in ["low", "medium", "high", "none"]:
+                    self.reasoning_effort = effort if effort != "none" else None
+                    print(f"Reasoning effort set to {effort}")
+                else:
+                    print("Invalid effort level. Use: low, medium, high, or none")
+            else:
+                if self.reasoning_effort:
+                    print(f"Reasoning effort is currently: {self.reasoning_effort}")
+                else:
+                    print("Reasoning effort is currently: none (not set)")
+            return True
+
         elif cmd == "/thinking":
             if len(parts) > 1 and parts[1].lower() in ["on", "off"]:
                 if parts[1].lower() == "on":
@@ -2951,6 +3000,7 @@ class ChatybotApp:
         print(
             "  /reasoning <on|off> - Toggle reasoning (thinking) for NVIDIA and Qwen models."
         )
+        print("  /effort <low|medium|high|none> - Set reasoning effort for OpenAI (o1, o3) and Mistral (mistral-small-latest, mistral-medium-3.5) models.")
         print(
             "  /thinking <on|off> - Toggle display of <think> blocks and reasoning text."
         )
@@ -3093,10 +3143,9 @@ class ChatybotApp:
                             print("Error: Text chat requires a text model. Set one with /model <text_model_alias>")
                             continue
                         # Execute the buffered prompt
-                        temp_prompt = (
-                            "Using the following prompt, please provide a response:\n"
-                            + self.buffer_manager.prompt_buffer
-                        )
+                        # Use the prompt buffer directly, then clear it to avoid duplication
+                        temp_prompt = self.buffer_manager.prompt_buffer
+                        self.buffer_manager.prompt_buffer = ""
                         response = await self.chat_completion(
                             temp_prompt, stream=self.streaming_enabled
                         )
