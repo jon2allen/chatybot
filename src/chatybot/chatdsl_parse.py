@@ -168,7 +168,7 @@ class TParser:
         "help", "prompt", "file", "showfile", "clearfile", "filebank",
         "model", "listmodels", "logging", "save", "codeonly", "codeoff",
         "system", "temp", "maxtokens", "top_p", "top_k", "freq_penalty",
-        "pres_penalty", "reasoning", "seed", "stream", "script", "quit",
+        "pres_penalty", "reasoning", "effort", "seed", "stream", "script", "quit",
         "setdb", "dblist", "searchdb", "dblog", "dbprint", "loadvar",
         "savevar", "setvar", "notemode", "mem", "dump", "trace", "thinking",
         "filebank1", "filebank2", "filebank3", "filebank4", "filebank5",
