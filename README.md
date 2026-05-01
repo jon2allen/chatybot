@@ -514,6 +514,12 @@ chat --> Create a blog post outline about ${topic}
 
 ### Change log
 
+May 1st, 2026 (v0.4.2)
+----------------------
+- **Mistral Thinking Support**: Added support for Mistral's structured reasoning format (list of thinking/text blocks) in both streaming and non-streaming modes.
+- **Reasoning Effort**: Introduced the `/effort <low|medium|high|none>` command to control reasoning effort for supported models (Mistral, OpenAI o1/o3).
+- **Prompt Execution Fix**: Improved `/prompt` execution logic to avoid duplicate prompts and clear the buffer after execution.
+
 Apr 28th, 2026 (v0.4.1)
 --------------
 - **Hotfix**: Added missing `image_manager.py` module and declared explicit `aiohttp` requirement in dependencies.
