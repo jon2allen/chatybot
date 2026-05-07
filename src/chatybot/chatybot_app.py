@@ -2609,16 +2609,24 @@ class ChatybotApp:
             var_name = parts[1].strip('"')
             # Use full placeholder replacement to support image banks
             value_with_images = parts[2]
-            # Check if value contains imagebank placeholders
+            # Check if value contains bank placeholders
             for i in range(1, 6):
-                placeholder = f"{{imagebank{i}}}"
-                if placeholder in value_with_images:
-                    # Replace with actual image data
-                    bank_name = f"imagebank{i}"
-                    if bank_name in self.buffer_manager.image_banks:
-                        image_data = self.buffer_manager.image_banks[bank_name]
+                # Image banks
+                img_placeholder = f"{{imagebank{i}}}"
+                if img_placeholder in value_with_images:
+                    if img_placeholder in self.buffer_manager.image_banks:
+                        image_data = self.buffer_manager.image_banks[img_placeholder.strip("{}")]
                         if image_data:
-                            value_with_images = value_with_images.replace(placeholder, image_data)
+                            value_with_images = value_with_images.replace(img_placeholder, image_data)
+                
+                # Audio banks
+                aud_placeholder = f"{{audiobank{i}}}"
+                if aud_placeholder in value_with_images:
+                    if aud_placeholder.strip("{}") in self.buffer_manager.audio_banks:
+                        audio_data = self.buffer_manager.audio_banks[aud_placeholder.strip("{}")]
+                        if audio_data:
+                            value_with_images = value_with_images.replace(aud_placeholder, audio_data)
+                            
             var_value = self.buffer_manager.replace_placeholders_legacy(value_with_images)
             
             # Check if variable already exists and contains image data or JSON
@@ -2720,10 +2728,34 @@ class ChatybotApp:
                 return True
             
             if len(parts) < 2:
-                print("Usage: /transcribe <file> [model=X] [language=XX] [diarization=true]")
+                print("Usage: /transcribe <file_or_bank_or_var> [model=X] [language=XX] [diarization=true]")
                 return True
+
+            target = parts[1].strip(" \"'")
+            audio_input = target
             
-            file_path = parts[1].strip(" \"'")
+            # Check for audiobank placeholder: {audiobank1}
+            import re
+            bank_match = re.match(r'\{audiobank([1-5])\}', target)
+            if bank_match:
+                bank_num = int(bank_match.group(1))
+                audio_input = self.buffer_manager.get_audio_bytes_from_bank(bank_num)
+                if not audio_input:
+                    print(f"Error: audiobank{bank_num} is empty.")
+                    return True
+            
+            # Check for variable syntax: [varname]
+            elif target.startswith("[") and target.endswith("]"):
+                var_name = target[1:-1]
+                if var_name in self.buffer_manager.script_vars:
+                    var_value = self.buffer_manager.script_vars[var_name]
+                    audio_input = self.buffer_manager.get_audio_bytes_from_variable(var_value)
+                    if not audio_input:
+                        print(f"Error: Variable '{var_name}' does not contain valid audio data.")
+                        return True
+                else:
+                    print(f"Error: Variable '{var_name}' not found.")
+                    return True
             
             # Parse options from remaining parts
             options = {}
@@ -2741,7 +2773,7 @@ class ChatybotApp:
                         options[key] = value
             
             # Use audio engine for transcription
-            result = await self.audio_engine.transcribe(file_path, **options)
+            result = await self.audio_engine.transcribe(audio_input, **options)
             if result.success:
                 print(f"Transcription: {result.text}")
                 if result.file_path:
@@ -3126,8 +3158,8 @@ class ChatybotApp:
             "  /loadvar <varname> [ALL|id|range] - Load search buffer, all docs, a doc ID, or a range (e.g. 1-5) into a variable."
         )
         print("  /savevar <varname> <filename> - Save a variable's contents to a file.")
-        print("  /setvar <varname> <value> - Set a script variable to a string (text only, not image data).")
-        print("  /mem - Show size of buffers and script variables.")
+        print("  /setvar <varname> <value> - Set a script variable to a string (supports {imagebankN} and {audiobankN}).")
+        print("  /mem - Show size of buffers, banks (image/audio), and script variables.")
         print("  /dump [varname|all] - Print content of buffers or script variables.")
         print("\nAudio commands:")
         print("  /model <audio_model_alias> - Set active audio model (e.g., voxtral-mini-3b, voxtral-tts)")
@@ -3135,7 +3167,7 @@ class ChatybotApp:
         print("    Actions: speak/tts, transcribe/stt, generate/sfx/music, analyze/recognize")
         print("    Example: /audialize \"speak: Hello world\" voice=alloy")
         print("    Example: /audialize \"transcribe: speech.wav\" language=en")
-        print("  /transcribe <file> [options] - Transcribe audio file to text")
+        print("  /transcribe <file|bank|var> [options] - Transcribe audio from file, {audiobankN}, or [variable]")
         print("    Options: model=X, language=XX, diarization=true")
         print("  /transcribemirror <var> - Save last transcription to variable")
         print("  /audiomirror <var> - Save last generated audio to variable (base64)")
