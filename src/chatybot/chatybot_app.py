@@ -2575,6 +2575,26 @@ class ChatybotApp:
                     for p, r in self.chat_history
                 ) / 1024
                 print(f"{'CHAT_HISTORY':<20} {total_ch_size:>10.2f}")
+            
+            # Show last audio memory usage
+            if hasattr(self.audio_engine, 'last_generated_audio') and self.audio_engine.last_generated_audio:
+                file_path, audio_data = self.audio_engine.last_generated_audio
+                # Calculate size from base64 if it's a data URL
+                if audio_data.startswith("data:"):
+                    data_start = audio_data.find(",") + 1
+                    if data_start > 0:
+                        base64_len = len(audio_data) - data_start
+                        audio_size_kb = (base64_len * 3) / 4 / 1024
+                    else:
+                        audio_size_kb = len(audio_data.encode('utf-8')) / 1024
+                else:
+                    audio_size_kb = len(audio_data.encode('utf-8')) / 1024
+                print(f"{'LAST_AUDIO':<20} {audio_size_kb:>10.2f}")
+            
+            # Show last transcription memory usage
+            if hasattr(self.audio_engine, 'last_transcription') and self.audio_engine.last_transcription:
+                trans_size_kb = len(self.audio_engine.last_transcription.encode('utf-8')) / 1024
+                print(f"{'LAST_TRANSCRIPTION':<20} {trans_size_kb:>10.2f}")
             return True
 
         elif cmd == "/dump":

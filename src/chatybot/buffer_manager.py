@@ -512,6 +512,22 @@ class BufferManager:
             else:
                 print(f"{bank_name:<20} {0:>10.2f}")
         
+        # Audio Banks
+        for i in range(1, 6):
+            bank_name = f"audiobank{i}"
+            content = self.audio_banks[bank_name]
+            if content and content.startswith("data:audio/"):
+                # For base64 data URLs, calculate size differently
+                data_start = content.find(",") + 1
+                if data_start > 0:
+                    base64_len = len(content) - data_start
+                    bank_size = (base64_len * 3) / 4 / 1024  # Approximate
+                    print(f"{bank_name:<20} {bank_size:>10.2f}")
+                else:
+                    print(f"{bank_name:<20} {0:>10.2f}")
+            else:
+                print(f"{bank_name:<20} {0:>10.2f}")
+        
         # Search Buffer
         if search_buffer is not None:
             import json
@@ -543,6 +559,10 @@ class BufferManager:
                 bank_name = f"imagebank{i}"
                 content = self.image_banks[bank_name]
                 print(f"{bank_name.upper()}: {'<image data>' if content else ''}")
+            for i in range(1, 6):
+                bank_name = f"audiobank{i}"
+                content = self.audio_banks[bank_name]
+                print(f"{bank_name.upper()}: {'<audio data>' if content else ''}")
             
             if search_buffer is not None:
                 print(f"SEARCH_BUFFER: {search_buffer}")
@@ -583,6 +603,12 @@ class BufferManager:
             if name in self.image_banks:
                 content = self.image_banks[name]
                 print(f"{name.upper()}: {'<image data>' if content else ''}")
+            else:
+                print(f"Error: {name} not found.")
+        elif name.startswith("audiobank") and name[9:].isdigit():
+            if name in self.audio_banks:
+                content = self.audio_banks[name]
+                print(f"{name.upper()}: {'<audio data>' if content else ''}")
             else:
                 print(f"Error: {name} not found.")
         elif name in self.script_vars:
