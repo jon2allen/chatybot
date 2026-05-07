@@ -389,6 +389,50 @@ class BufferManager:
             return format_part
         return None
     
+    def get_audio_bytes_from_variable(self, var_value: str) -> Optional[bytes]:
+        """
+        Extract audio bytes from a data URL variable.
+        
+        Args:
+            var_value: Audio data URL
+            
+        Returns:
+            Audio bytes or None
+        """
+        if not self.is_audio_variable(var_value):
+            return None
+        
+        # Extract base64 data
+        data_start = var_value.find(",") + 1
+        if data_start <= 0:
+            return None
+        
+        base64_data = var_value[data_start:]
+        try:
+            return base64.b64decode(base64_data)
+        except Exception:
+            return None
+            
+    def get_audio_bytes_from_bank(self, bank_num: int) -> Optional[bytes]:
+        """
+        Extract audio bytes from a specific audio bank.
+        
+        Args:
+            bank_num: Audio bank number (1-5)
+            
+        Returns:
+            Audio bytes or None
+        """
+        if bank_num < 1 or bank_num > 5:
+            return None
+        
+        bank_name = f"audiobank{bank_num}"
+        content = self.audio_banks.get(bank_name)
+        if not content:
+            return None
+            
+        return self.get_audio_bytes_from_variable(content)
+    
     def replace_placeholders(self, prompt: str, include_images: bool = True, include_audio: bool = True) -> Tuple[str, List[Dict]]:
         """
         Replace filebank, script variable, imagebank, and audiobank placeholders in the prompt.
