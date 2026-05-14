@@ -1,0 +1,6 @@
+# Ignore auto-generated corpus files from Atheris
+# These are hex-named files created during fuzzing
+*[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]*
+
+# Keep only intentional seed files (.txt)
+!*.txt

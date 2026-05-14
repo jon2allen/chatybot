@@ -1,0 +1,1 @@
+Hello {filebank1} world! My name is ${var1} and I work at {filebank2}.

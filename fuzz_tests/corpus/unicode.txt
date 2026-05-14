@@ -1,0 +1,1 @@
+Unicode test: 你好世界 {filebank1} 世界 ${var1} 🌍 Привет {filebank2} こんにちは

@@ -155,6 +155,41 @@ class BufferManager:
         else:
             raise ValueError(f"Unsupported image format: {ext}. Use .jpg, .jpeg, or .png")
 
+    def detect_audio_format(self, file_path: str) -> str:
+        """
+        Detect audio MIME type from file extension.
+        
+        Args:
+            file_path: Path to the audio file
+            
+        Returns:
+            MIME type string (e.g., 'audio/mpeg', 'audio/wav')
+            
+        Raises:
+            ValueError: If file format is not supported
+        """
+        ext = Path(file_path).suffix.lower()
+        if ext == '.mp3':
+            return 'audio/mpeg'
+        elif ext == '.wav':
+            return 'audio/wav'
+        elif ext == '.flac':
+            return 'audio/flac'
+        elif ext == '.ogg':
+            return 'audio/ogg'
+        elif ext == '.m4a':
+            return 'audio/mp4'
+        elif ext == '.webm':
+            return 'audio/webm'
+        elif ext == '.opus':
+            return 'audio/opus'
+        elif ext == '.aac':
+            return 'audio/aac'
+        elif ext == '.pcm':
+            return 'audio/pcm'
+        else:
+            raise ValueError(f"Unsupported audio format: {ext}. Use .mp3, .wav, .flac, .ogg, .m4a, .webm, .opus, .aac, or .pcm")
+
     def load_image_to_bank(self, bank_num: int, file_path: str) -> None:
         """
         Load an image file into a specific image bank as base64 data URL.
@@ -416,3 +451,38 @@ class BufferManager:
             print(f"SCRIPT_VAR '{name}': {self.script_vars[name]}")
         else:
             print(f"Error: Variable '{name}' not found.")
+
+    def fuzz_test_crash(self, data: bytes) -> str:
+        """
+        ARTIFICIAL CRASH FUNCTION FOR FUZZ TESTING.
+        
+        This function intentionally crashes on specific inputs to test
+        that the fuzzing infrastructure correctly detects and saves crashes.
+        
+        Crash triggers:
+        - Input starting with b'CRASH1' -> ZeroDivisionError
+        - Input starting with b'CRASH2' -> IndexError
+        - Input starting with b'CRASH3' -> TypeError
+        
+        Args:
+            data: Input bytes to test
+            
+        Returns:
+            "OK" if no crash
+            
+        Raises:
+            ZeroDivisionError: If input starts with b'CRASH1'
+            IndexError: If input starts with b'CRASH2'
+            TypeError: If input starts with b'CRASH3'
+        """
+        if data.startswith(b'CRASH1'):
+            # Trigger ZeroDivisionError
+            return 1 / 0
+        elif data.startswith(b'CRASH2'):
+            # Trigger IndexError
+            empty_list = []
+            return empty_list[0]
+        elif data.startswith(b'CRASH3'):
+            # Trigger TypeError
+            return None['key']
+        return "OK"

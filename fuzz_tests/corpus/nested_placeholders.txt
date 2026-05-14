@@ -1,0 +1,1 @@
+{{filebank1}} {{{filebank2}}} ${var1} $${var2} ${{var3}}
