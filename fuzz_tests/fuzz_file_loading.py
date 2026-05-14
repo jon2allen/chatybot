@@ -29,6 +29,8 @@ atheris.instrument_all()
 def TestOneInput(data: bytes):
     """Test file loading methods with fuzzed inputs."""
     bm = BufferManager()
+
+    print("bytes: ", data.decode('utf-8', errors='replace'))
     
     with tempfile.TemporaryDirectory() as tmpdir:
         # Test 1: Load directly from a file we write
@@ -44,6 +46,7 @@ def TestOneInput(data: bytes):
             bm.clear_file_bank(bank_num)
         
         # Test 2: Try to construct path from fuzz data
+        print( "test2 .... test2 ")
         path_str = data.decode('utf-8', errors='replace')
         
         # Strict path validation - only allow safe characters
