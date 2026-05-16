@@ -2555,6 +2555,15 @@ class ChatybotApp:
                         image_data = self.buffer_manager.image_banks[bank_name]
                         if image_data:
                             value_with_images = value_with_images.replace(placeholder, image_data)
+                            
+            # Check for CHAT_HISTORY placeholder
+            if "{CHAT_HISTORY}" in value_with_images:
+                history_json = []
+                for p, r in self.chat_history:
+                    history_json.append({"role": "user", "content": p})
+                    history_json.append({"role": "assistant", "content": r})
+                value_with_images = value_with_images.replace("{CHAT_HISTORY}", json.dumps(history_json))
+                
             var_value = self.buffer_manager.replace_placeholders_legacy(value_with_images)
             
             # Check if variable already exists and contains image data or JSON
@@ -2632,7 +2641,7 @@ class ChatybotApp:
         print("  /model [alias] - Switch to a different model or show current model.")
         print("  /listmodels - List available models from toml.")
         print("  /logging <start|end> - Start or stop logging.")
-        print("  /save <file> - Save the last chat completion to a file.")
+        print("  /save <file> [all] - Save the last chat completion to a file (use 'all' for full history).")
         print("  /notemode <on|off> - Toggle note mode for /save command.")
         print("  /codeonly - Set flag to generate code only without explanations.")
         print("  /codeoff - Reverse the code-only flag.")
