@@ -2466,7 +2466,7 @@ class ChatybotApp:
             await self.execute_script(actual_script_path)
             return True
 
-        elif cmd == "/quit":
+        elif cmd in ["/quit", "/exit"]:
             print("Goodbye! Thanks for chatting.")
             self.logging_manager.stop_logging()
             self.save_input_history()
@@ -2670,7 +2670,7 @@ class ChatybotApp:
         print("  /echo <text> - Echo text to screen with variable substitution.")
         print("  /reloadmacros [file] - Reload macro definitions from macro.chatdsl or specified file.")
         print("  /script <file> [x=value y=value z=value] - Execute a script file with optional parameters.")
-        print("  /quit - Exit the program.")
+        print("  /quit | /exit - Exit the program.")
         print(
             "  /setdb <dbname> - Create or select a TinyDB database. Use 'Null' to deactivate."
         )
@@ -2724,7 +2724,7 @@ class ChatybotApp:
         print("===========================")
         print("Chatybot.py                ")
         print("Created by Jon Allen - 2025")
-        print("Version: 0.4.2             ")
+        print("Version: 0.4.3             ")
         print("===========================")
         print(
             f"Active model: {self.config_manager.get_model_config(self.config_manager.active_model_alias)['name']} (alias: {self.config_manager.active_model_alias})"
