@@ -149,7 +149,7 @@ Active escape commands:
   /stream - Toggle streaming responses.
   /trace <rawpayload|tps|tpsperf> <on|off> - Debugging options
   /script <file> - Execute a script file containing multiple commands.
-  /quit - Exit the program.
+  /quit | /exit - Exit the program.
   /setdb <dbname> - Create or select a TinyDB database. Use 'Null' to deactivate.
   /dblist - List all TinyDB databases in the db directory.
   /searchdb <query> - Search all docs in the current database.
@@ -225,7 +225,7 @@ chat --> Hello!      # Start a conversation
 | `/imagebank{1-5} show` | Show image bank info | `/imagebank1 show` |
 | `/mem` | Show memory size of buffers/variables | `/mem` |
 | `/dump [v\|all]` | Dump variables | `/dump all` |
-| `/quit` | Exit the program | `/quit` |
+| `/quit` \| `/exit` | Exit the program | `/quit` |
 
 ---
 
@@ -511,6 +511,12 @@ chat --> Create a blog post outline about ${topic}
 ```
 
 ### Change log
+
+May 16th, 2026 (v0.4.3)
+----------------------
+- **Enhanced Chat History Export**: Added `{CHAT_HISTORY}` placeholder to `/setvar` for JSON chat history export and added the `all` parameter to the `/save` command.
+- **Improved UX**: Added `/exit` as a natural alias for `/quit`.
+- **Documentation Overhaul**: Fixed markdown formatting issues in the command table and established a dedicated **Known Issues** section.
 
 May 1st, 2026 (v0.4.2)
 ----------------------
