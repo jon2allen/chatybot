@@ -202,8 +202,6 @@ chat --> Hello!      # Start a conversation
 | `/thinking <on\|off>` | Toggle `<think>` and `<thought>` visibility | `/thinking off` |
 | `/thoughtstyle <none\|gemma4\|nanbeige\|nanbeige_code>` | Set prompting format for negative prompt to disable reasoning - auto | `/thoughtstyle nanbeige_code` |
 | `/seed <value>` | Set PRNG Seed | `/seed time` |
-
-**Note:** `nanbeige_code` may only generate thinking tokens - this is an artifact/quirk of the model.
 | `/stream` | Toggle streaming | `/stream` |
 | `/trace <cmd> <state>`| Trace tokens/payload | `/trace rawpayload on` |
 | `/debug payload` | Edit payload in editor and send to API | `/debug payload` |
@@ -212,7 +210,7 @@ chat --> Hello!      # Start a conversation
 | `/notemode <on\|off>` | Toggle note block separation | `/notemode on` |
 | `/multiline` | Toggle multi-line input | `/multiline` |
 | `/logging <start\|end>` | Start/stop logging | `/logging start` |
-| `/save <file>` | Save last response | `/save output.txt` |
+| `/save <file> [all]` | Save last response (or full history with 'all') | `/save output.txt all` |
 | `/script <path>` | Execute a script | `/script setup.dsl` |
 | `/setdb <name>` | Select TinyDB database. Use `Null` to deactivate. | `/setdb knowledge` |
 | `/dblist` | List all TinyDB databases | `/dblist` |
@@ -221,7 +219,7 @@ chat --> Hello!      # Start a conversation
 | `/dbprint [file]` | Print formatted DB report | `/dbprint report.txt` |
 | `/loadvar <v> [p]` | Store search, ALL, ID, or range in variable | `/loadvar results 1-5` |
 | `/savevar <v> <f>`| Save variable to file | `/savevar results log.txt` |
-| `/setvar <v> <val>`| Set a string variable (text only) | `/setvar user "Jon"` |
+| `/setvar <v> <val>`| Set a string variable (supports `{CHAT_HISTORY}` JSON export) | `/setvar var1 {CHAT_HISTORY}` |
 | `/imagebank{1-5} <file>` | Load image into bank for vision analysis | `/imagebank1 cat.jpg` |
 | `/imagebank{1-5} clear` | Clear an image bank | `/imagebank1 clear` |
 | `/imagebank{1-5} show` | Show image bank info | `/imagebank1 show` |
@@ -748,6 +746,12 @@ Assistant: Here's a well-structured Bash script that uses the `cat` command to d
 ## **License**
 
 This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) file for details.
+
+---
+
+## **Known Issues**
+
+- **`nanbeige_code` Generation**: When using `/thoughtstyle nanbeige_code`, the model may only generate thinking tokens without producing the final output. This is a known artifact/quirk of the `nanbeige` model itself.
 
 ---
 
