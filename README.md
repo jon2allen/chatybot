@@ -129,7 +129,7 @@ Active escape commands:
   /model [alias] - Switch to a different model or show current model.
   /listmodels - List available models from toml.
   /logging <start|end> - Start or stop logging.
-  /save <file> - Save the last chat completion to a file.
+  /save <file> [all] [nothink|withthink] - Save last completion or all history to a file (respects /thinking state by default).
   /notemode <on|off> - Toggle note mode for /save command.
   /codeonly - Set flag to generate code only without explanations.
   /codeoff - Reverse the code-only flag.
@@ -210,7 +210,7 @@ chat --> Hello!      # Start a conversation
 | `/notemode <on\|off>` | Toggle note block separation | `/notemode on` |
 | `/multiline` | Toggle multi-line input | `/multiline` |
 | `/logging <start\|end>` | Start/stop logging | `/logging start` |
-| `/save <file> [all]` | Save last response (or full history with 'all') | `/save output.txt all` |
+| `/save <file> [all] [nothink\|withthink]` | Save last response or all history, with optional thinking stripping | `/save output.txt all nothink` |
 | `/script <path>` | Execute a script | `/script setup.dsl` |
 | `/setdb <name>` | Select TinyDB database. Use `Null` to deactivate. | `/setdb knowledge` |
 | `/dblist` | List all TinyDB databases | `/dblist` |
@@ -511,6 +511,13 @@ chat --> Create a blog post outline about ${topic}
 ```
 
 ### Change log
+
+May 17th, 2026 (v0.4.4)
+----------------------
+- **Smart Thought Saving**: Upgraded the `/save` command to automatically respect the `/thinking` toggle state by default, stripping `<think>` and `<thought>` blocks when `/thinking` is `OFF`.
+- **Custom Stripping Modifiers**: Added `nothink` and `withthink` parameters to `/save` to allow force-stripping or force-including thinking blocks on demand.
+- **Thought Standardisation**: Wrapped all raw streaming and non-streaming thinking and reasoning chunks in standardized `<think>...</think>` tags in conversation history.
+- **Improved UX**: Documented the new `/save` command options in `/help` and added descriptions to the README command list and command tables.
 
 May 16th, 2026 (v0.4.3)
 ----------------------
