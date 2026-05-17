@@ -720,7 +720,8 @@ class ChatybotApp:
                     self.debug_response_mode = False
                     self.debug_response_raw = False
 
-                full_response = ""
+                full_reasoning = ""
+                full_content = ""
                 print("Assistant: ", end="", flush=True)
 
                 buffer = ""
@@ -741,19 +742,21 @@ class ChatybotApp:
                             for item in reasoning:
                                 if isinstance(item, dict):
                                     if item.get("type") == "text":
-                                        full_response += item.get("text", "")
-                                    elif item.get("type") == "thinking" and self.show_thinking:
+                                        full_content += item.get("text", "")
+                                    elif item.get("type") == "thinking":
                                         thinking_text = item.get("thinking", "")
                                         if isinstance(thinking_text, list):
                                             for t in thinking_text:
                                                 if isinstance(t, dict):
-                                                    full_response += t.get("text", "")
-                                                    print(f"\033[90m{t.get('text', '')}\033[0m", end="", flush=True)
+                                                    full_reasoning += t.get("text", "")
+                                                    if self.show_thinking:
+                                                        print(f"\033[90m{t.get('text', '')}\033[0m", end="", flush=True)
                                         elif isinstance(thinking_text, str):
-                                            full_response += thinking_text
-                                            print(f"\033[90m{thinking_text}\033[0m", end="", flush=True)
+                                            full_reasoning += thinking_text
+                                            if self.show_thinking:
+                                                print(f"\033[90m{thinking_text}\033[0m", end="", flush=True)
                         else:
-                            full_response += reasoning
+                            full_reasoning += reasoning
                             think_tokens_estimate += 1
                             if self.trace_tps_perf:
                                 tps_records.append((chunk_time, "think", 1))
@@ -769,21 +772,23 @@ class ChatybotApp:
                                 if isinstance(item, dict):
                                     if item.get("type") == "text":
                                         text_content = item.get("text", "")
-                                        full_response += text_content
+                                        full_content += text_content
                                         print(text_content, end="", flush=True)
-                                    elif item.get("type") == "thinking" and self.show_thinking:
+                                    elif item.get("type") == "thinking":
                                         thinking_text = item.get("thinking", "")
                                         if isinstance(thinking_text, list):
                                             for t in thinking_text:
                                                 if isinstance(t, dict):
                                                     think_content = t.get("text", "")
-                                                    full_response += think_content
-                                                    print(f"\033[90m{think_content}\033[0m", end="", flush=True)
+                                                    full_reasoning += think_content
+                                                    if self.show_thinking:
+                                                        print(f"\033[90m{think_content}\033[0m", end="", flush=True)
                                         elif isinstance(thinking_text, str):
-                                            full_response += thinking_text
-                                            print(f"\033[90m{thinking_text}\033[0m", end="", flush=True)
+                                            full_reasoning += thinking_text
+                                            if self.show_thinking:
+                                                print(f"\033[90m{thinking_text}\033[0m", end="", flush=True)
                             continue  # Skip the rest of the processing for structured content
-                        full_response += content
+                        full_content += content
 
                         if in_think_block or "<think>" in content or "<thought>" in content:
                             think_tokens_estimate += 1
@@ -914,6 +919,12 @@ class ChatybotApp:
                 elif in_think_block and self.show_thinking:
                     print("\033[0m", end="", flush=True)
                 print()  # New line after streaming
+                
+                # Build the standardized full response
+                if full_reasoning:
+                    full_response = f"<think>{full_reasoning}</think>\n\n{full_content}"
+                else:
+                    full_response = full_content
             else:
                 response = await client.chat.completions.create(**kwargs)
                 message = response.choices[0].message
@@ -951,7 +962,8 @@ class ChatybotApp:
                 if reasoning:
                     if self.show_thinking:
                         print(f"\033[90m{reasoning}\033[0m")
-                    full_response += f"{reasoning}\n\n"
+                    # Standardize raw reasoning fields into standard <think> tags in history
+                    full_response += f"<think>{reasoning}</think>\n\n"
 
                 # Handle Mistral's structured content (list of dicts with type: 'thinking' or 'text')
                 if isinstance(content, list):
@@ -2080,23 +2092,47 @@ class ChatybotApp:
 
         elif cmd == "/save":
             if len(parts) < 2:
-                print("Usage: /save <file> [all]")
-                print("  /save file.txt - Save last response")
+                print("Usage: /save <file> [all] [nothink]")
+                print("  /save file.txt - Save last response (omits thinking if /thinking is OFF)")
                 print("  /save file.txt all - Save all chat history")
+                print("  /save file.txt nothink - Force exclude thinking blocks")
+                print("  /save file.txt withthink - Force include thinking blocks")
                 return True
 
-            file_path = command.split(maxsplit=1)[1].strip(" \"'")
-            
-            # Check if 'all' modifier is present
+            # Parse parameters from the command
+            # Syntax: /save <file_path> [all] [nothink] (in any order at the end)
             save_all = False
-            parts_list = file_path.rsplit(" ", 1)
-            if len(parts_list) > 1 and parts_list[1].lower() == "all":
-                file_path = parts_list[0]
-                save_all = True
+            strip_thinking = not self.show_thinking # Respect /thinking state by default
+            
+            words = command.split()
+            # words[0] is "/save"
+            # Extract any known flags at the end
+            while len(words) > 2:
+                last_word = words[-1].lower().strip(" \"'")
+                if last_word == "all":
+                    save_all = True
+                    words.pop()
+                elif last_word in ("nothink", "no-think", "nothinking", "no-thinking"):
+                    strip_thinking = True
+                    words.pop()
+                elif last_word in ("withthink", "with-think", "withthinking", "with-thinking"):
+                    strip_thinking = False
+                    words.pop()
+                else:
+                    break
+            
+            # Reconstruct the file path
+            file_path = " ".join(words[1:]).strip(" \"'")
             
             if not self.chat_history:
                 print("No chat history to save.")
                 return True
+            
+            def clean_thinking(text: str) -> str:
+                import re
+                return re.sub(
+                    r"<think>.*?</think>\s*|<thought>.*?</thought>\s*", "", text, flags=re.DOTALL
+                )
             
             try:
                 directory = os.path.dirname(file_path)
@@ -2108,16 +2144,18 @@ class ChatybotApp:
                     # Save all chat history
                     with open(file_path, "w") as f:
                         for i, (prompt, response) in enumerate(self.chat_history, 1):
+                            res_to_save = clean_thinking(response) if strip_thinking else response
                             f.write(f"=== Conversation {i} ===\n")
                             f.write(f"PROMPT: {prompt}\n\n")
-                            f.write(f"RESPONSE: {response}\n\n")
+                            f.write(f"RESPONSE: {res_to_save}\n\n")
                             f.write("---\n\n")
                     print(f"All chat history ({len(self.chat_history)} conversations) saved to '{file_path}'.")
                 else:
                     # Save last response only (default behavior)
                     last_response = self.chat_history[-1][1]
+                    res_to_save = clean_thinking(last_response) if strip_thinking else last_response
                     with open(file_path, "w") as f:
-                        f.write(last_response)
+                        f.write(res_to_save)
                     print(f"Last chat completion saved to '{file_path}'.")
 
                     # If note mode is on, process the file to extract code blocks
@@ -2641,7 +2679,7 @@ class ChatybotApp:
         print("  /model [alias] - Switch to a different model or show current model.")
         print("  /listmodels - List available models from toml.")
         print("  /logging <start|end> - Start or stop logging.")
-        print("  /save <file> [all] - Save the last chat completion to a file (use 'all' for full history).")
+        print("  /save <file> [all] [nothink|withthink] - Save last completion or all history to a file (respects /thinking state by default).")
         print("  /notemode <on|off> - Toggle note mode for /save command.")
         print("  /codeonly - Set flag to generate code only without explanations.")
         print("  /codeoff - Reverse the code-only flag.")
