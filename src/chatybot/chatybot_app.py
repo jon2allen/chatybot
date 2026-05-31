@@ -2807,6 +2807,22 @@ class ChatybotApp:
                     chunk_size=item
                 )
                 
+                if self.trace_raw_payload:
+                    masked_key = f"{api_key[:10]}...{api_key[-5:]}" if api_key and len(api_key) > 15 else "None"
+                    payload_docs = chunked_docs if source_type != "dir" else f"Directory path: {source_id} (to be chunked dynamically)"
+                    payload = {
+                        "model": model_name,
+                        "query": query,
+                        "top_n": top_n,
+                        "documents": payload_docs
+                    }
+                    print("Payload:")
+                    print("-----------------------------")
+                    print(f"POST {base_url}")
+                    print(f"Headers: {{'Authorization': 'Bearer {masked_key}', 'Content-Type': 'application/json'}}")
+                    print(json.dumps(payload, indent=2))
+                    print("---- end of payload ---")
+
                 results = ranker.rerank(query=query, top_n=top_n, verbose=False)
                 self.latest_rerank_results = results
                 
