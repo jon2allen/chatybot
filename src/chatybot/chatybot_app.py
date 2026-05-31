@@ -2727,7 +2727,10 @@ class ChatybotApp:
                     
                 try:
                     db = TinyDB(db_path)
-                    all_items = db.all()
+                    if 'items' in db.tables():
+                        all_items = db.table('items').all()
+                    else:
+                        all_items = db.all()
                     for item_doc in all_items:
                         content = item_doc.get("content") or ""
                         doc_id = item_doc.doc_id
