@@ -116,6 +116,40 @@ class ChatybotApp:
 
     def initialize(self) -> None:
         """Initialize the application by loading configuration and setting up history."""
+        # Load environment variables from .env file if it exists
+        for path in [".env", "../.env", "../../.env"]:
+            if os.path.exists(path):
+                try:
+                    with open(path, "r") as f:
+                        for line in f:
+                            line = line.strip()
+                            if line and not line.startswith("#") and "=" in line:
+                                k, v = line.split("=", 1)
+                                k = k.strip()
+                                v = v.strip().strip('"\'')
+                                os.environ[k] = v
+                    break
+                except Exception:
+                    pass
+
+        # Also load from jina_api_key.txt as fallback
+        for key_file in ["jina_api_key.txt", "jina_ai_key.txt", "../jina_api_key.txt", "../jina_ai_key.txt"]:
+            if os.path.exists(key_file):
+                try:
+                    with open(key_file, "r") as f:
+                        content = f.read().strip()
+                        if "JINA_API_KEY=" in content:
+                            key = content.split("JINA_API_KEY=")[-1].strip().strip('"\'')
+                            os.environ["JINA_API_KEY"] = key
+                        elif "export " in content and "=" in content:
+                            key = content.split("=")[-1].strip().strip('"\'')
+                            os.environ["JINA_API_KEY"] = key
+                        else:
+                            os.environ["JINA_API_KEY"] = content.strip('"\'')
+                    break
+                except Exception:
+                    pass
+
         # Load configuration
         self.config_manager.load_config()
 
@@ -2581,6 +2615,40 @@ class ChatybotApp:
             return True
 
         elif cmd == "/rerank":
+            # Dynamically load env keys in case of persistent process startup without them
+            for path in [".env", "../.env", "../../.env"]:
+                if os.path.exists(path):
+                    try:
+                        with open(path, "r") as f:
+                            for line in f:
+                                line = line.strip()
+                                if line and not line.startswith("#") and "=" in line:
+                                    k, v = line.split("=", 1)
+                                    k = k.strip()
+                                    v = v.strip().strip('"\'')
+                                    os.environ[k] = v
+                        break
+                    except Exception:
+                        pass
+            
+            # Dynamic fallback to jina_api_key.txt
+            for key_file in ["jina_api_key.txt", "jina_ai_key.txt", "../jina_api_key.txt", "../jina_ai_key.txt"]:
+                if os.path.exists(key_file):
+                    try:
+                        with open(key_file, "r") as f:
+                            content = f.read().strip()
+                            if "JINA_API_KEY=" in content:
+                                key = content.split("JINA_API_KEY=")[-1].strip().strip('"\'')
+                                os.environ["JINA_API_KEY"] = key
+                            elif "export " in content and "=" in content:
+                                key = content.split("=")[-1].strip().strip('"\'')
+                                os.environ["JINA_API_KEY"] = key
+                            else:
+                                os.environ["JINA_API_KEY"] = content.strip('"\'')
+                        break
+                    except Exception:
+                        pass
+
             query_match = re.search(r'^/rerank\s+["\']([^"\']+)["\']', command, re.IGNORECASE)
             if not query_match:
                 print('Usage: /rerank "<query>" [, top_n=<number>] [, item=<sentences>]')
