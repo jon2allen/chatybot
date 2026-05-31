@@ -3004,7 +3004,9 @@ class ChatybotApp:
             "  /loadvar <varname> [ALL|id|range] - Load search buffer, all docs, a doc ID, or a range (e.g. 1-5) into a variable."
         )
         print("  /savevar <varname> <filename> - Save a variable's contents to a file.")
-        print("  /setvar <varname> <value> - Set a script variable to a string (text only, not image data).")
+        print("  /setvar <varname> <value> - Set a script variable. Supports {CHAT_HISTORY} and {LAST_RESPONSE} placeholders.")
+        print("  /documents <src>=<id> - Set the active rerank source: db=<name>, var=<name> (or CHAT_HISTORY), or dir=\"<path>\".")
+        print("  /rerank \"<query>\" [, top_n=<n>] [, item=<s>] - Semantically rerank source sentences/chunks.")
         print("  /mem - Show size of buffers and script variables.")
         print("  /dump [varname|all] - Print content of buffers or script variables.")
         print("\nScript-specific features:")
