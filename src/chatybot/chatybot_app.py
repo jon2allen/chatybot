@@ -40,6 +40,7 @@ from .buffer_manager import BufferManager
 from .image_generator import ImageGenerator
 from .image_manager import ImageManager
 from .extract_code import process_file
+from EasyRerank import EasyRanker
 from .chatydb import (
     set_db,
     search_db,
@@ -109,6 +110,10 @@ class ChatybotApp:
         self.freq_penalty: Optional[float] = None
         self.pres_penalty: Optional[float] = None
 
+        # Semantic Reranking state
+        self.rerank_documents_source = None
+        self.latest_rerank_results = []
+
     def initialize(self) -> None:
         """Initialize the application by loading configuration and setting up history."""
         # Load configuration
@@ -134,7 +139,7 @@ class ChatybotApp:
                     "setvar", "notemode", "mem", "dump", "trace",
                     "thinking", "echo", "def", "reloadmacros",
                     "imagine", "imagesize", "imagequality", "saveimage", "imagedir",
-                    "listimages", "showimage", "loadimage"
+                    "listimages", "showimage", "loadimage", "documents", "rerank"
                     ]
 
                  )
@@ -1567,6 +1572,7 @@ class ChatybotApp:
         Returns:
             True if the command was handled, False otherwise, or "EXECUTE_PROMPT" for prompt execution
         """
+        import re
         parts = command.split(maxsplit=2)
         if self.logging_manager.logging_active:
             self.logging_manager.log_message(f"Escape command: {command}")
@@ -2538,6 +2544,276 @@ class ChatybotApp:
             else:
                 dbprint()
             return True
+
+        elif cmd == "/documents":
+            doc_pattern = r'^/documents\s+(\w+)\s*=\s*(.+)$'
+            match = re.match(doc_pattern, command)
+            if not match:
+                print("Usage: /documents db=<name> | var=<name> | dir=\"<path>\"")
+                return True
+            
+            source_type = match.group(1).lower()
+            identifier = match.group(2).strip(' "\'')
+            
+            if source_type == "db":
+                db_file = os.path.expanduser(f"~/.local/share/chatybot/db/{identifier}.json")
+                if not os.path.exists(db_file):
+                    print(f"Warning: Database '{identifier}' does not exist or has no entries in {db_file}.")
+                self.rerank_documents_source = {"type": "db", "identifier": identifier}
+                print(f"Document source set to database '{identifier}'.")
+            elif source_type == "var":
+                if identifier == "CHAT_HISTORY":
+                    self.rerank_documents_source = {"type": "var", "identifier": "CHAT_HISTORY"}
+                    print("Document source set to live chat history.")
+                else:
+                    if identifier not in self.buffer_manager.script_vars:
+                        print(f"Warning: Variable '${{{identifier}}}' is not currently defined. It must be set before executing /rerank.")
+                    self.rerank_documents_source = {"type": "var", "identifier": identifier}
+                    print(f"Document source set to variable '${{{identifier}}}'.")
+            elif source_type == "dir":
+                if not os.path.exists(identifier) or not os.path.isdir(identifier):
+                    print(f"Error: Directory '{identifier}' does not exist.")
+                    return True
+                self.rerank_documents_source = {"type": "dir", "identifier": identifier}
+                print(f"Document source set to directory '{identifier}'.")
+            else:
+                print("Invalid source type. Use 'db', 'var', or 'dir'.")
+            return True
+
+        elif cmd == "/rerank":
+            query_match = re.search(r'^/rerank\s+["\']([^"\']+)["\']', command, re.IGNORECASE)
+            if not query_match:
+                print('Usage: /rerank "<query>" [, top_n=<number>] [, item=<sentences>]')
+                return True
+            
+            query = query_match.group(1)
+            remainder = command[query_match.end():]
+            
+            top_n_match = re.search(r'\btop_n\s*=\s*(\d+)', remainder, re.IGNORECASE)
+            item_match = re.search(r'\bitem\s*=\s*(\d+)', remainder, re.IGNORECASE)
+            
+            top_n = int(top_n_match.group(1)) if top_n_match else 2
+            item = int(item_match.group(1)) if item_match else 1
+            
+            if not self.rerank_documents_source:
+                print("Error: No document source specified. Set one using /documents <source> first.")
+                return True
+                
+            rerank_model_config = None
+            active_alias = self.config_manager.active_model_alias
+            if active_alias:
+                try:
+                    active_model_config = self.config_manager.get_model_config(active_alias)
+                    if active_model_config.get("type") == "reranker":
+                        rerank_model_config = active_model_config
+                except Exception:
+                    pass
+                    
+            if not rerank_model_config:
+                for alias, config in self.config_manager.config.get("models", {}).items():
+                    if config.get("type") == "reranker":
+                        rerank_model_config = config
+                        break
+                        
+            if not rerank_model_config:
+                jina_key = os.environ.get("JINA_API_KEY")
+                if jina_key:
+                    rerank_model_config = {
+                        "name": "jina-reranker-v3",
+                        "type": "reranker",
+                        "base_url": "https://api.jina.ai/v1/rerank",
+                        "api_key": "JINA_API_KEY"
+                    }
+                else:
+                    print("Error: No reranker model is configured, and JINA_API_KEY environment variable is not set.")
+                    return True
+                    
+            base_url = rerank_model_config.get("base_url", "")
+            model_name = rerank_model_config.get("name", "jina-reranker-v3")
+            api_key_env = rerank_model_config.get("api_key", "")
+            api_key = os.environ.get(api_key_env) if api_key_env else os.environ.get("JINA_API_KEY")
+            
+            if "localhost" in base_url or "127.0.0.1" in base_url:
+                backend = "local"
+                from urllib.parse import urlparse
+                parsed = urlparse(base_url)
+                host = parsed.hostname or "localhost"
+                port = parsed.port or 8080
+            else:
+                backend = "remote"
+                host = "localhost"
+                port = 8080
+                
+            source_type = self.rerank_documents_source["type"]
+            source_id = self.rerank_documents_source["identifier"]
+            
+            chunked_docs = []
+            chunk_mappings = []
+            
+            if source_type == "db":
+                from tinydb import TinyDB
+                db_path = os.path.expanduser(f"~/.local/share/chatybot/db/{source_id}.json")
+                if not os.path.exists(db_path):
+                    print(f"Error: Database file not found at {db_path}.")
+                    return True
+                    
+                try:
+                    db = TinyDB(db_path)
+                    all_items = db.all()
+                    for item_doc in all_items:
+                        content = item_doc.get("content") or ""
+                        doc_id = item_doc.doc_id
+                        name = item_doc.get("name", "N/A")
+                        sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', content) if s.strip()]
+                        for i in range(0, len(sentences), item):
+                            chunk_text = " ".join(sentences[i:i+item])
+                            if chunk_text:
+                                chunked_docs.append(chunk_text)
+                                chunk_mappings.append({
+                                    "parent_id": doc_id,
+                                    "parent_name": name
+                                })
+                except Exception as e:
+                    print(f"Error reading database {source_id}: {str(e)}")
+                    return True
+                    
+            elif source_type == "var":
+                raw_docs = []
+                if source_id == "CHAT_HISTORY":
+                    for turn_idx, (p, r) in enumerate(self.chat_history):
+                        user_sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', p) if s.strip()]
+                        for i in range(0, len(user_sentences), item):
+                            chunk_text = " ".join(user_sentences[i:i+item])
+                            if chunk_text:
+                                chunked_docs.append(chunk_text)
+                                chunk_mappings.append({"role": "user", "turn": turn_idx})
+                        asst_sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', r) if s.strip()]
+                        for i in range(0, len(asst_sentences), item):
+                            chunk_text = " ".join(asst_sentences[i:i+item])
+                            if chunk_text:
+                                chunked_docs.append(chunk_text)
+                                chunk_mappings.append({"role": "assistant", "turn": turn_idx})
+                else:
+                    var_val = self.buffer_manager.script_vars.get(source_id, "")
+                    try:
+                        parsed = json.loads(var_val)
+                        if isinstance(parsed, list):
+                            for item_val in parsed:
+                                if isinstance(item_val, dict):
+                                    content = item_val.get("content") or item_val.get("text") or item_val.get("value")
+                                    if content:
+                                        raw_docs.append(str(content))
+                                else:
+                                    raw_docs.append(str(item_val))
+                        elif isinstance(parsed, dict):
+                            content = parsed.get("content") or parsed.get("text") or parsed.get("value")
+                            raw_docs = [str(content)] if content else [str(parsed)]
+                        else:
+                            raw_docs = [str(parsed)]
+                    except Exception:
+                        raw_docs = [var_val]
+                        
+                    for doc_idx, doc in enumerate(raw_docs):
+                        sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', doc) if s.strip()]
+                        for i in range(0, len(sentences), item):
+                            chunk_text = " ".join(sentences[i:i+item])
+                            if chunk_text:
+                                chunked_docs.append(chunk_text)
+                                chunk_mappings.append({"doc_idx": doc_idx})
+                                
+            elif source_type == "dir":
+                pass
+                
+            print(f"Reranking documents from {source_type}='{source_id}' using {model_name}...")
+            try:
+                ranker = EasyRanker(
+                    documents=self.rerank_documents_source["identifier"] if source_type == "dir" else chunked_docs,
+                    backend=backend,
+                    api_key=api_key,
+                    host=host,
+                    port=port,
+                    model=model_name,
+                    chunk_size=item
+                )
+                
+                results = ranker.rerank(query=query, top_n=top_n, verbose=False)
+                self.latest_rerank_results = results
+                
+                ascii_lines = []
+                ascii_lines.append("=" * 90)
+                ascii_lines.append(f" EASYRERANK RESULTS FOR QUERY: \"{query}\"")
+                ascii_lines.append(f" Backend: {backend.upper()} | Model: {model_name} | Source: {source_type}={source_id}")
+                ascii_lines.append("=" * 90)
+                ascii_lines.append(" Rank |  Score | Source Reference & Snippet")
+                ascii_lines.append("------+--------+----------------------------------------------------------------------------")
+                
+                if not results:
+                    ascii_lines.append("      |        | No matching results found.")
+                else:
+                    for idx, res in enumerate(results, 1):
+                        score = res.get('relevance_score', 0.0)
+                        
+                        if source_type == "dir":
+                            filename = res.get('filename', 'Unknown')
+                            chunk_id = res.get('chunk_id', 0)
+                            text = res.get('chunk', '')
+                            ref_line = f"File: {filename} (Chunk: {chunk_id})"
+                        elif source_type == "db":
+                            text = chunked_docs[res.get('index', 0)]
+                            mapping = chunk_mappings[res.get('index', 0)]
+                            ref_line = f"DB Record: ID {mapping['parent_id']} (Name: '{mapping['parent_name']}')"
+                        elif source_type == "var" and source_id == "CHAT_HISTORY":
+                            text = chunked_docs[res.get('index', 0)]
+                            mapping = chunk_mappings[res.get('index', 0)]
+                            ref_line = f"Chat History: Turn {mapping['turn'] + 1} ({mapping['role'].capitalize()})"
+                        else:
+                            text = chunked_docs[res.get('index', 0)]
+                            ref_line = f"Variable Index: {res.get('index', 0)}"
+                            
+                        snippet = text.replace('\n', ' ').strip()
+                        if len(snippet) > 70:
+                            snippet = snippet[:67] + "..."
+                            
+                        ascii_lines.append(f"  {idx:2d}  | {score:.4f} | {ref_line}")
+                        ascii_lines.append(f"      |        | \"{snippet}\"")
+                        if idx < len(results):
+                            ascii_lines.append("------+--------+----------------------------------------------------------------------------")
+                ascii_lines.append("=" * 90)
+                ascii_lines.append(f"Total results: {len(results)}")
+                ascii_lines.append("=" * 90)
+                
+                ascii_table = "\n".join(ascii_lines)
+                print(ascii_table)
+                
+                self.chat_history.append((f"[Rerank Query] {query}", ascii_table))
+                
+                rerank_blocks = []
+                for idx, res in enumerate(results, 1):
+                    score = res.get('relevance_score', 0.0)
+                    if source_type == "dir":
+                        text = res.get('chunk', '')
+                        ref = f"File: {res.get('filename', 'Unknown')}"
+                    elif source_type == "db":
+                        text = chunked_docs[res.get('index', 0)]
+                        mapping = chunk_mappings[res.get('index', 0)]
+                        ref = f"Database Record ID {mapping['parent_id']} (Name: {mapping['parent_name']})"
+                    elif source_type == "var" and source_id == "CHAT_HISTORY":
+                        text = chunked_docs[res.get('index', 0)]
+                        mapping = chunk_mappings[res.get('index', 0)]
+                        ref = f"Chat Turn {mapping['turn'] + 1} ({mapping['role'].capitalize()})"
+                    else:
+                        text = chunked_docs[res.get('index', 0)]
+                        ref = f"Variable Index {res.get('index', 0)}"
+                    rerank_blocks.append(f"[Rerank Match #{idx} | {ref} | Relevance: {score:.4f}]\n{text}")
+                
+                self.buffer_manager.script_vars["latest_rerank"] = "\n\n".join(rerank_blocks)
+                
+            except Exception as e:
+                import traceback
+                print(f"Error executing reranking pipeline: {str(e)}")
+                traceback.print_exc()
+            return True
+
         elif cmd == "/loadvar":
             if len(parts) < 2:
                 print("Usage: /loadvar <varname> [ALL | id | range]")
@@ -2602,6 +2878,14 @@ class ChatybotApp:
                     history_json.append({"role": "assistant", "content": r})
                 value_with_images = value_with_images.replace("{CHAT_HISTORY}", json.dumps(history_json))
                 
+            # Check for LAST_RESPONSE placeholder
+            if "{LAST_RESPONSE}" in value_with_images:
+                if self.chat_history:
+                    last_turn_response = self.chat_history[-1][1]
+                    value_with_images = value_with_images.replace("{LAST_RESPONSE}", last_turn_response)
+                else:
+                    value_with_images = value_with_images.replace("{LAST_RESPONSE}", "")
+                    
             var_value = self.buffer_manager.replace_placeholders_legacy(value_with_images)
             
             # Check if variable already exists and contains image data or JSON
