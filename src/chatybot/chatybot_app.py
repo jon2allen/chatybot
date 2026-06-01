@@ -95,6 +95,7 @@ class ChatybotApp:
         self.trace_raw_payload: bool = False
         self.trace_tps: bool = False
         self.trace_tps_perf: bool = False
+        self.trace_rerank: bool = False
         self.debug_payload_mode: bool = False
         self.debug_response_mode: bool = False
         self.debug_response_raw: bool = False
@@ -1633,10 +1634,13 @@ class ChatybotApp:
                 elif subcmd == "imagedbg":
                     self.image_debug_mode = is_on
                     print(f"Trace imagedbg set to {is_on}")
+                elif subcmd == "rerank":
+                    self.trace_rerank = is_on
+                    print(f"Trace rerank set to {is_on}")
                 else:
-                    print("Unknown /trace subcommand. Use rawpayload, tps, tpsperf, or imagedbg.")
+                    print("Unknown /trace subcommand. Use rawpayload, tps, tpsperf, imagedbg, or rerank.")
             else:
-                print("Usage: /trace <rawpayload|tps|tpsperf|imagedbg> <on|off>")
+                print("Usage: /trace <rawpayload|tps|tpsperf|imagedbg|rerank> <on|off>")
             return True
 
         elif cmd == "/debug":
@@ -2651,7 +2655,7 @@ class ChatybotApp:
 
             query_match = re.search(r'^/rerank\s+["\']([^"\']+)["\']', command, re.IGNORECASE)
             if not query_match:
-                print('Usage: /rerank "<query>" [, top_n=<number>] [, item=<sentences>]')
+                print('Usage: /rerank "<query>" [, top_n=<number>] [, item=<sentences>] [, return=<summ|text>] [, full_doc=<true|false>]')
                 return True
             
             query = query_match.group(1)
@@ -2659,9 +2663,13 @@ class ChatybotApp:
             
             top_n_match = re.search(r'\btop_n\s*=\s*(\d+)', remainder, re.IGNORECASE)
             item_match = re.search(r'\bitem\s*=\s*(\d+)', remainder, re.IGNORECASE)
+            return_match = re.search(r'\breturn\s*=\s*([a-zA-Z]+)', remainder, re.IGNORECASE)
+            full_doc_match = re.search(r'\bfull_doc\s*=\s*([a-zA-Z]+)', remainder, re.IGNORECASE)
             
             top_n = int(top_n_match.group(1)) if top_n_match else 2
             item = int(item_match.group(1)) if item_match else 1
+            return_type = return_match.group(1).lower() if return_match else "summ"
+            full_doc = (full_doc_match.group(1).lower() == "true") if full_doc_match else False
             
             if not self.rerank_documents_source:
                 print("Error: No document source specified. Set one using /documents <source> first.")
@@ -2742,7 +2750,8 @@ class ChatybotApp:
                                 chunked_docs.append(chunk_text)
                                 chunk_mappings.append({
                                     "parent_id": doc_id,
-                                    "parent_name": name
+                                    "parent_name": name,
+                                    "full_text": content
                                 })
                 except Exception as e:
                     print(f"Error reading database {source_id}: {str(e)}")
@@ -2757,13 +2766,21 @@ class ChatybotApp:
                             chunk_text = " ".join(user_sentences[i:i+item])
                             if chunk_text:
                                 chunked_docs.append(chunk_text)
-                                chunk_mappings.append({"role": "user", "turn": turn_idx})
+                                chunk_mappings.append({
+                                    "role": "user",
+                                    "turn": turn_idx,
+                                    "full_text": p
+                                })
                         asst_sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', r) if s.strip()]
                         for i in range(0, len(asst_sentences), item):
                             chunk_text = " ".join(asst_sentences[i:i+item])
                             if chunk_text:
                                 chunked_docs.append(chunk_text)
-                                chunk_mappings.append({"role": "assistant", "turn": turn_idx})
+                                chunk_mappings.append({
+                                    "role": "assistant",
+                                    "turn": turn_idx,
+                                    "full_text": r
+                                })
                 else:
                     var_val = self.buffer_manager.script_vars.get(source_id, "")
                     try:
@@ -2790,7 +2807,10 @@ class ChatybotApp:
                             chunk_text = " ".join(sentences[i:i+item])
                             if chunk_text:
                                 chunked_docs.append(chunk_text)
-                                chunk_mappings.append({"doc_idx": doc_idx})
+                                chunk_mappings.append({
+                                    "doc_idx": doc_idx,
+                                    "full_text": doc
+                                })
                                 
             elif source_type == "dir":
                 pass
@@ -2826,6 +2846,54 @@ class ChatybotApp:
                 results = ranker.rerank(query=query, top_n=top_n, verbose=False)
                 self.latest_rerank_results = results
                 
+                # Pre-resolve matching texts and references
+                resolved_matches = []
+                for idx, res in enumerate(results, 1):
+                    score = res.get('relevance_score', 0.0)
+                    
+                    if source_type == "dir":
+                        chunk_text = res.get('chunk', '')
+                        filename = res.get('filename', 'Unknown')
+                        chunk_id = res.get('chunk_id', 0)
+                        ref_line = f"File: {filename} (Chunk: {chunk_id})"
+                        ref_short = f"File: {filename}"
+                        
+                        if full_doc:
+                            file_path = os.path.join(source_id, filename)
+                            if os.path.exists(file_path):
+                                try:
+                                    with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                                        text_to_return = f.read()
+                                except Exception:
+                                    text_to_return = chunk_text
+                            else:
+                                text_to_return = chunk_text
+                        else:
+                            text_to_return = chunk_text
+                    else:
+                        chunk_text = chunked_docs[res.get('index', 0)]
+                        mapping = chunk_mappings[res.get('index', 0)]
+                        text_to_return = mapping.get("full_text", chunk_text) if full_doc else chunk_text
+                        
+                        if source_type == "db":
+                            ref_line = f"DB Record: ID {mapping['parent_id']} (Name: '{mapping['parent_name']}')"
+                            ref_short = f"Database Record ID {mapping['parent_id']} (Name: {mapping['parent_name']})"
+                        elif source_type == "var" and source_id == "CHAT_HISTORY":
+                            ref_line = f"Chat History: Turn {mapping['turn'] + 1} ({mapping['role'].capitalize()})"
+                            ref_short = f"Chat Turn {mapping['turn'] + 1} ({mapping['role'].capitalize()})"
+                        else:
+                            ref_line = f"Variable Index: {res.get('index', 0)}"
+                            ref_short = f"Variable Index {mapping.get('doc_idx', res.get('index', 0))}"
+                            
+                    resolved_matches.append({
+                        "score": score,
+                        "chunk_text": chunk_text,
+                        "text_to_return": text_to_return,
+                        "ref_line": ref_line,
+                        "ref_short": ref_short
+                    })
+                
+                # Construct ASCII results table (summary table)
                 ascii_lines = []
                 ascii_lines.append("=" * 90)
                 ascii_lines.append(f" EASYRERANK RESULTS FOR QUERY: \"{query}\"")
@@ -2834,65 +2902,52 @@ class ChatybotApp:
                 ascii_lines.append(" Rank |  Score | Source Reference & Snippet")
                 ascii_lines.append("------+--------+----------------------------------------------------------------------------")
                 
-                if not results:
+                if not resolved_matches:
                     ascii_lines.append("      |        | No matching results found.")
                 else:
-                    for idx, res in enumerate(results, 1):
-                        score = res.get('relevance_score', 0.0)
+                    for idx, match in enumerate(resolved_matches, 1):
+                        score = match["score"]
+                        ref_line = match["ref_line"]
+                        chunk_text = match["chunk_text"]
                         
-                        if source_type == "dir":
-                            filename = res.get('filename', 'Unknown')
-                            chunk_id = res.get('chunk_id', 0)
-                            text = res.get('chunk', '')
-                            ref_line = f"File: {filename} (Chunk: {chunk_id})"
-                        elif source_type == "db":
-                            text = chunked_docs[res.get('index', 0)]
-                            mapping = chunk_mappings[res.get('index', 0)]
-                            ref_line = f"DB Record: ID {mapping['parent_id']} (Name: '{mapping['parent_name']}')"
-                        elif source_type == "var" and source_id == "CHAT_HISTORY":
-                            text = chunked_docs[res.get('index', 0)]
-                            mapping = chunk_mappings[res.get('index', 0)]
-                            ref_line = f"Chat History: Turn {mapping['turn'] + 1} ({mapping['role'].capitalize()})"
-                        else:
-                            text = chunked_docs[res.get('index', 0)]
-                            ref_line = f"Variable Index: {res.get('index', 0)}"
-                            
-                        snippet = text.replace('\n', ' ').strip()
+                        snippet = chunk_text.replace('\n', ' ').strip()
                         if len(snippet) > 70:
                             snippet = snippet[:67] + "..."
                             
                         ascii_lines.append(f"  {idx:2d}  | {score:.4f} | {ref_line}")
                         ascii_lines.append(f"      |        | \"{snippet}\"")
-                        if idx < len(results):
+                        if idx < len(resolved_matches):
                             ascii_lines.append("------+--------+----------------------------------------------------------------------------")
                 ascii_lines.append("=" * 90)
-                ascii_lines.append(f"Total results: {len(results)}")
+                ascii_lines.append(f"Total results: {len(resolved_matches)}")
                 ascii_lines.append("=" * 90)
                 
                 ascii_table = "\n".join(ascii_lines)
-                print(ascii_table)
                 
-                self.chat_history.append((f"[Rerank Query] {query}", ascii_table))
+                # Construct raw text response (concatenated plain text)
+                raw_texts = [match["text_to_return"] for match in resolved_matches]
+                concatenated_text = "\n\n".join(raw_texts)
                 
+                # 1. Output printing
+                if return_type == "text":
+                    if self.trace_rerank:
+                        print(ascii_table)
+                        print("\n[Raw Text Output]")
+                        print("-" * 30)
+                    print(concatenated_text)
+                else:
+                    print(ascii_table)
+                    
+                # 2. Append to chat history
+                if return_type == "text":
+                    self.chat_history.append((f"[Rerank Query] {query}", concatenated_text))
+                else:
+                    self.chat_history.append((f"[Rerank Query] {query}", ascii_table))
+                    
+                # 3. Populate latest_rerank prompt variables
                 rerank_blocks = []
-                for idx, res in enumerate(results, 1):
-                    score = res.get('relevance_score', 0.0)
-                    if source_type == "dir":
-                        text = res.get('chunk', '')
-                        ref = f"File: {res.get('filename', 'Unknown')}"
-                    elif source_type == "db":
-                        text = chunked_docs[res.get('index', 0)]
-                        mapping = chunk_mappings[res.get('index', 0)]
-                        ref = f"Database Record ID {mapping['parent_id']} (Name: {mapping['parent_name']})"
-                    elif source_type == "var" and source_id == "CHAT_HISTORY":
-                        text = chunked_docs[res.get('index', 0)]
-                        mapping = chunk_mappings[res.get('index', 0)]
-                        ref = f"Chat Turn {mapping['turn'] + 1} ({mapping['role'].capitalize()})"
-                    else:
-                        text = chunked_docs[res.get('index', 0)]
-                        ref = f"Variable Index {res.get('index', 0)}"
-                    rerank_blocks.append(f"[Rerank Match #{idx} | {ref} | Relevance: {score:.4f}]\n{text}")
-                
+                for idx, match in enumerate(resolved_matches, 1):
+                    rerank_blocks.append(f"[Rerank Match #{idx} | {match['ref_short']} | Relevance: {match['score']:.4f}]\n{match['text_to_return']}")
                 self.buffer_manager.script_vars["latest_rerank"] = "\n\n".join(rerank_blocks)
                 
             except Exception as e:
