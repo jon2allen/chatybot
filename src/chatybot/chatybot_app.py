@@ -2655,7 +2655,7 @@ class ChatybotApp:
 
             query_match = re.search(r'^/rerank\s+["\']([^"\']+)["\']', command, re.IGNORECASE)
             if not query_match:
-                print('Usage: /rerank "<query>" [, top_n=<number>] [, item=<number>] [, split=<sentence|line>] [, return=<summ|text>] [, full_doc=<true|false>]')
+                print('Usage: /rerank "<query>" [, top_n=<number>] [, item=<number>] [, split=<sentence|line|paragraph>] [, return=<summ|text>] [, full_doc=<true|false>]')
                 return True
             
             query = query_match.group(1)
@@ -2746,7 +2746,18 @@ class ChatybotApp:
                         doc_id = item_doc.doc_id
                         name = item_doc.get("name", "N/A")
                         
-                        if split_mode == "line":
+                        if split_mode == "paragraph":
+                            paragraphs = [p.strip() for p in re.split(r'\n\s*\n', content) if p.strip()]
+                            for i in range(0, len(paragraphs), item):
+                                chunk_text = "\n\n".join(paragraphs[i:i+item])
+                                if chunk_text:
+                                    chunked_docs.append(chunk_text)
+                                    chunk_mappings.append({
+                                        "parent_id": doc_id,
+                                        "parent_name": name,
+                                        "full_text": content
+                                    })
+                        elif split_mode == "line":
                             lines = [line.strip() for line in content.split('\n') if line.strip()]
                             for i in range(0, len(lines), item):
                                 chunk_text = "\n".join(lines[i:i+item])
@@ -2776,7 +2787,28 @@ class ChatybotApp:
                 raw_docs = []
                 if source_id == "CHAT_HISTORY":
                     for turn_idx, (p, r) in enumerate(self.chat_history):
-                        if split_mode == "line":
+                        if split_mode == "paragraph":
+                            p_paras = [para.strip() for para in re.split(r'\n\s*\n', p) if para.strip()]
+                            for i in range(0, len(p_paras), item):
+                                chunk_text = "\n\n".join(p_paras[i:i+item])
+                                if chunk_text:
+                                    chunked_docs.append(chunk_text)
+                                    chunk_mappings.append({
+                                        "role": "user",
+                                        "turn": turn_idx,
+                                        "full_text": p
+                                    })
+                            r_paras = [para.strip() for para in re.split(r'\n\s*\n', r) if para.strip()]
+                            for i in range(0, len(r_paras), item):
+                                chunk_text = "\n\n".join(r_paras[i:i+item])
+                                if chunk_text:
+                                    chunked_docs.append(chunk_text)
+                                    chunk_mappings.append({
+                                        "role": "assistant",
+                                        "turn": turn_idx,
+                                        "full_text": r
+                                    })
+                        elif split_mode == "line":
                             p_lines = [line.strip() for line in p.split('\n') if line.strip()]
                             for i in range(0, len(p_lines), item):
                                 chunk_text = "\n".join(p_lines[i:i+item])
@@ -2839,7 +2871,17 @@ class ChatybotApp:
                         raw_docs = [var_val]
                         
                     for doc_idx, doc in enumerate(raw_docs):
-                        if split_mode == "line":
+                        if split_mode == "paragraph":
+                            paragraphs = [p.strip() for p in re.split(r'\n\s*\n', doc) if p.strip()]
+                            for i in range(0, len(paragraphs), item):
+                                chunk_text = "\n\n".join(paragraphs[i:i+item])
+                                if chunk_text:
+                                    chunked_docs.append(chunk_text)
+                                    chunk_mappings.append({
+                                        "doc_idx": doc_idx,
+                                        "full_text": doc
+                                    })
+                        elif split_mode == "line":
                             lines = [line.strip() for line in doc.split('\n') if line.strip()]
                             for i in range(0, len(lines), item):
                                 chunk_text = "\n".join(lines[i:i+item])
