@@ -47,16 +47,17 @@ Executes semantic relevance scoring on the active `/documents` source against a 
 #### Parameters:
 *   `"<query>"`: The semantic search query (must be wrapped in double quotes).
 *   `top_n=<number>` *(Optional, Default: `1`)*: The maximum number of top results to return and display.
-*   `item=<number>` *(Optional, Default: `1`)*: Specifies the number of items (sentences or lines) grouped per text chunk (maps to the candidate chunk size for reranking).
-*   `split=<sentence|line>` *(Optional, Default: `sentence`)*:
+*   `item=<number>` *(Optional, Default: `1`)*: Specifies the number of items (sentences, lines, or paragraphs) grouped per text chunk (maps to the candidate chunk size for reranking).
+*   `split=<sentence|line|paragraph>` *(Optional, Default: `sentence`)*:
     *   `split=sentence`: Sub-document sentence-based chunking. Splits document content on newlines and then on sentence boundaries (joining chunks with a space `" "`).
     *   `split=line`: Line-based chunking. Splits document content strictly by non-empty lines, keeping sub-headers, lists, and formatted tables intact (joining chunks with a newline `"\n"`).
+    *   `split=paragraph`: Paragraph-based chunking. Splits document content on double newlines (`\n\n`), keeping multi-sentence paragraphs intact as discrete semantic units (joining chunks with a double newline `"\n\n"`).
 *   `return=<summ|text>` *(Optional, Default: `summ`)*:
     *   `return=summ`: Summary mode. Prints the clean, formatted ASCII results table (Rank, Score, Source, Snippet) to stdout and appends it to the virtual chat history.
     *   `return=text`: Plain text mode. Returns only the plain text of the top `top_n` matched items concatenated together. Ideal for scripting, placing into variables with `/setvar`, and injecting directly into prompts.
 *   `full_doc=<true|false>` *(Optional, Default: `false`)*:
-    *   `full_doc=false`: Returns the exact matching sub-document text chunk (the `item` sentences/lines that were evaluated) when `return=text` is selected.
-    *   `full_doc=true`: If the active source is a database (`db=<name>`), it will look up the parent record by its `doc_id` and return the **entire parent document content** instead of just the 2-sentence chunk. For other sources (`dir` or `var`), it defaults to returning the full file text or full variable item content respectively.
+    *   `full_doc=false`: Returns the exact matching sub-document text chunk (the `item` sentences/lines/paragraphs that were evaluated) when `return=text` is selected.
+    *   `full_doc=true`: If the active source is a database (`db=<name>`), it will look up the parent record by its `doc_id` and return the **entire parent document content** instead of just the chunk. For other sources (`dir` or `var`), it defaults to returning the full file text or full variable item content respectively.
 
 > [!NOTE]
 > ### 🔍 Unified Sub-Document Chunking:
