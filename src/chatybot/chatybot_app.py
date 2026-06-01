@@ -2743,7 +2743,7 @@ class ChatybotApp:
                         content = item_doc.get("content") or ""
                         doc_id = item_doc.doc_id
                         name = item_doc.get("name", "N/A")
-                        sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', content) if s.strip()]
+                        sentences = [s.strip() for line in content.split('\n') for s in re.split(r'(?<=[.!?])\s+', line) if s.strip()]
                         for i in range(0, len(sentences), item):
                             chunk_text = " ".join(sentences[i:i+item])
                             if chunk_text:
@@ -2761,7 +2761,7 @@ class ChatybotApp:
                 raw_docs = []
                 if source_id == "CHAT_HISTORY":
                     for turn_idx, (p, r) in enumerate(self.chat_history):
-                        user_sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', p) if s.strip()]
+                        user_sentences = [s.strip() for line in p.split('\n') for s in re.split(r'(?<=[.!?])\s+', line) if s.strip()]
                         for i in range(0, len(user_sentences), item):
                             chunk_text = " ".join(user_sentences[i:i+item])
                             if chunk_text:
@@ -2771,7 +2771,7 @@ class ChatybotApp:
                                     "turn": turn_idx,
                                     "full_text": p
                                 })
-                        asst_sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', r) if s.strip()]
+                        asst_sentences = [s.strip() for line in r.split('\n') for s in re.split(r'(?<=[.!?])\s+', line) if s.strip()]
                         for i in range(0, len(asst_sentences), item):
                             chunk_text = " ".join(asst_sentences[i:i+item])
                             if chunk_text:
@@ -2802,7 +2802,7 @@ class ChatybotApp:
                         raw_docs = [var_val]
                         
                     for doc_idx, doc in enumerate(raw_docs):
-                        sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', doc) if s.strip()]
+                        sentences = [s.strip() for line in doc.split('\n') for s in re.split(r'(?<=[.!?])\s+', line) if s.strip()]
                         for i in range(0, len(sentences), item):
                             chunk_text = " ".join(sentences[i:i+item])
                             if chunk_text:
