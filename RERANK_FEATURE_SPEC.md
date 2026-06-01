@@ -38,16 +38,22 @@ Specifies the active dataset or corpus that `chatybot` will evaluate during the 
 ---
 
 ### B. `/rerank` Command
-Executes semantic relevance scoring on the active `/documents` source against a query and prints a formatted summary.
+Executes semantic relevance scoring on the active `/documents` source against a query and returns either a formatted summary or raw concatenated text.
 
 ```text
-/rerank "<query>" [, top_n=<number>] [, item=<sentences>]
+/rerank "<query>" [, top_n=<number>] [, item=<sentences>] [, return=<summ|text>] [, full_doc=<true|false>]
 ```
 
 #### Parameters:
 *   `"<query>"`: The semantic search query (must be wrapped in double quotes).
 *   `top_n=<number>` *(Optional, Default: `1`)*: The maximum number of top results to return and display.
 *   `item=<sentences>` *(Optional, Default: `1`)*: Specifies the number of sentences grouped per text chunk (maps to the candidate chunk size for reranking).
+*   `return=<summ|text>` *(Optional, Default: `summ`)*:
+    *   `return=summ`: Summary mode. Prints the clean, formatted ASCII results table (Rank, Score, Source, Snippet) to stdout and appends it to the virtual chat history.
+    *   `return=text`: Plain text mode. Returns only the plain text of the top `top_n` matched items concatenated together. Ideal for scripting, placing into variables with `/setvar`, and injecting directly into prompts.
+*   `full_doc=<true|false>` *(Optional, Default: `false`)*:
+    *   `full_doc=false`: Returns the exact matching sub-document text chunk (the `item` sentences that were evaluated) when `return=text` is selected.
+    *   `full_doc=true`: If the active source is a database (`db=<name>`), it will look up the parent record by its `doc_id` and return the **entire parent document content** instead of just the 2-sentence chunk. For other sources (`dir` or `var`), it defaults to returning the full file text or full variable item content respectively.
 
 > [!NOTE]
 > ### 🔍 Unified Sub-Document Sentence Chunking:
@@ -71,9 +77,19 @@ Executes semantic relevance scoring on the active `/documents` source against a 
 > * **Persistent Logging**: Running `/dblog` immediately after `/rerank` will save the full results table into your active TinyDB history.
 > * **Contextual Follow-up**: The LLM will have access to the ranked results in the thread history, allowing you to ask natural follow-up questions like: *"Summarize the top match in the list."*
 
+### C. `/trace rerank` Command
+Enables or disables debugging output for the reranking processor.
+
+```text
+/trace rerank <on|off>
+```
+
+*   **`on`**: Rerank tracing enabled. If a rerank command is executed with `return=text`, the system will **still print the ASCII results summary table** directly to the console for interactive debugging and value verification. The chat history and captured variables remain clean and unaffected (containing only the plain text).
+*   **`off`**: Standard behavior (default). No summary tables are printed when `return=text` is specified.
+
 ---
 
-### C. `/model` & Configuration Specifications
+### D. `/model` & Configuration Specifications
 `chatybot` uses the `/model` command to switch between active models. To support semantic reranking, the target model must be rerank-capable.
 
 #### Rules:
