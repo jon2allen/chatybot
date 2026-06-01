@@ -41,27 +41,30 @@ Specifies the active dataset or corpus that `chatybot` will evaluate during the 
 Executes semantic relevance scoring on the active `/documents` source against a query and returns either a formatted summary or raw concatenated text.
 
 ```text
-/rerank "<query>" [, top_n=<number>] [, item=<sentences>] [, return=<summ|text>] [, full_doc=<true|false>]
+/rerank "<query>" [, top_n=<number>] [, item=<number>] [, split=<sentence|line>] [, return=<summ|text>] [, full_doc=<true|false>]
 ```
 
 #### Parameters:
 *   `"<query>"`: The semantic search query (must be wrapped in double quotes).
 *   `top_n=<number>` *(Optional, Default: `1`)*: The maximum number of top results to return and display.
-*   `item=<sentences>` *(Optional, Default: `1`)*: Specifies the number of sentences grouped per text chunk (maps to the candidate chunk size for reranking).
+*   `item=<number>` *(Optional, Default: `1`)*: Specifies the number of items (sentences or lines) grouped per text chunk (maps to the candidate chunk size for reranking).
+*   `split=<sentence|line>` *(Optional, Default: `sentence`)*:
+    *   `split=sentence`: Sub-document sentence-based chunking. Splits document content on newlines and then on sentence boundaries (joining chunks with a space `" "`).
+    *   `split=line`: Line-based chunking. Splits document content strictly by non-empty lines, keeping sub-headers, lists, and formatted tables intact (joining chunks with a newline `"\n"`).
 *   `return=<summ|text>` *(Optional, Default: `summ`)*:
     *   `return=summ`: Summary mode. Prints the clean, formatted ASCII results table (Rank, Score, Source, Snippet) to stdout and appends it to the virtual chat history.
     *   `return=text`: Plain text mode. Returns only the plain text of the top `top_n` matched items concatenated together. Ideal for scripting, placing into variables with `/setvar`, and injecting directly into prompts.
 *   `full_doc=<true|false>` *(Optional, Default: `false`)*:
-    *   `full_doc=false`: Returns the exact matching sub-document text chunk (the `item` sentences that were evaluated) when `return=text` is selected.
+    *   `full_doc=false`: Returns the exact matching sub-document text chunk (the `item` sentences/lines that were evaluated) when `return=text` is selected.
     *   `full_doc=true`: If the active source is a database (`db=<name>`), it will look up the parent record by its `doc_id` and return the **entire parent document content** instead of just the 2-sentence chunk. For other sources (`dir` or `var`), it defaults to returning the full file text or full variable item content respectively.
 
 > [!NOTE]
-> ### 🔍 Unified Sub-Document Sentence Chunking:
-> By default, Chatybot assumes **sub-document sentence-based chunking** across all document sources to ensure maximum semantic search accuracy:
+> ### 🔍 Unified Sub-Document Chunking:
+> By default, Chatybot assumes **sub-document chunking** across all document sources to ensure maximum semantic search accuracy:
 > 1. **Directory Files (`dir="<path>"`)**: Splits files into sentence chunks of `item` size.
-> 2. **Database Tables (`db=<name>`)**: Splits the `content` field of each database record into sentence chunks of `item` size, preserving a reference linkage back to the parent `doc_id` and metadata.
-> 3. **Chat History (`var=CHAT_HISTORY`)**: Splits the text of each past message turn (user/assistant content) into sentence chunks of `item` size, preserving role attribution.
-> 4. **In-Memory Lists (`var=<name>`)**: Splits individual string elements in the list into sentence chunks of `item` size.
+> 2. **Database Tables (`db=<name>`)**: Splits the `content` field of each database record into chunks of `item` size, preserving a reference linkage back to the parent `doc_id` and metadata.
+> 3. **Chat History (`var=CHAT_HISTORY`)**: Splits the text of each past message turn (user/assistant content) into chunks of `item` size, preserving role attribution.
+> 4. **In-Memory Lists (`var=<name>`)**: Splits individual string elements in the list into chunks of `item` size.
 
 #### Operational Behavior:
 1.  Verify that a `/documents` source has been set. If empty, return: `ERROR: No document source specified. Use "/documents <source>" first.`
