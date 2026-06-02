@@ -1,0 +1,51 @@
+# Sparse Context Injection Example
+# This script demonstrates using semantic reranking to extract relevant chunks
+# from a document (10_foods.txt), capturing them, and injecting them into a final prompt.
+
+# We need a rerank-capable model for the extraction phase
+/model bge_reranker_f16
+
+# Load the document into a filebank and set it as the active document source
+/filebank1 10_foods.txt
+/documents filebank=1
+
+# Perform 3 semantic queries to extract sparse context.
+# We use return=text so we get the raw chunk, and full_doc=false (default) to keep it sparse.
+# We use split=line since the document is a line-based list.
+
+# Query 1: Extract information about a German cake/dessert
+/rerank "German cake dessert with cherries" top_n=1 split=line items=2 return=text
+/setvar german_dessert {LAST_RESPONSE}
+
+# Query 2: Extract information about a Spanish rice and seafood dish
+/rerank "Spanish seafood rice dish" top_n=1 split=line items=2 return=text
+/setvar spanish_dish {LAST_RESPONSE}
+
+# Query 3: Extract information about a French chicken dish
+/rerank "slow-cooked French chicken dish with wine" top_n=1 split=line items=2 return=text
+/setvar french_dish {LAST_RESPONSE}
+
+# Switch to a generative model for the final prompt
+/model mistral_1
+
+# Final 4th prompt: Inject the sparse context we extracted
+/clearfile
+/multiline
+You are a master chef planning a European fusion dinner. 
+I have extracted the following specific food descriptions from our culinary database:
+
+German Item:
+${german_dessert}
+
+Spanish Item:
+${spanish_dish}
+
+French Item:
+${french_dish}
+
+Using ONLY the provided context above, write an elegant, creative menu description for a 3-course meal featuring these items. Explain how the flavors from Spain, France, and Germany will complement each other.
+;;
+/multiline
+
+# Save the final output
+/save european_fusion_menu.txt

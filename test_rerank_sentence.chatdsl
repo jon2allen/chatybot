@@ -1,0 +1,27 @@
+# Test semantic reranking with BGE model - SENTENCE mode
+# This script tests in-memory reranking using sentence-level splitting
+
+# Set up the BGE reranker model
+/model bge_reranker_f16
+
+# Load test data into filebank3
+/filebank3 test_ger_foods_sentence.txt
+
+# Set the document source to filebank3
+/documents filebank=3
+
+# Enable trace to see the raw payload
+/trace rawpayload on
+
+# Test 1: Rerank with sentence splitting, items=1 (each sentence separate)
+/rerank "sausage" top_n=3 split=sentence items=1 return=summ
+
+# Test 2: Rerank with sentence splitting, items=2 (group 2 sentences together)
+/rerank "beer" top_n=2 split=sentence items=2 return=summ
+
+# Test 3: Rerank with sentence splitting, return as text for full_doc
+/rerank "cake" top_n=1 split=sentence items=1 return=text full_doc=true
+
+# Clean up
+/trace rawpayload off
+/filebank3 clear
