@@ -2587,7 +2587,7 @@ class ChatybotApp:
             doc_pattern = r'^/documents\s+(\w+)\s*=\s*(.+)$'
             match = re.match(doc_pattern, command)
             if not match:
-                print("Usage: /documents db=<name> | var=<name> | var=file | filebank=<1-5> | dir="<path>"")
+                print("Usage: /documents db=<name> | var=<name> | var=file | filebank=<1-5> | dir=\"<path>\"")
                 return True
             
             source_type = match.group(1).lower()
@@ -3230,7 +3230,7 @@ class ChatybotApp:
         )
         print("  /savevar <varname> <filename> - Save a variable's contents to a file.")
         print("  /setvar <varname> <value> - Set a script variable. Supports {CHAT_HISTORY} and {LAST_RESPONSE} placeholders.")
-        print("  /documents <src>=<id> - Set the active rerank source: db=<name>, var=<name> (or CHAT_HISTORY or file), filebank=<1-5>, or dir="<path>"")
+        print("  /documents <src>=<id> - Set the active rerank source: db=<name>, var=<name> (or CHAT_HISTORY or file), filebank=<1-5>, or dir=\"<path>\"")
         print("  /rerank \"<query>\" [, top_n=<n>] [, items=<n>] [, split=<sentence|line|paragraph>] - Semantically rerank source sentences/chunks.")
         print("  /mem - Show size of buffers and script variables.")
         print("  /dump [varname|all] - Print content of buffers or script variables.")
