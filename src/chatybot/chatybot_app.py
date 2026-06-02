@@ -2587,7 +2587,7 @@ class ChatybotApp:
             doc_pattern = r'^/documents\s+(\w+)\s*=\s*(.+)$'
             match = re.match(doc_pattern, command)
             if not match:
-                print("Usage: /documents db=<name> | var=<name> | dir=\"<path>\"")
+                print("Usage: /documents db=<name> | var=<name> | var=file | filebank=<1-5> | dir="<path>"")
                 return True
             
             source_type = match.group(1).lower()
@@ -2603,11 +2603,25 @@ class ChatybotApp:
                 if identifier == "CHAT_HISTORY":
                     self.rerank_documents_source = {"type": "var", "identifier": "CHAT_HISTORY"}
                     print("Document source set to live chat history.")
+                elif identifier == "file":
+                    if not self.buffer_manager.file_buffer:
+                        print("Warning: No file loaded. Use /file <path> first.")
+                    self.rerank_documents_source = {"type": "var", "identifier": "file"}
+                    print("Document source set to file buffer.")
                 else:
                     if identifier not in self.buffer_manager.script_vars:
                         print(f"Warning: Variable '${{{identifier}}}' is not currently defined. It must be set before executing /rerank.")
                     self.rerank_documents_source = {"type": "var", "identifier": identifier}
                     print(f"Document source set to variable '${{{identifier}}}'.")
+            elif source_type == "filebank":
+                bank_name = f"filebank{identifier}"
+                if bank_name not in self.buffer_manager.file_banks:
+                    print(f"Error: Invalid filebank number '{identifier}'. Use 1-5.")
+                    return True
+                if not self.buffer_manager.file_banks[bank_name]:
+                    print(f"Warning: Filebank{identifier} is empty. Load a file first with /filebank{identifier} <path>.")
+                self.rerank_documents_source = {"type": "filebank", "identifier": identifier}
+                print(f"Document source set to {bank_name}.")
             elif source_type == "dir":
                 if not os.path.exists(identifier) or not os.path.isdir(identifier):
                     print(f"Error: Directory '{identifier}' does not exist.")
@@ -2615,7 +2629,7 @@ class ChatybotApp:
                 self.rerank_documents_source = {"type": "dir", "identifier": identifier}
                 print(f"Document source set to directory '{identifier}'.")
             else:
-                print("Invalid source type. Use 'db', 'var', or 'dir'.")
+                print("Invalid source type. Use 'db', 'var', 'filebank', or 'dir'.")
             return True
 
         elif cmd == "/rerank":
@@ -2806,6 +2820,10 @@ class ChatybotApp:
                                         "turn": turn_idx,
                                         "full_text": text
                                     })
+                elif source_id == "file":
+                    # Use the file buffer directly
+                    var_val = self.buffer_manager.file_buffer
+                    raw_docs = [var_val] if var_val else []
                 else:
                     var_val = self.buffer_manager.script_vars.get(source_id, "")
                     try:
@@ -2848,6 +2866,34 @@ class ChatybotApp:
                                     "full_text": doc
                                 })
                                 
+            elif source_type == "filebank":
+                bank_name = f"filebank{source_id}"
+                if bank_name in self.buffer_manager.file_banks:
+                    content = self.buffer_manager.file_banks[bank_name]
+                    if content:
+                        parser = TextParser(content)
+                        if split_mode == "paragraph":
+                            chunks = list(parser.paragraphs())
+                            join_str = "\n\n"
+                        elif split_mode == "line":
+                            chunks = list(parser.lines())
+                            join_str = "\n"
+                        else:
+                            sentences = [s.strip() for line in content.split('\n') for s in re.split(r'(?<=[.!?])\s+', line) if s.strip()]
+                            chunks = sentences
+                            join_str = " "
+                        
+                        for i in range(0, len(chunks), item):
+                            chunk_text = join_str.join(chunks[i:i+item])
+                            if chunk_text:
+                                chunked_docs.append(chunk_text)
+                                chunk_mappings.append({
+                                    "bank": bank_name,
+                                    "full_text": content
+                                })
+                else:
+                    print(f"Error: Filebank{source_id} not found.")
+                    return True
             elif source_type == "dir":
                 pass
                 
@@ -3184,7 +3230,7 @@ class ChatybotApp:
         )
         print("  /savevar <varname> <filename> - Save a variable's contents to a file.")
         print("  /setvar <varname> <value> - Set a script variable. Supports {CHAT_HISTORY} and {LAST_RESPONSE} placeholders.")
-        print("  /documents <src>=<id> - Set the active rerank source: db=<name>, var=<name> (or CHAT_HISTORY), or dir=\"<path>\".")
+        print("  /documents <src>=<id> - Set the active rerank source: db=<name>, var=<name> (or CHAT_HISTORY or file), filebank=<1-5>, or dir="<path>"")
         print("  /rerank \"<query>\" [, top_n=<n>] [, items=<n>] [, split=<sentence|line|paragraph>] - Semantically rerank source sentences/chunks.")
         print("  /mem - Show size of buffers and script variables.")
         print("  /dump [varname|all] - Print content of buffers or script variables.")
