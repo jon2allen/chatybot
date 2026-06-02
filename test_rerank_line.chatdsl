@@ -1,0 +1,27 @@
+# Test semantic reranking with BGE model - LINE mode
+# This script tests in-memory reranking using line-level splitting
+
+# Set up the BGE reranker model
+/model bge_reranker_f16
+
+# Load test data into filebank2
+/filebank2 test_ger_foods_line.txt
+
+# Set the document source to filebank2
+/documents filebank=2
+
+# Enable trace to see the raw payload
+/trace rawpayload on
+
+# Test 1: Rerank with line splitting, items=1 (each line separate)
+/rerank "meat" top_n=3 split=line items=1 return=summ
+
+# Test 2: Rerank with line splitting, items=3 (group 3 lines together)
+/rerank "sausage" top_n=2 split=line items=3 return=summ
+
+# Test 3: Rerank with line splitting, return as text
+/rerank "beer" top_n=1 split=line items=1 return=text
+
+# Clean up
+/trace rawpayload off
+/filebank2 clear

@@ -1,0 +1,60 @@
+# Semantic Code Extraction Example
+# This script generates a Python class with various string methods, 
+# and uses true *semantic* queries to find whole functions based on their 
+# conceptual behavior, rather than simple syntax matching.
+
+# Step 1: Generate the Python class
+/model mistral_1
+/clearfile
+/multiline
+Write a Python class named 'StringManipulator' that contains exactly 20 different methods for manipulating and analyzing strings. 
+Include a diverse set of functionalities (e.g., validation, cryptography/hashing, casing, whitespace formatting).
+CRITICAL FORMATTING RULES:
+1. Include a short docstring and implementation for each method.
+2. Separate each method from the next with EXACTLY one blank line (this ensures paragraph-based chunking works perfectly).
+3. Do not include markdown code block wrappers (like ```python).
+;;
+/multiline
+/save generated_class.py
+
+# Step 2: Set up the document source
+/filebank1 generated_class.py
+/documents filebank=1
+
+# Step 3: Use semantic search to extract full methods by their conceptual intent!
+# We use split=paragraph so that the entire method (signature + docstring + body) 
+# is evaluated and returned as a single chunk.
+/model bge_reranker_f16
+
+# Query A: Find methods related to security and hashing
+/rerank "cryptography hashing encryption security algorithms" top_n=2 split=paragraph items=1 return=text
+/setvar security_methods {LAST_RESPONSE}
+
+# Query B: Find methods that return boolean checks (is_valid, has_numbers, etc.)
+/rerank "boolean validation checking if string matches a condition" top_n=3 split=paragraph items=1 return=text
+/setvar validation_methods {LAST_RESPONSE}
+
+# Query C: Find methods dealing with capitalization and text case
+/rerank "changing text casing capitalization upper lower case" top_n=2 split=paragraph items=1 return=text
+/setvar casing_methods {LAST_RESPONSE}
+
+# Step 4: Generate a specialized review based on the semantically extracted methods
+/model mistral_1
+/clearfile
+/multiline
+I have used a semantic search engine to search through a massive Python class and extract specific methods based on conceptual queries.
+
+Here are the extracted Security & Cryptography methods:
+${security_methods}
+
+Here are the extracted Validation & Boolean Check methods:
+${validation_methods}
+
+Here are the extracted Text Casing methods:
+${casing_methods}
+
+Please provide a code review of just these specific extracted methods. 
+Focus on whether the implementations are Pythonic and efficient, and suggest any potential edge-case improvements.
+;;
+/multiline
+/save semantic_code_review.txt

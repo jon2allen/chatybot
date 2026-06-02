@@ -1,0 +1,24 @@
+# Test semantic reranking with BGE model - PARAGRAPH mode
+# This script tests in-memory reranking using paragraph-level splitting
+
+# Set up the BGE reranker model
+/model bge_reranker_f16
+
+# Load test data into filebank1
+/filebank1 test_ger_foods_paragraph.txt
+
+# Set the document source to filebank1
+/documents filebank=1
+
+# Enable trace to see the raw payload
+/trace rawpayload on
+
+# Test 1: Rerank with paragraph splitting, top 3 results
+/rerank "meat" top_n=3 split=paragraph items=1 return=summ
+
+# Test 2: Rerank with paragraph splitting, return as text
+/rerank "sausage" top_n=2 split=paragraph items=1 return=text
+
+# Clean up
+/trace rawpayload off
+/filebank1 clear
