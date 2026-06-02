@@ -2655,20 +2655,20 @@ class ChatybotApp:
 
             query_match = re.search(r'^/rerank\s+["\']([^"\']+)["\']', command, re.IGNORECASE)
             if not query_match:
-                print('Usage: /rerank "<query>" [, top_n=<number>] [, item=<number>] [, split=<sentence|line|paragraph>] [, return=<summ|text>] [, full_doc=<true|false>]')
+                print('Usage: /rerank "<query>" [, top_n=<number>] [, items=<number>] [, split=<sentence|line|paragraph>] [, return=<summ|text>] [, full_doc=<true|false>]')
                 return True
             
             query = query_match.group(1)
             remainder = command[query_match.end():]
             
             top_n_match = re.search(r'\btop_n\s*=\s*(\d+)', remainder, re.IGNORECASE)
-            item_match = re.search(r'\bitem\s*=\s*(\d+)', remainder, re.IGNORECASE)
+            item_match = re.search(r'\bitem(s)?\s*=\s*(\d+)', remainder, re.IGNORECASE)
             split_match = re.search(r'\bsplit\s*=\s*([a-zA-Z]+)', remainder, re.IGNORECASE)
             return_match = re.search(r'\breturn\s*=\s*([a-zA-Z]+)', remainder, re.IGNORECASE)
             full_doc_match = re.search(r'\bfull_doc\s*=\s*([a-zA-Z]+)', remainder, re.IGNORECASE)
             
             top_n = int(top_n_match.group(1)) if top_n_match else 2
-            item = int(item_match.group(1)) if item_match else 1
+            item = int(item_match.group(2)) if item_match else 1
             split_mode = split_match.group(1).lower() if split_match else "sentence"
             return_type = return_match.group(1).lower() if return_match else "summ"
             full_doc = (full_doc_match.group(1).lower() == "true") if full_doc_match else False
@@ -3166,7 +3166,7 @@ class ChatybotApp:
         )
         print("  /seed <value> - Set seed (int, 'time', or 'random <min>,<max>').")
         print("  /stream - Toggle streaming responses.")
-        print("  /trace <rawpayload|tps|tpsperf|imagedbg> <on|off> - Debugging options")
+        print("  /trace <rawpayload|tps|tpsperf|imagedbg|rerank> <on|off> - Debugging options")
         print("  /debug <payload|response [raw]> - Activate debug mode for the next prompt.")
         print("  /echo <text> - Echo text to screen with variable substitution.")
         print("  /reloadmacros [file] - Reload macro definitions from macro.chatdsl or specified file.")
@@ -3185,7 +3185,7 @@ class ChatybotApp:
         print("  /savevar <varname> <filename> - Save a variable's contents to a file.")
         print("  /setvar <varname> <value> - Set a script variable. Supports {CHAT_HISTORY} and {LAST_RESPONSE} placeholders.")
         print("  /documents <src>=<id> - Set the active rerank source: db=<name>, var=<name> (or CHAT_HISTORY), or dir=\"<path>\".")
-        print("  /rerank \"<query>\" [, top_n=<n>] [, item=<s>] - Semantically rerank source sentences/chunks.")
+        print("  /rerank \"<query>\" [, top_n=<n>] [, items=<n>] [, split=<sentence|line|paragraph>] - Semantically rerank source sentences/chunks.")
         print("  /mem - Show size of buffers and script variables.")
         print("  /dump [varname|all] - Print content of buffers or script variables.")
         print("\nScript-specific features:")
