@@ -40,7 +40,7 @@ from .buffer_manager import BufferManager
 from .image_generator import ImageGenerator
 from .image_manager import ImageManager
 from .extract_code import process_file
-from EasyRerank import EasyRanker
+from EasyRerank import EasyRanker, TextParser
 from .chatydb import (
     set_db,
     search_db,
@@ -2711,14 +2711,21 @@ class ChatybotApp:
             api_key_env = rerank_model_config.get("api_key", "")
             api_key = os.environ.get(api_key_env) if api_key_env else os.environ.get("JINA_API_KEY")
             
+            chunking_mode_map = {"sentence": "sentences", "line": "lines", "paragraph": "paragraphs"}
+            chunking_mode = chunking_mode_map.get(split_mode, "sentences")
+
             if "localhost" in base_url or "127.0.0.1" in base_url:
                 backend = "local"
                 from urllib.parse import urlparse
                 parsed = urlparse(base_url)
                 host = parsed.hostname or "localhost"
                 port = parsed.port or 8080
-            else:
+            elif base_url:
                 backend = "remote"
+                host = "localhost"
+                port = 8080
+            else:
+                backend = "auto"
                 host = "localhost"
                 port = 8080
                 
@@ -2746,39 +2753,27 @@ class ChatybotApp:
                         doc_id = item_doc.doc_id
                         name = item_doc.get("name", "N/A")
                         
+                        parser = TextParser(content)
                         if split_mode == "paragraph":
-                            paragraphs = [p.strip() for p in re.split(r'\n\s*\n', content) if p.strip()]
-                            for i in range(0, len(paragraphs), item):
-                                chunk_text = "\n\n".join(paragraphs[i:i+item])
-                                if chunk_text:
-                                    chunked_docs.append(chunk_text)
-                                    chunk_mappings.append({
-                                        "parent_id": doc_id,
-                                        "parent_name": name,
-                                        "full_text": content
-                                    })
+                            chunks = list(parser.paragraphs())
+                            join_str = "\n\n"
                         elif split_mode == "line":
-                            lines = [line.strip() for line in content.split('\n') if line.strip()]
-                            for i in range(0, len(lines), item):
-                                chunk_text = "\n".join(lines[i:i+item])
-                                if chunk_text:
-                                    chunked_docs.append(chunk_text)
-                                    chunk_mappings.append({
-                                        "parent_id": doc_id,
-                                        "parent_name": name,
-                                        "full_text": content
-                                    })
+                            chunks = list(parser.lines())
+                            join_str = "\n"
                         else:
                             sentences = [s.strip() for line in content.split('\n') for s in re.split(r'(?<=[.!?])\s+', line) if s.strip()]
-                            for i in range(0, len(sentences), item):
-                                chunk_text = " ".join(sentences[i:i+item])
-                                if chunk_text:
-                                    chunked_docs.append(chunk_text)
-                                    chunk_mappings.append({
-                                        "parent_id": doc_id,
-                                        "parent_name": name,
-                                        "full_text": content
-                                    })
+                            chunks = sentences
+                            join_str = " "
+                        
+                        for i in range(0, len(chunks), item):
+                            chunk_text = join_str.join(chunks[i:i+item])
+                            if chunk_text:
+                                chunked_docs.append(chunk_text)
+                                chunk_mappings.append({
+                                    "parent_id": doc_id,
+                                    "parent_name": name,
+                                    "full_text": content
+                                })
                 except Exception as e:
                     print(f"Error reading database {source_id}: {str(e)}")
                     return True
@@ -2787,68 +2782,29 @@ class ChatybotApp:
                 raw_docs = []
                 if source_id == "CHAT_HISTORY":
                     for turn_idx, (p, r) in enumerate(self.chat_history):
-                        if split_mode == "paragraph":
-                            p_paras = [para.strip() for para in re.split(r'\n\s*\n', p) if para.strip()]
-                            for i in range(0, len(p_paras), item):
-                                chunk_text = "\n\n".join(p_paras[i:i+item])
+                        for text, role in [(p, "user"), (r, "assistant")]:
+                            if not text:
+                                continue
+                            parser = TextParser(text)
+                            if split_mode == "paragraph":
+                                chunks = list(parser.paragraphs())
+                                join_str = "\n\n"
+                            elif split_mode == "line":
+                                chunks = list(parser.lines())
+                                join_str = "\n"
+                            else:
+                                sentences = [s.strip() for line in text.split('\n') for s in re.split(r'(?<=[.!?])\s+', line) if s.strip()]
+                                chunks = sentences
+                                join_str = " "
+                                
+                            for i in range(0, len(chunks), item):
+                                chunk_text = join_str.join(chunks[i:i+item])
                                 if chunk_text:
                                     chunked_docs.append(chunk_text)
                                     chunk_mappings.append({
-                                        "role": "user",
+                                        "role": role,
                                         "turn": turn_idx,
-                                        "full_text": p
-                                    })
-                            r_paras = [para.strip() for para in re.split(r'\n\s*\n', r) if para.strip()]
-                            for i in range(0, len(r_paras), item):
-                                chunk_text = "\n\n".join(r_paras[i:i+item])
-                                if chunk_text:
-                                    chunked_docs.append(chunk_text)
-                                    chunk_mappings.append({
-                                        "role": "assistant",
-                                        "turn": turn_idx,
-                                        "full_text": r
-                                    })
-                        elif split_mode == "line":
-                            p_lines = [line.strip() for line in p.split('\n') if line.strip()]
-                            for i in range(0, len(p_lines), item):
-                                chunk_text = "\n".join(p_lines[i:i+item])
-                                if chunk_text:
-                                    chunked_docs.append(chunk_text)
-                                    chunk_mappings.append({
-                                        "role": "user",
-                                        "turn": turn_idx,
-                                        "full_text": p
-                                    })
-                            r_lines = [line.strip() for line in r.split('\n') if line.strip()]
-                            for i in range(0, len(r_lines), item):
-                                chunk_text = "\n".join(r_lines[i:i+item])
-                                if chunk_text:
-                                    chunked_docs.append(chunk_text)
-                                    chunk_mappings.append({
-                                        "role": "assistant",
-                                        "turn": turn_idx,
-                                        "full_text": r
-                                    })
-                        else:
-                            user_sentences = [s.strip() for line in p.split('\n') for s in re.split(r'(?<=[.!?])\s+', line) if s.strip()]
-                            for i in range(0, len(user_sentences), item):
-                                chunk_text = " ".join(user_sentences[i:i+item])
-                                if chunk_text:
-                                    chunked_docs.append(chunk_text)
-                                    chunk_mappings.append({
-                                        "role": "user",
-                                        "turn": turn_idx,
-                                        "full_text": p
-                                    })
-                            asst_sentences = [s.strip() for line in r.split('\n') for s in re.split(r'(?<=[.!?])\s+', line) if s.strip()]
-                            for i in range(0, len(asst_sentences), item):
-                                chunk_text = " ".join(asst_sentences[i:i+item])
-                                if chunk_text:
-                                    chunked_docs.append(chunk_text)
-                                    chunk_mappings.append({
-                                        "role": "assistant",
-                                        "turn": turn_idx,
-                                        "full_text": r
+                                        "full_text": text
                                     })
                 else:
                     var_val = self.buffer_manager.script_vars.get(source_id, "")
@@ -2871,36 +2827,26 @@ class ChatybotApp:
                         raw_docs = [var_val]
                         
                     for doc_idx, doc in enumerate(raw_docs):
+                        parser = TextParser(doc)
                         if split_mode == "paragraph":
-                            paragraphs = [p.strip() for p in re.split(r'\n\s*\n', doc) if p.strip()]
-                            for i in range(0, len(paragraphs), item):
-                                chunk_text = "\n\n".join(paragraphs[i:i+item])
-                                if chunk_text:
-                                    chunked_docs.append(chunk_text)
-                                    chunk_mappings.append({
-                                        "doc_idx": doc_idx,
-                                        "full_text": doc
-                                    })
+                            chunks = list(parser.paragraphs())
+                            join_str = "\n\n"
                         elif split_mode == "line":
-                            lines = [line.strip() for line in doc.split('\n') if line.strip()]
-                            for i in range(0, len(lines), item):
-                                chunk_text = "\n".join(lines[i:i+item])
-                                if chunk_text:
-                                    chunked_docs.append(chunk_text)
-                                    chunk_mappings.append({
-                                        "doc_idx": doc_idx,
-                                        "full_text": doc
-                                    })
+                            chunks = list(parser.lines())
+                            join_str = "\n"
                         else:
                             sentences = [s.strip() for line in doc.split('\n') for s in re.split(r'(?<=[.!?])\s+', line) if s.strip()]
-                            for i in range(0, len(sentences), item):
-                                chunk_text = " ".join(sentences[i:i+item])
-                                if chunk_text:
-                                    chunked_docs.append(chunk_text)
-                                    chunk_mappings.append({
-                                        "doc_idx": doc_idx,
-                                        "full_text": doc
-                                    })
+                            chunks = sentences
+                            join_str = " "
+                            
+                        for i in range(0, len(chunks), item):
+                            chunk_text = join_str.join(chunks[i:i+item])
+                            if chunk_text:
+                                chunked_docs.append(chunk_text)
+                                chunk_mappings.append({
+                                    "doc_idx": doc_idx,
+                                    "full_text": doc
+                                })
                                 
             elif source_type == "dir":
                 pass
@@ -2914,7 +2860,8 @@ class ChatybotApp:
                     host=host,
                     port=port,
                     model=model_name,
-                    chunk_size=item
+                    chunk_size=item,
+                    chunking_mode=chunking_mode
                 )
                 
                 if self.trace_raw_payload:
