@@ -2909,6 +2909,8 @@ class ChatybotApp:
                     chunk_size=item,
                     chunking_mode=chunking_mode
                 )
+                if backend == "remote" and base_url and hasattr(ranker, "backend_instance") and hasattr(ranker.backend_instance, "base_url"):
+                    ranker.backend_instance.base_url = base_url
                 
                 if self.trace_raw_payload:
                     masked_key = f"{api_key[:10]}...{api_key[-5:]}" if api_key and len(api_key) > 15 else "None"
