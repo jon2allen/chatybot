@@ -2748,6 +2748,7 @@ class ChatybotApp:
             
             chunked_docs = []
             chunk_mappings = []
+            pre_filtered_chunks = []
             
             if source_type == "db":
                 from tinydb import TinyDB
@@ -2895,12 +2896,33 @@ class ChatybotApp:
                     print(f"Error: Filebank{source_id} not found.")
                     return True
             elif source_type == "dir":
-                pass
+                from EasyRerank import DirectoryTextProcessor
+                processor = DirectoryTextProcessor(source_id)
+                
+                # Check for parameter overrides
+                limit_batch_size_match = re.search(r'\blimit_batch_size\s*=\s*(\d+)', remainder, re.IGNORECASE)
+                limit_top_n_match = re.search(r'\blimit_top_n\s*=\s*(\d+)', remainder, re.IGNORECASE)
+                max_limit_match = re.search(r'\bmax_limit\s*=\s*(\d+)', remainder, re.IGNORECASE)
+                
+                limit_batch_size = int(limit_batch_size_match.group(1)) if limit_batch_size_match else 64
+                limit_top_n = int(limit_top_n_match.group(1)) if limit_top_n_match else 3
+                max_limit = int(max_limit_match.group(1)) if max_limit_match else 64
+                
+                print(f"Ingesting directory '{source_id}' with Batched Top-N pre-filtering (limit_batch_size={limit_batch_size}, limit_top_n={limit_top_n}, max_limit={max_limit})...")
+                
+                pre_filtered_chunks, reached_limit = processor.process_with_batched_top_n(
+                    chunk_size=item,
+                    top_n=limit_top_n,
+                    max_limit=max_limit,
+                    batch_size=limit_batch_size,
+                    chunking_mode=chunking_mode
+                )
+                chunked_docs = [c['chunk'] for c in pre_filtered_chunks]
                 
             print(f"Reranking documents from {source_type}='{source_id}' using {model_name}...")
             try:
                 ranker = EasyRanker(
-                    documents=self.rerank_documents_source["identifier"] if source_type == "dir" else chunked_docs,
+                    documents=chunked_docs,
                     backend=backend,
                     api_key=api_key,
                     host=host,
@@ -2914,12 +2936,11 @@ class ChatybotApp:
                 
                 if self.trace_raw_payload:
                     masked_key = f"{api_key[:10]}...{api_key[-5:]}" if api_key and len(api_key) > 15 else "None"
-                    payload_docs = chunked_docs if source_type != "dir" else f"Directory path: {source_id} (to be chunked dynamically)"
                     payload = {
                         "model": model_name,
                         "query": query,
                         "top_n": top_n,
-                        "documents": payload_docs
+                        "documents": chunked_docs
                     }
                     print("Payload:")
                     print("-----------------------------")
@@ -2937,9 +2958,16 @@ class ChatybotApp:
                     score = res.get('relevance_score', 0.0)
                     
                     if source_type == "dir":
-                        chunk_text = res.get('chunk', '')
-                        filename = res.get('filename', 'Unknown')
-                        chunk_id = res.get('chunk_id', 0)
+                        matched_idx = res.get('index', 0)
+                        if matched_idx < len(pre_filtered_chunks):
+                            source_chunk = pre_filtered_chunks[matched_idx]
+                            chunk_text = source_chunk.get('chunk', '')
+                            filename = source_chunk.get('filename', 'Unknown')
+                            chunk_id = source_chunk.get('chunk_id', 0)
+                        else:
+                            chunk_text = res.get('chunk', '')
+                            filename = res.get('filename', 'Unknown')
+                            chunk_id = res.get('chunk_id', 0)
                         ref_line = f"File: {filename} (Chunk: {chunk_id})"
                         ref_short = f"File: {filename}"
                         
