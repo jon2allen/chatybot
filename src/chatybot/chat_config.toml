@@ -145,6 +145,12 @@ top_k = 1
 base_url = "https://openrouter.ai/api/v1"
 api_key = "OPENROUTER_API_KEY"
 
+[models.cohere_reranker]
+name = "cohere/rerank-v3.5"
+type = "reranker"
+base_url = "https://openrouter.ai/api/v1/rerank"
+api_key = "OPENROUTER_API_KEY"
+
 # ============================================================================
 # NVIDIA NIM MODELS
 # ============================================================================
