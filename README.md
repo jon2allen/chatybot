@@ -220,6 +220,9 @@ chat --> Hello!      # Start a conversation
 | `/loadvar <v> [p]` | Store search, ALL, ID, or range in variable | `/loadvar results 1-5` |
 | `/savevar <v> <f>`| Save variable to file | `/savevar results log.txt` |
 | `/setvar <v> <val>`| Set a string variable (supports `{CHAT_HISTORY}` JSON export) | `/setvar var1 {CHAT_HISTORY}` |
+| `/documents <src>=<id>`| Set the active rerank source: `db=<name>`, `var=<name>` (or `CHAT_HISTORY`/`file`), `filebank=<1-5>`, or `dir="<path>"` | `/documents dir="test/conrad_test"` |
+| `/rerank "<query>"` | Semantically rerank source sentences/chunks with optional parameters | `/rerank "sea voyage" top_n=3 split=paragraph` |
+| `/trace rerank <state>`| Enable/disable debugging output for the reranking processor | `/trace rerank on` |
 | `/imagebank{1-5} <file>` | Load image into bank for vision analysis | `/imagebank1 cat.jpg` |
 | `/imagebank{1-5} clear` | Clear an image bank | `/imagebank1 clear` |
 | `/imagebank{1-5} show` | Show image bank info | `/imagebank1 show` |
@@ -276,6 +279,45 @@ chatdsl_parse --file my_script.chatdsl
 chat --> Explain these: ${search_results}
 /dblog                    # Save the AI's explanation back to the database
 ```
+
+### **Semantic Reranking**
+chatybot supports real-time semantic document reranking via the `EasyRerank` library. This allows you to automatically split massive document sources (directories, database records, variables, or conversation history) into semantic chunks, score them against a target query using local or remote cross-encoder models, and inject only the most relevant context back into LLM prompts.
+
+#### **1. Setting the Active Dataset (`/documents`)**
+Specify the target corpus using the `/documents` command:
+```bash
+/documents <source_type>=<identifier>
+```
+*   `db=<name>`: Fetches records from a TinyDB database matching `<name>`.
+*   `var=<name>`: Loads from a script variable (e.g. `${search_results}`).
+*   `var=CHAT_HISTORY`: Special variable that segments the current conversation history.
+*   `var=file`: Uses the main file buffer directly.
+*   `filebank=<1-5>`: Uses the contents of `filebank1` through `filebank5`.
+*   `dir="<path>"`: Specifies a local folder containing `.txt` files (wrap in double quotes if the path contains spaces).
+
+#### **2. Executing Reranking (`/rerank`)**
+Rerank the active documents against a search query:
+```bash
+/rerank "<query>" [, top_n=<n>] [, items=<n>] [, split=<sentence|line|paragraph>] [, return=<summ|text>] [, full_doc=<true|false>] [, limit_batch_size=<n>] [, limit_top_n=<n>] [, max_limit=<n>]
+```
+**Parameters:**
+*   `top_n` *(Default: 2)*: Maximum number of top results to return.
+*   `items` / `item` *(Default: 1)*: Number of segmentation units grouped per text chunk.
+*   `split` *(Default: sentence)*: Segmentation mode:
+    *   `sentence`: Sub-document sentence-based segmentation.
+    *   `line`: Segments strictly by non-empty lines (keeps tables and lists together).
+    *   `paragraph`: Segments by double newlines (`\n\n`).
+*   `return` *(Default: summ)*:
+    *   `summ`: Prints a beautifully formatted ASCII results table (Rank, Score, Reference, Snippet) and appends it to the chat history as a virtual assistant turn.
+    *   `text`: Returns the plain text of matched chunks concatenated together (perfect for saving into script variables).
+*   `full_doc` *(Default: false)*: If `true`, returns the parent document content (from database, file, variable) rather than just the segment chunk text.
+*   `limit_batch_size` *(Default: 64)*: Batch size for batched Top-N pre-filtering.
+*   `limit_top_n` *(Default: 3)*: Top N chunks kept per pre-filtering batch.
+*   `max_limit` *(Default: 64)*: Maximum number of chunks collected during pre-filtering (can be scaled up to e.g. 700 to process massive directories).
+
+#### **3. Debugging Reranking (`/debug response` & `/trace rerank`)**
+*   **`/debug response [raw]`**: Active debug mode for the next prompt. In `/rerank`, it prints a raw JSON dump or list representation of the final resolved result set, bypassing intermediate batch request spam.
+*   **`/trace rerank <on|off>`**: Toggle tracing. When `return=text` is used, tracing `on` will still print the formatted ASCII summary table to stdout for debugging, while keeping variables clean.
 
 ### **Variable Substitution**
 Variables can be set manually, via search results, or in scripts:
@@ -511,6 +553,27 @@ chat --> Create a blog post outline about ${topic}
 ```
 
 ### Change log
+
+June 4-5th, 2026 (v0.5.0)
+-------------------------
+- **Debug Response for Rerank**: Added `/debug response` and `/debug response raw` integration for `/rerank` which outputs raw JSON lists of the final resolved result set, avoiding intermediate batch spam.
+- **Cohere Rerank Support**: Configured Cohere's Reranker v3.5 via OpenRouter in `chat_config.toml`.
+- **Conrad book testing**: Created and validated `test_conrad_full_c.chatdsl` to test Cohere reranking.
+
+June 3rd, 2026
+--------------
+- **Batched Top-N pre-filtering**: Integrated EasyRerank's batched Top-N processing for massive directory files to prevent context exhaustion.
+- **Limit Scaling**: Enabled execution limits scaling (`max_limit` up to 700) to support processing the entire Gutenberg book *Chance* (~14,000 lines).
+
+June 2nd, 2026
+--------------
+- **Sparse Context Injection**: Created `test_sparse_injection.chatdsl` showcasing sparse context injection workflow.
+- **Filebank Document Source**: Supported `filebank` as a document source type (`filebank<1-5>`) in `/documents`.
+- **Parameter Enhancements**: Handled both `item=` and `items=` parameters and standardized split types.
+
+June 1st, 2026
+--------------
+- **EasyRerank 0.2.0 Integration**: Upgraded routing and document loading. Added support for chunking by lines and paragraphs (`split=line` and `split=paragraph`).
 
 May 17th, 2026 (v0.4.4)
 ----------------------
