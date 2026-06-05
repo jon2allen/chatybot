@@ -4,6 +4,7 @@
 /model bge_reranker_f16
 /documents dir="test/conrad_test"
 /trace rerank on
+/debug response 
 
 # Run a query with max_limit=700 and limit_top_n=3 to ensure all 13,962 lines are processed
 #/rerank "pets" top_n=3 split=paragraphe limit_top_n=3 max_limit=700 return=text

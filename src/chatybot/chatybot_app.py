@@ -2952,6 +2952,17 @@ class ChatybotApp:
                 results = ranker.rerank(query=query, top_n=top_n, verbose=False)
                 self.latest_rerank_results = results
                 
+                if self.debug_response_mode:
+                    print("\n--- DEBUG RESPONSE (JSON) ---")
+                    print(json.dumps(results, indent=2))
+                    print("--- END DEBUG RESPONSE ---\n")
+                    self.debug_response_mode = False
+                elif self.debug_response_raw:
+                    print("\n--- DEBUG RESPONSE (RAW) ---")
+                    print(results)
+                    print("--- END DEBUG RESPONSE ---\n")
+                    self.debug_response_raw = False
+                
                 # Pre-resolve matching texts and references
                 resolved_matches = []
                 for idx, res in enumerate(results, 1):
