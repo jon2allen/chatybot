@@ -3424,7 +3424,16 @@ def run():
         help="Path to alternate TOML configuration file",
         default=None
     )
+    parser.add_argument(
+        "--config-edit",
+        action="store_true",
+        help="Launch the TUI configuration manager to edit the models list"
+    )
     args, unknown = parser.parse_known_args()
+
+    if args.config_edit:
+        from .config_tui import main as tui_main
+        sys.exit(tui_main(config_path=args.config))
 
     global app
     app = ChatybotApp(config_path=args.config)
