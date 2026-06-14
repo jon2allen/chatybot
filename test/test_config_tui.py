@@ -270,4 +270,94 @@ def test_tui_clone_dialog_edit_full_passes_is_new():
     assert "orig_clone" not in tui.config.models
 
 
+def test_tui_save_menu_dialog_overwrite():
+    tui = ConfigTUI(config_path="test_config.toml")
+    tui.save_config_to_file = MagicMock()
+    
+    mock_stdscr = MagicMock()
+    mock_stdscr.getmaxyx.return_value = (40, 80)
+    
+    mock_win = MagicMock()
+    mock_win.getmaxyx.return_value = (8, 48)
+    # Default is Overwrite (index 0). Pressing Enter (10) should execute save.
+    mock_win.getch.side_effect = [10]
+    
+    with patch("curses.newwin", return_value=mock_win), \
+         patch("curses.color_pair", return_value=0):
+        tui.save_menu_dialog(mock_stdscr)
+        
+    tui.save_config_to_file.assert_called_once_with(mock_stdscr)
+
+
+def test_tui_save_menu_dialog_save_as():
+    tui = ConfigTUI(config_path="test_config.toml")
+    tui.save_config_as_dialog = MagicMock(return_value=True)
+    tui.save_config_to_file = MagicMock()
+    
+    mock_stdscr = MagicMock()
+    mock_stdscr.getmaxyx.return_value = (40, 80)
+    
+    mock_win = MagicMock()
+    mock_win.getmaxyx.return_value = (8, 48)
+    # Press right (curses.KEY_RIGHT) to move to Save As... (index 1), then Enter (10).
+    import curses
+    mock_win.getch.side_effect = [curses.KEY_RIGHT, 10]
+    
+    with patch("curses.newwin", return_value=mock_win), \
+         patch("curses.color_pair", return_value=0):
+        tui.save_menu_dialog(mock_stdscr)
+        
+    tui.save_config_as_dialog.assert_called_once_with(mock_stdscr)
+    tui.save_config_to_file.assert_not_called()
+
+
+def test_tui_save_menu_dialog_cancel():
+    tui = ConfigTUI(config_path="test_config.toml")
+    tui.save_config_to_file = MagicMock()
+    tui.save_config_as_dialog = MagicMock()
+    
+    mock_stdscr = MagicMock()
+    mock_stdscr.getmaxyx.return_value = (40, 80)
+    
+    mock_win = MagicMock()
+    mock_win.getmaxyx.return_value = (8, 48)
+    # Escape (27) should exit.
+    mock_win.getch.side_effect = [27]
+    
+    with patch("curses.newwin", return_value=mock_win), \
+         patch("curses.color_pair", return_value=0):
+        tui.save_menu_dialog(mock_stdscr)
+        
+    tui.save_config_to_file.assert_not_called()
+    tui.save_config_as_dialog.assert_not_called()
+
+
+def test_tui_draw_main_screen_version():
+    from chatybot.config_model import ChatConfig
+    tui = ConfigTUI(config_path="test_config.toml")
+    tui.config = ChatConfig(models={})
+    tui.sync_models_list()
+    
+    mock_stdscr = MagicMock()
+    mock_stdscr.getmaxyx.return_value = (40, 80)
+    
+    with patch("curses.color_pair", return_value=0):
+        tui.draw_main_screen(mock_stdscr)
+        
+    # Verify that stdscr.addstr was called with a version string
+    called_args = []
+    for call in mock_stdscr.addstr.call_args_list:
+        args, kwargs = call
+        for arg in args:
+            if isinstance(arg, str):
+                called_args.append(arg)
+            
+    # Check that some form of version string (e.g. starting with "v") is drawn
+    # e.g., "v0.5.0"
+    version_drawn = any(val.startswith("v") and len(val) >= 4 for val in called_args)
+    assert version_drawn
+
+
+
+
 
