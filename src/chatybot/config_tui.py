@@ -168,7 +168,7 @@ class ConfigTUI:
                     alias, model = self.filtered_list[self.selected_idx]
                     self.delete_model_dialog(stdscr, alias, model)
             elif ch == ord('s') or ch == ord('S'):
-                self.save_config_to_file(stdscr)
+                self.save_menu_dialog(stdscr)
             elif ch == curses.KEY_RESIZE:
                 # Curses handles resizing; just clear and let next loop redraw
                 stdscr.clear()
@@ -179,9 +179,15 @@ class ConfigTUI:
         
         # Header (2 lines)
         stdscr.addstr(0, 0, " Chatybot Config Manager", curses.color_pair(1) | curses.A_BOLD)
-        branch_info = "config_editor branch"
-        if w - len(branch_info) - 2 > 30:
-            stdscr.addstr(0, w - len(branch_info) - 2, branch_info, curses.color_pair(3))
+        
+        try:
+            import importlib.metadata
+            version_str = f"v{importlib.metadata.version('chatybot')}"
+        except Exception:
+            version_str = "unknown"
+            
+        if w - len(version_str) - 2 > 30:
+            stdscr.addstr(0, w - len(version_str) - 2, version_str, curses.color_pair(3))
         
         file_msg = f" File: {self.config_path}"
         loaded_msg = f"{len(self.models_list)} models loaded"
@@ -387,6 +393,55 @@ class ConfigTUI:
             self.save_config_to_file(stdscr)
             return True
         return False
+
+    def save_menu_dialog(self, stdscr):
+        h, w = stdscr.getmaxyx()
+        win_h, win_w = 8, 48
+        win_y = (h - win_h) // 2
+        win_x = (w - win_w) // 2
+        
+        win = curses.newwin(win_h, win_w, win_y, win_x)
+        win.keypad(True)
+        self.draw_dialog_border(win, "Save Configuration")
+        
+        # Display the file to overwrite, truncated if too long
+        display_path = self.config_path
+        if len(display_path) > 38:
+            display_path = "..." + display_path[-35:]
+        win.addstr(2, 4, f"File: {display_path}")
+        
+        options = ["[ Overwrite ]", "[ Save As... ]", "[ Cancel ]"]
+        sel = 0  # Overwrite is default
+        
+        while True:
+            # Render options
+            for idx, opt in enumerate(options):
+                opt_x = 3 + (idx * 15)
+                if idx == sel:
+                    win.addstr(5, opt_x, opt, curses.color_pair(2))
+                else:
+                    win.addstr(5, opt_x, opt)
+            win.refresh()
+            
+            ch = win.getch()
+            if ch == curses.KEY_LEFT:
+                sel = (sel - 1) % len(options)
+            elif ch == curses.KEY_RIGHT:
+                sel = (sel + 1) % len(options)
+            elif ch in (10, 13):  # Enter
+                if sel == 0:  # Overwrite
+                    self.save_config_to_file(stdscr)
+                    break
+                elif sel == 1:  # Save As...
+                    if self.save_config_as_dialog(stdscr):
+                        break
+                else:  # Cancel
+                    break
+            elif ch == 27:  # Escape
+                break
+        
+        # Force a redraw of the main screen after closing
+        stdscr.clear()
 
     def save_config_to_file(self, stdscr):
         try:
