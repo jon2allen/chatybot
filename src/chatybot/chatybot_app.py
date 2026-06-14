@@ -59,10 +59,10 @@ app = None  # Global app instance for database functions to access
 class ChatybotApp:
     """Main application class for Chatybot."""
 
-    def __init__(self):
+    def __init__(self, config_path: Optional[str] = None):
         """Initialize the Chatybot application."""
         # Initialize managers
-        self.config_manager = ConfigManager()
+        self.config_manager = ConfigManager(config_path=config_path)
         self.logging_manager = LoggingManager()
         self.buffer_manager = BufferManager()
         self.image_generator = ImageGenerator()
@@ -3415,11 +3415,20 @@ class ChatybotApp:
 
 def run():
     """Entry point for the application."""
-    global app
-    app = ChatybotApp()
-    # Also set the module-level app variable
+    import argparse
     import sys
 
+    parser = argparse.ArgumentParser(description="Chatybot CLI")
+    parser.add_argument(
+        "-c", "--config",
+        help="Path to alternate TOML configuration file",
+        default=None
+    )
+    args, unknown = parser.parse_known_args()
+
+    global app
+    app = ChatybotApp(config_path=args.config)
+    # Also set the module-level app variable
     current_module = sys.modules[__name__]
     current_module.app = app
     app.run()
