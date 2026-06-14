@@ -85,6 +85,39 @@ class BaseModelConfig(BaseModel):
             return None
         return os.getenv(self.api_key)
 
+    @property
+    def detected_vendor(self) -> str:
+        """Heuristically detect the vendor name based on base_url, api_key, or name if not explicitly set."""
+        explicit = getattr(self, "vendor", None)
+        if explicit:
+            return explicit
+        
+        base_url_lower = self.base_url.lower()
+        api_key_lower = (self.api_key or "").lower()
+        name_lower = self.name.lower()
+        
+        if "openrouter" in base_url_lower or "openrouter" in api_key_lower:
+            return "openrouter"
+        if "googleapis.com" in base_url_lower or "gemini" in api_key_lower or "google" in name_lower or "google" in base_url_lower:
+            return "google"
+        if "mistral" in base_url_lower or "mistral" in api_key_lower:
+            return "mistral"
+        if "openai.com" in base_url_lower or "openai" in api_key_lower:
+            return "openai"
+        if "nvidia" in base_url_lower or "nvidia" in api_key_lower:
+            return "nvidia"
+        if "jina" in base_url_lower or "jina" in api_key_lower:
+            return "jina"
+        if "localhost:11434" in base_url_lower or "ollama" in base_url_lower or "ollama" in api_key_lower:
+            return "ollama"
+        if "localhost:8080" in base_url_lower or "llama.cpp" in base_url_lower or "llama-cpp" in base_url_lower:
+            return "llama_cpp"
+        if "publicai" in base_url_lower or "swiss" in api_key_lower:
+            return "publicai"
+        if "bytez" in base_url_lower or "bytez" in api_key_lower:
+            return "bytez"
+        return ""
+
 
 # ============================================================================
 # CHAT MODEL CONFIG
