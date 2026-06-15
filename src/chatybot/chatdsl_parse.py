@@ -176,7 +176,9 @@ class TParser:
         # Phase 2: Image generation commands
         "imagine", "imagesize", "imagequality", "saveimage", "imagedir",
         "listimages", "showimage", "loadimage",
-        "multiline", "echo", "thoughtstyle", "def"
+        "multiline", "echo", "thoughtstyle", "def",
+        # Semantic reranking commands
+        "documents", "rerank"
     }
 
     def __init__(self, tokens: List[Token], verbose: bool = False):

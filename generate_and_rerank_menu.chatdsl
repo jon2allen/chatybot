@@ -1,0 +1,59 @@
+# Generate, Rerank, and Create Menu
+# This script first generates a large dataset of dishes using a generative model,
+# then uses the reranker to extract specific dish types, and finally creates a menu.
+
+# Step 1: Generate the dataset of 60 dishes (20 from each country)
+/model mistral_1
+/clearfile
+/multiline
+Please list 20 popular traditional dishes from France, 20 from Germany, and 20 from Spain (60 dishes in total). 
+Format the output as a simple list with one dish per line, including a brief description of its ingredients. 
+Ensure the list includes a variety of items, specifically desserts, chicken dishes, and vegetable dishes.
+;;
+/multiline
+/save 60_generated_dishes.txt
+
+# Step 2: Set up the document source for reranking
+# We load the newly generated text file into a filebank and set it as the target
+/filebank1 60_generated_dishes.txt
+/documents filebank=1
+
+# Step 3: Extract the specific dishes using semantic search
+# Switch to the reranker model
+/model bge_reranker_f16
+
+# Extract a vegetable dish
+/rerank "traditional vegetable dish or vegetarian stew" top_n=1 split=line items=1 return=text
+/setvar menu_vegetable {LAST_RESPONSE}
+
+# Extract a chicken dish
+/rerank "traditional chicken poultry dish" top_n=1 split=line items=1 return=text
+/setvar menu_chicken {LAST_RESPONSE}
+
+# Extract a dessert
+/rerank "sweet dessert cake pastry" top_n=1 split=line items=1 return=text
+/setvar menu_dessert {LAST_RESPONSE}
+
+# Step 4: Create the final menu
+# Switch back to the generative model
+/model mistral_1
+/clearfile
+/multiline
+You are the head chef of a prestigious European restaurant. 
+I have selected the following three dishes from our expansive culinary database:
+
+Appetizer (Vegetable):
+${menu_vegetable}
+
+Main Course (Chicken):
+${menu_chicken}
+
+Dessert:
+${menu_dessert}
+
+Please write a highly elegant and creative menu description for this 3-course meal. Describe how the flavors progress from the appetizer to the main course and finish with the dessert.
+;;
+/multiline
+
+# Save the final output
+/save generated_3_course_menu.txt

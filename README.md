@@ -129,7 +129,7 @@ Active escape commands:
   /model [alias] - Switch to a different model or show current model.
   /listmodels - List available models from toml.
   /logging <start|end> - Start or stop logging.
-  /save <file> - Save the last chat completion to a file.
+  /save <file> [all] [nothink|withthink] - Save last completion or all history to a file (respects /thinking state by default).
   /notemode <on|off> - Toggle note mode for /save command.
   /codeonly - Set flag to generate code only without explanations.
   /codeoff - Reverse the code-only flag.
@@ -149,7 +149,7 @@ Active escape commands:
   /stream - Toggle streaming responses.
   /trace <rawpayload|tps|tpsperf> <on|off> - Debugging options
   /script <file> - Execute a script file containing multiple commands.
-  /quit - Exit the program.
+  /quit | /exit - Exit the program.
   /setdb <dbname> - Create or select a TinyDB database. Use 'Null' to deactivate.
   /dblist - List all TinyDB databases in the db directory.
   /searchdb <query> - Search all docs in the current database.
@@ -202,8 +202,6 @@ chat --> Hello!      # Start a conversation
 | `/thinking <on\|off>` | Toggle `<think>` and `<thought>` visibility | `/thinking off` |
 | `/thoughtstyle <none\|gemma4\|nanbeige\|nanbeige_code>` | Set prompting format for negative prompt to disable reasoning - auto | `/thoughtstyle nanbeige_code` |
 | `/seed <value>` | Set PRNG Seed | `/seed time` |
-
-**Note:** `nanbeige_code` may only generate thinking tokens - this is an artifact/quirk of the model.
 | `/stream` | Toggle streaming | `/stream` |
 | `/trace <cmd> <state>`| Trace tokens/payload | `/trace rawpayload on` |
 | `/debug payload` | Edit payload in editor and send to API | `/debug payload` |
@@ -212,7 +210,7 @@ chat --> Hello!      # Start a conversation
 | `/notemode <on\|off>` | Toggle note block separation | `/notemode on` |
 | `/multiline` | Toggle multi-line input | `/multiline` |
 | `/logging <start\|end>` | Start/stop logging | `/logging start` |
-| `/save <file>` | Save last response | `/save output.txt` |
+| `/save <file> [all] [nothink\|withthink]` | Save last response or all history, with optional thinking stripping | `/save output.txt all nothink` |
 | `/script <path>` | Execute a script | `/script setup.dsl` |
 | `/setdb <name>` | Select TinyDB database. Use `Null` to deactivate. | `/setdb knowledge` |
 | `/dblist` | List all TinyDB databases | `/dblist` |
@@ -221,13 +219,16 @@ chat --> Hello!      # Start a conversation
 | `/dbprint [file]` | Print formatted DB report | `/dbprint report.txt` |
 | `/loadvar <v> [p]` | Store search, ALL, ID, or range in variable | `/loadvar results 1-5` |
 | `/savevar <v> <f>`| Save variable to file | `/savevar results log.txt` |
-| `/setvar <v> <val>`| Set a string variable (text only) | `/setvar user "Jon"` |
+| `/setvar <v> <val>`| Set a string variable (supports `{CHAT_HISTORY}` JSON export) | `/setvar var1 {CHAT_HISTORY}` |
+| `/documents <src>=<id>`| Set the active rerank source: `db=<name>`, `var=<name>` (or `CHAT_HISTORY`/`file`), `filebank=<1-5>`, or `dir="<path>"` | `/documents dir="test/conrad_test"` |
+| `/rerank "<query>"` | Semantically rerank source sentences/chunks with optional parameters | `/rerank "sea voyage" top_n=3 split=paragraph` |
+| `/trace rerank <state>`| Enable/disable debugging output for the reranking processor | `/trace rerank on` |
 | `/imagebank{1-5} <file>` | Load image into bank for vision analysis | `/imagebank1 cat.jpg` |
 | `/imagebank{1-5} clear` | Clear an image bank | `/imagebank1 clear` |
 | `/imagebank{1-5} show` | Show image bank info | `/imagebank1 show` |
 | `/mem` | Show memory size of buffers/variables | `/mem` |
 | `/dump [v\|all]` | Dump variables | `/dump all` |
-| `/quit` | Exit the program | `/quit` |
+| `/quit` \| `/exit` | Exit the program | `/quit` |
 
 ---
 
@@ -278,6 +279,45 @@ chatdsl_parse --file my_script.chatdsl
 chat --> Explain these: ${search_results}
 /dblog                    # Save the AI's explanation back to the database
 ```
+
+### **Semantic Reranking**
+chatybot supports real-time semantic document reranking via the `EasyRerank` library. This allows you to automatically split massive document sources (directories, database records, variables, or conversation history) into semantic chunks, score them against a target query using local or remote cross-encoder models, and inject only the most relevant context back into LLM prompts.
+
+#### **1. Setting the Active Dataset (`/documents`)**
+Specify the target corpus using the `/documents` command:
+```bash
+/documents <source_type>=<identifier>
+```
+*   `db=<name>`: Fetches records from a TinyDB database matching `<name>`.
+*   `var=<name>`: Loads from a script variable (e.g. `${search_results}`).
+*   `var=CHAT_HISTORY`: Special variable that segments the current conversation history.
+*   `var=file`: Uses the main file buffer directly.
+*   `filebank=<1-5>`: Uses the contents of `filebank1` through `filebank5`.
+*   `dir="<path>"`: Specifies a local folder containing `.txt` files (wrap in double quotes if the path contains spaces).
+
+#### **2. Executing Reranking (`/rerank`)**
+Rerank the active documents against a search query:
+```bash
+/rerank "<query>" [, top_n=<n>] [, items=<n>] [, split=<sentence|line|paragraph>] [, return=<summ|text>] [, full_doc=<true|false>] [, limit_batch_size=<n>] [, limit_top_n=<n>] [, max_limit=<n>]
+```
+**Parameters:**
+*   `top_n` *(Default: 2)*: Maximum number of top results to return.
+*   `items` / `item` *(Default: 1)*: Number of segmentation units grouped per text chunk.
+*   `split` *(Default: sentence)*: Segmentation mode:
+    *   `sentence`: Sub-document sentence-based segmentation.
+    *   `line`: Segments strictly by non-empty lines (keeps tables and lists together).
+    *   `paragraph`: Segments by double newlines (`\n\n`).
+*   `return` *(Default: summ)*:
+    *   `summ`: Prints a beautifully formatted ASCII results table (Rank, Score, Reference, Snippet) and appends it to the chat history as a virtual assistant turn.
+    *   `text`: Returns the plain text of matched chunks concatenated together (perfect for saving into script variables).
+*   `full_doc` *(Default: false)*: If `true`, returns the parent document content (from database, file, variable) rather than just the segment chunk text.
+*   `limit_batch_size` *(Default: 64)*: Batch size for batched Top-N pre-filtering.
+*   `limit_top_n` *(Default: 3)*: Top N chunks kept per pre-filtering batch.
+*   `max_limit` *(Default: 64)*: Maximum number of chunks collected during pre-filtering (can be scaled up to e.g. 700 to process massive directories).
+
+#### **3. Debugging Reranking (`/debug response` & `/trace rerank`)**
+*   **`/debug response [raw]`**: Active debug mode for the next prompt. In `/rerank`, it prints a raw JSON dump or list representation of the final resolved result set, bypassing intermediate batch request spam.
+*   **`/trace rerank <on|off>`**: Toggle tracing. When `return=text` is used, tracing `on` will still print the formatted ASCII summary table to stdout for debugging, while keeping variables clean.
 
 ### **Variable Substitution**
 Variables can be set manually, via search results, or in scripts:
@@ -514,6 +554,40 @@ chat --> Create a blog post outline about ${topic}
 
 ### Change log
 
+June 4-5th, 2026 (v0.5.0)
+-------------------------
+- **Debug Response for Rerank**: Added `/debug response` and `/debug response raw` integration for `/rerank` which outputs raw JSON lists of the final resolved result set, avoiding intermediate batch spam.
+- **Cohere Rerank Support**: Configured Cohere's Reranker v3.5 via OpenRouter in `chat_config.toml`.
+- **Conrad book testing**: Created and validated `test_conrad_full_c.chatdsl` to test Cohere reranking.
+
+June 3rd, 2026
+--------------
+- **Batched Top-N pre-filtering**: Integrated EasyRerank's batched Top-N processing for massive directory files to prevent context exhaustion.
+- **Limit Scaling**: Enabled execution limits scaling (`max_limit` up to 700) to support processing the entire Gutenberg book *Chance* (~14,000 lines).
+
+June 2nd, 2026
+--------------
+- **Sparse Context Injection**: Created `test_sparse_injection.chatdsl` showcasing sparse context injection workflow.
+- **Filebank Document Source**: Supported `filebank` as a document source type (`filebank<1-5>`) in `/documents`.
+- **Parameter Enhancements**: Handled both `item=` and `items=` parameters and standardized split types.
+
+June 1st, 2026
+--------------
+- **EasyRerank 0.2.0 Integration**: Upgraded routing and document loading. Added support for chunking by lines and paragraphs (`split=line` and `split=paragraph`).
+
+May 17th, 2026 (v0.4.4)
+----------------------
+- **Smart Thought Saving**: Upgraded the `/save` command to automatically respect the `/thinking` toggle state by default, stripping `<think>` and `<thought>` blocks when `/thinking` is `OFF`.
+- **Custom Stripping Modifiers**: Added `nothink` and `withthink` parameters to `/save` to allow force-stripping or force-including thinking blocks on demand.
+- **Thought Standardisation**: Wrapped all raw streaming and non-streaming thinking and reasoning chunks in standardized `<think>...</think>` tags in conversation history.
+- **Improved UX**: Documented the new `/save` command options in `/help` and added descriptions to the README command list and command tables.
+
+May 16th, 2026 (v0.4.3)
+----------------------
+- **Enhanced Chat History Export**: Added `{CHAT_HISTORY}` placeholder to `/setvar` for JSON chat history export and added the `all` parameter to the `/save` command.
+- **Improved UX**: Added `/exit` as a natural alias for `/quit`.
+- **Documentation Overhaul**: Fixed markdown formatting issues in the command table and established a dedicated **Known Issues** section.
+
 May 1st, 2026 (v0.4.2)
 ----------------------
 - **Mistral Thinking Support**: Added support for Mistral's structured reasoning format (list of thinking/text blocks) in both streaming and non-streaming modes.
@@ -748,6 +822,12 @@ Assistant: Here's a well-structured Bash script that uses the `cat` command to d
 ## **License**
 
 This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) file for details.
+
+---
+
+## **Known Issues**
+
+- **`nanbeige_code` Generation**: When using `/thoughtstyle nanbeige_code`, the model may only generate thinking tokens without producing the final output. This is a known artifact/quirk of the `nanbeige` model itself.
 
 ---
 
