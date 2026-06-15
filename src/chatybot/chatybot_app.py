@@ -41,6 +41,7 @@ from .image_generator import ImageGenerator
 from .image_manager import ImageManager
 from .extract_code import process_file
 from EasyRerank import EasyRanker, TextParser
+from .chaty_help import get_help_system
 from .chatydb import (
     set_db,
     search_db,
@@ -67,6 +68,7 @@ class ChatybotApp:
         self.buffer_manager = BufferManager()
         self.image_generator = ImageGenerator()
         self.image_manager = ImageManager()
+        self.help_system = get_help_system()
 
         # Image generation settings
         self.image_size = "1024x1024"
@@ -1614,7 +1616,12 @@ class ChatybotApp:
         cmd = parts[0].lower()
 
         if cmd == "/help":
-            self.show_help()
+            # Handle /help with optional query argument
+            if len(parts) > 1:
+                query = parts[1]
+                print(self.help_system.get_help_text(query))
+            else:
+                self.show_help()
             return True
 
         elif cmd == "/trace":
@@ -3283,6 +3290,9 @@ class ChatybotApp:
         print('             if "${var} == value" then command, if "true" then command')
         print("  wait <seconds> - Pause execution")
         print("  # comment - Comments in script files")
+        print("\n--- Help Tips ---")
+        print("Use '/help <command>' for detailed help on a specific command (e.g., '/help /file').")
+        print("Use '/help <keyword>' to filter commands by keyword (e.g., '/help file' shows all file-related commands).")
 
     async def get_multi_line_input(self) -> str:
         """
