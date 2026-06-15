@@ -67,5 +67,9 @@ wait 2
 /script ${test_dir}/test16_maxtokens_settings.chatdsl
 wait 2
 
+# Test Case 17: Array and Memory Detail Settings
+/script ${test_dir}/test17_array_memory_detail.chatdsl
+wait 2
+
 #finish
 /quit

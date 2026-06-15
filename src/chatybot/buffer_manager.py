@@ -6,7 +6,7 @@ Manages file buffers, file banks, script variables, and image banks
 
 import base64
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Any
 
 
 class BufferManager:
@@ -18,6 +18,40 @@ class BufferManager:
         self.file_banks: Dict[str, str] = {f"filebank{i}": "" for i in range(1, 6)}
         self.image_banks: Dict[str, str] = {f"imagebank{i}": "" for i in range(1, 6)}
         self.script_vars: Dict[str, str] = {}
+        self.array_store: Dict[str, Dict[str, Any]] = {}
+        self.array_counter: int = 0
+    
+    def allocate_array(self, data: List[str]) -> str:
+        """
+        Allocate a string array on the heap and return a pointer string.
+        
+        Args:
+            data: List of strings to store
+            
+        Returns:
+            Pointer string to the array (e.g. __ARRAY_REF_001__)
+        """
+        self.array_counter += 1
+        ref_id = f"__ARRAY_REF_{self.array_counter:03d}__"
+        self.array_store[ref_id] = {
+            "type": "array",
+            "data": data
+        }
+        return ref_id
+
+    def clean_unreferenced_arrays(self) -> None:
+        """
+        Garbage collect any arrays in array_store that are not referenced by any script variable.
+        """
+        referenced_refs = set()
+        for val in self.script_vars.values():
+            if isinstance(val, str) and val.startswith("__ARRAY_REF_"):
+                referenced_refs.add(val)
+        
+        # Identify unreferenced arrays
+        unreferenced = [ref for ref in self.array_store if ref not in referenced_refs]
+        for ref in unreferenced:
+            del self.array_store[ref]
     
     def load_file_to_buffer(self, file_path: str) -> None:
         """
@@ -239,7 +273,37 @@ class BufferManager:
                 print(f"{bank_name}: {mime_type}")
         else:
             print(f"{bank_name}: Invalid data format")
-    
+    def get_variable_value(self, name_with_subscript: str) -> str:
+        """
+        Retrieves a variable value, supporting subscripting like var[0].
+        Raises KeyError if the base variable is not found.
+        Raises IndexError if the index is out of bounds.
+        Raises ValueError if subscripting a non-array variable.
+        """
+        import re
+        match = re.match(r"^(\w+)\[(-?\d+)\]$", name_with_subscript)
+        if match:
+            var_name = match.group(1)
+            index = int(match.group(2))
+            if var_name not in self.script_vars:
+                raise KeyError(f"Variable '{var_name}' not found")
+            var_value = self.script_vars[var_name]
+            if isinstance(var_value, str) and var_value.startswith("__ARRAY_REF_") and var_value in self.array_store:
+                data = self.array_store[var_value]["data"]
+                try:
+                    return data[index]
+                except IndexError:
+                    raise IndexError(f"Index {index} out of bounds for array '{var_name}' of length {len(data)}")
+            else:
+                raise ValueError(f"Variable '{var_name}' is not an array, cannot subscript")
+        else:
+            if name_with_subscript not in self.script_vars:
+                raise KeyError(f"Variable '{name_with_subscript}' not found")
+            var_value = self.script_vars[name_with_subscript]
+            if isinstance(var_value, str) and var_value.startswith("__ARRAY_REF_") and var_value in self.array_store:
+                return "\n".join(self.array_store[var_value]["data"])
+            return str(var_value)
+
     def replace_placeholders(self, prompt: str, include_images: bool = True) -> Tuple[str, List[Dict]]:
         """
         Replace filebank, script variable, and imagebank placeholders in the prompt.
@@ -258,15 +322,64 @@ class BufferManager:
         """
         # First, handle text placeholders (filebanks and script vars)
         text_prompt = prompt
+        
+        import re
+        # If the prompt matches a clean subscript of an existing array variable directly, resolve it
+        match_direct = re.match(r"^(\w+)\[(-?\d+)\]$", text_prompt.strip())
+        if match_direct:
+            var_name = match_direct.group(1)
+            if var_name in self.script_vars:
+                var_value = self.script_vars[var_name]
+                if isinstance(var_value, str) and var_value.startswith("__ARRAY_REF_") and var_value in self.array_store:
+                    try:
+                        text_prompt = self.get_variable_value(text_prompt.strip())
+                    except Exception:
+                        pass
+
         for bank_name, content in self.file_banks.items():
             placeholder = f"{{{bank_name}}}"
             if placeholder in text_prompt:
                 text_prompt = text_prompt.replace(placeholder, content)
-        
-        for var_name, var_value in self.script_vars.items():
-            placeholder = f"${{{var_name}}}"
-            if placeholder in text_prompt:
-                text_prompt = text_prompt.replace(placeholder, str(var_value))
+        # Sort keys by length descending to prevent shorter variable names matching prefixes of longer ones
+        sorted_vars = sorted(list(self.script_vars.keys()), key=len, reverse=True)
+        for var_name in sorted_vars:
+            # 1. Braced subscripts: ${var_name[index]}
+            braced_sub_pat = rf"\$\{{{re.escape(var_name)}\[(-?\d+)\]\}}"
+            def replace_braced_sub(m):
+                idx = m.group(1)
+                try:
+                    return self.get_variable_value(f"{var_name}[{idx}]")
+                except Exception:
+                    return m.group(0)
+            text_prompt = re.sub(braced_sub_pat, replace_braced_sub, text_prompt)
+
+            # 2. Unbraced subscripts: $var_name[index]
+            unbraced_sub_pat = rf"\${re.escape(var_name)}\[(-?\d+)\]"
+            def replace_unbraced_sub(m):
+                idx = m.group(1)
+                try:
+                    return self.get_variable_value(f"{var_name}[{idx}]")
+                except Exception:
+                    return m.group(0)
+            text_prompt = re.sub(unbraced_sub_pat, replace_unbraced_sub, text_prompt)
+
+            # 3. Braced variables: ${var_name}
+            braced_pat = rf"\$\{{{re.escape(var_name)}\}}"
+            def replace_braced(m):
+                try:
+                    return self.get_variable_value(var_name)
+                except Exception:
+                    return m.group(0)
+            text_prompt = re.sub(braced_pat, replace_braced, text_prompt)
+
+            # 4. Unbraced variables: $var_name
+            unbraced_pat = rf"\${re.escape(var_name)}\b"
+            def replace_unbraced(m):
+                try:
+                    return self.get_variable_value(var_name)
+                except Exception:
+                    return m.group(0)
+            text_prompt = re.sub(unbraced_pat, replace_unbraced, text_prompt)
         
         # Collect images only if requested
         image_list = []
@@ -306,22 +419,38 @@ class BufferManager:
         text_prompt, _ = self.replace_placeholders(prompt, include_images=False)
         return text_prompt
     
-    def show_memory_usage(self, search_buffer: list = None) -> None:
+    def show_memory_usage(self, search_buffer: list = None, detail: bool = False) -> None:
         """
         Show size of the file buffer, filebanks, image banks, and script variables in KB.
         """
+        self.clean_unreferenced_arrays()
         print(f"\n{'Source':<20} {'Size (KB)':>10}")
         print("-" * 32)
         
         # File Buffer
         file_buffer_size = len(self.file_buffer.encode('utf-8')) / 1024
         print(f"{'FILE_BUFFER':<20} {file_buffer_size:>10.2f}")
+        if detail and self.file_buffer:
+            lines = self.file_buffer.count('\n') + 1
+            words = len(self.file_buffer.split())
+            chars = len(self.file_buffer)
+            preview = self.file_buffer.strip().replace('\n', ' ')[:50]
+            print(f"  -> {lines} lines, {words} words, {chars} chars")
+            print(f"  -> Preview: \"{preview}...\"")
         
         # File Banks
         for i in range(1, 6):
             bank_name = f"filebank{i}"
-            bank_size = len(self.file_banks[bank_name].encode('utf-8')) / 1024
+            content = self.file_banks[bank_name]
+            bank_size = len(content.encode('utf-8')) / 1024
             print(f"{bank_name:<20} {bank_size:>10.2f}")
+            if detail and content:
+                lines = content.count('\n') + 1
+                words = len(content.split())
+                chars = len(content)
+                preview = content.strip().replace('\n', ' ')[:50]
+                print(f"  -> {lines} lines, {words} words, {chars} chars")
+                print(f"  -> Preview: \"{preview}...\"")
         
         # Image Banks
         for i in range(1, 6):
@@ -334,6 +463,11 @@ class BufferManager:
                     base64_len = len(content) - data_start
                     bank_size = (base64_len * 3) / 4 / 1024  # Approximate
                     print(f"{bank_name:<20} {bank_size:>10.2f}")
+                    if detail:
+                        mime_end = content.find(";")
+                        mime = content[5:mime_end] if mime_end > 5 else "unknown"
+                        print(f"  -> MIME type: {mime}")
+                        print(f"  -> Base64 length: {base64_len} chars")
                 else:
                     print(f"{bank_name:<20} {0:>10.2f}")
             else:
@@ -344,11 +478,35 @@ class BufferManager:
             import json
             sb_size = len(json.dumps(search_buffer).encode('utf-8')) / 1024
             print(f"{'SEARCH_BUFFER':<20} {sb_size:>10.2f}")
+            if detail and search_buffer:
+                print(f"  -> Total items: {len(search_buffer)}")
+                for idx, item in enumerate(search_buffer, 1):
+                    item_str = str(item)
+                    item_size = len(item_str.encode('utf-8')) / 1024
+                    item_preview = item_str.strip().replace('\n', ' ')[:50]
+                    print(f"    [{idx}] {item_size:.2f} KB | {item_preview}...")
             
         # Script Variables
         for var_name, var_value in self.script_vars.items():
-            var_size = len(str(var_value).encode('utf-8')) / 1024
-            print(f"{var_name:<20} {var_size:>10.2f}")
+            if isinstance(var_value, str) and var_value.startswith("__ARRAY_REF_") and var_value in self.array_store:
+                num_items = len(self.array_store[var_value]["data"])
+                total_len = sum(len(str(x).encode('utf-8')) for x in self.array_store[var_value]["data"])
+                var_size = total_len / 1024
+                display_name = f"{var_name}[] ({num_items} items)"
+                print(f"{display_name:<20} {var_size:>10.2f}")
+                if detail:
+                    for idx, elem in enumerate(self.array_store[var_value]["data"]):
+                        elem_size = len(str(elem).encode('utf-8')) / 1024
+                        elem_preview = str(elem).strip().replace('\n', ' ')[:40]
+                        print(f"    [{idx}] {elem_size:.2f} KB | {elem_preview}")
+            else:
+                var_size = len(str(var_value).encode('utf-8')) / 1024
+                display_name = var_name
+                print(f"{display_name:<20} {var_size:>10.2f}")
+                if detail:
+                    val_preview = str(var_value).strip().replace('\n', ' ')[:50]
+                    val_type = type(var_value).__name__
+                    print(f"  -> Type: {val_type} | Value: \"{val_preview}\"")
         print()
     
     def dump_variables(self, name: str = "all", search_buffer: list = None, chat_history: list = None) -> None:
@@ -360,6 +518,7 @@ class BufferManager:
             search_buffer: Optional search buffer to dump
             chat_history: Optional chat history list to dump
         """
+        self.clean_unreferenced_arrays()
         if name == "all":
             print("\n--- DUMP ALL VARIABLES ---")
             print(f"FILE_BUFFER: {self.file_buffer}")
@@ -381,7 +540,10 @@ class BufferManager:
                     print(f"      RESPONSE: {response[:100]}{'...' if len(response) > 100 else ''}")
                 
             for var_name, var_value in self.script_vars.items():
-                print(f"SCRIPT_VAR '{var_name}': {var_value}")
+                if isinstance(var_value, str) and var_value.startswith("__ARRAY_REF_") and var_value in self.array_store:
+                    print(f"SCRIPT_VAR '{var_name}': {self.array_store[var_value]['data']}")
+                else:
+                    print(f"SCRIPT_VAR '{var_name}': {var_value}")
             print("--- END DUMP ---\n")
         elif name == "file_buffer":
             print(f"FILE_BUFFER: {self.file_buffer}")
@@ -413,6 +575,16 @@ class BufferManager:
             else:
                 print(f"Error: {name} not found.")
         elif name in self.script_vars:
-            print(f"SCRIPT_VAR '{name}': {self.script_vars[name]}")
+            var_value = self.script_vars[name]
+            if isinstance(var_value, str) and var_value.startswith("__ARRAY_REF_") and var_value in self.array_store:
+                print(f"SCRIPT_VAR '{name}': {self.array_store[var_value]['data']}")
+            else:
+                print(f"SCRIPT_VAR '{name}': {var_value}")
         else:
-            print(f"Error: Variable '{name}' not found.")
+            try:
+                val = self.get_variable_value(name)
+                print(f"SCRIPT_VAR '{name}': {val}")
+            except KeyError:
+                print(f"Error: Variable '{name}' not found.")
+            except (IndexError, ValueError) as e:
+                print(f"Error: {str(e)}.")

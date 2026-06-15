@@ -1,0 +1,52 @@
+# Test Case 17: Array and Memory Detail commands
+# Description: Test array assignments, file/image banks, variable dereferencing, and detailed memory reporting.
+
+# Initialize memory detail
+/mem detail
+
+# Load ww1 queries report into filebank1
+/filebank1 ww1_queries_rpt.txt
+
+# Attempt to define array testarray5 referencing uninitialized variable rpt
+/setvar testarray5[] = ["bob","mary", "Jon", ${rpt} ]
+
+# Check memory details
+/mem detail
+
+# Check summary memory
+/mem
+
+# Define another array testarray6 referencing uninitialized variable rpt
+/setvar testarray6[] = ["bob","mary", "Jon", ${rpt} ]
+
+# Check summary memory
+/mem
+
+# Check detailed memory
+/mem detail
+
+# Initialize rpt variable to filebank1 contents
+/setvar rpt {filebank1}
+
+# Define testarray7 referencing now-initialized rpt variable
+/setvar testarray7[] = ["bob","mary", "Jon", ${rpt} ]
+
+# Check detailed memory with rpt fully expanded in testarray7
+/mem detail
+
+# Check summary memory
+/mem
+
+# Load kid and test1 images into image banks
+/imagebank1 test_images/kid.jpg
+/mem
+/mem detail
+
+/imagebank2 test_images/test1.jpg
+/mem detail
+
+# Define an array referencing both imagebank1 and imagebank2
+/setvar testi[] = [{imagebank1},{imagebank2}]
+
+# Verify final detailed memory layout
+/mem detail
