@@ -312,12 +312,65 @@ class TParser:
         self.expect(TokenType.IDENTIFIER, "set")
         self.expect(TokenType.WHITESPACE)
         var_name = self.expect(TokenType.IDENTIFIER).raw
+        
+        # Look ahead for [] suffix
+        is_array = False
+        lookahead_idx = self.idx
+        while lookahead_idx < len(self.tokens) and self.tokens[lookahead_idx].type == TokenType.WHITESPACE:
+            lookahead_idx += 1
+        if lookahead_idx < len(self.tokens) and self.tokens[lookahead_idx].type == TokenType.SYMBOL and self.tokens[lookahead_idx].raw == '[':
+            lookahead_idx += 1
+            while lookahead_idx < len(self.tokens) and self.tokens[lookahead_idx].type == TokenType.WHITESPACE:
+                lookahead_idx += 1
+            if lookahead_idx < len(self.tokens) and self.tokens[lookahead_idx].type == TokenType.SYMBOL and self.tokens[lookahead_idx].raw == ']':
+                # Suffix [] is present
+                self.parse_opt_ws()
+                self.expect(TokenType.SYMBOL, "[")
+                self.parse_opt_ws()
+                self.expect(TokenType.SYMBOL, "]")
+                is_array = True
+                var_name += "[]"
+
         self.parse_opt_ws()
         self.expect(TokenType.SYMBOL, "=")
         self.parse_opt_ws()
-        val = self.current.value
-        self.advance()
+        val = self.parse_value_or_list()
         return {"type": "set_command", "var": var_name, "val": val}
+
+    def parse_value_or_list(self) -> Any:
+        self.parse_opt_ws()
+        if self.match(TokenType.SYMBOL, "["):
+            self.advance()
+            self.parse_opt_ws()
+            elements = []
+            if not self.match(TokenType.SYMBOL, "]"):
+                elements.append(self.parse_list_element())
+                self.parse_opt_ws()
+                while self.match(TokenType.SYMBOL, ","):
+                    self.advance()
+                    self.parse_opt_ws()
+                    elements.append(self.parse_list_element())
+                    self.parse_opt_ws()
+            self.expect(TokenType.SYMBOL, "]")
+            return elements
+        else:
+            val = self.current.value
+            self.advance()
+            return val
+
+    def parse_list_element(self) -> Any:
+        if self.match(TokenType.STRING):
+            tok = self.expect(TokenType.STRING)
+            return tok.value
+        elif self.match(TokenType.NUMBER):
+            tok = self.expect(TokenType.NUMBER)
+            return tok.value
+        elif self.match(TokenType.IDENTIFIER):
+            tok = self.expect(TokenType.IDENTIFIER)
+            return tok.raw
+        else:
+            raise ParseError(f"Expected string, number, or identifier in array literal, got {self.current.type.value} '{self.current.raw}'", self.current.line, self.current.column)
+
 
     def parse_wait(self) -> Dict[str, Any]:
         self.expect(TokenType.IDENTIFIER, "wait")

@@ -197,7 +197,8 @@ class ChatybotApp:
         macro_def_with_params = 'def' ws ident:name ws '(' ws param_list?:params ws ')' ws '=' ws string:template -> (name, params or [], template)
         macro_def_no_params = 'def' ws ident:name ws '(' ws ')' ws '=' ws string:template -> (name, [], template)
         param_list = param:p (ws ',' ws param)*:ps -> [p] + ps
-        param = ident
+        param = variable_ref | ident
+        variable_ref = '${' ident:var_name '}' -> var_name
         ident = <letter (letter | digit | '_')*>
         letter = 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'g' | 'h' | 'i' | 'j' | 'k' | 'l' | 'm' | 'n' | 'o' | 'p' | 'q' | 'r' | 's' | 't' | 'u' | 'v' | 'w' | 'x' | 'y' | 'z' | 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'I' | 'J' | 'K' | 'L' | 'M' | 'N' | 'O' | 'P' | 'Q' | 'R' | 'S' | 'T' | 'U' | 'V' | 'W' | 'X' | 'Y' | 'Z'
         digit = '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'
@@ -283,14 +284,47 @@ class ChatybotApp:
             if len(resolved_args) != len(macro['params']):
                 return f"ERROR: Macro '{name}' expects {len(macro['params'])} arguments, got {len(resolved_args)}"
             
+            # If the template contains ${param}, convert it to {param} for python .format()
+            template = macro['template']
+            for param in macro['params']:
+                template = template.replace(f"${{{param}}}", f"{{{param}}}")
+            
+            # Check if any arguments are array references
+            array_args_info = {}
+            for param, arg in zip(macro['params'], resolved_args):
+                if isinstance(arg, str) and arg.startswith("__ARRAY_REF_") and arg in self.buffer_manager.array_store:
+                    array_args_info[param] = self.buffer_manager.array_store[arg]["data"]
+
+            if array_args_info:
+                # We have array arguments! Find the maximum length to iterate over
+                num_iterations = max(len(data) for data in array_args_info.values())
+                
+                expanded_runs = []
+                for i in range(num_iterations):
+                    iteration_mapping = {}
+                    for param, arg in zip(macro['params'], resolved_args):
+                        if param in array_args_info:
+                            data_list = array_args_info[param]
+                            val = data_list[i] if i < len(data_list) else ""
+                            iteration_mapping[param] = val
+                        else:
+                            iteration_mapping[param] = arg
+                    
+                    try:
+                        expanded_runs.append(template.format(**iteration_mapping))
+                    except Exception as e:
+                        return f"ERROR: Format error in macro '{name}' at iteration {i}: {e}"
+                
+                return "\n".join(expanded_runs)
+            
             # Create parameter mapping
             param_mapping = {}
             for param, arg in zip(macro['params'], resolved_args):
                 param_mapping[param] = arg
             
-            # Format the template
+            # Format the template (no array arguments)
             try:
-                expanded = macro['template'].format(**param_mapping)
+                expanded = template.format(**param_mapping)
                 return expanded
             except Exception as e:
                 return f"ERROR: Format error in macro '{name}': {e}"
@@ -309,6 +343,138 @@ class ChatybotApp:
             for var_name, var_value in self.buffer_manager.script_vars.items():
                 result = result.replace(f'${{{var_name}}}', var_value)
             return result
+
+    def parse_dsl_list(self, val_str: str) -> List[str]:
+        """Splits a DSL list string by top-level commas, respecting quotes and braces/brackets."""
+        val_str = val_str.strip()
+        if not (val_str.startswith('[') and val_str.endswith(']')):
+            raise ValueError("Array literal must start with '[' and end with ']'")
+        
+        content = val_str[1:-1]
+        elements = []
+        current_element = []
+        
+        in_double_quote = False
+        in_single_quote = False
+        escape = False
+        brace_depth = 0
+        bracket_depth = 0
+        
+        for char in content:
+            if escape:
+                current_element.append(char)
+                escape = False
+                continue
+            
+            if char == '\\':
+                current_element.append(char)
+                escape = True
+                continue
+            
+            if char == '"' and not in_single_quote:
+                in_double_quote = not in_double_quote
+                current_element.append(char)
+                continue
+            
+            if char == "'" and not in_double_quote:
+                in_single_quote = not in_single_quote
+                current_element.append(char)
+                continue
+                
+            if not in_double_quote and not in_single_quote:
+                if char == '{':
+                    brace_depth += 1
+                elif char == '}':
+                    brace_depth = max(0, brace_depth - 1)
+                elif char == '[':
+                    bracket_depth += 1
+                elif char == ']':
+                    bracket_depth = max(0, bracket_depth - 1)
+                elif char == ',' and brace_depth == 0 and bracket_depth == 0:
+                    elements.append("".join(current_element))
+                    current_element = []
+                    continue
+                    
+            current_element.append(char)
+            
+        elements.append("".join(current_element))
+        return elements
+
+    def parse_array_value(self, val_str: str) -> List[str]:
+        """
+        Parses an array value string containing a DSL list, replacing placeholders
+        within elements, and returns a list of resolved string elements.
+        
+        Supports element-level placeholder replacement, avoiding syntax errors
+        when placeholders resolve to strings containing quotes, newlines, or leading zeros.
+        """
+        # Parse the top-level list structure
+        raw_elements = self.parse_dsl_list(val_str)
+        
+        # Resolve placeholders for each element
+        resolved_elements = []
+        for elem in raw_elements:
+            elem = elem.strip()
+            if not elem:
+                continue
+            
+            # Check if it's a quoted string
+            if (elem.startswith('"') and elem.endswith('"')) or (elem.startswith("'") and elem.endswith("'")):
+                # Unwrap the string literal safely
+                import ast
+                try:
+                    unwrapped = ast.literal_eval(elem)
+                except Exception:
+                    unwrapped = elem[1:-1]
+                
+                # Resolve placeholders inside the string
+                resolved_val = self.resolve_placeholders_in_element(unwrapped)
+                resolved_elements.append(resolved_val)
+            else:
+                # It's an unquoted element (placeholder, number, or bareword)
+                resolved_val = self.resolve_placeholders_in_element(elem)
+                resolved_elements.append(resolved_val)
+                
+        return resolved_elements
+
+    def resolve_placeholders_in_element(self, elem: str) -> str:
+        """Resolve all placeholders (filebanks, script variables, image banks) in a single element."""
+        # 1. Image banks
+        for i in range(1, 6):
+            placeholder = f"{{imagebank{i}}}"
+            if placeholder in elem:
+                bank_name = f"imagebank{i}"
+                if bank_name in self.buffer_manager.image_banks:
+                    image_data = self.buffer_manager.image_banks[bank_name]
+                    if image_data:
+                        elem = elem.replace(placeholder, image_data)
+        
+        # 2. CHAT_HISTORY
+        if "{CHAT_HISTORY}" in elem:
+            import json
+            history_json = []
+            for p, r in self.chat_history:
+                history_json.append({"role": "user", "content": p})
+                history_json.append({"role": "assistant", "content": r})
+            elem = elem.replace("{CHAT_HISTORY}", json.dumps(history_json))
+            
+        # 3. LAST_RESPONSE
+        if "{LAST_RESPONSE}" in elem:
+            if self.chat_history:
+                last_turn_response = self.chat_history[-1][1]
+                elem = elem.replace("{LAST_RESPONSE}", last_turn_response)
+            else:
+                elem = elem.replace("{LAST_RESPONSE}", "")
+                
+        # 4. Filebanks and script variables (via legacy replace)
+        # Run up to 5 times to resolve nested/recursive placeholder references
+        for _ in range(5):
+            new_elem = self.buffer_manager.replace_placeholders_legacy(elem)
+            if new_elem == elem:
+                break
+            elem = new_elem
+        
+        return elem
 
     def get_history_path(self) -> str:
         """
@@ -1175,7 +1341,7 @@ class ChatybotApp:
             try:
                 set_stripped = command.lstrip()
                 # Use regex to parse "set var = value" supporting multiline (. matches anything with re.S)
-                match = re.match(r"set\s+(\w+)\s*=\s*(.*)", set_stripped, re.S)
+                match = re.match(r"set\s+(\w+(?:\[\])?)\s*=\s*(.*)", set_stripped, re.S)
                 if match:
                     var_name = match.group(1)
                     var_value = match.group(2).strip()
@@ -1202,16 +1368,26 @@ class ChatybotApp:
                         # Non-quoted value
                         var_value = var_value.strip()
 
-                    # Replace variables in the value before storing
-                    def replace_var_in_val(match):
-                        var_name_match = match.group(1)
-                        return self.buffer_manager.script_vars.get(var_name_match, "")
-
-                    processed_value = re.sub(
-                        r"\$\{(\w+)\}", replace_var_in_val, var_value
-                    )
-                    self.buffer_manager.script_vars[var_name.strip()] = processed_value
-                    return True
+                    # Replace variables in the value before storing (supporting subscripts and unbraced names)
+                    processed_value = self.buffer_manager.replace_placeholders_legacy(var_value)
+                    
+                    # Check if it is an array
+                    if var_name.endswith("[]"):
+                        clean_var_name = var_name[:-2]
+                        val_str = var_value.lstrip().lstrip('=').strip()
+                        try:
+                            string_list = self.parse_array_value(val_str)
+                        except Exception as e:
+                            print(f"Error: Invalid array format for '{clean_var_name}': {e}")
+                            return True
+                        
+                        pointer = self.buffer_manager.allocate_array(string_list)
+                        self.buffer_manager.script_vars[clean_var_name] = pointer
+                        print(f"Variable '{clean_var_name}' set to array pointer {pointer}.")
+                        return True
+                    else:
+                        self.buffer_manager.script_vars[var_name.strip()] = processed_value
+                        return True
                 else:
                     print("Invalid set command format. Usage: set <name> = <value>")
                     return True
@@ -1237,12 +1413,12 @@ class ChatybotApp:
                 print(f"Error defining macro: {e}")
                 return True
 
-        # Replace variables in the command
-        def replace_var(match):
-            var_name = match.group(1)
-            return self.buffer_manager.script_vars.get(var_name, "")
-
-        processed_command = re.sub(r"\$\{(\w+)\}", replace_var, command)
+        # Replace variables in the command (supporting subscripts and unbraced names)
+        # We do not replace variables on the command line for /setvar as it handles substitution internally (avoiding splitting elements with commas)
+        if command.lstrip().startswith("/setvar"):
+            processed_command = command
+        else:
+            processed_command = self.buffer_manager.replace_placeholders_legacy(command)
         
         # Strip whitespace for command detection (used by multiple handlers)
         stripped_command = processed_command.lstrip()
@@ -3098,12 +3274,16 @@ class ChatybotApp:
             return True
 
         elif cmd == "/mem":
-            self.buffer_manager.show_memory_usage(SEARCHBUFFER)
+            detail = len(parts) > 1 and parts[1].lower() == "detail"
+            self.buffer_manager.show_memory_usage(SEARCHBUFFER, detail=detail)
             # Also show last generated image memory usage
             if hasattr(self.image_generator, 'last_generated_image') and self.image_generator.last_generated_image is not None:
                 file_path, image_data = self.image_generator.last_generated_image
                 image_size_kb = len(image_data.encode('utf-8')) / 1024
                 print(f"{'LAST_IMAGE':<20} {image_size_kb:>10.2f}")
+                if detail:
+                    print(f"  -> File path: {file_path}")
+                    print(f"  -> Data size: {len(image_data)} chars")
             # Show chat history memory usage
             if self.chat_history:
                 total_ch_size = sum(
@@ -3111,6 +3291,15 @@ class ChatybotApp:
                     for p, r in self.chat_history
                 ) / 1024
                 print(f"{'CHAT_HISTORY':<20} {total_ch_size:>10.2f}")
+                if detail:
+                    print(f"  -> Total exchanges: {len(self.chat_history)}")
+                    for idx, (p, r) in enumerate(self.chat_history, 1):
+                        p_size = len(p.encode('utf-8')) / 1024
+                        r_size = len(r.encode('utf-8')) / 1024
+                        p_snip = p.strip().replace('\n', ' ')[:40]
+                        r_snip = r.strip().replace('\n', ' ')[:40]
+                        print(f"    [{idx}] User: {p_size:.2f} KB | {p_snip}...")
+                        print(f"        Bot:  {r_size:.2f} KB | {r_snip}...")
             return True
 
         elif cmd == "/dump":
@@ -3125,6 +3314,23 @@ class ChatybotApp:
             var_name = parts[1].strip('"')
             # Use full placeholder replacement to support image banks
             value_with_images = parts[2]
+            
+            is_array = var_name.endswith("[]")
+            clean_var_name = var_name[:-2] if is_array else var_name
+
+            if is_array:
+                val_str = value_with_images.lstrip().lstrip('=').strip()
+                try:
+                    string_list = self.parse_array_value(val_str)
+                except Exception as e:
+                    print(f"Error: Invalid array format for '{clean_var_name}': {e}")
+                    return True
+                
+                pointer = self.buffer_manager.allocate_array(string_list)
+                self.buffer_manager.set_script_var(clean_var_name, pointer)
+                print(f"Variable '{clean_var_name}' set to array pointer {pointer}.")
+                return True
+
             # Check if value contains imagebank placeholders
             for i in range(1, 6):
                 placeholder = f"{{imagebank{i}}}"
@@ -3155,8 +3361,8 @@ class ChatybotApp:
             var_value = self.buffer_manager.replace_placeholders_legacy(value_with_images)
             
             # Check if variable already exists and contains image data or JSON
-            if var_name in self.buffer_manager.script_vars:
-                existing_value = self.buffer_manager.script_vars[var_name]
+            if clean_var_name in self.buffer_manager.script_vars:
+                existing_value = self.buffer_manager.script_vars[clean_var_name]
                 if existing_value:
                     # Check if existing value is image data (starts with data:image or is base64)
                     is_existing_image = (
@@ -3179,11 +3385,10 @@ class ChatybotApp:
                         is_new_json = var_value.strip().startswith("{") or var_value.strip().startswith("[")
                         
                         if not (is_new_image or is_new_json):
-                            print(f"Warning: Variable '{var_name}' already contains {'image data' if is_existing_image else 'JSON'}. Not overwritten.")
+                            print(f"Warning: Variable '{clean_var_name}' already contains {'image data' if is_existing_image else 'JSON'}. Not overwritten.")
                             return True
             
-
-            self.buffer_manager.set_script_var(var_name, var_value)
+            self.buffer_manager.set_script_var(clean_var_name, var_value)
             return True
 
         elif cmd == "/reloadmacros":
