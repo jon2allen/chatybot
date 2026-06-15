@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "chatybot"
-version = "0.4.2"
+version = "0.5.0"
 description = "A CLI-based AI chat assistant"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -15,7 +15,8 @@ dependencies = [
     "tinydb",
     "pygments",
     "parsley",
-    "aiohttp"
+    "aiohttp",
+    "EasyRerank"
 ]
 
 [project.scripts]

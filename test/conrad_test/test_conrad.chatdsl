@@ -1,0 +1,9 @@
+# Test script for batched Top-N on Conrad Chance text file
+/model bge_reranker_f16
+/documents dir="test/conrad_test"
+/trace rawpayload on
+
+# Test query for a sea voyage topic using batched top-n pre-filtering
+/rerank "captain on a sea voyage adventure" top_n=2 limit_top_n=3 max_limit=10 return=summ
+
+/trace rawpayload off
