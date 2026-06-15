@@ -33,7 +33,8 @@ export PYTHONPATH=.":$PYTHONPATH"
 
 # Use the python that has atheris installed
 #PYTHON=/opt/homebrew/opt/python@3.11/bin/python3.11
-PYTHON=python3
+PYTHON=python3.11
+# if using .venv - point to python3 
 # Create crashes directory
 mkdir -p crashes
 
