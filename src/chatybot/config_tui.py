@@ -181,10 +181,14 @@ class ConfigTUI:
         stdscr.addstr(0, 0, " Chatybot Config Manager", curses.color_pair(1) | curses.A_BOLD)
         
         try:
-            import importlib.metadata
-            version_str = f"v{importlib.metadata.version('chatybot')}"
+            from . import __version__
+            version_str = f"v{__version__}"
         except Exception:
-            version_str = "unknown"
+            try:
+                import importlib.metadata
+                version_str = f"v{importlib.metadata.version('chatybot')}"
+            except Exception:
+                version_str = "unknown"
             
         if w - len(version_str) - 2 > 30:
             stdscr.addstr(0, w - len(version_str) - 2, version_str, curses.color_pair(3))
