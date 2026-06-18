@@ -134,7 +134,7 @@ Active escape commands:
   /notemode <on|off> - Toggle note mode for /save command.
   /codeonly - Set flag to generate code only without explanations.
   /codeoff - Reverse the code-only flag.
-  /multiline - Toggle multi-line input mode (use ';;' to end input).
+  /multiline - Enter multi-line input mode (use ';;' to automatically end/exit multiline mode).
   /system <message> - Set a custom system message.
   /temp <value> - Set temperature for the current model (0.0-2.0).
   /maxtokens <value> - Set max tokens for the current model.
@@ -209,7 +209,7 @@ chat --> Hello!      # Start a conversation
 | `/codeonly` | Enable code-only mode | `/codeonly` |
 | `/codeoff` | Disable code-only mode | `/codeoff` |
 | `/notemode <on\|off>` | Toggle note block separation | `/notemode on` |
-| `/multiline` | Toggle multi-line input | `/multiline` |
+| `/multiline` | Enter multi-line input | `/multiline` |
 | `/logging <start\|end>` | Start/stop logging | `/logging start` |
 | `/save <file> [all] [nothink\|withthink]` | Save last response or all history, with optional thinking stripping | `/save output.txt all nothink` |
 | `/script <path>` | Execute a script | `/script setup.dsl` |
@@ -597,6 +597,14 @@ chat --> Create a blog post outline about ${topic}
 ```
 
 ### Change log
+
+June 18th, 2026 (v0.5.3)
+------------------------
+- **Version Bump**: Updated to v0.5.3 to support stateless multiline boundary behavior.
+- **State-Based Multiline Mode**: Replaced legacy `/multiline` toggle-off requirement with a deterministic, auto-exiting `;;` boundary parser.
+- **Legacy Bypass Lookahead**: Added parser lookahead inside scripts and deferred check state in the interactive REPL to silently bypass legacy trailing `/multiline` toggles.
+- **Deprecated Token Reporting**: Logged warning messages when legacy `/multiline` toggles are bypassed.
+- **Double Semicolon Tokenization**: Enhanced character-level parser to treat `;;` as a standalone command token.
 
 June 15th, 2026 (v0.5.2)
 ------------------------
