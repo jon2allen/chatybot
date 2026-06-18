@@ -90,6 +90,7 @@ class ChatybotApp:
         self.reasoning_effort: Optional[str] = None
         self.show_thinking: bool = True
         self.multi_line_mode: bool = False
+        self.auto_exit_pending: bool = False
         self.script_context: bool = False
         self.thoughtstyle: str = "none"
 
@@ -1430,10 +1431,20 @@ class ChatybotApp:
                             else:
                                 current_command.append(char)
                         elif char == ";":
-                            cmd = "".join(current_command).strip()
-                            if cmd:
-                                commands_list.append(cmd)
-                            current_command = []
+                            if i + 1 < len(line) and line[i+1] == ";":
+                                # This is ';;'. Treat it as a single token.
+                                cmd = "".join(current_command).strip()
+                                if cmd:
+                                    commands_list.append(cmd)
+                                commands_list.append(";;")
+                                current_command = []
+                                i += 1
+                                continue
+                            else:
+                                cmd = "".join(current_command).strip()
+                                if cmd:
+                                    commands_list.append(cmd)
+                                current_command = []
                         else:
                             current_command.append(char)
                     i += 1
@@ -1457,7 +1468,13 @@ class ChatybotApp:
             multi_line_buffer = []
             in_multi_line = False
 
-            for cmd in commands_list:
+            idx = 0
+            while idx < len(commands_list):
+                cmd = commands_list[idx]
+                if not cmd.strip():
+                    idx += 1
+                    continue
+
                 # Check if we're in multi-line mode and not processing an escaped command
                 if (
                     self.multi_line_mode
@@ -1466,11 +1483,13 @@ class ChatybotApp:
                 ):
                     in_multi_line = True
                     multi_line_buffer = [cmd]
+                    idx += 1
                     continue
 
                 if in_multi_line:
                     if cmd.strip() == ";;":
                         # End of multi-line input, process it
+                        self.multi_line_mode = False  # The absolute rule for the new behavior
                         # First, expand any macros in the buffer
                         expanded_lines = []
                         for line in multi_line_buffer:
@@ -1501,6 +1520,28 @@ class ChatybotApp:
                             print("Prompt sent to LLM successfully")
                         in_multi_line = False
                         multi_line_buffer = []
+
+                        # Peek ahead to burn legacy /multiline if needed
+                        next_meaningful = []
+                        peek_idx = idx + 1
+                        while peek_idx < len(commands_list) and len(next_meaningful) < 2:
+                            peek_cmd = commands_list[peek_idx]
+                            if peek_cmd.strip():
+                                next_meaningful.append((peek_idx, peek_cmd))
+                            peek_idx += 1
+
+                        if len(next_meaningful) >= 2:
+                            idx1, cmd1 = next_meaningful[0]
+                            idx2, cmd2 = next_meaningful[1]
+                            if cmd1 == "/multiline" and cmd2.startswith("/"):
+                                print(">> Legacy /multiline bypassed in script.")
+                                commands_list[idx1] = ""
+                        elif len(next_meaningful) == 1:
+                            idx1, cmd1 = next_meaningful[0]
+                            if cmd1 == "/multiline":
+                                print(">> Legacy /multiline bypassed in script.")
+                                commands_list[idx1] = ""
+
                     elif cmd.startswith("/"):
                         # Escaped command in the middle of multi-line - process the buffer first
                         # First, expand any macros in the buffer
@@ -1560,6 +1601,8 @@ class ChatybotApp:
                     )
                     if not handled:
                         print(f"Unknown command in script: {cmd}")
+
+                idx += 1
 
             print("Script execution finished")
 
@@ -3306,6 +3349,8 @@ class ChatybotApp:
         while True:
             line = input()
             if line.strip() == ";;":
+                self.multi_line_mode = False
+                self.auto_exit_pending = True
                 break
             # Process macro calls in each line
             if line.lstrip().startswith("%"):
@@ -3336,6 +3381,11 @@ class ChatybotApp:
                     prompt = await self.get_multi_line_input()
                 else:
                     prompt = input("chat --> ")
+                    if self.auto_exit_pending:
+                        self.auto_exit_pending = False
+                        if prompt.strip() == "/multiline":
+                            print(">> Legacy /multiline bypassed. Multiline mode: OFF.")
+                            continue
 
                 # Handle history search command (!) - must be checked before adding to history
                 if prompt.startswith("!"):
