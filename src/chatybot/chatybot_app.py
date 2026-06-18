@@ -1534,12 +1534,12 @@ class ChatybotApp:
                             idx1, cmd1 = next_meaningful[0]
                             idx2, cmd2 = next_meaningful[1]
                             if cmd1 == "/multiline" and cmd2.startswith("/"):
-                                print(">> Legacy /multiline bypassed in script.")
+                                print(f"depreciated line removed: {cmd1}")
                                 commands_list[idx1] = ""
                         elif len(next_meaningful) == 1:
                             idx1, cmd1 = next_meaningful[0]
                             if cmd1 == "/multiline":
-                                print(">> Legacy /multiline bypassed in script.")
+                                print(f"depreciated line removed: {cmd1}")
                                 commands_list[idx1] = ""
 
                     elif cmd.startswith("/"):
@@ -3384,7 +3384,7 @@ class ChatybotApp:
                     if self.auto_exit_pending:
                         self.auto_exit_pending = False
                         if prompt.strip() == "/multiline":
-                            print(">> Legacy /multiline bypassed. Multiline mode: OFF.")
+                            print(f"depreciated line removed: {prompt.strip()}")
                             continue
 
                 # Handle history search command (!) - must be checked before adding to history
