@@ -93,6 +93,10 @@ class ChatybotApp:
         self.auto_exit_pending: bool = False
         self.script_context: bool = False
         self.thoughtstyle: str = "none"
+        
+        # Run command settings
+        self.safe_mode: bool = True
+        self.run_timeout: int = 30
 
         # Trace settings
         self.trace_raw_payload: bool = False
@@ -177,7 +181,8 @@ class ChatybotApp:
                     "setvar", "notemode", "mem", "dump", "trace",
                     "thinking", "echo", "def", "reloadmacros",
                     "imagine", "imagesize", "imagequality", "saveimage", "imagedir",
-                    "listimages", "showimage", "loadimage", "documents", "rerank"
+                    "listimages", "showimage", "loadimage", "documents", "rerank",
+                    "run", "extract_tools", "run_safe", "run_unsafe"
                     ]
 
                  )
@@ -1642,6 +1647,393 @@ class ChatybotApp:
         finally:
             self.script_context = False
 
+    # =========== RUN COMMAND METHODS ===========
+
+    def check_dangerous(self, command: str) -> Optional[str]:
+        """
+        Check command for dangerous patterns.
+        
+        Args:
+            command: The shell command to check
+            
+        Returns:
+            Warning message if dangerous pattern found, None otherwise
+        """
+        import re
+        
+        DANGEROUS_PATTERNS = [
+            # Recursive deletes
+            (r'rm\s+-r\b', "Recursive delete (rm -r)"),
+            (r'rm\s+--recursive\b', "Recursive delete (rm --recursive)"),
+            (r'rm\s+-rf\b', "Recursive force delete (rm -rf)"),
+            (r'rm\s+--recursive\s+--force\b', "Recursive force delete"),
+            
+            # System directory writes
+            (r'>\s*(/dev/|/etc/|/usr/|/bin/|/sbin/|/lib/|/boot/|/var/|/opt/)', 
+             "Write to critical system directory"),
+            
+            # Shell features that could be exploited
+            (r':\s*\>\s*\S+', "Here-document"),
+            (r';\s*', "Command chaining with ;"),
+            (r'&&\s*', "AND-chain"),
+            (r'\|\s*', "OR-chain"),
+            (r'\$\(', "Command substitution"),
+            (r'`[^`]+`', "Backtick command substitution"),
+            
+            # Dangerous commands
+            (r'chmod\s+-R\b', "Recursive chmod"),
+            (r'chown\s+-R\b', "Recursive chown"),
+            (r'mkfs\b', "Filesystem creation"),
+            (r'dd\s+if=\s*', "dd command (disk operations)"),
+            (r'fdisk\b', "Partition table manipulation"),
+            (r'format\b', "Disk formatting"),
+            (r'partition\b', "Partition manipulation"),
+            (r'mount\b', "Mount filesystems"),
+            (r'umount\b', "Unmount filesystems"),
+            
+            # Privilege escalation
+            (r'sudo\b', "Privilege escalation (sudo)"),
+            (r'su\s+', "Switch user"),
+        ]
+        
+        for pattern, description in DANGEROUS_PATTERNS:
+            if re.search(pattern, command):
+                return description
+        
+        return None
+
+    def execute_shell_command(self, command: str, timeout: Optional[int] = None) -> None:
+        """
+        Execute a shell command and store output in RUN_COMPLETION and LAST_COMPLETION.
+        
+        SECURITY: Uses shlex.split() + shell=False to prevent injection.
+        Variables are substituted in Python BEFORE shell execution.
+        
+        Args:
+            command: The shell command to execute
+            timeout: Optional timeout in seconds (defaults to self.run_timeout)
+        """
+        import subprocess
+        import shlex
+        
+        if timeout is None:
+            timeout = self.run_timeout
+        
+        # CRITICAL: Variable substitution already happened in the caller
+        # So 'command' contains literal strings, not ${VAR} references
+        
+        # Check for dangerous patterns
+        danger = self.check_dangerous(command)
+        if danger:
+            if self.safe_mode:
+                self.buffer_manager.set_script_var('RUN_COMPLETION', 
+                    f"Blocked (safe mode): {danger}")
+                self.buffer_manager.set_script_var('RUN_ERROR', '')
+                self.buffer_manager.set_script_var('RUN_EXIT_CODE', '-1')
+                self.buffer_manager.set_script_var('LAST_COMPLETION', 
+                    f"Blocked (safe mode): {danger}")
+                print(f"⚠️  Blocked: {danger}")
+                return
+            else:
+                confirm = input(f"⚠️  {danger} Execute anyway? (y/N): ")
+                if confirm.lower() != 'y':
+                    self.buffer_manager.set_script_var('RUN_COMPLETION', "Command aborted by user")
+                    self.buffer_manager.set_script_var('RUN_ERROR', '')
+                    self.buffer_manager.set_script_var('RUN_EXIT_CODE', '-1')
+                    self.buffer_manager.set_script_var('LAST_COMPLETION', "Command aborted by user")
+                    print("❌ Command aborted")
+                    return
+        
+        try:
+            # SAFE: No shell=True, uses shlex.split for proper tokenization
+            result = subprocess.run(
+                shlex.split(command),
+                shell=False,  # CRITICAL: Prevents shell injection
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=timeout,
+                cwd=os.getcwd()
+            )
+            
+            # Store in buffer_manager using RUN_* variables to avoid conflicts
+            self.buffer_manager.set_script_var('RUN_COMPLETION', result.stdout)
+            self.buffer_manager.set_script_var('RUN_ERROR', result.stderr)
+            self.buffer_manager.set_script_var('RUN_EXIT_CODE', str(result.returncode))
+            
+            # Also store in LAST_COMPLETION for backward compatibility
+            self.buffer_manager.set_script_var('LAST_COMPLETION', result.stdout)
+            
+            if result.returncode != 0:
+                print(f"⚠️  Command exited with code {result.returncode}")
+            else:
+                print(f"✅ Command executed")
+                
+        except subprocess.TimeoutExpired:
+            self.buffer_manager.set_script_var('RUN_COMPLETION', 
+                f"Error: Command timed out after {timeout}s")
+            self.buffer_manager.set_script_var('RUN_ERROR', '')
+            self.buffer_manager.set_script_var('RUN_EXIT_CODE', '-2')
+            self.buffer_manager.set_script_var('LAST_COMPLETION', 
+                f"Error: Command timed out after {timeout}s")
+            print(f"⏰ Timeout after {timeout}s")
+        except FileNotFoundError as e:
+            self.buffer_manager.set_script_var('RUN_COMPLETION', '')
+            self.buffer_manager.set_script_var('RUN_ERROR', f"Command not found: {e.filename}")
+            self.buffer_manager.set_script_var('RUN_EXIT_CODE', '-1')
+            self.buffer_manager.set_script_var('LAST_COMPLETION', '')
+            print(f"❌ Command not found: {e.filename}")
+        except Exception as e:
+            self.buffer_manager.set_script_var('RUN_COMPLETION', '')
+            self.buffer_manager.set_script_var('RUN_ERROR', str(e))
+            self.buffer_manager.set_script_var('RUN_EXIT_CODE', '-1')
+            self.buffer_manager.set_script_var('LAST_COMPLETION', '')
+            print(f"⚠️  Error: {e}")
+
+    def _parse_tool_content(self, content: str) -> Dict[str, str]:
+        """Parse tool content in format: name(args) or just name."""
+        content = content.strip()
+        if '(' in content and content.endswith(')'):
+            # Format: name(args)
+            name = content[:content.index('(')].strip()
+            args = content[content.index('(')+1:-1].strip()
+            return {'name': name, 'args': args, 'raw': content}
+        else:
+            # Format: just name
+            return {'name': content, 'args': '', 'raw': content}
+
+    def _parse_xml_tool_calls(self, text: str) -> List[Dict[str, str]]:
+        """Parse XML formatted tool calls."""
+        import re
+        tool_calls = []
+        
+        # Pattern 1: <tool name="func">args</tool>
+        # Pattern 2: <function name="func">args</function>
+        # Pattern 3: <tool>name(args)</tool>
+        patterns = [
+            (r'<tool\s+name="([^"]+)"[^>]*>([^<]*)</tool>', lambda m: {'name': m.group(1), 'args': m.group(2), 'raw': m.group(0)}),
+            (r'<function\s+name="([^"]+)"[^>]*>([^<]*)</function>', lambda m: {'name': m.group(1), 'args': m.group(2), 'raw': m.group(0)}),
+            (r'<tool>([^<]*)</tool>', lambda m: self._parse_tool_content(m.group(1))),
+            (r'<function>([^<]*)</function>', lambda m: self._parse_tool_content(m.group(1))),
+        ]
+        
+        for pattern, handler in patterns:
+            for match in re.finditer(pattern, text):
+                try:
+                    tool_calls.append(handler(match))
+                except:
+                    continue
+        
+        return tool_calls
+
+    def _parse_json_tool_calls(self, text: str) -> List[Dict[str, str]]:
+        """Parse JSON formatted tool calls."""
+        import json
+        
+        tool_calls = []
+        
+        # First, try to parse the entire text as JSON
+        # This handles the case where the entire response is a JSON object
+        try:
+            data = json.loads(text)
+            if isinstance(data, dict) and 'tool_calls' in data:
+                for tc in data['tool_calls']:
+                    if isinstance(tc, dict):
+                        if 'function' in tc:
+                            func = tc['function']
+                            tool_calls.append({
+                                'name': func.get('name', ''),
+                                'args': json.dumps(func.get('arguments', {})),
+                                'raw': json.dumps(tc)
+                            })
+                        elif 'tool' in tc:
+                            # Alternative format
+                            tool = tc['tool']
+                            tool_calls.append({
+                                'name': tool.get('name', ''),
+                                'args': json.dumps(tool.get('arguments', {})),
+                                'raw': json.dumps(tc)
+                            })
+                        elif 'name' in tc:
+                            # Direct tool call format
+                            tool_calls.append({
+                                'name': tc.get('name', ''),
+                                'args': json.dumps(tc.get('arguments', {})),
+                                'raw': json.dumps(tc)
+                            })
+            return tool_calls
+        except (json.JSONDecodeError, TypeError):
+            pass
+        
+        # If that fails, try to find JSON objects containing tool_calls
+        # This is a fallback for text that contains JSON among other content
+        import re
+        # More lenient pattern that matches balanced braces
+        json_pattern = r'\{[^{}]*"tool_calls"[^{}]*\}'
+        
+        for match in re.finditer(json_pattern, text):
+            try:
+                data = json.loads(match.group(0))
+                if isinstance(data, dict) and 'tool_calls' in data:
+                    for tc in data['tool_calls']:
+                        if isinstance(tc, dict):
+                            if 'function' in tc:
+                                func = tc['function']
+                                tool_calls.append({
+                                    'name': func.get('name', ''),
+                                    'args': json.dumps(func.get('arguments', {})),
+                                    'raw': json.dumps(tc)
+                                })
+                            elif 'tool' in tc:
+                                tool = tc['tool']
+                                tool_calls.append({
+                                    'name': tool.get('name', ''),
+                                    'args': json.dumps(tool.get('arguments', {})),
+                                    'raw': json.dumps(tc)
+                                })
+                            elif 'name' in tc:
+                                tool_calls.append({
+                                    'name': tc.get('name', ''),
+                                    'args': json.dumps(tc.get('arguments', {})),
+                                    'raw': json.dumps(tc)
+                                })
+            except (json.JSONDecodeError, TypeError):
+                continue
+        
+        return tool_calls
+
+    def _parse_markdown_tool_calls(self, text: str) -> List[Dict[str, str]]:
+        """Parse markdown code block formatted tool calls."""
+        import re
+        import json
+        tool_calls = []
+        
+        # Pattern: ```tool or ```function
+        pattern = r'```(?:tool|function)\s*\n([\s\S]*?)```'
+        
+        for match in re.finditer(pattern, text):
+            content = match.group(1).strip()
+            if content:
+                # Try to parse as JSON first
+                try:
+                    data = json.loads(content)
+                    if isinstance(data, dict) and 'name' in data:
+                        tool_calls.append({
+                            'name': data['name'],
+                            'args': json.dumps(data.get('arguments', {})),
+                            'raw': content
+                        })
+                    elif isinstance(data, list):
+                        for item in data:
+                            if isinstance(item, dict) and 'name' in item:
+                                tool_calls.append({
+                                    'name': item['name'],
+                                    'args': json.dumps(item.get('arguments', {})),
+                                    'raw': json.dumps(item)
+                                })
+                except (json.JSONDecodeError, TypeError):
+                    # Parse as simple format: name(args)
+                    tool = self._parse_tool_content(content)
+                    tool_calls.append(tool)
+        
+        return tool_calls
+
+    def _parse_inline_tool_calls(self, text: str) -> List[Dict[str, str]]:
+        """Parse inline tool call patterns like TOOL: name(args)."""
+        import re
+        tool_calls = []
+        
+        # Pattern: TOOL: name(args) or FUNCTION: name(args)
+        pattern = r'\b(TOOL|FUNCTION):\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\((.*)\)'
+        
+        for match in re.finditer(pattern, text):
+            tool_calls.append({
+                'name': match.group(2),
+                'args': match.group(3).strip(),
+                'raw': match.group(0)
+            })
+        
+        return tool_calls
+
+    def extract_tool_calls(self, format_hint: str = "auto") -> None:
+        """
+        Parse LAST_COMPLETION for tool calls and populate TOOL_* variables.
+        
+        Supports multiple tool calls with indexed variable access.
+        
+        Args:
+            format_hint: Optional format hint ('xml', 'json', 'markdown', 'inline', or 'auto')
+        """
+        # Get the last completion from buffer_manager (consistent store)
+        last_completion = self.buffer_manager.get_script_var('LAST_COMPLETION') or ""
+        
+        if not last_completion.strip():
+            self.buffer_manager.set_script_var('TOOL_FOUND', 'false')
+            self.buffer_manager.set_script_var('TOOL_COUNT', '0')
+            self.buffer_manager.set_script_var('TOOL_ERROR', 'No content to parse')
+            self.buffer_manager.set_script_var('TOOL_FORMAT', '')
+            self.buffer_manager.set_script_var('TOOL_NAME', '')
+            self.buffer_manager.set_script_var('TOOL_ARGS', '')
+            self.buffer_manager.set_script_var('TOOL_CALL', '')
+            self.buffer_manager.set_script_var('TOOL_CALLS', '[]')
+            print("⚠️  No content in LAST_COMPLETION to parse")
+            return
+        
+        # Try different formats based on hint or auto-detection
+        tool_calls = []
+        detected_format = ""
+        
+        if format_hint == "auto" or format_hint == "xml":
+            tool_calls = self._parse_xml_tool_calls(last_completion)
+            if tool_calls:
+                detected_format = "xml"
+        
+        if not tool_calls and (format_hint == "auto" or format_hint == "json"):
+            tool_calls = self._parse_json_tool_calls(last_completion)
+            if tool_calls:
+                detected_format = "json"
+        
+        if not tool_calls and (format_hint == "auto" or format_hint == "markdown"):
+            tool_calls = self._parse_markdown_tool_calls(last_completion)
+            if tool_calls:
+                detected_format = "markdown"
+        
+        if not tool_calls and format_hint == "auto":
+            tool_calls = self._parse_inline_tool_calls(last_completion)
+            if tool_calls:
+                detected_format = "inline"
+        
+        # Set common variables
+        self.buffer_manager.set_script_var('TOOL_FOUND', 'true' if tool_calls else 'false')
+        self.buffer_manager.set_script_var('TOOL_COUNT', str(len(tool_calls)))
+        self.buffer_manager.set_script_var('TOOL_FORMAT', detected_format)
+        
+        if tool_calls:
+            # Set all tool calls as JSON array
+            import json
+            self.buffer_manager.set_script_var('TOOL_CALLS', json.dumps(tool_calls))
+            self.buffer_manager.set_script_var('TOOL_ERROR', '')
+            
+            # Set first tool for backward compatibility
+            first_tool = tool_calls[0]
+            self.buffer_manager.set_script_var('TOOL_NAME', first_tool.get('name', ''))
+            self.buffer_manager.set_script_var('TOOL_ARGS', first_tool.get('args', ''))
+            self.buffer_manager.set_script_var('TOOL_CALL', first_tool.get('raw', ''))
+            
+            # Set indexed variables for multi-tool support
+            for i, tool in enumerate(tool_calls):
+                self.buffer_manager.set_script_var(f'TOOL_NAME[{i}]', tool.get('name', ''))
+                self.buffer_manager.set_script_var(f'TOOL_ARGS[{i}]', tool.get('args', ''))
+            
+            print(f"✅ Extracted {len(tool_calls)} tool call(s) ({detected_format})")
+        else:
+            self.buffer_manager.set_script_var('TOOL_NAME', '')
+            self.buffer_manager.set_script_var('TOOL_ARGS', '')
+            self.buffer_manager.set_script_var('TOOL_CALL', '')
+            self.buffer_manager.set_script_var('TOOL_CALLS', '[]')
+            self.buffer_manager.set_script_var('TOOL_ERROR', 'No tool calls found')
+            print("⚠️  No tool calls found in LAST_COMPLETION")
+
     async def handle_escape_command(self, command: str) -> Union[bool, str]:
         """
         Handle escape commands.
@@ -2544,6 +2936,58 @@ class ChatybotApp:
             print(processed_text)
             return True
 
+        elif cmd == "/run":
+            if len(parts) < 2:
+                print("Usage: /run <command>")
+                return True
+            
+            # Extract the command portion (everything after "/run")
+            command_str = command.split(maxsplit=1)[1]
+            
+            # Strip only the outermost matching quotes, preserving inner quotes
+            import shlex
+            stripped_command = command_str
+            if len(command_str) >= 2:
+                first_char = command_str[0]
+                last_char = command_str[-1]
+                if first_char == last_char and first_char in ('"', "'"):
+                    # Check if the quotes are balanced (simple check for outermost pair)
+                    # Strip the outermost pair
+                    stripped_command = command_str[1:-1]
+            
+            # Validate quote balance before processing
+            try:
+                shlex.split(stripped_command)
+            except ValueError as e:
+                print(f"⚠️  Error: {e}")
+                print("Tip: Mix quotes: /run find . -name \"*.md\"")
+                print("     Or: /run \"find . -name '*.md'\"")
+                print("     Escape inner quotes: /run \"find . -name \\\"*.md\\\"\"")
+                return True
+            
+            if stripped_command:
+                # Perform variable substitution before execution
+                # Note: We pass stripped_command, shlex.split in execute_shell_command will handle remaining quotes
+                processed_cmd, _ = self.buffer_manager.replace_placeholders(stripped_command, include_images=False)
+                self.execute_shell_command(processed_cmd)
+            return True
+
+        elif cmd == "/extract_tools":
+            # /extract_tools [format] - Parse LAST_COMPLETION for tool calls
+            format_hint = parts[1] if len(parts) > 1 else "auto"
+            self.extract_tool_calls(format_hint=format_hint)
+            return True
+
+        elif cmd == "/run_safe":
+            self.safe_mode = True
+            print("✅ Safe mode enabled - dangerous patterns require confirmation")
+            return True
+
+        elif cmd == "/run_unsafe":
+            self.safe_mode = False
+            print("⚠️  Safe mode disabled - dangerous commands allowed without confirmation")
+            return True
+
         elif cmd == "/stream":
             self.streaming_enabled = not self.streaming_enabled
             print(
@@ -3148,7 +3592,7 @@ class ChatybotApp:
             return True
 
         elif cmd == "/mem":
-            self.buffer_manager.show_memory_usage(SEARCHBUFFER)
+            self.buffer_manager.show_memory_usage(SEARCHBUFFER, self.chat_history)
             # Also show last generated image memory usage
             if hasattr(self.image_generator, 'last_generated_image') and self.image_generator.last_generated_image is not None:
                 file_path, image_data = self.image_generator.last_generated_image
@@ -3325,6 +3769,10 @@ class ChatybotApp:
         print("  /rerank \"<query>\" [, top_n=<n>] [, items=<n>] [, split=<sentence|line|paragraph>] - Semantically rerank source sentences/chunks.")
         print("  /mem - Show size of buffers and script variables.")
         print("  /dump [varname|all] - Print content of buffers or script variables.")
+        print("  /run <command> - Execute a shell command and store output in RUN_COMPLETION (and LAST_COMPLETION).")
+        print("  /extract_tools [format] - Parse LAST_COMPLETION for tool calls (xml, json, markdown, inline).")
+        print("  /run_safe - Enable safe mode (block dangerous commands).")
+        print("  /run_unsafe - Disable safe mode (allow dangerous commands).")
         print("\nScript-specific features:")
         print("  set <name> = <value> - Define a variable")
         print("  ${name} - Reference a variable")
