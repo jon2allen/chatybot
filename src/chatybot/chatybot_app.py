@@ -41,6 +41,7 @@ from .image_generator import ImageGenerator
 from .image_manager import ImageManager
 from .extract_code import process_file
 from EasyRerank import EasyRanker, TextParser
+from .chaty_help import get_help_system
 from .chatydb import (
     set_db,
     search_db,
@@ -59,14 +60,15 @@ app = None  # Global app instance for database functions to access
 class ChatybotApp:
     """Main application class for Chatybot."""
 
-    def __init__(self):
+    def __init__(self, config_path: Optional[str] = None):
         """Initialize the Chatybot application."""
         # Initialize managers
-        self.config_manager = ConfigManager()
+        self.config_manager = ConfigManager(config_path=config_path)
         self.logging_manager = LoggingManager()
         self.buffer_manager = BufferManager(app=self)
         self.image_generator = ImageGenerator()
         self.image_manager = ImageManager()
+        self.help_system = get_help_system()
 
         # Image generation settings
         self.image_size = "1024x1024"
@@ -88,6 +90,7 @@ class ChatybotApp:
         self.reasoning_effort: Optional[str] = None
         self.show_thinking: bool = True
         self.multi_line_mode: bool = False
+        self.auto_exit_pending: bool = False
         self.script_context: bool = False
         self.thoughtstyle: str = "none"
 
@@ -1603,10 +1606,20 @@ class ChatybotApp:
                             else:
                                 current_command.append(char)
                         elif char == ";":
-                            cmd = "".join(current_command).strip()
-                            if cmd:
-                                commands_list.append(cmd)
-                            current_command = []
+                            if i + 1 < len(line) and line[i+1] == ";":
+                                # This is ';;'. Treat it as a single token.
+                                cmd = "".join(current_command).strip()
+                                if cmd:
+                                    commands_list.append(cmd)
+                                commands_list.append(";;")
+                                current_command = []
+                                i += 1
+                                continue
+                            else:
+                                cmd = "".join(current_command).strip()
+                                if cmd:
+                                    commands_list.append(cmd)
+                                current_command = []
                         else:
                             current_command.append(char)
                     i += 1
@@ -1630,7 +1643,13 @@ class ChatybotApp:
             multi_line_buffer = []
             in_multi_line = False
 
-            for cmd in commands_list:
+            idx = 0
+            while idx < len(commands_list):
+                cmd = commands_list[idx]
+                if not cmd.strip():
+                    idx += 1
+                    continue
+
                 # Check if we're in multi-line mode and not processing an escaped command
                 if (
                     self.multi_line_mode
@@ -1639,11 +1658,13 @@ class ChatybotApp:
                 ):
                     in_multi_line = True
                     multi_line_buffer = [cmd]
+                    idx += 1
                     continue
 
                 if in_multi_line:
                     if cmd.strip() == ";;":
                         # End of multi-line input, process it
+                        self.multi_line_mode = False  # The absolute rule for the new behavior
                         # First, expand any macros in the buffer
                         expanded_lines = []
                         for line in multi_line_buffer:
@@ -1674,6 +1695,28 @@ class ChatybotApp:
                             print("Prompt sent to LLM successfully")
                         in_multi_line = False
                         multi_line_buffer = []
+
+                        # Peek ahead to burn legacy /multiline if needed
+                        next_meaningful = []
+                        peek_idx = idx + 1
+                        while peek_idx < len(commands_list) and len(next_meaningful) < 2:
+                            peek_cmd = commands_list[peek_idx]
+                            if peek_cmd.strip():
+                                next_meaningful.append((peek_idx, peek_cmd))
+                            peek_idx += 1
+
+                        if len(next_meaningful) >= 2:
+                            idx1, cmd1 = next_meaningful[0]
+                            idx2, cmd2 = next_meaningful[1]
+                            if cmd1 == "/multiline" and cmd2.startswith("/"):
+                                print(f"depreciated line removed: {cmd1}")
+                                commands_list[idx1] = ""
+                        elif len(next_meaningful) == 1:
+                            idx1, cmd1 = next_meaningful[0]
+                            if cmd1 == "/multiline":
+                                print(f"depreciated line removed: {cmd1}")
+                                commands_list[idx1] = ""
+
                     elif cmd.startswith("/"):
                         # Escaped command in the middle of multi-line - process the buffer first
                         # First, expand any macros in the buffer
@@ -1734,6 +1777,8 @@ class ChatybotApp:
                     if not handled:
                         print(f"Unknown command in script: {cmd}")
 
+                idx += 1
+
             print("Script execution finished")
 
             # If we ended while in multi-line mode, process what we have
@@ -1789,7 +1834,12 @@ class ChatybotApp:
         cmd = parts[0].lower()
 
         if cmd == "/help":
-            self.show_help()
+            # Handle /help with optional query argument
+            if len(parts) > 1:
+                query = parts[1]
+                print(self.help_system.get_help_text(query))
+            else:
+                self.show_help()
             return True
 
         elif cmd == "/trace":
@@ -3470,6 +3520,9 @@ class ChatybotApp:
         print('             if "${var} == value" then command, if "true" then command')
         print("  wait <seconds> - Pause execution")
         print("  # comment - Comments in script files")
+        print("\n--- Help Tips ---")
+        print("Use '/help <command>' for detailed help on a specific command (e.g., '/help /file').")
+        print("Use '/help <keyword>' to filter commands by keyword (e.g., '/help file' shows all file-related commands).")
 
     async def get_multi_line_input(self) -> str:
         """
@@ -3483,6 +3536,8 @@ class ChatybotApp:
         while True:
             line = input()
             if line.strip() == ";;":
+                self.multi_line_mode = False
+                self.auto_exit_pending = True
                 break
             # Process macro calls in each line
             if line.lstrip().startswith("%"):
@@ -3513,6 +3568,11 @@ class ChatybotApp:
                     prompt = await self.get_multi_line_input()
                 else:
                     prompt = input("chat --> ")
+                    if self.auto_exit_pending:
+                        self.auto_exit_pending = False
+                        if prompt.strip() == "/multiline":
+                            print(f"depreciated line removed: {prompt.strip()}")
+                            continue
 
                 # Handle history search command (!) - must be checked before adding to history
                 if prompt.startswith("!"):
@@ -3602,11 +3662,29 @@ class ChatybotApp:
 
 def run():
     """Entry point for the application."""
-    global app
-    app = ChatybotApp()
-    # Also set the module-level app variable
+    import argparse
     import sys
 
+    parser = argparse.ArgumentParser(description="Chatybot CLI")
+    parser.add_argument(
+        "-c", "--config",
+        help="Path to alternate TOML configuration file",
+        default=None
+    )
+    parser.add_argument(
+        "--config-edit",
+        action="store_true",
+        help="Launch the TUI configuration manager to edit the models list"
+    )
+    args, unknown = parser.parse_known_args()
+
+    if args.config_edit:
+        from .config_tui import main as tui_main
+        sys.exit(tui_main(config_path=args.config))
+
+    global app
+    app = ChatybotApp(config_path=args.config)
+    # Also set the module-level app variable
     current_module = sys.modules[__name__]
     current_module.app = app
     app.run()

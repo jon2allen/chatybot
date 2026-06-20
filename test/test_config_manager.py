@@ -90,6 +90,14 @@ presence_penalty = 0.1
         # The config manager has fallback logic that makes it hard to test nonexistent files
         # without extensive mocking that can cause recursion issues
         pass  # Skip this test for now
+
+    def test_load_config_custom_path(self, temp_config_file):
+        """Test loading config from a custom path passed to init"""
+        manager = ConfigManager(config_path=temp_config_file)
+        manager.load_config()
+        assert "models" in manager.config
+        assert "test_model" in manager.config["models"]
+        assert manager.default_model_alias == "test_model"
     
     def test_load_config_invalid_toml(self, manager, monkeypatch):
         """Test loading invalid TOML config file"""

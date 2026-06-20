@@ -60,6 +60,7 @@ chatybot is an interactive command-line tool that enables seamless communication
 - **Code-Only Mode** - Generate pure code without explanations
 - **TinyDB Integration** - Persistent storage for search results and chat logs
 - **Advanced Variable Linking** - Use database results in prompts via `${variables}`
+- **Config Utility Views** - Interactive TUI for managing model configurations with vendor presets
 
 ---
 
@@ -133,7 +134,7 @@ Active escape commands:
   /notemode <on|off> - Toggle note mode for /save command.
   /codeonly - Set flag to generate code only without explanations.
   /codeoff - Reverse the code-only flag.
-  /multiline - Toggle multi-line input mode (use ';;' to end input).
+  /multiline - Enter multi-line input mode (use ';;' to automatically end/exit multiline mode).
   /system <message> - Set a custom system message.
   /temp <value> - Set temperature for the current model (0.0-2.0).
   /maxtokens <value> - Set max tokens for the current model.
@@ -208,7 +209,7 @@ chat --> Hello!      # Start a conversation
 | `/codeonly` | Enable code-only mode | `/codeonly` |
 | `/codeoff` | Disable code-only mode | `/codeoff` |
 | `/notemode <on\|off>` | Toggle note block separation | `/notemode on` |
-| `/multiline` | Toggle multi-line input | `/multiline` |
+| `/multiline` | Enter multi-line input | `/multiline` |
 | `/logging <start\|end>` | Start/stop logging | `/logging start` |
 | `/save <file> [all] [nothink\|withthink]` | Save last response or all history, with optional thinking stripping | `/save output.txt all nothink` |
 | `/script <path>` | Execute a script | `/script setup.dsl` |
@@ -229,6 +230,11 @@ chat --> Hello!      # Start a conversation
 | `/mem` | Show memory size of buffers/variables | `/mem` |
 | `/dump [v\|all]` | Dump variables | `/dump all` |
 | `/quit` \| `/exit` | Exit the program | `/quit` |
+
+| **CLI Flag** | Description | Example |
+|-------------|-------------|---------|
+| `--config-edit` | Launch the TUI configuration manager to edit models | `chatybot --config-edit` |
+| `-c <path>` \| `--config <path>` | Path to alternate TOML configuration file | `chatybot -c ~/my_config.toml` |
 
 ---
 
@@ -464,7 +470,13 @@ chatybot/
 │   ├── chatydb.py       # TinyDB database manager module
 │   ├── extract_code.py  # Utilities for isolating code blocks
 │   ├── chat_config.toml # Default/Fallback LLM configuration
-│   └── macro.chatdsl    # Default macro definitions
+│   ├── macro.chatdsl    # Default macro definitions
+│   ├── config_model.py  # Configuration data model with Pydantic v2
+│   ├── config_manager.py # Configuration loading and management
+│   ├── config_tui.py    # Curses-based TUI for configuration
+│   └── vendors.py       # Vendor preset definitions
+├── config_model_design.md # Configuration data model design document
+├── config_tui_design.md  # TUI design documentation
 ├── dsl_test/            # Script examples and testing
 ├── ~/.config/chatybot/  # Active user configuration directory (Auto-generated)
 └── ~/.local/share/chatybot/ # Active database and history storage (Auto-generated)
@@ -477,6 +489,7 @@ chatybot/
 4. **Script Interpreter**: Executes DSL scripts with conditionals
 5. **Model Interface**: Communicates with LLMs via API
 6. **Session Logger**: Records chat sessions
+7. **Config Utility**: TUI-based configuration management with vendor presets
 
 ---
 
@@ -527,6 +540,37 @@ api_key = "GEMINI_API_KEY"
 
 ---
 
+## **Configuration Utility**
+
+chatybot provides a comprehensive configuration management system with both file-based and interactive TUI options.
+
+### **Config Data Model**
+The configuration system uses Pydantic v2 models to validate and manage:
+- **Chat Models**: Standard LLM configurations with temperature, top_k, base_url, api_key
+- **Reranker Models**: Specialized configurations for re-ranking APIs
+- **Image Generation Settings**: Default directory, size, and quality for generated images
+- **Vendor Presets**: Pre-defined configurations for popular providers (Mistral, Google, OpenAI, OpenRouter, NVIDIA, PublicAI, Bytez, Ollama, Llama.cpp, Jina)
+
+### **Using the Config TUI**
+Launch the interactive configuration manager:
+```bash
+chatybot --config-edit
+```
+
+The TUI provides:
+- **Model Browser**: Navigate and filter through configured models
+- **Vendor Presets**: Quick setup with predefined vendor configurations
+- **Model Editor**: Add, clone, edit, and delete models
+- **Save Options**: Save configuration to current or new file locations
+
+### **File-Based Configuration**
+Edit `~/.config/chatybot/chat_config.toml` directly or use the `-c` flag to specify an alternate config file:
+```bash
+chatybot -c ~/my_custom_config.toml
+```
+
+---
+
 ## **Examples**
 
 ### **Example 1: Code Generation**
@@ -553,6 +597,38 @@ chat --> Create a blog post outline about ${topic}
 ```
 
 ### Change log
+
+June 18th, 2026 (v0.5.3)
+------------------------
+- **Version Bump**: Updated to v0.5.3 to support stateless multiline boundary behavior.
+- **State-Based Multiline Mode**: Replaced legacy `/multiline` toggle-off requirement with a deterministic, auto-exiting `;;` boundary parser.
+- **Legacy Bypass Lookahead**: Added parser lookahead inside scripts and deferred check state in the interactive REPL to silently bypass legacy trailing `/multiline` toggles.
+- **Deprecated Token Reporting**: Logged warning messages when legacy `/multiline` toggles are bypassed.
+- **Double Semicolon Tokenization**: Enhanced character-level parser to treat `;;` as a standalone command token.
+
+June 15th, 2026 (v0.5.2)
+------------------------
+- **Version Bump**: Updated to v0.5.2 to reflect new configuration management features.
+- **Config Utility Views**: Added comprehensive TUI-based configuration management with pycurses.
+- **Enhanced /help**: Integrated structured help system with keyword filtering and command deep-dives.
+
+June 14th, 2026 (v0.5.1)
+------------------------
+- **Config Data Model**: Introduced `config_model.py` with Pydantic v2 models for structured configuration management. Supports chat models, reranker models, and image generation settings with full TOML validation.
+- **Config TUI**: Added curses-based terminal UI (`config_tui.py`) for interactive configuration management. Features include:
+  - Browse, filter, and select models
+  - Add new models with vendor presets (Mistral, Google, OpenAI, OpenRouter, NVIDIA, PublicAI, Bytez, Ollama, Llama.cpp, Jina)
+  - Clone existing models as templates
+  - Edit model parameters (temperature, top_k, etc.)
+  - Delete models
+  - Save configuration to file
+- **Vendor Presets**: Added `vendors.py` with predefined vendor configurations for quick model setup.
+- **Config Save Feature**: Enhanced save functionality in Config TUI to support saving as new files.
+- **Pycurses Design**: Initial TUI design implementation with comprehensive documentation in `config_tui_design.md`.
+
+June 5th, 2026
+--------------
+- **License Format**: Updated LICENSE to SPDX format for better compatibility and standardization.
 
 June 4-5th, 2026 (v0.5.0)
 -------------------------

@@ -22,6 +22,7 @@ dependencies = [
 [project.scripts]
 chatybot = "chatybot.main:run"
 chatdsl_parse = "chatybot.chatdsl_parse:main"
+chatybot-config = "chatybot.config_tui:main"
 
 [tool.setuptools.package-data]
 chatybot = ["*.toml", "*.chatdsl"]
