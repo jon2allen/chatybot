@@ -3570,7 +3570,7 @@ class ChatybotApp:
                     prompt = input("chat --> ")
                     if self.auto_exit_pending:
                         self.auto_exit_pending = False
-                        if prompt.strip() == "/multiline":
+                        if self.script_context and prompt.strip() == "/multiline":
                             print(f"depreciated line removed: {prompt.strip()}")
                             continue
 
