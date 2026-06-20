@@ -1,68 +1,125 @@
-#! /usr/bin/env python3
+#!/usr/bin/env python3
 """
 Buffer Manager Module
 Manages file buffers, file banks, script variables, and image banks
 """
 
 import base64
+import re
+import json
 from pathlib import Path
-from typing import Dict, List, Tuple, Any
+from collections import UserDict
+from typing import Dict, List, Tuple, Any, Optional
+
+
+class ScriptVars(UserDict):
+    """
+    A dictionary-like wrapper that automatically tracks variable types 
+    on assignment, maintaining 100% backward compatibility.
+    """
+    def __init__(self, manager, *args, **kwargs):
+        self.manager = manager
+        self.types: Dict[str, str] = {}
+        super().__init__(*args, **kwargs)
+
+    def __setitem__(self, key: str, value: Any):
+        # 1. Native Python Array / Dict / JSON Detection
+        if isinstance(value, list):
+            self.types[key] = "array"
+            super().__setitem__(key, value)
+            return
+        if isinstance(value, dict):
+            self.types[key] = "json"
+            super().__setitem__(key, value)
+            return
+
+        str_val = str(value) if value is not None else ""
+        super().__setitem__(key, str_val)
+        
+        # 2. Multimodal: Audio & Image Detection (sub-microsecond prefix match)
+        str_val_stripped = str_val.strip()
+        
+        if str_val_stripped.startswith("data:image/") or any(str_val_stripped.startswith(p) for p in ["iVBOR", "/9j/", "UklGR"]):
+            self.types[key] = "image"
+            return
+            
+        if str_val_stripped.startswith("data:audio/") or any(str_val_stripped.startswith(p) for p in ["SUQz", "UklGR_audio"]): 
+            self.types[key] = "audio"
+            return
+
+        # 3. JSON & Serialized Array detection
+        if (str_val_stripped.startswith("[") and str_val_stripped.endswith("]")) or \
+           (str_val_stripped.startswith("{") and str_val_stripped.endswith("}")):
+            try:
+                parsed = json.loads(str_val_stripped)
+                self.types[key] = "array" if isinstance(parsed, list) else "json"
+                return
+            except Exception:
+                pass
+                
+        # 4. Fallback for general binary base64
+        if self.manager.is_base64_payload(str_val_stripped):
+            self.types[key] = "base64"
+            return
+            
+        # 5. Default
+        self.types[key] = "text"
+
+    def __delitem__(self, key: str):
+        super().__delitem__(key)
+        self.types.pop(key, None)
+
+    def get_type(self, key: str) -> str:
+        """Returns the type identifier ('text', 'image', 'audio', 'array', 'json', 'base64')."""
+        return self.types.get(key, "text")
 
 
 class BufferManager:
     """Manages file buffers, file banks, script variables, and image banks."""
     
-    def __init__(self):
+    def __init__(self, app=None):
+        self.app = app
         self.file_buffer: str = ""
         self.prompt_buffer: str = ""
         self.file_banks: Dict[str, str] = {f"filebank{i}": "" for i in range(1, 6)}
         self.image_banks: Dict[str, str] = {f"imagebank{i}": "" for i in range(1, 6)}
-        self.script_vars: Dict[str, str] = {}
-        self.array_store: Dict[str, Dict[str, Any]] = {}
-        self.array_counter: int = 0
+        self.script_vars = ScriptVars(self)
     
-    def allocate_array(self, data: List[str]) -> str:
-        """
-        Allocate a string array on the heap and return a pointer string.
-        
-        Args:
-            data: List of strings to store
+    def is_base64_payload(self, val: str) -> bool:
+        """Detects if a string is a base64 payload in O(1) constant time."""
+        if not val:
+            return False
             
-        Returns:
-            Pointer string to the array (e.g. __ARRAY_REF_001__)
-        """
-        self.array_counter += 1
-        ref_id = f"__ARRAY_REF_{self.array_counter:03d}__"
-        self.array_store[ref_id] = {
-            "type": "array",
-            "data": data
-        }
-        return ref_id
+        val_stripped = val.strip()
+        val_len = len(val_stripped)
+        
+        # 1. Quick length constraint
+        if val_len <= 64:
+            return False
+            
+        # 2. Fast prefix matches
+        if val_stripped.startswith("data:") and ";base64," in val_stripped[:100]:
+            return True
+        if val_stripped[:5] in ("iVBOR", "/9j/", "UklGR", "R0lG", "JVBER"):
+            return True
 
-    def clean_unreferenced_arrays(self) -> None:
-        """
-        Garbage collect any arrays in array_store that are not referenced by any script variable.
-        """
-        referenced_refs = set()
-        for val in self.script_vars.values():
-            if isinstance(val, str) and val.startswith("__ARRAY_REF_"):
-                referenced_refs.add(val)
-        
-        # Identify unreferenced arrays
-        unreferenced = [ref for ref in self.array_store if ref not in referenced_refs]
-        for ref in unreferenced:
-            del self.array_store[ref]
-    
-    def load_file_to_buffer(self, file_path: str) -> None:
-        """
-        Load a file into the file buffer.
-        
-        Args:
-            file_path: Path to the file to load
+        # 3. Constant-time slice validation (checks first 80 chars)
+        prefix = val_stripped[:80]
+        if " " in prefix or "\n" in prefix:
+            return False
             
-        Raises:
-            Exception: If there's an error reading the file
-        """
+        check_len = len(prefix) - (len(prefix) % 4)
+        if check_len < 4:
+            return False
+            
+        try:
+            base64.b64decode(prefix[:check_len], validate=True)
+            return True
+        except Exception:
+            return False
+
+    def load_file_to_buffer(self, file_path: str) -> None:
+        """Load a file into the file buffer."""
         try:
             with open(file_path, "r") as f:
                 self.file_buffer = f.read()
@@ -77,12 +134,7 @@ class BufferManager:
         print("File buffer cleared.")
     
     def show_file_buffer(self, show_all: bool = False) -> None:
-        """
-        Show the file buffer content.
-        
-        Args:
-            show_all: If True, show entire content. If False, show first 100 characters.
-        """
+        """Show the file buffer content."""
         if self.file_buffer:
             if show_all:
                 print(self.file_buffer)
@@ -92,17 +144,7 @@ class BufferManager:
             print("File buffer is empty.")
     
     def load_file_to_bank(self, bank_num: int, file_path: str) -> None:
-        """
-        Load a file into a specific file bank.
-        
-        Args:
-            bank_num: File bank number (1-5)
-            file_path: Path to the file to load
-            
-        Raises:
-            ValueError: If bank_num is invalid
-            Exception: If there's an error reading the file
-        """
+        """Load a file into a specific file bank."""
         if bank_num < 1 or bank_num > 5:
             raise ValueError("Invalid filebank number. Please use 1 through 5.")
         
@@ -116,15 +158,7 @@ class BufferManager:
             raise
     
     def clear_file_bank(self, bank_num: int) -> None:
-        """
-        Clear a specific file bank.
-        
-        Args:
-            bank_num: File bank number (1-5)
-            
-        Raises:
-            ValueError: If bank_num is invalid
-        """
+        """Clear a specific file bank."""
         if bank_num < 1 or bank_num > 5:
             raise ValueError("Invalid filebank number. Please use 1 through 5.")
         
@@ -133,16 +167,7 @@ class BufferManager:
         print(f"{bank_name} cleared.")
     
     def show_file_bank(self, bank_num: int, show_all: bool = False) -> None:
-        """
-        Show the content of a specific file bank.
-        
-        Args:
-            bank_num: File bank number (1-5)
-            show_all: If True, show entire content. If False, show first 100 characters.
-            
-        Raises:
-            ValueError: If bank_num is invalid
-        """
+        """Show the content of a specific file bank."""
         if bank_num < 1 or bank_num > 5:
             raise ValueError("Invalid filebank number. Please use 1 through 5.")
         
@@ -157,30 +182,13 @@ class BufferManager:
         else:
             print(content[:100] + ("..." if len(content) > 100 else ""))
     
-    def set_script_var(self, var_name: str, var_value: str) -> None:
-        """
-        Set a script variable.
-        
-        Args:
-            var_name: Name of the variable
-            var_value: Value of the variable
-        """
+    def set_script_var(self, var_name: str, var_value: Any) -> None:
+        """Set a script variable."""
         self.script_vars[var_name] = var_value
         print(f"Variable '{var_name}' set.")
 
     def detect_image_format(self, file_path: str) -> str:
-        """
-        Detect image MIME type from file extension.
-        
-        Args:
-            file_path: Path to the image file
-            
-        Returns:
-            MIME type string (e.g., 'image/jpeg', 'image/png')
-            
-        Raises:
-            ValueError: If file format is not supported
-        """
+        """Detect image MIME type from file extension."""
         ext = Path(file_path).suffix.lower()
         if ext in ['.jpg', '.jpeg']:
             return 'image/jpeg'
@@ -190,17 +198,7 @@ class BufferManager:
             raise ValueError(f"Unsupported image format: {ext}. Use .jpg, .jpeg, or .png")
 
     def load_image_to_bank(self, bank_num: int, file_path: str) -> None:
-        """
-        Load an image file into a specific image bank as base64 data URL.
-        
-        Args:
-            bank_num: Image bank number (1-5)
-            file_path: Path to the image file to load
-            
-        Raises:
-            ValueError: If bank_num is invalid or image format is unsupported
-            Exception: If there's an error reading the file
-        """
+        """Load an image file into a specific image bank as base64 data URL."""
         if bank_num < 1 or bank_num > 5:
             raise ValueError("Invalid imagebank number. Please use 1 through 5.")
         
@@ -223,15 +221,7 @@ class BufferManager:
             raise
 
     def clear_image_bank(self, bank_num: int) -> None:
-        """
-        Clear a specific image bank.
-        
-        Args:
-            bank_num: Image bank number (1-5)
-            
-        Raises:
-            ValueError: If bank_num is invalid
-        """
+        """Clear a specific image bank."""
         if bank_num < 1 or bank_num > 5:
             raise ValueError("Invalid imagebank number. Please use 1 through 5.")
         
@@ -240,16 +230,7 @@ class BufferManager:
         print(f"{bank_name} cleared.")
 
     def show_image_bank(self, bank_num: int, show_all: bool = False) -> None:
-        """
-        Show info about an image bank (not the actual image data).
-        
-        Args:
-            bank_num: Image bank number (1-5)
-            show_all: Currently unused, for future expansion
-            
-        Raises:
-            ValueError: If bank_num is invalid
-        """
+        """Show info about an image bank (not the actual image data)."""
         if bank_num < 1 or bank_num > 5:
             raise ValueError("Invalid imagebank number. Please use 1 through 5.")
         
@@ -273,6 +254,7 @@ class BufferManager:
                 print(f"{bank_name}: {mime_type}")
         else:
             print(f"{bank_name}: Invalid data format")
+
     def get_variable_value(self, name_with_subscript: str) -> str:
         """
         Retrieves a variable value, supporting subscripting like var[0].
@@ -280,7 +262,6 @@ class BufferManager:
         Raises IndexError if the index is out of bounds.
         Raises ValueError if subscripting a non-array variable.
         """
-        import re
         match = re.match(r"^(\w+)\[(-?\d+)\]$", name_with_subscript)
         if match:
             var_name = match.group(1)
@@ -288,143 +269,185 @@ class BufferManager:
             if var_name not in self.script_vars:
                 raise KeyError(f"Variable '{var_name}' not found")
             var_value = self.script_vars[var_name]
-            if isinstance(var_value, str) and var_value.startswith("__ARRAY_REF_") and var_value in self.array_store:
-                data = self.array_store[var_value]["data"]
+            if self.script_vars.get_type(var_name) == "array":
                 try:
-                    return data[index]
+                    return str(var_value[index])
                 except IndexError:
-                    raise IndexError(f"Index {index} out of bounds for array '{var_name}' of length {len(data)}")
+                    raise IndexError(f"Index {index} out of bounds for array '{var_name}' of length {len(var_value)}")
             else:
-                raise ValueError(f"Variable '{var_name}' is not an array, cannot subscript")
+                raise ValueError(f"Variable '{var_name}' is not an array")
         else:
             if name_with_subscript not in self.script_vars:
+                special_val = self.resolve_text_variable(name_with_subscript)
+                if special_val is not None:
+                    return special_val
                 raise KeyError(f"Variable '{name_with_subscript}' not found")
             var_value = self.script_vars[name_with_subscript]
-            if isinstance(var_value, str) and var_value.startswith("__ARRAY_REF_") and var_value in self.array_store:
-                return "\n".join(self.array_store[var_value]["data"])
+            if self.script_vars.get_type(name_with_subscript) == "array":
+                return "\n".join(map(str, var_value))
             return str(var_value)
+
+    def resolve_text_variable(self, var_name: str) -> Optional[str]:
+        """Resolves text-safe variables only (blocks base64/multimodal data)."""
+        # Special variables
+        if var_name == 'LAST_RESPONSE':
+            if self.app and self.app.chat_history:
+                return self.app.chat_history[-1][1]
+            return ""
+        if var_name == 'CHAT_HISTORY':
+            if self.app and self.app.chat_history:
+                history_json = []
+                for p, r in self.app.chat_history:
+                    history_json.append({"role": "user", "content": p})
+                    history_json.append({"role": "assistant", "content": r})
+                return json.dumps(history_json)
+            return "[]"
+            
+        # File banks
+        if var_name in self.file_banks:
+            return self.file_banks[var_name]
+            
+        # Script variables
+        if var_name in self.script_vars:
+            # Skip base64, image, or audio elements to prevent console/prompt bloat
+            if self.script_vars.get_type(var_name) in ("image", "audio", "base64"):
+                return None
+            val = self.script_vars[var_name]
+            if isinstance(val, list):
+                return "\n".join(map(str, val))
+            return str(val)
+            
+        return None
 
     def replace_placeholders(self, prompt: str, include_images: bool = True) -> Tuple[str, List[Dict]]:
         """
         Replace filebank, script variable, and imagebank placeholders in the prompt.
-        
-        For image banks, returns separated text and images for proper OpenAI multimodal format.
-        
-        Args:
-            prompt: The prompt string containing placeholders
-            include_images: If True, include image banks in search (for chat completion)
-                          If False, images are ignored (for echo command)
-            
-        Returns:
-            Tuple of (text_prompt, image_list) where:
-            - text_prompt: Prompt with filebank and script var placeholders replaced
-            - image_list: List of image content dicts for OpenAI format
+        Supports both ${VAR} and {VAR} syntaxes.
         """
-        # First, handle text placeholders (filebanks and script vars)
         text_prompt = prompt
+        multimodal_parts = []
         
-        import re
-        # If the prompt matches a clean subscript of an existing array variable directly, resolve it
+        # 1. Direct subscript evaluation if the entire prompt matches a subscript exactly
         match_direct = re.match(r"^(\w+)\[(-?\d+)\]$", text_prompt.strip())
         if match_direct:
             var_name = match_direct.group(1)
             if var_name in self.script_vars:
-                var_value = self.script_vars[var_name]
-                if isinstance(var_value, str) and var_value.startswith("__ARRAY_REF_") and var_value in self.array_store:
-                    try:
-                        text_prompt = self.get_variable_value(text_prompt.strip())
-                    except Exception:
-                        pass
-
-        for bank_name, content in self.file_banks.items():
-            placeholder = f"{{{bank_name}}}"
-            if placeholder in text_prompt:
-                text_prompt = text_prompt.replace(placeholder, content)
-        # Sort keys by length descending to prevent shorter variable names matching prefixes of longer ones
-        sorted_vars = sorted(list(self.script_vars.keys()), key=len, reverse=True)
-        for var_name in sorted_vars:
-            # 1. Braced subscripts: ${var_name[index]}
-            braced_sub_pat = rf"\$\{{{re.escape(var_name)}\[(-?\d+)\]\}}"
-            def replace_braced_sub(m):
-                idx = m.group(1)
                 try:
-                    return self.get_variable_value(f"{var_name}[{idx}]")
+                    text_prompt = self.get_variable_value(text_prompt.strip())
                 except Exception:
-                    return m.group(0)
-            text_prompt = re.sub(braced_sub_pat, replace_braced_sub, text_prompt)
+                    pass
 
-            # 2. Unbraced subscripts: $var_name[index]
-            unbraced_sub_pat = rf"\${re.escape(var_name)}\[(-?\d+)\]"
-            def replace_unbraced_sub(m):
-                idx = m.group(1)
-                try:
-                    return self.get_variable_value(f"{var_name}[{idx}]")
-                except Exception:
-                    return m.group(0)
-            text_prompt = re.sub(unbraced_sub_pat, replace_unbraced_sub, text_prompt)
-
-            # 3. Braced variables: ${var_name}
-            braced_pat = rf"\$\{{{re.escape(var_name)}\}}"
-            def replace_braced(m):
-                try:
-                    return self.get_variable_value(var_name)
-                except Exception:
-                    return m.group(0)
-            text_prompt = re.sub(braced_pat, replace_braced, text_prompt)
-
-            # 4. Unbraced variables: $var_name
-            unbraced_pat = rf"\${re.escape(var_name)}\b"
-            def replace_unbraced(m):
-                try:
-                    return self.get_variable_value(var_name)
-                except Exception:
-                    return m.group(0)
-            text_prompt = re.sub(unbraced_pat, replace_unbraced, text_prompt)
-        
-        # Collect images only if requested
-        image_list = []
+        # 2. Extract image banks if include_images is requested
         if include_images:
             for bank_name, content in self.image_banks.items():
-                placeholder = f"{{{bank_name}}}"
-                if placeholder in text_prompt:
-                    if content:  # Has valid image data
-                        if content.startswith("data:"):
-                            image_list.append({
+                placeholders = [f"{{{bank_name}}}", f"${{{bank_name}}}"]
+                for placeholder in placeholders:
+                    if placeholder in text_prompt:
+                        if content and content.startswith("data:"):
+                            multimodal_parts.append({
                                 "type": "image_url",
                                 "image_url": {"url": content}
                             })
-                        # Remove the placeholder from text since it's now an image
                         text_prompt = text_prompt.replace(placeholder, "")
+
+        # 3. Sort keys by length descending to prevent shorter variable names matching prefixes of longer ones
+        keys_to_resolve = list(self.script_vars.keys()) + ['LAST_RESPONSE', 'CHAT_HISTORY'] + list(self.file_banks.keys())
+        sorted_keys = sorted(list(set(keys_to_resolve)), key=len, reverse=True)
+
+        for key in sorted_keys:
+            var_type = self.script_vars.get_type(key) if key in self.script_vars else "text"
+            
+            # Extract script-bound images to prompt payload
+            if var_type == "image" and include_images:
+                placeholders = [f"{{{key}}}", f"${{{key}}}"]
+                for ph in placeholders:
+                    if ph in text_prompt:
+                        val = self.script_vars[key]
+                        multimodal_parts.append({
+                            "type": "image_url",
+                            "image_url": {"url": val}
+                        })
+                        text_prompt = text_prompt.replace(ph, "")
+                continue
+
+            # Extract script-bound audio to prompt payload
+            if var_type == "audio" and include_images:
+                placeholders = [f"{{{key}}}", f"${{{key}}}"]
+                for ph in placeholders:
+                    if ph in text_prompt:
+                        val = self.script_vars[key]
+                        fmt = "wav"
+                        if val.startswith("data:audio/"):
+                            fmt = val.split(";")[0].split("/")[-1]
+                        multimodal_parts.append({
+                            "type": "input_audio",
+                            "input_audio": {
+                                "data": val.split(",")[-1] if "," in val else val,
+                                "format": fmt
+                            }
+                        })
+                        text_prompt = text_prompt.replace(ph, "")
+                continue
+
+            # B. Array subscript replacement (supports braced `${key[index]}` and `{key[index]}`)
+            sub_pat = rf"\$?\{{{re.escape(key)}\[(-?\d+)\]\}}"
+            def replace_sub(m):
+                idx = m.group(1)
+                try:
+                    return self.get_variable_value(f"{key}[{idx}]")
+                except Exception:
+                    return m.group(0)
+            text_prompt = re.sub(sub_pat, replace_sub, text_prompt)
+
+            # C. Standard unbraced subscript ($key[index])
+            unbraced_sub_pat = rf"\${re.escape(key)}\[(-?\d+)\]"
+            text_prompt = re.sub(unbraced_sub_pat, replace_sub, text_prompt)
+
+            # D. Base variable replacement (braced: `${key}` / `{key}`)
+            braced_pat = rf"\$?\{{{re.escape(key)}\}}"
+            def replace_base(m):
+                val = self.resolve_text_variable(key)
+                return str(val) if val is not None else m.group(0)
+            text_prompt = re.sub(braced_pat, replace_base, text_prompt)
+
+            # E. Standard unbraced variable ($key)
+            unbraced_pat = rf"\${re.escape(key)}\b"
+            text_prompt = re.sub(unbraced_pat, replace_base, text_prompt)
         
-        # Clean up any remaining whitespace from removed placeholders
+        # Clean up any remaining whitespace
         text_prompt = text_prompt.strip()
-        # Replace double spaces with single spaces
         while "  " in text_prompt:
             text_prompt = text_prompt.replace("  ", " ")
         
-        return text_prompt, image_list
+        return text_prompt, multimodal_parts
     
     def replace_placeholders_legacy(self, prompt: str) -> str:
-        """
-        Legacy method for backward compatibility.
-        Replaces placeholders and returns only text (ignoring images).
-        Used by /echo command and other places that don't need image handling.
-        
-        Args:
-            prompt: The prompt string containing placeholders
-            
-        Returns:
-            Prompt with placeholders replaced (text only)
-        """
+        """Legacy method for backward compatibility. Replaces text and ignores images."""
         text_prompt, _ = self.replace_placeholders(prompt, include_images=False)
         return text_prompt
     
-    def show_memory_usage(self, search_buffer: list = None, detail: bool = False) -> None:
-        """
-        Show size of the file buffer, filebanks, image banks, and script variables in KB.
-        """
-        self.clean_unreferenced_arrays()
-        print(f"\n{'Source':<20} {'Size (KB)':>10}")
+    def show_memory_usage(self, search_buffer: list = None, detail: bool = False, debug: bool = False) -> None:
+        """Show size of the file buffer, filebanks, image banks, and script variables in KB."""
+        if debug:
+            print("\n--- SCRIPT_VARS DEBUG METADATA ---")
+            print(f"{'Variable':<25} {'Type':<12} {'Python Class':<15} {'Preview / Info':<40}")
+            print("-" * 92)
+            for var_name, var_value in self.script_vars.items():
+                var_type = self.script_vars.get_type(var_name)
+                py_class = var_value.__class__.__name__
+                if isinstance(var_value, (list, dict)):
+                    info = f"Length: {len(var_value)} items"
+                else:
+                    val_str = str(var_value)
+                    if len(val_str) > 50:
+                        info = f"Str length: {len(val_str)} | Preview: {val_str[:30]}..."
+                    else:
+                        info = val_str
+                print(f"{var_name:<25} {var_type:<12} {py_class:<15} {info:<40}")
+            print("--- END DEBUG METADATA ---\n")
+            return
+
+        print(f"\nSource                Size (KB)")
         print("-" * 32)
         
         # File Buffer
@@ -457,11 +480,10 @@ class BufferManager:
             bank_name = f"imagebank{i}"
             content = self.image_banks[bank_name]
             if content and content.startswith("data:"):
-                # For base64 data URLs, calculate size differently
                 data_start = content.find(",") + 1
                 if data_start > 0:
                     base64_len = len(content) - data_start
-                    bank_size = (base64_len * 3) / 4 / 1024  # Approximate
+                    bank_size = (base64_len * 3) / 4 / 1024
                     print(f"{bank_name:<20} {bank_size:>10.2f}")
                     if detail:
                         mime_end = content.find(";")
@@ -475,7 +497,6 @@ class BufferManager:
         
         # Search Buffer
         if search_buffer is not None:
-            import json
             sb_size = len(json.dumps(search_buffer).encode('utf-8')) / 1024
             print(f"{'SEARCH_BUFFER':<20} {sb_size:>10.2f}")
             if detail and search_buffer:
@@ -488,14 +509,15 @@ class BufferManager:
             
         # Script Variables
         for var_name, var_value in self.script_vars.items():
-            if isinstance(var_value, str) and var_value.startswith("__ARRAY_REF_") and var_value in self.array_store:
-                num_items = len(self.array_store[var_value]["data"])
-                total_len = sum(len(str(x).encode('utf-8')) for x in self.array_store[var_value]["data"])
+            var_type = self.script_vars.get_type(var_name)
+            if var_type == "array":
+                num_items = len(var_value)
+                total_len = sum(len(str(x).encode('utf-8')) for x in var_value)
                 var_size = total_len / 1024
                 display_name = f"{var_name}[] ({num_items} items)"
                 print(f"{display_name:<20} {var_size:>10.2f}")
                 if detail:
-                    for idx, elem in enumerate(self.array_store[var_value]["data"]):
+                    for idx, elem in enumerate(var_value):
                         elem_size = len(str(elem).encode('utf-8')) / 1024
                         elem_preview = str(elem).strip().replace('\n', ' ')[:40]
                         print(f"    [{idx}] {elem_size:.2f} KB | {elem_preview}")
@@ -505,21 +527,21 @@ class BufferManager:
                 print(f"{display_name:<20} {var_size:>10.2f}")
                 if detail:
                     val_preview = str(var_value).strip().replace('\n', ' ')[:50]
-                    val_type = type(var_value).__name__
-                    print(f"  -> Type: {val_type} | Value: \"{val_preview}\"")
+                    print(f"  -> Type: {var_type} | Value: \"{val_preview}\"")
         print()
     
     def dump_variables(self, name: str = "all", search_buffer: list = None, chat_history: list = None) -> None:
-        """
-        Print the contents of a variable or 'all' variables.
-        
-        Args:
-            name: Name of variable to dump, or 'all' for all variables
-            search_buffer: Optional search buffer to dump
-            chat_history: Optional chat history list to dump
-        """
-        self.clean_unreferenced_arrays()
-        if name == "all":
+        """Print the contents of a variable or 'all' variables."""
+        # Clean variable name by stripping potential placeholder wrappers: ${name}, {name}, $name
+        clean_name = name.strip()
+        if clean_name.startswith("${") and clean_name.endswith("}"):
+            clean_name = clean_name[2:-1]
+        elif clean_name.startswith("{") and clean_name.endswith("}"):
+            clean_name = clean_name[1:-1]
+        elif clean_name.startswith("$"):
+            clean_name = clean_name[1:]
+
+        if clean_name == "all":
             print("\n--- DUMP ALL VARIABLES ---")
             print(f"FILE_BUFFER: {self.file_buffer}")
             for i in range(1, 6):
@@ -540,19 +562,16 @@ class BufferManager:
                     print(f"      RESPONSE: {response[:100]}{'...' if len(response) > 100 else ''}")
                 
             for var_name, var_value in self.script_vars.items():
-                if isinstance(var_value, str) and var_value.startswith("__ARRAY_REF_") and var_value in self.array_store:
-                    print(f"SCRIPT_VAR '{var_name}': {self.array_store[var_value]['data']}")
-                else:
-                    print(f"SCRIPT_VAR '{var_name}': {var_value}")
+                print(f"SCRIPT_VAR '{var_name}': {var_value}")
             print("--- END DUMP ---\n")
-        elif name == "file_buffer":
+        elif clean_name == "file_buffer":
             print(f"FILE_BUFFER: {self.file_buffer}")
-        elif name == "search_buffer":
+        elif clean_name == "search_buffer":
             if search_buffer is not None:
                 print(f"SEARCH_BUFFER: {search_buffer}")
             else:
                 print("SEARCH_BUFFER is empty or not available.")
-        elif name == "chat_history" or name == "CHAT_HISTORY":
+        elif clean_name == "chat_history" or clean_name == "CHAT_HISTORY":
             if chat_history is not None and chat_history:
                 print("\n--- CHAT_HISTORY ---")
                 for i, (prompt, response) in enumerate(chat_history, 1):
@@ -563,28 +582,24 @@ class BufferManager:
                 print("--- END CHAT_HISTORY ---\n")
             else:
                 print("CHAT_HISTORY is empty.")
-        elif name.startswith("filebank") and name[8:].isdigit():
-            if name in self.file_banks:
-                print(f"{name.upper()}: {self.file_banks[name]}")
+        elif clean_name.startswith("filebank") and clean_name[8:].isdigit():
+            if clean_name in self.file_banks:
+                print(f"{clean_name.upper()}: {self.file_banks[clean_name]}")
             else:
-                print(f"Error: {name} not found.")
-        elif name.startswith("imagebank") and name[9:].isdigit():
-            if name in self.image_banks:
-                content = self.image_banks[name]
-                print(f"{name.upper()}: {'<image data>' if content else ''}")
+                print(f"Error: {clean_name} not found.")
+        elif clean_name.startswith("imagebank") and clean_name[9:].isdigit():
+            if clean_name in self.image_banks:
+                content = self.image_banks[clean_name]
+                print(f"{clean_name.upper()}: {'<image data>' if content else ''}")
             else:
-                print(f"Error: {name} not found.")
-        elif name in self.script_vars:
-            var_value = self.script_vars[name]
-            if isinstance(var_value, str) and var_value.startswith("__ARRAY_REF_") and var_value in self.array_store:
-                print(f"SCRIPT_VAR '{name}': {self.array_store[var_value]['data']}")
-            else:
-                print(f"SCRIPT_VAR '{name}': {var_value}")
+                print(f"Error: {clean_name} not found.")
+        elif clean_name in self.script_vars:
+            print(f"SCRIPT_VAR '{clean_name}': {self.script_vars[clean_name]}")
         else:
             try:
-                val = self.get_variable_value(name)
-                print(f"SCRIPT_VAR '{name}': {val}")
+                val = self.get_variable_value(clean_name)
+                print(f"SCRIPT_VAR '{clean_name}': {val}")
             except KeyError:
-                print(f"Error: Variable '{name}' not found.")
+                print(f"Error: Variable '{clean_name}' not found.")
             except (IndexError, ValueError) as e:
                 print(f"Error: {str(e)}.")
