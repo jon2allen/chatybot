@@ -280,9 +280,11 @@ chatdsl_parse --file my_script.chatdsl
 - Use the `-v` flag for verbose error output.
 
 ### **Database & Variable Integration (New!)**
+The `/searchdb` command performs a case-insensitive search across the document `name`, `content`, and any keys or values stored in its `metadata` (such as `model_alias`, `model_name`, or custom tags).
+
 ```bash
 /setdb my_knowledge       # Open or create 'db/my_knowledge.json'
-/searchdb "linked list"   # Search content, results stored in SEARCHBUFFER
+/searchdb "linked list"   # Search name, content, and metadata fields
 /loadvar search_results   # Copy SEARCHBUFFER to ${search_results}
 chat --> Explain these: ${search_results}
 /dblog                    # Save the AI's explanation back to the database
