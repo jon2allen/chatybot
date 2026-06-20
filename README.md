@@ -61,6 +61,8 @@ chatybot is an interactive command-line tool that enables seamless communication
 - **TinyDB Integration** - Persistent storage for search results and chat logs
 - **Advanced Variable Linking** - Use database results in prompts via `${variables}`
 - **Config Utility Views** - Interactive TUI for managing model configurations with vendor presets
+- **Native Array & Subscript Support** - Declare list variables with `[]` and access elements using index subscripts
+- **Extended Metadata Database Search** - `/searchdb` recursively searches through structured record metadata (JSON, lists, and dicts) for a target query
 
 ---
 
@@ -597,6 +599,14 @@ chat --> Create a blog post outline about ${topic}
 ```
 
 ### Change log
+
+June 20th, 2026 (v0.5.4)
+------------------------
+- **Version Bump**: Updated to v0.5.4 to support native array integration and metadata-aware database search.
+- **Native Array & Subscript Syntax**: Implemented dynamic array declaration (e.g. `set arr[] = [...]`) and bracket-based subscripts (e.g. `arr[0]`) in `ScriptVars`.
+- **Extended Metadata DB Search**: Refactored `search_db` in `chatydb.py` to recursively match queries in metadata keys/values (dicts, lists) in addition to name/content.
+- **Memory Diagnostic CLI**: Enhanced `/mem debug` with clean object representation, dynamic sizing, and variable type auditing.
+- **Testing Expansion**: Added dedicated unit test files `test_arrays.py` and `test_chatydb.py`.
 
 June 18th, 2026 (v0.5.3)
 ------------------------
