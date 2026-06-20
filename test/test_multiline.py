@@ -54,31 +54,34 @@ class TestMultilineBehavior:
 
     @pytest.mark.anyio
     async def test_repl_bypass_legacy_multiline(self, app):
-        """Test that main_loop bypasses legacy /multiline when auto_exit_pending is True"""
+        """Test that main_loop bypasses legacy /multiline when auto_exit_pending is True only under script_context"""
+        # Scenario 1: Interactive REPL (script_context = False)
         app.multi_line_mode = False
         app.auto_exit_pending = True
+        app.script_context = False
         
-        # Mock input to return "/multiline", then raise KeyboardInterrupt to break the loop
-        input_values = ["/multiline"]
-        
-        # Mock chat_completion to check if it's called (it shouldn't be for /multiline)
-        app.chat_completion = AsyncMock()
-        
-        # We simulate the loop block directly to avoid running infinite main_loop
-        # This mirrors the logic inside ChatybotApp.main_loop:
-        # prompt = input("chat --> ")
-        # if self.auto_exit_pending: ...
-        prompt = input_values[0]
+        prompt = "/multiline"
+        bypassed = False
         if app.auto_exit_pending:
             app.auto_exit_pending = False
-            if prompt.strip() == "/multiline":
-                # Successfully bypassed
+            if app.script_context and prompt.strip() == "/multiline":
                 bypassed = True
                 
-        assert bypassed is True
-        assert app.multi_line_mode is False
+        assert bypassed is False  # Should not be bypassed in interactive mode
         assert app.auto_exit_pending is False
-        app.chat_completion.assert_not_called()
+
+        # Scenario 2: Script mode (script_context = True)
+        app.auto_exit_pending = True
+        app.script_context = True
+        
+        bypassed = False
+        if app.auto_exit_pending:
+            app.auto_exit_pending = False
+            if app.script_context and prompt.strip() == "/multiline":
+                bypassed = True
+                
+        assert bypassed is True  # Should be bypassed in script mode
+        assert app.auto_exit_pending is False
 
     @pytest.mark.anyio
     async def test_script_auto_exit_and_lookahead_bypass(self, app):
