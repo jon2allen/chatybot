@@ -64,7 +64,7 @@ class ChatybotApp:
         # Initialize managers
         self.config_manager = ConfigManager()
         self.logging_manager = LoggingManager()
-        self.buffer_manager = BufferManager()
+        self.buffer_manager = BufferManager(app=self)
         self.image_generator = ImageGenerator()
         self.image_manager = ImageManager()
 
@@ -292,8 +292,8 @@ class ChatybotApp:
             # Check if any arguments are array references
             array_args_info = {}
             for param, arg in zip(macro['params'], resolved_args):
-                if isinstance(arg, str) and arg.startswith("__ARRAY_REF_") and arg in self.buffer_manager.array_store:
-                    array_args_info[param] = self.buffer_manager.array_store[arg]["data"]
+                if isinstance(arg, list):
+                    array_args_info[param] = arg
 
             if array_args_info:
                 # We have array arguments! Find the maximum length to iterate over
@@ -1381,9 +1381,8 @@ class ChatybotApp:
                             print(f"Error: Invalid array format for '{clean_var_name}': {e}")
                             return True
                         
-                        pointer = self.buffer_manager.allocate_array(string_list)
-                        self.buffer_manager.script_vars[clean_var_name] = pointer
-                        print(f"Variable '{clean_var_name}' set to array pointer {pointer}.")
+                        self.buffer_manager.script_vars[clean_var_name] = string_list
+                        print(f"Variable '{clean_var_name}' set to array.")
                         return True
                     else:
                         self.buffer_manager.script_vars[var_name.strip()] = processed_value
@@ -3274,8 +3273,10 @@ class ChatybotApp:
             return True
 
         elif cmd == "/mem":
-            detail = len(parts) > 1 and parts[1].lower() == "detail"
-            self.buffer_manager.show_memory_usage(SEARCHBUFFER, detail=detail)
+            subcmd = parts[1].lower() if len(parts) > 1 else ""
+            detail = subcmd == "detail"
+            debug = subcmd == "debug"
+            self.buffer_manager.show_memory_usage(SEARCHBUFFER, detail=detail, debug=debug)
             # Also show last generated image memory usage
             if hasattr(self.image_generator, 'last_generated_image') and self.image_generator.last_generated_image is not None:
                 file_path, image_data = self.image_generator.last_generated_image
@@ -3326,37 +3327,18 @@ class ChatybotApp:
                     print(f"Error: Invalid array format for '{clean_var_name}': {e}")
                     return True
                 
-                pointer = self.buffer_manager.allocate_array(string_list)
-                self.buffer_manager.set_script_var(clean_var_name, pointer)
-                print(f"Variable '{clean_var_name}' set to array pointer {pointer}.")
+                self.buffer_manager.set_script_var(clean_var_name, string_list)
+                print(f"Variable '{clean_var_name}' set to array.")
                 return True
 
             # Check if value contains imagebank placeholders
             for i in range(1, 6):
-                placeholder = f"{{imagebank{i}}}"
-                if placeholder in value_with_images:
-                    # Replace with actual image data
-                    bank_name = f"imagebank{i}"
-                    if bank_name in self.buffer_manager.image_banks:
-                        image_data = self.buffer_manager.image_banks[bank_name]
-                        if image_data:
-                            value_with_images = value_with_images.replace(placeholder, image_data)
-                            
-            # Check for CHAT_HISTORY placeholder
-            if "{CHAT_HISTORY}" in value_with_images:
-                history_json = []
-                for p, r in self.chat_history:
-                    history_json.append({"role": "user", "content": p})
-                    history_json.append({"role": "assistant", "content": r})
-                value_with_images = value_with_images.replace("{CHAT_HISTORY}", json.dumps(history_json))
-                
-            # Check for LAST_RESPONSE placeholder
-            if "{LAST_RESPONSE}" in value_with_images:
-                if self.chat_history:
-                    last_turn_response = self.chat_history[-1][1]
-                    value_with_images = value_with_images.replace("{LAST_RESPONSE}", last_turn_response)
-                else:
-                    value_with_images = value_with_images.replace("{LAST_RESPONSE}", "")
+                bank_name = f"imagebank{i}"
+                if bank_name in self.buffer_manager.image_banks:
+                    image_data = self.buffer_manager.image_banks[bank_name]
+                    if image_data:
+                        value_with_images = value_with_images.replace(f"{{{bank_name}}}", image_data)
+                        value_with_images = value_with_images.replace(f"${{{bank_name}}}", image_data)
                     
             var_value = self.buffer_manager.replace_placeholders_legacy(value_with_images)
             
@@ -3478,7 +3460,7 @@ class ChatybotApp:
         print("  /setvar <varname> <value> - Set a script variable. Supports {CHAT_HISTORY} and {LAST_RESPONSE} placeholders.")
         print("  /documents <src>=<id> - Set the active rerank source: db=<name>, var=<name> (or CHAT_HISTORY or file), filebank=<1-5>, or dir=\"<path>\"")
         print("  /rerank \"<query>\" [, top_n=<n>] [, items=<n>] [, split=<sentence|line|paragraph>] - Semantically rerank source sentences/chunks.")
-        print("  /mem - Show size of buffers and script variables.")
+        print("  /mem [detail|debug] - Show size of buffers and script variables. Use 'detail' for element breakdowns, or 'debug' for metadata.")
         print("  /dump [varname|all] - Print content of buffers or script variables.")
         print("\nScript-specific features:")
         print("  set <name> = <value> - Define a variable")
@@ -3519,7 +3501,7 @@ class ChatybotApp:
         print("===========================")
         print("Chatybot.py                ")
         print("Created by Jon Allen - 2025")
-        print("Version: 0.5.0             ")
+        print("Version: 0.5.4             ")
         print("===========================")
         print(
             f"Active model: {self.config_manager.get_model_config(self.config_manager.active_model_alias)['name']} (alias: {self.config_manager.active_model_alias})"

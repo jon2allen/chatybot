@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Unit tests for Array feature in Chatybot
+Unit tests for Array feature in Chatybot (Native Storage Version)
 """
 
 import pytest
@@ -24,31 +24,16 @@ class TestArrayFeature:
         """Create a ChatybotApp instance with patched components"""
         with patch('src.chatybot.chatybot_app.readline'):
             application = ChatybotApp()
-            application.buffer_manager = BufferManager()
+            application.buffer_manager = BufferManager(app=application)
             application.chat_history = []
             application.macros = {}
             application.setup_macro_grammars()
             return application
 
-    def test_allocate_array(self, manager):
-        """Test that array allocation creates correct reference pointer and stores data"""
-        data = ["apple", "banana", "cherry"]
-        ref_id = manager.allocate_array(data)
-        
-        assert ref_id == "__ARRAY_REF_001__"
-        assert ref_id in manager.array_store
-        assert manager.array_store[ref_id]["type"] == "array"
-        assert manager.array_store[ref_id]["data"] == data
-
-        # Test subsequent allocation increases reference count
-        ref_id2 = manager.allocate_array(["dog", "cat"])
-        assert ref_id2 == "__ARRAY_REF_002__"
-
     def test_replace_placeholders_with_array(self, manager):
         """Test that placeholders like ${var} substitute newline-joined array contents when referencing an array"""
         data = ["line1", "line2", "line3"]
-        ref_id = manager.allocate_array(data)
-        manager.set_script_var("my_arr", ref_id)
+        manager.set_script_var("my_arr", data)
 
         prompt = "Header\n${my_arr}\nFooter"
         text, images = manager.replace_placeholders(prompt)
@@ -59,8 +44,7 @@ class TestArrayFeature:
     def test_replace_placeholders_legacy_with_array(self, manager):
         """Test the legacy placeholder replacement for arrays"""
         data = ["a", "b"]
-        ref_id = manager.allocate_array(data)
-        manager.set_script_var("my_arr", ref_id)
+        manager.set_script_var("my_arr", data)
 
         prompt = "${my_arr}"
         result = manager.replace_placeholders_legacy(prompt)
@@ -69,8 +53,7 @@ class TestArrayFeature:
     def test_dump_variables_and_memory_usage_with_array(self, manager, capsys):
         """Test dumping array variables displays elements and memory calculation includes array items"""
         data = ["hello", "world"]
-        ref_id = manager.allocate_array(data)
-        manager.set_script_var("my_arr", ref_id)
+        manager.set_script_var("my_arr", data)
 
         # Dump variables
         manager.dump_variables("my_arr")
@@ -93,14 +76,9 @@ class TestArrayFeature:
         result = asyncio.run(app.execute_script_command(command, dummy_handler))
         assert result is True
         
-        # Check that 'cities' is defined in script_vars and points to an array reference
+        # Check that 'cities' is defined in script_vars as a list
         assert "cities" in app.buffer_manager.script_vars
-        pointer = app.buffer_manager.script_vars["cities"]
-        assert pointer.startswith("__ARRAY_REF_")
-        
-        # Verify the array contents in the storage
-        assert pointer in app.buffer_manager.array_store
-        assert app.buffer_manager.array_store[pointer]["data"] == ["London", "New York", "Tokyo"]
+        assert app.buffer_manager.script_vars["cities"] == ["London", "New York", "Tokyo"]
 
     def test_setvar_escape_command_with_array(self, app):
         """Test setting an array variable interactively using the /setvar escape command"""
@@ -109,9 +87,7 @@ class TestArrayFeature:
         assert result is True
 
         assert "items" in app.buffer_manager.script_vars
-        pointer = app.buffer_manager.script_vars["items"]
-        assert pointer.startswith("__ARRAY_REF_")
-        assert app.buffer_manager.array_store[pointer]["data"] == ["gold", "silver", "bronze"]
+        assert app.buffer_manager.script_vars["items"] == ["gold", "silver", "bronze"]
 
     def test_setvar_invalid_array_format(self, app, capsys):
         """Test error handling when setting an array with invalid format"""
@@ -132,9 +108,8 @@ class TestArrayFeature:
             "template": "Hello ${name}!"
         }
         
-        # Allocate array and set script var
-        ref_id = app.buffer_manager.allocate_array(["Alice", "Bob", "Charlie"])
-        app.buffer_manager.set_script_var("guests", ref_id)
+        # Set script var directly
+        app.buffer_manager.set_script_var("guests", ["Alice", "Bob", "Charlie"])
 
         # Expand macro with variable argument
         expanded = app.expand_macro("%greet(${guests})")
@@ -150,12 +125,9 @@ class TestArrayFeature:
             "template": "Left: ${x}, Right: ${y}"
         }
 
-        # Allocate arrays
-        ref_left = app.buffer_manager.allocate_array(["A", "B"])
-        ref_right = app.buffer_manager.allocate_array(["1", "2", "3"])
-        
-        app.buffer_manager.set_script_var("left_side", ref_left)
-        app.buffer_manager.set_script_var("right_side", ref_right)
+        # Set script vars
+        app.buffer_manager.set_script_var("left_side", ["A", "B"])
+        app.buffer_manager.set_script_var("right_side", ["1", "2", "3"])
 
         # Expand macro
         expanded = app.expand_macro("%pair(${left_side}, ${right_side})")
@@ -174,8 +146,7 @@ class TestArrayFeature:
             "template": "Category: ${category}, Item: ${item}"
         }
 
-        ref_items = app.buffer_manager.allocate_array(["apple", "banana"])
-        app.buffer_manager.set_script_var("fruit_list", ref_items)
+        app.buffer_manager.set_script_var("fruit_list", ["apple", "banana"])
 
         # category is a scalar literal "Fruit", item is an array variable
         expanded = app.expand_macro("%describe(Fruit, ${fruit_list})")
@@ -226,9 +197,7 @@ class TestArrayFeature:
         # 2. Run /setvar with unquoted {filebank1}
         await app.handle_escape_command('/setvar testarray3[] = ["bob", "mary", "alice", {filebank1}]')
         
-        pointer = app.buffer_manager.script_vars["testarray3"]
-        array_data = app.buffer_manager.array_store[pointer]["data"]
-        
+        array_data = app.buffer_manager.script_vars["testarray3"]
         assert array_data == ["bob", "mary", "alice", problematic_content]
 
         # 3. Set a script variable to {filebank1}
@@ -238,9 +207,7 @@ class TestArrayFeature:
         # 4. Run /setvar with unquoted ${rpt}
         await app.handle_escape_command('/setvar testarray4[] = ["bob", "mary", "alice", ${rpt}]')
         
-        pointer2 = app.buffer_manager.script_vars["testarray4"]
-        array_data2 = app.buffer_manager.array_store[pointer2]["data"]
-        
+        array_data2 = app.buffer_manager.script_vars["testarray4"]
         assert array_data2 == ["bob", "mary", "alice", problematic_content]
 
     @pytest.mark.anyio
@@ -255,9 +222,7 @@ class TestArrayFeature:
         # Run script command set with unquoted {filebank1}
         await app.execute_script_command('set testarray5[] = ["bob", "mary", "alice", {filebank1}]', dummy_handler)
         
-        pointer = app.buffer_manager.script_vars["testarray5"]
-        array_data = app.buffer_manager.array_store[pointer]["data"]
-        
+        array_data = app.buffer_manager.script_vars["testarray5"]
         assert array_data == ["bob", "mary", "alice", problematic_content]
 
         # Set a script variable to the filebank content
@@ -265,15 +230,12 @@ class TestArrayFeature:
         # Run script command set with unquoted ${rpt}
         await app.execute_script_command('set testarray6[] = ["bob", "mary", "alice", ${rpt}]', dummy_handler)
         
-        pointer2 = app.buffer_manager.script_vars["testarray6"]
-        array_data2 = app.buffer_manager.array_store[pointer2]["data"]
-        
+        array_data2 = app.buffer_manager.script_vars["testarray6"]
         assert array_data2 == ["bob", "mary", "alice", problematic_content]
 
     def test_get_variable_value_subscripts(self, app):
         """Test retrieving array elements using get_variable_value."""
-        pointer = app.buffer_manager.allocate_array(["bob", "mary", "alice"])
-        app.buffer_manager.script_vars["testarray"] = pointer
+        app.buffer_manager.script_vars["testarray"] = ["bob", "mary", "alice"]
 
         # Valid indexes
         assert app.buffer_manager.get_variable_value("testarray[0]") == "bob"
@@ -286,7 +248,7 @@ class TestArrayFeature:
 
         # Subscripting non-array variable
         app.buffer_manager.script_vars["scalar"] = "hello"
-        with pytest.raises(ValueError, match="is not an array, cannot subscript"):
+        with pytest.raises(ValueError, match="is not an array"):
             app.buffer_manager.get_variable_value("scalar[0]")
 
         # Missing variable
@@ -295,8 +257,7 @@ class TestArrayFeature:
 
     def test_placeholder_replacement_subscripts(self, app):
         """Test placeholder replacement with array subscripts in prompts."""
-        pointer = app.buffer_manager.allocate_array(["bob", "mary", "alice"])
-        app.buffer_manager.script_vars["testarray"] = pointer
+        app.buffer_manager.script_vars["testarray"] = ["bob", "mary", "alice"]
 
         # Braced subscripts
         replaced = app.buffer_manager.replace_placeholders_legacy("Hello ${testarray[1]} and ${testarray[-1]}")
@@ -308,8 +269,7 @@ class TestArrayFeature:
 
     def test_dump_variables_subscripts(self, app, capsys):
         """Test the /dump command with array subscripts."""
-        pointer = app.buffer_manager.allocate_array(["bob", "mary", "alice"])
-        app.buffer_manager.script_vars["testarray3"] = pointer
+        app.buffer_manager.script_vars["testarray3"] = ["bob", "mary", "alice"]
 
         # Valid dump of subscript
         app.buffer_manager.dump_variables("testarray3[1]")
@@ -325,18 +285,36 @@ class TestArrayFeature:
         app.buffer_manager.script_vars["scalar"] = "hello"
         app.buffer_manager.dump_variables("scalar[0]")
         captured = capsys.readouterr()
-        assert "Error: Variable 'scalar' is not an array, cannot subscript." in captured.out
+        assert "Error: Variable 'scalar' is not an array." in captured.out
 
         # Non-existent variable
         app.buffer_manager.dump_variables("nonexistent[0]")
         captured = capsys.readouterr()
         assert "Error: Variable 'nonexistent[0]' not found." in captured.out
 
+    def test_dump_special_variables(self, app, capsys):
+        """Test dumping special variables like LAST_RESPONSE and CHAT_HISTORY with/without braces."""
+        app.chat_history = [("hello", "Sure! Here are five cities in Spain: ...")]
+
+        # 1. Plain
+        app.buffer_manager.dump_variables("LAST_RESPONSE", chat_history=app.chat_history)
+        captured = capsys.readouterr()
+        assert "SCRIPT_VAR 'LAST_RESPONSE': Sure! Here are five cities in Spain: ..." in captured.out
+
+        # 2. Braced
+        app.buffer_manager.dump_variables("{LAST_RESPONSE}", chat_history=app.chat_history)
+        captured = capsys.readouterr()
+        assert "SCRIPT_VAR 'LAST_RESPONSE': Sure! Here are five cities in Spain: ..." in captured.out
+
+        # 3. Dollar Braced
+        app.buffer_manager.dump_variables("${LAST_RESPONSE}", chat_history=app.chat_history)
+        captured = capsys.readouterr()
+        assert "SCRIPT_VAR 'LAST_RESPONSE': Sure! Here are five cities in Spain: ..." in captured.out
+
     @pytest.mark.anyio
     async def test_setvar_and_script_command_subscripts(self, app):
         """Test /setvar and script commands resolving subscripts."""
-        pointer = app.buffer_manager.allocate_array(["bob", "mary", "alice"])
-        app.buffer_manager.script_vars["testarray3"] = pointer
+        app.buffer_manager.script_vars["testarray3"] = ["bob", "mary", "alice"]
 
         # 1. /setvar tst1 testarray3[1] - direct unprefixed subscript
         await app.handle_escape_command('/setvar tst1 testarray3[1]')
@@ -356,33 +334,11 @@ class TestArrayFeature:
         await app.execute_script_command('set tst4 = ${testarray3[1]}', dummy_handler)
         assert app.buffer_manager.script_vars["tst4"] == "mary"
 
-    def test_array_garbage_collection_and_counter(self, manager):
-        """Test that unreferenced arrays are garbage collected and array counter is monotonic."""
-        ref1 = manager.allocate_array(["a", "b"])
-        manager.set_script_var("arr", ref1)
-        assert ref1 in manager.array_store
-        assert manager.array_counter == 1
-
-        # Reassign arr to a new array
-        ref2 = manager.allocate_array(["c", "d"])
-        manager.set_script_var("arr", ref2)
-        assert manager.array_counter == 2
-
-        # At this stage, ref1 is still in array_store (no GC run yet)
-        assert ref1 in manager.array_store
-        assert ref2 in manager.array_store
-
-        # Triggering garbage collection should clean up ref1
-        manager.clean_unreferenced_arrays()
-        assert ref1 not in manager.array_store
-        assert ref2 in manager.array_store
-
     @pytest.mark.anyio
     async def test_mem_detail_command(self, app, capsys):
         """Test `/mem detail` output details."""
         app.buffer_manager.file_buffer = "line1\nline2"
-        ref = app.buffer_manager.allocate_array(["itemA", "itemB"])
-        app.buffer_manager.script_vars["my_list"] = ref
+        app.buffer_manager.script_vars["my_list"] = ["itemA", "itemB"]
         app.chat_history = [("hello", "hi there")]
 
         await app.handle_escape_command('/mem detail')
@@ -396,6 +352,25 @@ class TestArrayFeature:
         assert "CHAT_HISTORY" in captured.out
         assert "Total exchanges: 1" in captured.out
         assert "User: 0.00 KB | hello..." in captured.out
+
+    @pytest.mark.anyio
+    async def test_mem_debug_command(self, app, capsys):
+        """Test `/mem debug` output details."""
+        app.buffer_manager.script_vars["my_list"] = ["itemA", "itemB"]
+        app.buffer_manager.script_vars["my_scalar"] = "hello"
+
+        await app.handle_escape_command('/mem debug')
+        captured = capsys.readouterr()
+
+        assert "--- SCRIPT_VARS DEBUG METADATA ---" in captured.out
+        assert "my_list" in captured.out
+        assert "array" in captured.out
+        assert "list" in captured.out
+        assert "Length: 2 items" in captured.out
+        assert "my_scalar" in captured.out
+        assert "text" in captured.out
+        assert "str" in captured.out
+        assert "hello" in captured.out
 
     @pytest.mark.anyio
     async def test_execute_test17_chatdsl_script(self, app):
@@ -417,17 +392,15 @@ class TestArrayFeature:
         assert app.buffer_manager.image_banks["imagebank1"].startswith("data:image/jpeg;base64,")
         assert app.buffer_manager.image_banks["imagebank2"].startswith("data:image/jpeg;base64,")
         
-        ref5 = app.buffer_manager.script_vars["testarray5"]
-        assert app.buffer_manager.array_store[ref5]["data"][0] == "bob"
-        assert app.buffer_manager.array_store[ref5]["data"][1] == "mary"
-        assert app.buffer_manager.array_store[ref5]["data"][2] == "Jon"
-        assert app.buffer_manager.array_store[ref5]["data"][3] == "${rpt}"
+        arr5 = app.buffer_manager.script_vars["testarray5"]
+        assert arr5[0] == "bob"
+        assert arr5[1] == "mary"
+        assert arr5[2] == "Jon"
+        assert arr5[3] == "${rpt}"
 
-        ref7 = app.buffer_manager.script_vars["testarray7"]
-        assert len(app.buffer_manager.array_store[ref7]["data"]) == 4
-        assert app.buffer_manager.array_store[ref7]["data"][0] == "bob"
-        assert app.buffer_manager.array_store[ref7]["data"][1] == "mary"
-        assert app.buffer_manager.array_store[ref7]["data"][2] == "Jon"
-        assert app.buffer_manager.array_store[ref7]["data"][3] == app.buffer_manager.script_vars["rpt"]
-
-
+        arr7 = app.buffer_manager.script_vars["testarray7"]
+        assert len(arr7) == 4
+        assert arr7[0] == "bob"
+        assert arr7[1] == "mary"
+        assert arr7[2] == "Jon"
+        assert arr7[3] == app.buffer_manager.script_vars["rpt"]
