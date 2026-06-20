@@ -12,7 +12,8 @@ from typing import Dict, Any, Optional, List
 class ConfigManager:
     """Manages application configuration from TOML files."""
     
-    def __init__(self):
+    def __init__(self, config_path: Optional[str] = None):
+        self.config_path = config_path
         self.config: Dict[str, Any] = {}
         self.default_model_alias: Optional[str] = None
         self.active_model_alias: Optional[str] = None
@@ -27,26 +28,31 @@ class ConfigManager:
         """
         Load the configuration from chat_config.toml.
         """
-        config_path = os.path.expanduser("~/.config/chatybot/chat_config.toml")
+        if self.config_path:
+            config_path = os.path.expanduser(self.config_path)
+            if not os.path.exists(config_path):
+                raise FileNotFoundError(f"Configuration file not found: '{config_path}'")
+        else:
+            config_path = os.path.expanduser("~/.config/chatybot/chat_config.toml")
+            # Create the config directory if it doesn't exist
+            os.makedirs(os.path.dirname(config_path), exist_ok=True)
+            
+            # Check if config exists in ~/.config, otherwise try local and copy
+            if not os.path.exists(config_path):
+                local_config = os.path.join(os.path.dirname(__file__), "chat_config.toml")
+                if os.path.exists(local_config):
+                    import shutil
+                    shutil.copy2(local_config, config_path)
+                    print(f"Copied local '{local_config}' to '{config_path}'")
+                else:
+                    raise FileNotFoundError(f"Configuration file not found. Please create '{config_path}'.")
         
-        # Create the config directory if it doesn't exist
-        os.makedirs(os.path.dirname(config_path), exist_ok=True)
-        
-        # Check if config exists in ~/.config, otherwise try local and copy
-        if not os.path.exists(config_path):
-            local_config = os.path.join(os.path.dirname(__file__), "chat_config.toml")
-            if os.path.exists(local_config):
-                import shutil
-                shutil.copy2(local_config, config_path)
-                print(f"Copied local '{local_config}' to '{config_path}'")
-            else:
-                raise FileNotFoundError(f"Configuration file not found. Please create '{config_path}'.")
-        
+        from .config_model import ChatConfig
         try:
-            with open(config_path, "rb") as f:
-                self.config = tomllib.load(f)
-        except tomllib.TOMLDecodeError:
-            raise ValueError(f"Invalid TOML format in '{config_path}'.")
+            chat_config = ChatConfig.from_toml(config_path)
+            self.config = chat_config.model_dump(exclude_none=True)
+        except Exception as e:
+            raise ValueError(f"Failed to parse or validate config at '{config_path}': {e}")
         
         # Set the default model alias to the first model in the config
         self.default_model_alias = next(iter(self.config["models"]))
