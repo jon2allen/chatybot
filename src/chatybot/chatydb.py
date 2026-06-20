@@ -89,14 +89,31 @@ def search_db(query: str) -> None:
     if _manager is None:
         print("No database selected. Use /setdb <dbname> first.")
         return
-    # Simple case‑insensitive substring search across name and content fields
+    # Simple case‑insensitive substring search across name, content, and metadata fields
     all_items = _manager.get_all_items()
     results = []
     q = query.lower()
     for item in all_items:
         name = item.get("name", "")
         content = item.get("content", "")
-        if q in name.lower() or q in content.lower():
+        metadata = item.get("metadata", {})
+        
+        in_metadata = False
+        if isinstance(metadata, dict):
+            for k, val in metadata.items():
+                if q in str(k).lower() or q in str(val).lower():
+                    in_metadata = True
+                    break
+        elif isinstance(metadata, list):
+            for val in metadata:
+                if q in str(val).lower():
+                    in_metadata = True
+                    break
+        elif metadata:
+            if q in str(metadata).lower():
+                in_metadata = True
+        
+        if q in name.lower() or q in content.lower() or in_metadata:
             results.append(item)
     SEARCHBUFFER.clear()
     SEARCHBUFFER.extend(results)
