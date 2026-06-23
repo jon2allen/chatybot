@@ -90,17 +90,23 @@ class TestArrayFeature:
         assert app.buffer_manager.script_vars["items"] == ["gold", "silver", "bronze"]
 
     def test_setvar_escape_command_with_quotes(self, app):
-        """Test that interactive /setvar command strips surrounding quotes for scalar variables"""
-        command = '/setvar m1 "nvidia_1"'
+        """Test that interactive /setvar command strips surrounding quotes and leading = for scalar variables"""
+        command = '/setvar m1 = "nvidia_1"'
         result = asyncio.run(app.handle_escape_command(command))
         assert result is True
         assert app.buffer_manager.script_vars["m1"] == "nvidia_1"
 
-        # Check with single quotes
+        # Check with single quotes and no equals sign
         command2 = "/setvar m2 'nvidia_2'"
         result2 = asyncio.run(app.handle_escape_command(command2))
         assert result2 is True
         assert app.buffer_manager.script_vars["m2"] == "nvidia_2"
+
+        # Check with no quotes but with equals sign
+        command3 = "/setvar m3 = nvidia_3"
+        result3 = asyncio.run(app.handle_escape_command(command3))
+        assert result3 is True
+        assert app.buffer_manager.script_vars["m3"] == "nvidia_3"
 
     def test_setvar_invalid_array_format(self, app, capsys):
         """Test error handling when setting an array with invalid format"""
