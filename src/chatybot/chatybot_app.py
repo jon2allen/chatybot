@@ -3370,8 +3370,12 @@ class ChatybotApp:
             clean_var_name = var_name[:-2] if is_array else var_name
 
             if not is_array:
-                # Handle quoted values for scalar variables (matching script mode parsing)
+                # Handle leading '=' if user typed `/setvar var = val`
                 value_with_images = value_with_images.strip()
+                if value_with_images.startswith('='):
+                    value_with_images = value_with_images[1:].strip()
+                
+                # Handle quoted values for scalar variables (matching script mode parsing)
                 if value_with_images.startswith('"') or value_with_images.startswith("'"):
                     q = value_with_images[0]
                     closing_idx = -1
