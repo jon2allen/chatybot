@@ -3587,6 +3587,8 @@ class ChatybotApp:
                         
                         # Execute the selected command
                         if selected_command.startswith("/"):
+                            if not selected_command.lstrip().startswith("/setvar"):
+                                selected_command = self.buffer_manager.replace_placeholders_legacy(selected_command)
                             await self.handle_escape_command(selected_command)
                         else:
                             response = await self.chat_completion(
@@ -3605,6 +3607,8 @@ class ChatybotApp:
                     continue
 
                 if prompt.startswith("/"):
+                    if not prompt.lstrip().startswith("/setvar"):
+                        prompt = self.buffer_manager.replace_placeholders_legacy(prompt)
                     result = await self.handle_escape_command(prompt)
                     if result == "EXECUTE_PROMPT":
                         # Execute the buffered prompt

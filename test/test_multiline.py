@@ -140,6 +140,42 @@ line 2
         finally:
             os.unlink(script_path)
 
+    @pytest.mark.anyio
+    async def test_interactive_escape_command_placeholder_resolution(self, app):
+        """Test that interactive escape commands resolve variables in main_loop"""
+        app.buffer_manager.set_script_var("arr1", ["Nanjing_food_comparison/mistral_results.txt"])
+        
+        # Mock handle_escape_command to record the command it was called with
+        called_commands = []
+        async def mock_handle_escape_command(cmd):
+            called_commands.append(cmd)
+            return True
+        app.handle_escape_command = mock_handle_escape_command
+        
+        # Test case 1: Standard escape command via direct input
+        with patch('builtins.input', side_effect=["/dump ${arr1[0]}", KeyboardInterrupt()]):
+            await app.main_loop()
+            
+        assert len(called_commands) == 1
+        assert called_commands[0] == "/dump Nanjing_food_comparison/mistral_results.txt"
+        
+        # Test case 2: Escape command resolved via history search (!)
+        called_commands.clear()
+        app.handle_history_command = AsyncMock(return_value="/dump ${arr1[0]}")
+        with patch('builtins.input', side_effect=["!1", KeyboardInterrupt()]):
+            await app.main_loop()
+            
+        assert len(called_commands) == 1
+        assert called_commands[0] == "/dump Nanjing_food_comparison/mistral_results.txt"
+
+        # Test case 3: /setvar command is NOT resolved (handled internally)
+        called_commands.clear()
+        with patch('builtins.input', side_effect=["/setvar val = ${arr1[0]}", KeyboardInterrupt()]):
+            await app.main_loop()
+            
+        assert len(called_commands) == 1
+        assert called_commands[0] == "/setvar val = ${arr1[0]}"
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
