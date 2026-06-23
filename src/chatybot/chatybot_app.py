@@ -3369,6 +3369,25 @@ class ChatybotApp:
             is_array = var_name.endswith("[]")
             clean_var_name = var_name[:-2] if is_array else var_name
 
+            if not is_array:
+                # Handle quoted values for scalar variables (matching script mode parsing)
+                value_with_images = value_with_images.strip()
+                if value_with_images.startswith('"') or value_with_images.startswith("'"):
+                    q = value_with_images[0]
+                    closing_idx = -1
+                    for i in range(1, len(value_with_images)):
+                        if value_with_images[i] == "\\":
+                            print(f"Error: Escape character '\\' is not allowed in setvar command for '{clean_var_name}'.")
+                            return True
+                        if value_with_images[i] == q:
+                            closing_idx = i
+                            break
+                    if closing_idx != -1:
+                        value_with_images = value_with_images[1:closing_idx]
+                    else:
+                        print(f"Error: No closing quote found for variable '{clean_var_name}'.")
+                        return True
+
             if is_array:
                 val_str = value_with_images.lstrip().lstrip('=').strip()
                 try:
