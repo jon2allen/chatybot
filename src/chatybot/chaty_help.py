@@ -464,8 +464,12 @@ class HelpSystem:
             category="variable",
             short_desc="Set a script variable",
             usage="/setvar <varname> <value>",
-            long_desc="Set a script variable to a string value. This is for text only, not image data.",
-            examples=["/setvar name John", "/setvar count 42"]
+            long_desc="Set a script variable to a string value. Surrounding quotes and leading '=' are automatically stripped. To have quotes inside quotes, alternate single and double quotes instead of escaping with '\\' (which is forbidden to prevent script parsing errors). This is for text only, not image data.",
+            examples=[
+                "/setvar name John",
+                "/setvar count = 42",
+                "/setvar quote_var 'This is an \"inner\" quote'"
+            ]
         ))
         
         self.register_command(CommandHelp(
