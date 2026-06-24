@@ -336,6 +336,18 @@ Variables can be set manually, via search results, or in scripts:
 chat --> Hello ${username}, show me ${search_results}
 ```
 
+#### **Quote and Escape Rules**
+* **Surrounding Quotes**: When setting a scalar variable (e.g., `/setvar name "Jon"` or `/setvar name = 'Jon'`), any surrounding single (`'`) or double (`"`) quotes are automatically stripped.
+* **Escaping is Forbidden**: The backslash escape character (`\`) is **strictly forbidden** inside variable values. Attempting to use `\` will result in an error. This prevents syntax errors inside the ChatDSL parser (which does not support backslash escapes).
+* **Quotes Inside Quotes**: To include quotes within a variable's value, **alternate single and double quotes** instead of escaping:
+  ```bash
+  # Stores: This is an "inner" quote
+  /setvar my_var 'This is an "inner" quote'
+
+  # Stores: This is an 'inner' quote
+  /setvar my_var "This is an 'inner' quote"
+  ```
+
 **Note:** Script variables (`/setvar`) are for **text substitution only**. For image analysis with vision models, use image banks instead. Load images with `/imagebank1 <file>` and reference them with `{imagebank1}` syntax in your prompts. The `{imagebank1}` placeholder sends the image as a proper multimodal attachment, while `${var}` substitution inserts text only.
 
 ### **Image Support (Beta)**
@@ -601,6 +613,12 @@ chat --> Create a blog post outline about ${topic}
 ```
 
 ### Change log
+
+June 24th, 2026 (v0.5.5)
+------------------------
+- **Interactive Escape Command Variable Resolution**: Enabled resolving variables and subscripts inside interactive escape commands (e.g. `/filebank1 ${arr1[0]}`).
+- **Quotes and Equals Sign Stripping**: Standardized interactive `/setvar` to automatically strip surrounding single/double quotes and leading `=` signs from scalar values, matching DSL script behavior.
+- **Improved Quote Documentation**: Documented variable quote alternating rules and why the escape character `\` is forbidden in the README.
 
 June 20th, 2026 (v0.5.4)
 ------------------------
