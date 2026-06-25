@@ -1,0 +1,22 @@
+# Test Case 20: Tool and Run execution commands
+# Description: Verify parsing of /tool and /run escape commands.
+
+set test_dir = "./dsl_test"
+
+# Enable tool mode
+/tool on
+
+# Show the current tool prompt configuration
+/tool prompt
+
+# Dispatch a mock tool call directly
+/tool {"tool": "list_directory", "arguments": {"path": "."}}
+
+# Disable tool mode
+/tool off
+
+# Run a safe command and inspect results
+/run echo "hello from ChatDSL"
+
+# Display variables
+/echo ${RUN_COMPLETION}

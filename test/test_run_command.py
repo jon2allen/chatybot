@@ -334,3 +334,24 @@ class TestRunCommandBehavior:
         call2 = app.extract_tool_call(text2)
         assert call2 is not None
         assert call2["tool"] == "list_directory"
+
+    @pytest.mark.anyio
+    async def test_tool_prompt_subcommand(self, app):
+        """Verifies that the /tool prompt escape command generates/shows the correct context and instructions"""
+        app.generate_tool_context = MagicMock(return_value="=== AVAILABLE TOOLS ===\ntool: list_directory")
+        with patch('builtins.print') as mock_print:
+            res = await app.handle_escape_command("/tool prompt")
+            assert res is True
+            mock_print.assert_any_call("\n=== TOOL CONTEXT INJECTED INTO PROMPT ===")
+            mock_print.assert_any_call("=== AVAILABLE TOOLS ===\ntool: list_directory")
+            mock_print.assert_any_call("\n=== AGENTIC LOOP SYSTEM INSTRUCTIONS ===")
+
+    @pytest.mark.anyio
+    async def test_custom_agentic_instructions(self, app):
+        """Verifies custom agentic instructions override the default and are printed/injected correctly"""
+        app.agentic_instructions = "CUSTOM INSTRUCTIONS"
+        app.generate_tool_context = MagicMock(return_value="=== AVAILABLE TOOLS ===\ntool: list_directory")
+        with patch('builtins.print') as mock_print:
+            res = await app.handle_escape_command("/tool prompt")
+            assert res is True
+            mock_print.assert_any_call("CUSTOM INSTRUCTIONS")
