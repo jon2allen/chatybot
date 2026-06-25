@@ -102,6 +102,15 @@ class ChatybotApp:
         self.tool_mode: bool = False
         self.tool_context: str = ""
         self.in_tool_loop: bool = False
+        self.agentic_instructions: str = ""
+        self.default_agentic_instructions: str = (
+            "IMPORTANT: You are executing in an autonomous, multi-turn tool-calling loop. "
+            "If you need to use a tool to get information, output ONLY the single next JSON tool call "
+            "block (e.g. within ```json ... ```). DO NOT describe your plan, DO NOT offer a menu of "
+            "different options, and DO NOT ask the user for permission or input. Just output the tool "
+            "call. Only output natural language/conversation when you have finished all tool executions "
+            "and are ready to present the final result."
+        )
 
         # Trace settings
         self.trace_raw_payload: bool = False
@@ -550,18 +559,12 @@ class ChatybotApp:
                     current_system_message = self.tool_context
 
             # Append agentic prompt instruction whenever tool_mode is enabled
-            agentic_prompt = (
-                "\n\nIMPORTANT: You are executing in an autonomous, multi-turn tool-calling loop. "
-                "If you need to use a tool to get information, output ONLY the single next JSON tool call "
-                "block (e.g. within ```json ... ```). DO NOT describe your plan, DO NOT offer a menu of "
-                "different options, and DO NOT ask the user for permission or input. Just output the tool "
-                "call. Only output natural language/conversation when you have finished all tool executions "
-                "and are ready to present the final result."
-            )
+            instr = self.agentic_instructions or self.default_agentic_instructions
+            agentic_prompt = f"\n\n{instr}"
             if current_system_message:
                 current_system_message += agentic_prompt
             else:
-                current_system_message = agentic_prompt.strip()
+                current_system_message = instr
 
         if is_reasoning_model and not self.reasoning_mode:
             if current_system_message:
@@ -2123,6 +2126,11 @@ class ChatybotApp:
                 print("⚠️  Could not load tools_config.toml")
                 return ""
         
+        # Load custom agentic instructions if present
+        config_section = config.get('config', {})
+        if 'agentic_instructions' in config_section:
+            self.agentic_instructions = config_section.get('agentic_instructions', '').strip()
+
         tools = config.get('tools', {})
         if not tools:
             return ""
@@ -3173,6 +3181,19 @@ class ChatybotApp:
                         except ValueError:
                             pass
                 await self.execute_tool_loop(max_turns)
+                return True
+            
+            elif subcmd == "prompt":
+                # Show the prompt injected during tool operation
+                context = self.tool_context or self.generate_tool_context()
+                if context:
+                    print("\n=== TOOL CONTEXT INJECTED INTO PROMPT ===")
+                    print(context)
+                    print("\n=== AGENTIC LOOP SYSTEM INSTRUCTIONS ===")
+                    print(self.agentic_instructions or self.default_agentic_instructions)
+                    print("=========================================\n")
+                else:
+                    print("⚠️  No tools available or tool context could not be generated.")
                 return True
             
             else:
