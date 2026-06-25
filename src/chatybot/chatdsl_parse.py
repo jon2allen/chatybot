@@ -179,8 +179,8 @@ class TParser:
         "multiline", "echo", "thoughtstyle", "def",
         # Semantic reranking commands
         "documents", "rerank",
-        # Shell execution and tool extraction commands
-        "run", "extract_tools", "run_safe", "run_unsafe"
+        # Shell execution commands
+        "run", "run_safe", "run_unsafe", "tool"
     }
 
     def __init__(self, tokens: List[Token], verbose: bool = False):

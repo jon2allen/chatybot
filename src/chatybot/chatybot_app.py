@@ -97,6 +97,11 @@ class ChatybotApp:
         # Run command settings
         self.safe_mode: bool = True
         self.run_timeout: int = 30
+        
+        # Tool mode settings
+        self.tool_mode: bool = False
+        self.tool_context: str = ""
+        self.in_tool_loop: bool = False
 
         # Trace settings
         self.trace_raw_payload: bool = False
@@ -182,7 +187,7 @@ class ChatybotApp:
                     "thinking", "echo", "def", "reloadmacros",
                     "imagine", "imagesize", "imagequality", "saveimage", "imagedir",
                     "listimages", "showimage", "loadimage", "documents", "rerank",
-                    "run", "extract_tools", "run_safe", "run_unsafe"
+                    "run", "run_safe", "run_unsafe", "tool"
                     ]
 
                  )
@@ -494,33 +499,41 @@ class ChatybotApp:
         client = self.get_openai_client(model_alias)
         model_config = self.config_manager.get_model_config(model_alias)
         model_name = model_config["name"]
-        if self.matcher.matches(prompt[:12]):
-           print( "Error command verb at beginning:  " + prompt[:9] + " - use escape / sequence")
-           return ""
-        # Replace placeholders in the prompt - returns (text, image_list)
-        full_prompt, image_list = self.buffer_manager.replace_placeholders(prompt)
-
-        # Prepare the prompt with file buffer and prompt buffer if available
-        if self.buffer_manager.prompt_buffer:
-            full_prompt = self.buffer_manager.prompt_buffer + "\n\n" + full_prompt
-        if self.buffer_manager.file_buffer:
-            full_prompt = f"File:\n{self.buffer_manager.file_buffer}\n\n{full_prompt}"
-
-        # Add code-only instruction if flag is set
-        if self.code_only_flag:
-            full_prompt = (
-                "Do not explain or describe the code - generate the code requested only. "
-                + full_prompt
-            )
-
-        # Prepare messages for chat completion
-        # For multimodal (vision) models, use content array with text + images
-        if image_list:
-            content_parts = [{"type": "text", "text": full_prompt}]
-            content_parts.extend(image_list)
-            messages = [{"role": "user", "content": content_parts}]
+        
+        if isinstance(prompt, list):
+            messages = list(prompt)
         else:
-            messages = [{"role": "user", "content": full_prompt}]
+            if self.matcher.matches(prompt[:12]):
+               print( "Error command verb at beginning:  " + prompt[:9] + " - use escape / sequence")
+               return ""
+            # Replace placeholders in the prompt - returns (text, image_list)
+            full_prompt, image_list = self.buffer_manager.replace_placeholders(prompt)
+
+            # Prepare the prompt with file buffer and prompt buffer if available
+            if self.buffer_manager.prompt_buffer:
+                full_prompt = self.buffer_manager.prompt_buffer + "\n\n" + full_prompt
+            if self.buffer_manager.file_buffer:
+                full_prompt = f"File:\n{self.buffer_manager.file_buffer}\n\n{full_prompt}"
+
+            # Inject tool context if tool mode is enabled
+            if self.tool_mode and self.tool_context:
+                full_prompt = self.tool_context + "\n\n" + full_prompt
+
+            # Add code-only instruction if flag is set
+            if self.code_only_flag:
+                full_prompt = (
+                    "Do not explain or describe the code - generate the code requested only. "
+                    + full_prompt
+                )
+
+            # Prepare messages for chat completion
+            # For multimodal (vision) models, use content array with text + images
+            if image_list:
+                content_parts = [{"type": "text", "text": full_prompt}]
+                content_parts.extend(image_list)
+                messages = [{"role": "user", "content": content_parts}]
+            else:
+                messages = [{"role": "user", "content": full_prompt}]
 
         is_nvidia = (
             "nvidia" in model_config.get("base_url", "").lower()
@@ -529,6 +542,27 @@ class ChatybotApp:
         is_reasoning_model = is_nvidia or "qwen" in model_name.lower()
 
         current_system_message = self.config_manager.system_message
+        if self.tool_mode and self.tool_context:
+            if isinstance(prompt, list):
+                if current_system_message:
+                    current_system_message = self.tool_context + "\n\n" + current_system_message
+                else:
+                    current_system_message = self.tool_context
+
+            # Append agentic prompt instruction whenever tool_mode is enabled
+            agentic_prompt = (
+                "\n\nIMPORTANT: You are executing in an autonomous, multi-turn tool-calling loop. "
+                "If you need to use a tool to get information, output ONLY the single next JSON tool call "
+                "block (e.g. within ```json ... ```). DO NOT describe your plan, DO NOT offer a menu of "
+                "different options, and DO NOT ask the user for permission or input. Just output the tool "
+                "call. Only output natural language/conversation when you have finished all tool executions "
+                "and are ready to present the final result."
+            )
+            if current_system_message:
+                current_system_message += agentic_prompt
+            else:
+                current_system_message = agentic_prompt.strip()
+
         if is_reasoning_model and not self.reasoning_mode:
             if current_system_message:
                 current_system_message += "\ndetailed thinking off"
@@ -753,6 +787,15 @@ class ChatybotApp:
                     except:
                         pass
                     self.debug_payload_mode = False
+
+            # Clean assistant messages to ensure they are not empty (which causes API 400 error)
+            cleaned_messages = []
+            for msg in kwargs.get("messages", []):
+                if msg.get("role") == "assistant" and not (msg.get("content") or "").strip():
+                    cleaned_messages.append({"role": "assistant", "content": " "})
+                else:
+                    cleaned_messages.append(msg)
+            kwargs["messages"] = cleaned_messages
 
             tps_records = []
             think_tokens_estimate = 0
@@ -1115,7 +1158,8 @@ class ChatybotApp:
                 self.logging_manager.log_message(f"Model: {model_alias} ({model_name})")
                 self.logging_manager.log_message(f"User: {prompt}")
 
-            self.chat_history.append((prompt, full_response))
+            if not self.in_tool_loop:
+                self.chat_history.append((prompt, full_response))
 
             # Log assistant entry with completion datetime and token count
             if self.logging_manager.logging_active:
@@ -1790,249 +1834,330 @@ class ChatybotApp:
             self.buffer_manager.set_script_var('LAST_COMPLETION', '')
             print(f"⚠️  Error: {e}")
 
-    def _parse_tool_content(self, content: str) -> Dict[str, str]:
-        """Parse tool content in format: name(args) or just name."""
-        content = content.strip()
-        if '(' in content and content.endswith(')'):
-            # Format: name(args)
-            name = content[:content.index('(')].strip()
-            args = content[content.index('(')+1:-1].strip()
-            return {'name': name, 'args': args, 'raw': content}
-        else:
-            # Format: just name
-            return {'name': content, 'args': '', 'raw': content}
-
-    def _parse_xml_tool_calls(self, text: str) -> List[Dict[str, str]]:
-        """Parse XML formatted tool calls."""
-        import re
-        tool_calls = []
-        
-        # Pattern 1: <tool name="func">args</tool>
-        # Pattern 2: <function name="func">args</function>
-        # Pattern 3: <tool>name(args)</tool>
-        patterns = [
-            (r'<tool\s+name="([^"]+)"[^>]*>([^<]*)</tool>', lambda m: {'name': m.group(1), 'args': m.group(2), 'raw': m.group(0)}),
-            (r'<function\s+name="([^"]+)"[^>]*>([^<]*)</function>', lambda m: {'name': m.group(1), 'args': m.group(2), 'raw': m.group(0)}),
-            (r'<tool>([^<]*)</tool>', lambda m: self._parse_tool_content(m.group(1))),
-            (r'<function>([^<]*)</function>', lambda m: self._parse_tool_content(m.group(1))),
-        ]
-        
-        for pattern, handler in patterns:
-            for match in re.finditer(pattern, text):
-                try:
-                    tool_calls.append(handler(match))
-                except:
-                    continue
-        
-        return tool_calls
-
-    def _parse_json_tool_calls(self, text: str) -> List[Dict[str, str]]:
-        """Parse JSON formatted tool calls."""
-        import json
-        
-        tool_calls = []
-        
-        # First, try to parse the entire text as JSON
-        # This handles the case where the entire response is a JSON object
-        try:
-            data = json.loads(text)
-            if isinstance(data, dict) and 'tool_calls' in data:
-                for tc in data['tool_calls']:
-                    if isinstance(tc, dict):
-                        if 'function' in tc:
-                            func = tc['function']
-                            tool_calls.append({
-                                'name': func.get('name', ''),
-                                'args': json.dumps(func.get('arguments', {})),
-                                'raw': json.dumps(tc)
-                            })
-                        elif 'tool' in tc:
-                            # Alternative format
-                            tool = tc['tool']
-                            tool_calls.append({
-                                'name': tool.get('name', ''),
-                                'args': json.dumps(tool.get('arguments', {})),
-                                'raw': json.dumps(tc)
-                            })
-                        elif 'name' in tc:
-                            # Direct tool call format
-                            tool_calls.append({
-                                'name': tc.get('name', ''),
-                                'args': json.dumps(tc.get('arguments', {})),
-                                'raw': json.dumps(tc)
-                            })
-            return tool_calls
-        except (json.JSONDecodeError, TypeError):
-            pass
-        
-        # If that fails, try to find JSON objects containing tool_calls
-        # This is a fallback for text that contains JSON among other content
-        import re
-        # More lenient pattern that matches balanced braces
-        json_pattern = r'\{[^{}]*"tool_calls"[^{}]*\}'
-        
-        for match in re.finditer(json_pattern, text):
-            try:
-                data = json.loads(match.group(0))
-                if isinstance(data, dict) and 'tool_calls' in data:
-                    for tc in data['tool_calls']:
-                        if isinstance(tc, dict):
-                            if 'function' in tc:
-                                func = tc['function']
-                                tool_calls.append({
-                                    'name': func.get('name', ''),
-                                    'args': json.dumps(func.get('arguments', {})),
-                                    'raw': json.dumps(tc)
-                                })
-                            elif 'tool' in tc:
-                                tool = tc['tool']
-                                tool_calls.append({
-                                    'name': tool.get('name', ''),
-                                    'args': json.dumps(tool.get('arguments', {})),
-                                    'raw': json.dumps(tc)
-                                })
-                            elif 'name' in tc:
-                                tool_calls.append({
-                                    'name': tc.get('name', ''),
-                                    'args': json.dumps(tc.get('arguments', {})),
-                                    'raw': json.dumps(tc)
-                                })
-            except (json.JSONDecodeError, TypeError):
-                continue
-        
-        return tool_calls
-
-    def _parse_markdown_tool_calls(self, text: str) -> List[Dict[str, str]]:
-        """Parse markdown code block formatted tool calls."""
-        import re
-        import json
-        tool_calls = []
-        
-        # Pattern: ```tool or ```function
-        pattern = r'```(?:tool|function)\s*\n([\s\S]*?)```'
-        
-        for match in re.finditer(pattern, text):
-            content = match.group(1).strip()
-            if content:
-                # Try to parse as JSON first
-                try:
-                    data = json.loads(content)
-                    if isinstance(data, dict) and 'name' in data:
-                        tool_calls.append({
-                            'name': data['name'],
-                            'args': json.dumps(data.get('arguments', {})),
-                            'raw': content
-                        })
-                    elif isinstance(data, list):
-                        for item in data:
-                            if isinstance(item, dict) and 'name' in item:
-                                tool_calls.append({
-                                    'name': item['name'],
-                                    'args': json.dumps(item.get('arguments', {})),
-                                    'raw': json.dumps(item)
-                                })
-                except (json.JSONDecodeError, TypeError):
-                    # Parse as simple format: name(args)
-                    tool = self._parse_tool_content(content)
-                    tool_calls.append(tool)
-        
-        return tool_calls
-
-    def _parse_inline_tool_calls(self, text: str) -> List[Dict[str, str]]:
-        """Parse inline tool call patterns like TOOL: name(args)."""
-        import re
-        tool_calls = []
-        
-        # Pattern: TOOL: name(args) or FUNCTION: name(args)
-        pattern = r'\b(TOOL|FUNCTION):\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\((.*)\)'
-        
-        for match in re.finditer(pattern, text):
-            tool_calls.append({
-                'name': match.group(2),
-                'args': match.group(3).strip(),
-                'raw': match.group(0)
-            })
-        
-        return tool_calls
-
-    def extract_tool_calls(self, format_hint: str = "auto") -> None:
+    def dispatch_tool(self, invocation_json: str = None) -> str:
         """
-        Parse LAST_COMPLETION for tool calls and populate TOOL_* variables.
-        
-        Supports multiple tool calls with indexed variable access.
+        Dispatch a tool invocation to the dispatcher.
         
         Args:
-            format_hint: Optional format hint ('xml', 'json', 'markdown', 'inline', or 'auto')
+            invocation_json: JSON string containing tool invocation. If None, uses LAST_COMPLETION.
+        
+        Returns:
+            JSON result from dispatcher as string
         """
-        # Get the last completion from buffer_manager (consistent store)
-        last_completion = self.buffer_manager.get_script_var('LAST_COMPLETION') or ""
+        import subprocess
+        import tempfile
+        import os
         
-        if not last_completion.strip():
-            self.buffer_manager.set_script_var('TOOL_FOUND', 'false')
-            self.buffer_manager.set_script_var('TOOL_COUNT', '0')
-            self.buffer_manager.set_script_var('TOOL_ERROR', 'No content to parse')
-            self.buffer_manager.set_script_var('TOOL_FORMAT', '')
-            self.buffer_manager.set_script_var('TOOL_NAME', '')
-            self.buffer_manager.set_script_var('TOOL_ARGS', '')
-            self.buffer_manager.set_script_var('TOOL_CALL', '')
-            self.buffer_manager.set_script_var('TOOL_CALLS', '[]')
-            print("⚠️  No content in LAST_COMPLETION to parse")
+        # Use LAST_COMPLETION if no invocation_json provided
+        if invocation_json is None:
+            invocation_json = self.buffer_manager.get_script_var('LAST_COMPLETION') or ""
+        
+        if not invocation_json.strip():
+            print("⚠️  No tool invocation to dispatch")
+            return ""
+            
+        # Extract clean tool call if possible, to be robust to conversational formatting
+        import json
+        tool_call = self.extract_tool_call(invocation_json)
+        if tool_call:
+            invocation_json = json.dumps(tool_call)
+        
+        # Create a temporary file for the invocation
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp_file:
+            tmp_file.write(invocation_json)
+            tmp_path = tmp_file.name
+        
+        try:
+            # Build the dispatcher command
+            dispatcher_path = os.path.join(os.path.dirname(__file__), 'dispatcher.py')
+            config_path = os.path.join(os.path.dirname(__file__), 'tools_config.toml')
+            
+            # Check if dispatcher exists
+            if not os.path.exists(dispatcher_path):
+                print(f"⚠️  Dispatcher not found: {dispatcher_path}")
+                return ""
+            
+            # Run the dispatcher
+            cmd = ['python3', dispatcher_path, tmp_path, '--config', config_path]
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            # Store result in buffer_manager
+            self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', result.stdout)
+            self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', result.stderr)
+            self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', str(result.returncode))
+            
+            if result.returncode != 0:
+                print(f"⚠️  Tool dispatch failed: {result.stderr}")
+                return f"Error: Tool execution failed with exit code {result.returncode}: {result.stderr or result.stdout or 'Unknown error'}"
+            else:
+                print(f"✅ Tool dispatched successfully")
+                return result.stdout
+            
+        except Exception as e:
+            print(f"⚠️  Error dispatching tool: {e}")
+            self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
+            self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', str(e))
+            self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '-1')
+            return f"Error: Tool dispatch failed: {str(e)}"
+        finally:
+            # Clean up temp file
+            try:
+                os.unlink(tmp_path)
+            except:
+                pass
+
+    def extract_tool_call(self, text: str) -> Optional[Dict[str, Any]]:
+        """
+        Extract a tool call JSON block from conversational text.
+        Returns a dictionary if a valid tool call is found, and None otherwise.
+        """
+        import json
+        import re
+
+        def clean_json_string(s: str) -> str:
+            # Remove single line comments starting with // or #
+            lines = []
+            for line in s.split('\n'):
+                in_quote = False
+                cleaned_chars = []
+                i = 0
+                while i < len(line):
+                    if line[i] == '"' and (i == 0 or line[i-1] != '\\'):
+                        in_quote = not in_quote
+                        cleaned_chars.append(line[i])
+                    elif line[i:i+2] == '//' and not in_quote:
+                        break  # Skip the rest of the line
+                    elif line[i] == '#' and not in_quote:
+                        break  # Skip the rest of the line
+                    else:
+                        cleaned_chars.append(line[i])
+                    i += 1
+                lines.append("".join(cleaned_chars))
+            cleaned = "\n".join(lines)
+            # Remove trailing commas before closing braces/brackets
+            cleaned = re.sub(r',\s*([\]}])', r'\1', cleaned)
+            return cleaned
+
+        def normalize_tool_call(data: Any) -> Optional[Dict[str, Any]]:
+            if isinstance(data, dict) and "tool" in data:
+                tool_name = str(data["tool"])
+                if "." in tool_name:
+                    tool_name = tool_name.split(".")[-1]
+                data["tool"] = tool_name
+                return data
+            return None
+
+        text_stripped = text.strip()
+        
+        # 1. Try to parse the entire text as JSON
+        try:
+            cleaned = clean_json_string(text_stripped)
+            data = json.loads(cleaned)
+            res = normalize_tool_call(data)
+            if res:
+                return res
+        except Exception:
+            pass
+
+        # 2. Try finding a JSON block enclosed in markdown code fences
+        code_block_match = re.search(r'```(?:json)?\s*(\{[\s\S]*?\})\s*```', text)
+        if code_block_match:
+            try:
+                cleaned = clean_json_string(code_block_match.group(1).strip())
+                data = json.loads(cleaned)
+                res = normalize_tool_call(data)
+                if res:
+                    return res
+            except Exception:
+                pass
+
+        # 3. Try searching for any balanced { ... } containing "tool"
+        first_brace = text.find('{')
+        last_brace = text.rfind('}')
+        if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
+            try:
+                cleaned = clean_json_string(text[first_brace:last_brace+1])
+                data = json.loads(cleaned)
+                res = normalize_tool_call(data)
+                if res:
+                    return res
+            except Exception:
+                pass
+
+        return None
+
+    async def execute_tool_loop(self, max_turns: int) -> None:
+        """
+        Executes the autonomous agentic tool loop (Option B - History Management).
+        """
+        import json
+        
+        if not self.chat_history:
+            print("No prompt has been executed yet. Please run a prompt first.")
             return
+
+        initial_prompt, last_completion = self.chat_history[-1]
         
-        # Try different formats based on hint or auto-detection
-        tool_calls = []
-        detected_format = ""
+        # Enable tool loop state
+        self.in_tool_loop = True
+
+        # Ensure tool mode is enabled when entering the loop
+        if not self.tool_mode or not self.tool_context:
+            context = self.generate_tool_context()
+            if context:
+                self.tool_mode = True
+                self.buffer_manager.set_script_var('TOOL_CONTEXT', context)
         
-        if format_hint == "auto" or format_hint == "xml":
-            tool_calls = self._parse_xml_tool_calls(last_completion)
-            if tool_calls:
-                detected_format = "xml"
-        
-        if not tool_calls and (format_hint == "auto" or format_hint == "json"):
-            tool_calls = self._parse_json_tool_calls(last_completion)
-            if tool_calls:
-                detected_format = "json"
-        
-        if not tool_calls and (format_hint == "auto" or format_hint == "markdown"):
-            tool_calls = self._parse_markdown_tool_calls(last_completion)
-            if tool_calls:
-                detected_format = "markdown"
-        
-        if not tool_calls and format_hint == "auto":
-            tool_calls = self._parse_inline_tool_calls(last_completion)
-            if tool_calls:
-                detected_format = "inline"
-        
-        # Set common variables
-        self.buffer_manager.set_script_var('TOOL_FOUND', 'true' if tool_calls else 'false')
-        self.buffer_manager.set_script_var('TOOL_COUNT', str(len(tool_calls)))
-        self.buffer_manager.set_script_var('TOOL_FORMAT', detected_format)
-        
-        if tool_calls:
-            # Set all tool calls as JSON array
-            import json
-            self.buffer_manager.set_script_var('TOOL_CALLS', json.dumps(tool_calls))
-            self.buffer_manager.set_script_var('TOOL_ERROR', '')
+        # Build the temporary history buffer starting with past turns to preserve context
+        temp_history = []
+        for p, r in self.chat_history[:-1]:
+            temp_history.append({"role": "user", "content": p})
+            temp_history.append({"role": "assistant", "content": r})
             
-            # Set first tool for backward compatibility
-            first_tool = tool_calls[0]
-            self.buffer_manager.set_script_var('TOOL_NAME', first_tool.get('name', ''))
-            self.buffer_manager.set_script_var('TOOL_ARGS', first_tool.get('args', ''))
-            self.buffer_manager.set_script_var('TOOL_CALL', first_tool.get('raw', ''))
+        temp_history.append({"role": "user", "content": initial_prompt})
+        
+        current_response = last_completion
+        turn_count = 0
+        final_natural_language_response = ""
+
+        # If the last completion was natural language (not a tool call), request an initial tool call from the LLM
+        if not self.extract_tool_call(current_response):
+            print("Last completion was not a tool call. Requesting initial tool call from LLM...")
+            current_response = await self.chat_completion(temp_history, stream=self.streaming_enabled)
+        
+        print(f"Starting agentic tool loop (max turns: {max_turns})...")
+        
+        while turn_count < max_turns:
+            tool_call = self.extract_tool_call(current_response)
+            if not tool_call:
+                # Terminal state reached: model produced a natural-language response instead of a JSON tool call
+                final_natural_language_response = current_response
+                print("Terminal state reached (natural language response). Exiting loop.")
+                break
+                
+            # Document the tool call assistant response in temp history
+            temp_history.append({"role": "assistant", "content": current_response})
             
-            # Set indexed variables for multi-tool support
-            for i, tool in enumerate(tool_calls):
-                self.buffer_manager.set_script_var(f'TOOL_NAME[{i}]', tool.get('name', ''))
-                self.buffer_manager.set_script_var(f'TOOL_ARGS[{i}]', tool.get('args', ''))
+            tool_name = tool_call.get("tool")
+            tool_args = tool_call.get("arguments", {})
+            print(f"[Turn {turn_count+1}/{max_turns}] LLM requested tool: {tool_name}")
+            print(f"   Arguments: {json.dumps(tool_args)}")
             
-            print(f"✅ Extracted {len(tool_calls)} tool call(s) ({detected_format})")
-        else:
-            self.buffer_manager.set_script_var('TOOL_NAME', '')
-            self.buffer_manager.set_script_var('TOOL_ARGS', '')
-            self.buffer_manager.set_script_var('TOOL_CALL', '')
-            self.buffer_manager.set_script_var('TOOL_CALLS', '[]')
-            self.buffer_manager.set_script_var('TOOL_ERROR', 'No tool calls found')
-            print("⚠️  No tool calls found in LAST_COMPLETION")
+            # Execute the tool and capture result
+            self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
+            try:
+                # dispatch_tool writes result to TOOL_DISPATCH_RESULT and returns the stdout string
+                result_str = self.dispatch_tool(json.dumps(tool_call))
+            except Exception as e:
+                result_str = json.dumps({"status": "error", "message": f"Dispatch execution error: {str(e)}"})
+                self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', result_str)
+                self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
+                
+            print(f"Tool Result: {result_str}")
+            
+            # Append the tool result back to the temp history as a user message
+            temp_history.append({"role": "user", "content": f"Tool execution result: {result_str}"})
+            
+            turn_count += 1
+            if turn_count >= max_turns:
+                print(f"Reached maximum tool loop turns ({max_turns}).")
+                print("[Final Turn] Requesting final summary completion...")
+                temp_history.append({
+                    "role": "user",
+                    "content": (
+                        "You have reached the maximum allowed turns in this loop. "
+                        "Please summarize your findings and present the final answer to the user. "
+                        "Do not output any more tool calls."
+                    )
+                })
+                final_natural_language_response = await self.chat_completion(temp_history, stream=self.streaming_enabled)
+                break
+                
+            # Request next completion from LLM using the temporary history context
+            print(f"[Turn {turn_count+1}/{max_turns}] Requesting next completion...")
+            current_response = await self.chat_completion(temp_history, stream=self.streaming_enabled)
+            
+        # Clean up loop state
+        self.in_tool_loop = False
+        
+        # If final_natural_language_response is not set, fallback
+        if not final_natural_language_response:
+            final_natural_language_response = current_response
+            
+        # Update LAST_COMPLETION to the final output
+        self.buffer_manager.set_script_var('LAST_COMPLETION', final_natural_language_response)
+        
+        # Commit ONLY the final, natural-language outcome to the main chat_history (Option B)
+        self.chat_history[-1] = (initial_prompt, final_natural_language_response)
+        
+        print("\nAgentic Tool Loop finished.")
+        print(f"Final Response:\n{final_natural_language_response}")
+
+    def generate_tool_context(self) -> str:
+        """
+        Generate tool definitions for LLM context injection.
+        Reads tools_config.toml and formats tool schemas in a way the LLM can understand.
+        
+        Returns:
+            Formatted string with tool definitions for LLM prompt
+        """
+        import os
+        
+        config_path = os.path.join(os.path.dirname(__file__), 'tools_config.toml')
+        
+        try:
+            import tomllib
+            with open(config_path, 'rb') as f:
+                config = tomllib.load(f)
+        except (ImportError, FileNotFoundError, Exception):
+            try:
+                import toml
+                with open(config_path, 'r') as f:
+                    config = toml.load(f)
+            except (ImportError, FileNotFoundError, Exception):
+                print("⚠️  Could not load tools_config.toml")
+                return ""
+        
+        tools = config.get('tools', {})
+        if not tools:
+            return ""
+        
+        # Build tool context string
+        lines = []
+        lines.append("\n=== AVAILABLE TOOLS ===")
+        lines.append("You have access to the following tools. Use them by outputting JSON in this format:")
+        lines.append('{"tool": "tool_name", "arguments": {...}}')
+        lines.append("")
+        
+        for tool_name, tool_meta in tools.items():
+            if not tool_meta.get('enabled', False):
+                continue
+            
+            desc = tool_meta.get('description', 'No description')
+            params = tool_meta.get('parameters', {})
+            
+            lines.append(f"\n**{tool_name}**")
+            lines.append(f"Description: {desc}")
+            
+            if params:
+                lines.append("Parameters:")
+                for param_name, param_rules in params.items():
+                    param_type = param_rules.get('type', 'string')
+                    param_desc = param_rules.get('description', '')
+                    optional = param_rules.get('optional', False)
+                    required = " (optional)" if optional else " (required)"
+                    lines.append(f"  - {param_name}: {param_type}{required} - {param_desc}")
+        
+        lines.append("\n=== END TOOLS ===\n")
+        
+        context = '\n'.join(lines)
+        self.tool_context = context
+        return context
 
     async def handle_escape_command(self, command: str) -> Union[bool, str]:
         """
@@ -2972,12 +3097,6 @@ class ChatybotApp:
                 self.execute_shell_command(processed_cmd)
             return True
 
-        elif cmd == "/extract_tools":
-            # /extract_tools [format] - Parse LAST_COMPLETION for tool calls
-            format_hint = parts[1] if len(parts) > 1 else "auto"
-            self.extract_tool_calls(format_hint=format_hint)
-            return True
-
         elif cmd == "/run_safe":
             self.safe_mode = True
             print("✅ Safe mode enabled - dangerous patterns require confirmation")
@@ -2987,6 +3106,90 @@ class ChatybotApp:
             self.safe_mode = False
             print("⚠️  Safe mode disabled - dangerous commands allowed without confirmation")
             return True
+
+        elif cmd == "/tool":
+            # Handle /tool subcommands: on, off, or dispatch
+            if len(parts) < 2:
+                # No subcommand - dispatch tool invocation from LAST_COMPLETION
+                self.dispatch_tool()
+                return True
+            
+            subcmd = parts[1].lower()
+            
+            if subcmd == "on":
+                # Enable tool mode - inject tool definitions into system prompt
+                context = self.generate_tool_context()
+                if context:
+                    self.tool_mode = True
+                    # Inject into current prompt context
+                    self.buffer_manager.set_script_var('TOOL_CONTEXT', context)
+                    print("✅ Tool mode enabled - tool definitions loaded")
+                    print(f"   {len(context.split(chr(10)))} lines of tool context available")
+                else:
+                    print("⚠️  No tools available to load")
+                return True
+            
+            elif subcmd == "off":
+                # Disable tool mode
+                self.tool_mode = False
+                self.tool_context = ""
+                self.buffer_manager.set_script_var('TOOL_CONTEXT', '')
+                print("✅ Tool mode disabled")
+                return True
+            
+            elif subcmd == "loop":
+                max_turns = 5
+                # Extract all remaining arguments as lowercase strings by splitting the rest of the string
+                loop_args = []
+                if len(parts) > 2:
+                    loop_args = [p.lower() for p in parts[2].split()]
+                has_force = "force" in loop_args
+                
+                # Filter out 'force' to parse the turn count
+                count_args = [a for a in loop_args if a != "force"]
+                
+                if count_args:
+                    arg = count_args[0]
+                    if arg == "max":
+                        max_turns = 100
+                    elif arg.startswith("max="):
+                        try:
+                            val = int(arg.split("=")[1])
+                            if val > 100 and not has_force:
+                                print("⚠️  Warning: Loop counts greater than 100 require the 'force' flag. Capping at 100.")
+                                max_turns = 100
+                            else:
+                                max_turns = val
+                        except ValueError:
+                            pass
+                    else:
+                        try:
+                            val = int(arg)
+                            if val > 100 and not has_force:
+                                print("⚠️  Warning: Loop counts greater than 100 require the 'force' flag. Capping at 100.")
+                                max_turns = 100
+                            else:
+                                max_turns = val
+                        except ValueError:
+                            pass
+                await self.execute_tool_loop(max_turns)
+                return True
+            
+            else:
+                # Check if argument is a filename (ends with .json)
+                arg = command.split(maxsplit=1)[1]
+                if arg.endswith('.json') and os.path.exists(arg):
+                    # Read JSON from file
+                    try:
+                        with open(arg, 'r') as f:
+                            json_str = f.read()
+                        self.dispatch_tool(json_str)
+                    except Exception as e:
+                        print(f"⚠️  Error reading file {arg}: {e}")
+                else:
+                    # Provide JSON directly - dispatch it
+                    self.dispatch_tool(arg)
+                return True
 
         elif cmd == "/stream":
             self.streaming_enabled = not self.streaming_enabled
@@ -3770,7 +3973,6 @@ class ChatybotApp:
         print("  /mem - Show size of buffers and script variables.")
         print("  /dump [varname|all] - Print content of buffers or script variables.")
         print("  /run <command> - Execute a shell command and store output in RUN_COMPLETION (and LAST_COMPLETION).")
-        print("  /extract_tools [format] - Parse LAST_COMPLETION for tool calls (xml, json, markdown, inline).")
         print("  /run_safe - Enable safe mode (block dangerous commands).")
         print("  /run_unsafe - Disable safe mode (allow dangerous commands).")
         print("\nScript-specific features:")
