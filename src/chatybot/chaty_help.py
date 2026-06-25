@@ -514,18 +514,7 @@ class HelpSystem:
             usage="/run <command>",
             long_desc="Execute a shell command and store the output in RUN_COMPLETION (stdout), RUN_ERROR (stderr), RUN_EXIT_CODE (return code). Also stores in LAST_COMPLETION for backward compatibility. Supports variable substitution with ${VAR} syntax.",
             examples=["/run echo hello", "/run df -h", "/run echo ${VAR}", "/echo ${RUN_COMPLETION}"],
-            see_also=["/extract_tools", "/run_safe", "/run_unsafe"]
-        ))
-        
-        self.register_command(CommandHelp(
-            name="/extract_tools",
-            category="scripting",
-            short_desc="Parse tool calls from LAST_COMPLETION",
-            usage="/extract_tools [format]",
-            long_desc="Parse LAST_COMPLETION for tool/function calls and populate TOOL_* variables. Supports XML, JSON, Markdown, and inline formats. Auto-detects format by default.",
-            examples=["/extract_tools", "/extract_tools xml", "/extract_tools json"],
-            parameters={"format": "auto, xml, json, markdown, or inline"},
-            see_also=["/run", "/setvar"]
+            see_also=["/run_safe", "/run_unsafe"]
         ))
         
         self.register_command(CommandHelp(
@@ -546,6 +535,16 @@ class HelpSystem:
             long_desc="Disable safe mode. Dangerous shell commands will be allowed without confirmation. Use with caution!",
             examples=["/run_unsafe"],
             see_also=["/run_safe", "/run"]
+        ))
+        
+        self.register_command(CommandHelp(
+            name="/tool",
+            category="scripting",
+            short_desc="Manage tool mode and dispatch tool invocations",
+            usage="/tool [on|off|<json_file.json>|<json_invocation>]",
+            long_desc="Manage tool mode for LLM tool calling. When tool mode is on, tool definitions from tools_config.toml are available for the LLM to use.\n\nSubcommands:\n  /tool on - Enable tool mode, inject tool definitions into context\n  /tool off - Disable tool mode\n  /tool <file.json> - Dispatch tool invocation from JSON file\n  /tool [json] - Dispatch a tool invocation directly (uses LAST_COMPLETION if no argument provided)",
+            examples=["/tool on", "/tool off", "/tool", "/tool find1.json", "/tool {\"tool\": \"list_directory\", \"arguments\": {\"path\": \".\"}}"],
+            see_also=["/run"]
         ))
     
     def register_command(self, cmd_help: CommandHelp) -> None:
