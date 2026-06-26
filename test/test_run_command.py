@@ -355,3 +355,19 @@ class TestRunCommandBehavior:
             res = await app.handle_escape_command("/tool prompt")
             assert res is True
             mock_print.assert_any_call("CUSTOM INSTRUCTIONS")
+
+    @pytest.mark.anyio
+    async def test_custom_tool_timeout(self, app):
+        """Verifies custom tool timeout is read and applied to the dispatcher subprocess execution"""
+        app.tool_timeout = 75
+        with patch('subprocess.run') as mock_run, \
+             patch('os.path.exists', return_value=True):
+            mock_run.return_value.returncode = 0
+            mock_run.return_value.stdout = "success"
+            
+            res = app.dispatch_tool('{"tool": "list_directory"}')
+            assert res == "success"
+            mock_run.assert_called_once()
+            _, kwargs = mock_run.call_args
+            assert kwargs.get('timeout') == 75
+

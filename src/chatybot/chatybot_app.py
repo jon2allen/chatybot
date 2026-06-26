@@ -103,6 +103,7 @@ class ChatybotApp:
         self.tool_context: str = ""
         self.in_tool_loop: bool = False
         self.agentic_instructions: str = ""
+        self.tool_timeout: int = 30
         self.default_agentic_instructions: str = (
             "IMPORTANT: You are executing in an autonomous, multi-turn tool-calling loop. "
             "If you need to use a tool to get information, output ONLY the single next JSON tool call "
@@ -1886,7 +1887,7 @@ class ChatybotApp:
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=30
+                timeout=self.tool_timeout
             )
             
             # Store result in buffer_manager
@@ -2126,10 +2127,15 @@ class ChatybotApp:
                 print("Could not load tools_config.toml")
                 return ""
         
-        # Load custom agentic instructions if present
+        # Load custom agentic instructions and tool timeout if present
         config_section = config.get('config', {})
         if 'agentic_instructions' in config_section:
             self.agentic_instructions = config_section.get('agentic_instructions', '').strip()
+        if 'tool_timeout' in config_section:
+            try:
+                self.tool_timeout = int(config_section.get('tool_timeout'))
+            except (ValueError, TypeError):
+                pass
 
         tools = config.get('tools', {})
         if not tools:
