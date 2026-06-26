@@ -178,7 +178,9 @@ class TParser:
         "listimages", "showimage", "loadimage",
         "multiline", "echo", "thoughtstyle", "def",
         # Semantic reranking commands
-        "documents", "rerank"
+        "documents", "rerank",
+        # Shell execution commands
+        "run", "run_safe", "run_unsafe", "tool"
     }
 
     def __init__(self, tokens: List[Token], verbose: bool = False):

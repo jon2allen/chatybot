@@ -1,0 +1,58 @@
+[config]
+tool_timeout = 60
+agentic_instructions = """
+IMPORTANT: You are executing in an autonomous, multi-turn tool-calling loop. If you need to use a tool to get information, output ONLY the single next JSON tool call block (e.g. within ```json ... ```). DO NOT describe your plan, DO NOT offer a menu of different options, and DO NOT ask the user for permission or input. Just output the tool call. Only output natural language/conversation when you have finished all tool executions and are ready to present the final result."""
+
+[tools.list_directory]
+enabled = true
+description = "List contents of a directory"
+module = "chatybot.tools.file_utils"
+function = "list_directory"
+
+[tools.list_directory.parameters.path]
+type = "string"
+description = "Directory path to list"
+optional = true
+
+[tools.read_file]
+enabled = true
+description = "Read the contents of a file"
+module = "chatybot.tools.file_utils"
+function = "read_file"
+
+[tools.read_file.parameters.path]
+type = "string"
+description = "File path to read"
+optional = false
+
+[tools.find_files]
+enabled = true
+description = "Find files matching a pattern, optionally containing a literal search term"
+module = "chatybot.tools.file_utils"
+function = "find_files"
+
+[tools.find_files.parameters.path]
+type = "string"
+description = "Starting directory path"
+optional = true
+
+[tools.find_files.parameters.pattern]
+type = "string"
+description = "Filename glob pattern (e.g. *.txt)"
+optional = true
+
+[tools.find_files.parameters.search_term]
+type = "string"
+description = "Literal text substring to search for inside files (does NOT support regex or logical operators like '|')"
+optional = true
+
+[tools.run_command]
+enabled = true
+description = "Execute a shell command safely. Use shell=False, command will be split into tokens. Example: 'find . -name *.chatdsl -exec ls -l {} +'"
+module = "chatybot.tools.file_utils"
+function = "run_command"
+
+[tools.run_command.parameters.command]
+type = "string"
+description = "The shell command to execute"
+optional = false
