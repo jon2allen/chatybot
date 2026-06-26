@@ -677,7 +677,7 @@ class ChatybotApp:
             elif is_mistral:
                 # Mistral supports reasoning_effort at top level for reasoning models
                 # Check if model name suggests it's a reasoning model
-                if any(x in model_name.lower() for x in ["mistral-small-latest", "mistral-medium-3.5", "mistral-medium-2604", "magistral"]):
+                if any(x in model_name.lower() for x in ["mistral-small-latest", "mistral-medium-3.5", "mistral-medium-2604", "magistral", "devstral"]):
                     kwargs["reasoning_effort"] = self.reasoning_effort
 
         tk = self.top_k if self.top_k is not None else model_config.get("top_k")
@@ -1044,6 +1044,25 @@ class ChatybotApp:
                     print("--- END DEBUG RESPONSE ---\n")
                     self.debug_response_raw = False
                 content = message.content or ""
+                if hasattr(message, "tool_calls") and message.tool_calls:
+                    tool_calls_list = []
+                    for tc in message.tool_calls:
+                        tc_name = tc.function.name
+                        tc_args = tc.function.arguments
+                        if isinstance(tc_args, str):
+                            try:
+                                tc_args = json.loads(tc_args)
+                            except Exception:
+                                pass
+                        tool_calls_list.append({
+                            "tool": tc_name,
+                            "arguments": tc_args
+                        })
+                    if tool_calls_list:
+                        if len(tool_calls_list) == 1:
+                            content = f"```json\n{json.dumps(tool_calls_list[0])}\n```"
+                        else:
+                            content = f"```json\n{json.dumps(tool_calls_list)}\n```"
                 reasoning = (
                     getattr(
                         message,
