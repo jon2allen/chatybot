@@ -93,6 +93,25 @@ class ChatybotApp:
         self.auto_exit_pending: bool = False
         self.script_context: bool = False
         self.thoughtstyle: str = "none"
+        
+        # Run command settings
+        self.safe_mode: bool = True
+        self.run_timeout: int = 30
+        
+        # Tool mode settings
+        self.tool_mode: bool = False
+        self.tool_context: str = ""
+        self.in_tool_loop: bool = False
+        self.agentic_instructions: str = ""
+        self.tool_timeout: int = 30
+        self.default_agentic_instructions: str = (
+            "IMPORTANT: You are executing in an autonomous, multi-turn tool-calling loop. "
+            "If you need to use a tool to get information, output ONLY the single next JSON tool call "
+            "block (e.g. within ```json ... ```). DO NOT describe your plan, DO NOT offer a menu of "
+            "different options, and DO NOT ask the user for permission or input. Just output the tool "
+            "call. Only output natural language/conversation when you have finished all tool executions "
+            "and are ready to present the final result."
+        )
 
         # Trace settings
         self.trace_raw_payload: bool = False
@@ -177,7 +196,8 @@ class ChatybotApp:
                     "setvar", "notemode", "mem", "dump", "trace",
                     "thinking", "echo", "def", "reloadmacros",
                     "imagine", "imagesize", "imagequality", "saveimage", "imagedir",
-                    "listimages", "showimage", "loadimage", "documents", "rerank"
+                    "listimages", "showimage", "loadimage", "documents", "rerank",
+                    "run", "run_safe", "run_unsafe", "tool"
                     ]
 
                  )
@@ -655,33 +675,41 @@ class ChatybotApp:
         client = self.get_openai_client(model_alias)
         model_config = self.config_manager.get_model_config(model_alias)
         model_name = model_config["name"]
-        if self.matcher.matches(prompt[:12]):
-           print( "Error command verb at beginning:  " + prompt[:9] + " - use escape / sequence")
-           return ""
-        # Replace placeholders in the prompt - returns (text, image_list)
-        full_prompt, image_list = self.buffer_manager.replace_placeholders(prompt)
-
-        # Prepare the prompt with file buffer and prompt buffer if available
-        if self.buffer_manager.prompt_buffer:
-            full_prompt = self.buffer_manager.prompt_buffer + "\n\n" + full_prompt
-        if self.buffer_manager.file_buffer:
-            full_prompt = f"File:\n{self.buffer_manager.file_buffer}\n\n{full_prompt}"
-
-        # Add code-only instruction if flag is set
-        if self.code_only_flag:
-            full_prompt = (
-                "Do not explain or describe the code - generate the code requested only. "
-                + full_prompt
-            )
-
-        # Prepare messages for chat completion
-        # For multimodal (vision) models, use content array with text + images
-        if image_list:
-            content_parts = [{"type": "text", "text": full_prompt}]
-            content_parts.extend(image_list)
-            messages = [{"role": "user", "content": content_parts}]
+        
+        if isinstance(prompt, list):
+            messages = list(prompt)
         else:
-            messages = [{"role": "user", "content": full_prompt}]
+            if self.matcher.matches(prompt[:12]):
+               print( "Error command verb at beginning:  " + prompt[:9] + " - use escape / sequence")
+               return ""
+            # Replace placeholders in the prompt - returns (text, image_list)
+            full_prompt, image_list = self.buffer_manager.replace_placeholders(prompt)
+
+            # Prepare the prompt with file buffer and prompt buffer if available
+            if self.buffer_manager.prompt_buffer:
+                full_prompt = self.buffer_manager.prompt_buffer + "\n\n" + full_prompt
+            if self.buffer_manager.file_buffer:
+                full_prompt = f"File:\n{self.buffer_manager.file_buffer}\n\n{full_prompt}"
+
+            # Inject tool context if tool mode is enabled
+            if self.tool_mode and self.tool_context:
+                full_prompt = self.tool_context + "\n\n" + full_prompt
+
+            # Add code-only instruction if flag is set
+            if self.code_only_flag:
+                full_prompt = (
+                    "Do not explain or describe the code - generate the code requested only. "
+                    + full_prompt
+                )
+
+            # Prepare messages for chat completion
+            # For multimodal (vision) models, use content array with text + images
+            if image_list:
+                content_parts = [{"type": "text", "text": full_prompt}]
+                content_parts.extend(image_list)
+                messages = [{"role": "user", "content": content_parts}]
+            else:
+                messages = [{"role": "user", "content": full_prompt}]
 
         is_nvidia = (
             "nvidia" in model_config.get("base_url", "").lower()
@@ -690,6 +718,21 @@ class ChatybotApp:
         is_reasoning_model = is_nvidia or "qwen" in model_name.lower()
 
         current_system_message = self.config_manager.system_message
+        if self.tool_mode and self.tool_context:
+            if isinstance(prompt, list):
+                if current_system_message:
+                    current_system_message = self.tool_context + "\n\n" + current_system_message
+                else:
+                    current_system_message = self.tool_context
+
+            # Append agentic prompt instruction whenever tool_mode is enabled
+            instr = self.agentic_instructions or self.default_agentic_instructions
+            agentic_prompt = f"\n\n{instr}"
+            if current_system_message:
+                current_system_message += agentic_prompt
+            else:
+                current_system_message = instr
+
         if is_reasoning_model and not self.reasoning_mode:
             if current_system_message:
                 current_system_message += "\ndetailed thinking off"
@@ -800,7 +843,7 @@ class ChatybotApp:
             elif is_mistral:
                 # Mistral supports reasoning_effort at top level for reasoning models
                 # Check if model name suggests it's a reasoning model
-                if any(x in model_name.lower() for x in ["mistral-small-latest", "mistral-medium-3.5", "mistral-medium-2604", "magistral"]):
+                if any(x in model_name.lower() for x in ["mistral-small-latest", "mistral-medium-3.5", "mistral-medium-2604", "magistral", "devstral"]):
                     kwargs["reasoning_effort"] = self.reasoning_effort
 
         tk = self.top_k if self.top_k is not None else model_config.get("top_k")
@@ -914,6 +957,15 @@ class ChatybotApp:
                     except:
                         pass
                     self.debug_payload_mode = False
+
+            # Clean assistant messages to ensure they are not empty (which causes API 400 error)
+            cleaned_messages = []
+            for msg in kwargs.get("messages", []):
+                if msg.get("role") == "assistant" and not (msg.get("content") or "").strip():
+                    cleaned_messages.append({"role": "assistant", "content": " "})
+                else:
+                    cleaned_messages.append(msg)
+            kwargs["messages"] = cleaned_messages
 
             tps_records = []
             think_tokens_estimate = 0
@@ -1158,6 +1210,25 @@ class ChatybotApp:
                     print("--- END DEBUG RESPONSE ---\n")
                     self.debug_response_raw = False
                 content = message.content or ""
+                if hasattr(message, "tool_calls") and message.tool_calls:
+                    tool_calls_list = []
+                    for tc in message.tool_calls:
+                        tc_name = tc.function.name
+                        tc_args = tc.function.arguments
+                        if isinstance(tc_args, str):
+                            try:
+                                tc_args = json.loads(tc_args)
+                            except Exception:
+                                pass
+                        tool_calls_list.append({
+                            "tool": tc_name,
+                            "arguments": tc_args
+                        })
+                    if tool_calls_list:
+                        if len(tool_calls_list) == 1:
+                            content = f"```json\n{json.dumps(tool_calls_list[0])}\n```"
+                        else:
+                            content = f"```json\n{json.dumps(tool_calls_list)}\n```"
                 reasoning = (
                     getattr(
                         message,
@@ -1276,7 +1347,8 @@ class ChatybotApp:
                 self.logging_manager.log_message(f"Model: {model_alias} ({model_name})")
                 self.logging_manager.log_message(f"User: {prompt}")
 
-            self.chat_history.append((prompt, full_response))
+            if not self.in_tool_loop:
+                self.chat_history.append((prompt, full_response))
 
             # Log assistant entry with completion datetime and token count
             if self.logging_manager.logging_active:
@@ -1816,6 +1888,494 @@ class ChatybotApp:
             print(f"Error executing script: {str(e)}")
         finally:
             self.script_context = False
+
+    # =========== RUN COMMAND METHODS ===========
+
+    def check_dangerous(self, command: str) -> Optional[str]:
+        """
+        Check command for dangerous patterns.
+        
+        Args:
+            command: The shell command to check
+            
+        Returns:
+            Warning message if dangerous pattern found, None otherwise
+        """
+        import re
+        
+        DANGEROUS_PATTERNS = [
+            # Recursive deletes
+            (r'rm\s+-r\b', "Recursive delete (rm -r)"),
+            (r'rm\s+--recursive\b', "Recursive delete (rm --recursive)"),
+            (r'rm\s+-rf\b', "Recursive force delete (rm -rf)"),
+            (r'rm\s+--recursive\s+--force\b', "Recursive force delete"),
+            
+            # System directory writes
+            (r'>\s*(/dev/|/etc/|/usr/|/bin/|/sbin/|/lib/|/boot/|/var/|/opt/)', 
+             "Write to critical system directory"),
+            
+            # Shell features that could be exploited
+            (r':\s*\>\s*\S+', "Here-document"),
+            (r';\s*', "Command chaining with ;"),
+            (r'&&\s*', "AND-chain"),
+            (r'\|\s*', "OR-chain"),
+            (r'\$\(', "Command substitution"),
+            (r'`[^`]+`', "Backtick command substitution"),
+            
+            # Dangerous commands
+            (r'chmod\s+-R\b', "Recursive chmod"),
+            (r'chown\s+-R\b', "Recursive chown"),
+            (r'mkfs\b', "Filesystem creation"),
+            (r'dd\s+if=\s*', "dd command (disk operations)"),
+            (r'fdisk\b', "Partition table manipulation"),
+            (r'format\b', "Disk formatting"),
+            (r'partition\b', "Partition manipulation"),
+            (r'mount\b', "Mount filesystems"),
+            (r'umount\b', "Unmount filesystems"),
+            
+            # Privilege escalation
+            (r'sudo\b', "Privilege escalation (sudo)"),
+            (r'su\s+', "Switch user"),
+        ]
+        
+        for pattern, description in DANGEROUS_PATTERNS:
+            if re.search(pattern, command):
+                return description
+        
+        return None
+
+    def execute_shell_command(self, command: str, timeout: Optional[int] = None) -> None:
+        """
+        Execute a shell command and store output in RUN_COMPLETION and LAST_COMPLETION.
+        
+        SECURITY: Uses shlex.split() + shell=False to prevent injection.
+        Variables are substituted in Python BEFORE shell execution.
+        
+        Args:
+            command: The shell command to execute
+            timeout: Optional timeout in seconds (defaults to self.run_timeout)
+        """
+        import subprocess
+        import shlex
+        
+        if timeout is None:
+            timeout = self.run_timeout
+        
+        # CRITICAL: Variable substitution already happened in the caller
+        # So 'command' contains literal strings, not ${VAR} references
+        
+        # Check for dangerous patterns
+        danger = self.check_dangerous(command)
+        if danger:
+            if self.safe_mode:
+                self.buffer_manager.set_script_var('RUN_COMPLETION', 
+                    f"Blocked (safe mode): {danger}")
+                self.buffer_manager.set_script_var('RUN_ERROR', '')
+                self.buffer_manager.set_script_var('RUN_EXIT_CODE', '-1')
+                self.buffer_manager.set_script_var('LAST_COMPLETION', 
+                    f"Blocked (safe mode): {danger}")
+                print(f"Blocked: {danger}")
+                return
+            else:
+                confirm = input(f"Warning: {danger} Execute anyway? (y/N): ")
+                if confirm.lower() != 'y':
+                    self.buffer_manager.set_script_var('RUN_COMPLETION', "Command aborted by user")
+                    self.buffer_manager.set_script_var('RUN_ERROR', '')
+                    self.buffer_manager.set_script_var('RUN_EXIT_CODE', '-1')
+                    self.buffer_manager.set_script_var('LAST_COMPLETION', "Command aborted by user")
+                    print("Command aborted")
+                    return
+        
+        try:
+            # SAFE: No shell=True, uses shlex.split for proper tokenization
+            result = subprocess.run(
+                shlex.split(command),
+                shell=False,  # CRITICAL: Prevents shell injection
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=timeout,
+                cwd=os.getcwd()
+            )
+            
+            # Store in buffer_manager using RUN_* variables to avoid conflicts
+            self.buffer_manager.set_script_var('RUN_COMPLETION', result.stdout)
+            self.buffer_manager.set_script_var('RUN_ERROR', result.stderr)
+            self.buffer_manager.set_script_var('RUN_EXIT_CODE', str(result.returncode))
+            
+            # Also store in LAST_COMPLETION for backward compatibility
+            self.buffer_manager.set_script_var('LAST_COMPLETION', result.stdout)
+            
+            if result.returncode != 0:
+                err_text = result.stderr or result.stdout or ""
+                if err_text:
+                    print(err_text, end="")
+                if err_text and not err_text.endswith('\n'):
+                    print()
+                print(f"Command exited with code {result.returncode}")
+            else:
+                if result.stdout:
+                    print(result.stdout, end="")
+                
+        except subprocess.TimeoutExpired:
+            error_msg = f"Error: Command timed out after {timeout}s"
+            self.buffer_manager.set_script_var('RUN_COMPLETION', error_msg)
+            self.buffer_manager.set_script_var('RUN_ERROR', '')
+            self.buffer_manager.set_script_var('RUN_EXIT_CODE', '-2')
+            self.buffer_manager.set_script_var('LAST_COMPLETION', error_msg)
+            print(error_msg)
+            print("Command exited with code -2")
+        except FileNotFoundError as e:
+            error_msg = f"Error: Command not found: {e.filename}"
+            self.buffer_manager.set_script_var('RUN_COMPLETION', '')
+            self.buffer_manager.set_script_var('RUN_ERROR', error_msg)
+            self.buffer_manager.set_script_var('RUN_EXIT_CODE', '-1')
+            self.buffer_manager.set_script_var('LAST_COMPLETION', '')
+            print(error_msg)
+            print("Command exited with code -1")
+        except Exception as e:
+            error_msg = f"Error: {e}"
+            self.buffer_manager.set_script_var('RUN_COMPLETION', '')
+            self.buffer_manager.set_script_var('RUN_ERROR', error_msg)
+            self.buffer_manager.set_script_var('RUN_EXIT_CODE', '-1')
+            self.buffer_manager.set_script_var('LAST_COMPLETION', '')
+            print(error_msg)
+            print("Command exited with code -1")
+
+    def dispatch_tool(self, invocation_json: str = None) -> str:
+        """
+        Dispatch a tool invocation to the dispatcher.
+        
+        Args:
+            invocation_json: JSON string containing tool invocation. If None, uses LAST_COMPLETION.
+        
+        Returns:
+            JSON result from dispatcher as string
+        """
+        import subprocess
+        import tempfile
+        import os
+        
+        # Use LAST_COMPLETION if no invocation_json provided
+        if invocation_json is None:
+            invocation_json = self.buffer_manager.get_script_var('LAST_COMPLETION') or ""
+        
+        if not invocation_json.strip():
+            print("No tool invocation to dispatch")
+            return ""
+            
+        # Extract clean tool call if possible, to be robust to conversational formatting
+        import json
+        tool_call = self.extract_tool_call(invocation_json)
+        if tool_call:
+            invocation_json = json.dumps(tool_call)
+        
+        # Create a temporary file for the invocation
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp_file:
+            tmp_file.write(invocation_json)
+            tmp_path = tmp_file.name
+        
+        try:
+            # Build the dispatcher command
+            dispatcher_path = os.path.join(os.path.dirname(__file__), 'dispatcher.py')
+            config_path = os.path.join(os.path.dirname(__file__), 'tools_config.toml')
+            
+            # Check if dispatcher exists
+            if not os.path.exists(dispatcher_path):
+                print(f"Dispatcher not found: {dispatcher_path}")
+                return ""
+            
+            # Run the dispatcher
+            cmd = ['python3', dispatcher_path, tmp_path, '--config', config_path]
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=self.tool_timeout
+            )
+            
+            # Store result in buffer_manager
+            self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', result.stdout)
+            self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', result.stderr)
+            self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', str(result.returncode))
+            
+            if result.returncode != 0:
+                print(f"Tool dispatch failed: {result.stderr}")
+                return f"Error: Tool execution failed with exit code {result.returncode}: {result.stderr or result.stdout or 'Unknown error'}"
+            else:
+                print(f"Tool dispatched successfully")
+                return result.stdout
+            
+        except Exception as e:
+            print(f"Error dispatching tool: {e}")
+            self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
+            self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', str(e))
+            self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '-1')
+            return f"Error: Tool dispatch failed: {str(e)}"
+        finally:
+            # Clean up temp file
+            try:
+                os.unlink(tmp_path)
+            except:
+                pass
+
+    def extract_tool_call(self, text: str) -> Optional[Dict[str, Any]]:
+        """
+        Extract a tool call JSON block from conversational text.
+        Returns a dictionary if a valid tool call is found, and None otherwise.
+        """
+        import json
+        import re
+
+        def clean_json_string(s: str) -> str:
+            # Remove single line comments starting with // or #
+            lines = []
+            for line in s.split('\n'):
+                in_quote = False
+                cleaned_chars = []
+                i = 0
+                while i < len(line):
+                    if line[i] == '"' and (i == 0 or line[i-1] != '\\'):
+                        in_quote = not in_quote
+                        cleaned_chars.append(line[i])
+                    elif line[i:i+2] == '//' and not in_quote:
+                        break  # Skip the rest of the line
+                    elif line[i] == '#' and not in_quote:
+                        break  # Skip the rest of the line
+                    else:
+                        cleaned_chars.append(line[i])
+                    i += 1
+                lines.append("".join(cleaned_chars))
+            cleaned = "\n".join(lines)
+            # Remove trailing commas before closing braces/brackets
+            cleaned = re.sub(r',\s*([\]}])', r'\1', cleaned)
+            return cleaned
+
+        def normalize_tool_call(data: Any) -> Optional[Dict[str, Any]]:
+            if isinstance(data, dict) and "tool" in data:
+                tool_name = str(data["tool"])
+                if "." in tool_name:
+                    tool_name = tool_name.split(".")[-1]
+                data["tool"] = tool_name
+                return data
+            return None
+
+        text_stripped = text.strip()
+        
+        # 1. Try to parse the entire text as JSON
+        try:
+            cleaned = clean_json_string(text_stripped)
+            data = json.loads(cleaned)
+            res = normalize_tool_call(data)
+            if res:
+                return res
+        except Exception:
+            pass
+
+        # 2. Try finding a JSON block enclosed in markdown code fences
+        code_block_match = re.search(r'```(?:json)?\s*(\{[\s\S]*?\})\s*```', text)
+        if code_block_match:
+            try:
+                cleaned = clean_json_string(code_block_match.group(1).strip())
+                data = json.loads(cleaned)
+                res = normalize_tool_call(data)
+                if res:
+                    return res
+            except Exception:
+                pass
+
+        # 3. Try searching for any balanced { ... } containing "tool"
+        first_brace = text.find('{')
+        last_brace = text.rfind('}')
+        if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
+            try:
+                cleaned = clean_json_string(text[first_brace:last_brace+1])
+                data = json.loads(cleaned)
+                res = normalize_tool_call(data)
+                if res:
+                    return res
+            except Exception:
+                pass
+
+        return None
+
+    async def execute_tool_loop(self, max_turns: int) -> None:
+        """
+        Executes the autonomous agentic tool loop (Option B - History Management).
+        """
+        import json
+        
+        if not self.chat_history:
+            print("No prompt has been executed yet. Please run a prompt first.")
+            return
+
+        initial_prompt, last_completion = self.chat_history[-1]
+        
+        # Enable tool loop state
+        self.in_tool_loop = True
+
+        # Ensure tool mode is enabled when entering the loop
+        if not self.tool_mode or not self.tool_context:
+            context = self.generate_tool_context()
+            if context:
+                self.tool_mode = True
+                self.buffer_manager.set_script_var('TOOL_CONTEXT', context)
+        
+        # Build the temporary history buffer starting with past turns to preserve context
+        temp_history = []
+        for p, r in self.chat_history[:-1]:
+            temp_history.append({"role": "user", "content": p})
+            temp_history.append({"role": "assistant", "content": r})
+            
+        temp_history.append({"role": "user", "content": initial_prompt})
+        
+        current_response = last_completion
+        turn_count = 0
+        final_natural_language_response = ""
+
+        # If the last completion was natural language (not a tool call), request an initial tool call from the LLM
+        if not self.extract_tool_call(current_response):
+            print("Last completion was not a tool call. Requesting initial tool call from LLM...")
+            current_response = await self.chat_completion(temp_history, stream=self.streaming_enabled)
+        
+        print(f"Starting agentic tool loop (max turns: {max_turns})...")
+        
+        while turn_count < max_turns:
+            tool_call = self.extract_tool_call(current_response)
+            if not tool_call:
+                # Terminal state reached: model produced a natural-language response instead of a JSON tool call
+                final_natural_language_response = current_response
+                print("Terminal state reached (natural language response). Exiting loop.")
+                break
+                
+            # Document the tool call assistant response in temp history
+            temp_history.append({"role": "assistant", "content": current_response})
+            
+            tool_name = tool_call.get("tool")
+            tool_args = tool_call.get("arguments", {})
+            print(f"[Turn {turn_count+1}/{max_turns}] LLM requested tool: {tool_name}")
+            print(f"   Arguments: {json.dumps(tool_args)}")
+            
+            # Execute the tool and capture result
+            self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
+            try:
+                # dispatch_tool writes result to TOOL_DISPATCH_RESULT and returns the stdout string
+                result_str = self.dispatch_tool(json.dumps(tool_call))
+            except Exception as e:
+                result_str = json.dumps({"status": "error", "message": f"Dispatch execution error: {str(e)}"})
+                self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', result_str)
+                self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
+                
+            print(f"Tool Result: {result_str}")
+            
+            # Append the tool result back to the temp history as a user message
+            temp_history.append({"role": "user", "content": f"Tool execution result: {result_str}"})
+            
+            turn_count += 1
+            if turn_count >= max_turns:
+                print(f"Reached maximum tool loop turns ({max_turns}).")
+                print("[Final Turn] Requesting final summary completion...")
+                temp_history.append({
+                    "role": "user",
+                    "content": (
+                        "You have reached the maximum allowed turns in this loop. "
+                        "Please summarize your findings and present the final answer to the user. "
+                        "Do not output any more tool calls."
+                    )
+                })
+                final_natural_language_response = await self.chat_completion(temp_history, stream=self.streaming_enabled)
+                break
+                
+            # Request next completion from LLM using the temporary history context
+            print(f"[Turn {turn_count+1}/{max_turns}] Requesting next completion...")
+            current_response = await self.chat_completion(temp_history, stream=self.streaming_enabled)
+            
+        # Clean up loop state
+        self.in_tool_loop = False
+        
+        # If final_natural_language_response is not set, fallback
+        if not final_natural_language_response:
+            final_natural_language_response = current_response
+            
+        # Update LAST_COMPLETION to the final output
+        self.buffer_manager.set_script_var('LAST_COMPLETION', final_natural_language_response)
+        
+        # Commit ONLY the final, natural-language outcome to the main chat_history (Option B)
+        self.chat_history[-1] = (initial_prompt, final_natural_language_response)
+        
+        print("\nAgentic Tool Loop finished.")
+        print(f"Final Response:\n{final_natural_language_response}")
+
+    def generate_tool_context(self) -> str:
+        """
+        Generate tool definitions for LLM context injection.
+        Reads tools_config.toml and formats tool schemas in a way the LLM can understand.
+        
+        Returns:
+            Formatted string with tool definitions for LLM prompt
+        """
+        import os
+        
+        config_path = os.path.join(os.path.dirname(__file__), 'tools_config.toml')
+        
+        try:
+            import tomllib
+            with open(config_path, 'rb') as f:
+                config = tomllib.load(f)
+        except (ImportError, FileNotFoundError, Exception):
+            try:
+                import toml
+                with open(config_path, 'r') as f:
+                    config = toml.load(f)
+            except (ImportError, FileNotFoundError, Exception):
+                print("Could not load tools_config.toml")
+                return ""
+        
+        # Load custom agentic instructions and tool timeout if present
+        config_section = config.get('config', {})
+        if 'agentic_instructions' in config_section:
+            self.agentic_instructions = config_section.get('agentic_instructions', '').strip()
+        if 'tool_timeout' in config_section:
+            try:
+                self.tool_timeout = int(config_section.get('tool_timeout'))
+            except (ValueError, TypeError):
+                pass
+
+        tools = config.get('tools', {})
+        if not tools:
+            return ""
+        
+        # Build tool context string
+        lines = []
+        lines.append("\n=== AVAILABLE TOOLS ===")
+        lines.append("You have access to the following tools. Use them by outputting JSON in this format:")
+        lines.append('{"tool": "tool_name", "arguments": {...}}')
+        lines.append("")
+        
+        for tool_name, tool_meta in tools.items():
+            if not tool_meta.get('enabled', False):
+                continue
+            
+            desc = tool_meta.get('description', 'No description')
+            params = tool_meta.get('parameters', {})
+            
+            lines.append(f"\n**{tool_name}**")
+            lines.append(f"Description: {desc}")
+            
+            if params:
+                lines.append("Parameters:")
+                for param_name, param_rules in params.items():
+                    param_type = param_rules.get('type', 'string')
+                    param_desc = param_rules.get('description', '')
+                    optional = param_rules.get('optional', False)
+                    required = " (optional)" if optional else " (required)"
+                    lines.append(f"  - {param_name}: {param_type}{required} - {param_desc}")
+        
+        lines.append("\n=== END TOOLS ===\n")
+        
+        context = '\n'.join(lines)
+        self.tool_context = context
+        return context
 
     async def handle_escape_command(self, command: str) -> Union[bool, str]:
         """
@@ -2719,6 +3279,149 @@ class ChatybotApp:
             print(processed_text)
             return True
 
+        elif cmd == "/run":
+            if len(parts) < 2:
+                print("Usage: /run <command>")
+                return True
+            
+            # Extract the command portion (everything after "/run")
+            command_str = command.split(maxsplit=1)[1]
+            
+            # Strip only the outermost matching quotes, preserving inner quotes
+            import shlex
+            stripped_command = command_str
+            if len(command_str) >= 2:
+                first_char = command_str[0]
+                last_char = command_str[-1]
+                if first_char == last_char and first_char in ('"', "'"):
+                    # Check if the quotes are balanced (simple check for outermost pair)
+                    # Strip the outermost pair
+                    stripped_command = command_str[1:-1]
+            
+            # Validate quote balance before processing
+            try:
+                shlex.split(stripped_command)
+            except ValueError as e:
+                print(f"Error: {e}")
+                print("Tip: Mix quotes: /run find . -name \"*.md\"")
+                print("     Or: /run \"find . -name '*.md'\"")
+                print("     Escape inner quotes: /run \"find . -name \\\"*.md\\\"\"")
+                return True
+            
+            if stripped_command:
+                # Perform variable substitution before execution
+                # Note: We pass stripped_command, shlex.split in execute_shell_command will handle remaining quotes
+                processed_cmd, _ = self.buffer_manager.replace_placeholders(stripped_command, include_images=False)
+                self.execute_shell_command(processed_cmd)
+            return True
+
+        elif cmd == "/run_safe":
+            self.safe_mode = True
+            print("Safe mode enabled - dangerous patterns require confirmation")
+            return True
+
+        elif cmd == "/run_unsafe":
+            self.safe_mode = False
+            print("Safe mode disabled - dangerous commands allowed without confirmation")
+            return True
+
+        elif cmd == "/tool":
+            # Handle /tool subcommands: on, off, or dispatch
+            if len(parts) < 2:
+                # No subcommand - dispatch tool invocation from LAST_COMPLETION
+                self.dispatch_tool()
+                return True
+            
+            subcmd = parts[1].lower()
+            
+            if subcmd == "on":
+                # Enable tool mode - inject tool definitions into system prompt
+                context = self.generate_tool_context()
+                if context:
+                    self.tool_mode = True
+                    # Inject into current prompt context
+                    self.buffer_manager.set_script_var('TOOL_CONTEXT', context)
+                    print("Tool mode enabled - tool definitions loaded")
+                    print(f"   {len(context.split(chr(10)))} lines of tool context available")
+                else:
+                    print("No tools available to load")
+                return True
+            
+            elif subcmd == "off":
+                # Disable tool mode
+                self.tool_mode = False
+                self.tool_context = ""
+                self.buffer_manager.set_script_var('TOOL_CONTEXT', '')
+                print("Tool mode disabled")
+                return True
+            
+            elif subcmd == "loop":
+                max_turns = 5
+                # Extract all remaining arguments as lowercase strings by splitting the rest of the string
+                loop_args = []
+                if len(parts) > 2:
+                    loop_args = [p.lower() for p in parts[2].split()]
+                has_force = "force" in loop_args
+                
+                # Filter out 'force' to parse the turn count
+                count_args = [a for a in loop_args if a != "force"]
+                
+                if count_args:
+                    arg = count_args[0]
+                    if arg == "max":
+                        max_turns = 100
+                    elif arg.startswith("max="):
+                        try:
+                            val = int(arg.split("=")[1])
+                            if val > 100 and not has_force:
+                                print("Warning: Loop counts greater than 100 require the 'force' flag. Capping at 100.")
+                                max_turns = 100
+                            else:
+                                max_turns = val
+                        except ValueError:
+                            pass
+                    else:
+                        try:
+                            val = int(arg)
+                            if val > 100 and not has_force:
+                                print("Warning: Loop counts greater than 100 require the 'force' flag. Capping at 100.")
+                                max_turns = 100
+                            else:
+                                max_turns = val
+                        except ValueError:
+                            pass
+                await self.execute_tool_loop(max_turns)
+                return True
+            
+            elif subcmd == "prompt":
+                # Show the prompt injected during tool operation
+                context = self.tool_context or self.generate_tool_context()
+                if context:
+                    print("\n=== TOOL CONTEXT INJECTED INTO PROMPT ===")
+                    print(context)
+                    print("\n=== AGENTIC LOOP SYSTEM INSTRUCTIONS ===")
+                    print(self.agentic_instructions or self.default_agentic_instructions)
+                    print("=========================================\n")
+                else:
+                    print("No tools available or tool context could not be generated.")
+                return True
+            
+            else:
+                # Check if argument is a filename (ends with .json)
+                arg = command.split(maxsplit=1)[1]
+                if arg.endswith('.json') and os.path.exists(arg):
+                    # Read JSON from file
+                    try:
+                        with open(arg, 'r') as f:
+                            json_str = f.read()
+                        self.dispatch_tool(json_str)
+                    except Exception as e:
+                        print(f"Error reading file {arg}: {e}")
+                else:
+                    # Provide JSON directly - dispatch it
+                    self.dispatch_tool(arg)
+                return True
+
         elif cmd == "/stream":
             self.streaming_enabled = not self.streaming_enabled
             print(
@@ -3535,6 +4238,9 @@ class ChatybotApp:
         print("  /rerank \"<query>\" [, top_n=<n>] [, items=<n>] [, split=<sentence|line|paragraph>] - Semantically rerank source sentences/chunks.")
         print("  /mem [detail|debug] - Show size of buffers and script variables. Use 'detail' for element breakdowns, or 'debug' for metadata.")
         print("  /dump [varname|all] - Print content of buffers or script variables.")
+        print("  /run <command> - Execute a shell command and store output in RUN_COMPLETION (and LAST_COMPLETION).")
+        print("  /run_safe - Enable safe mode (block dangerous commands).")
+        print("  /run_unsafe - Disable safe mode (allow dangerous commands).")
         print("\nScript-specific features:")
         print("  set <name> = <value> - Define a variable")
         print("  ${name} - Reference a variable")
