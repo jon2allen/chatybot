@@ -371,3 +371,23 @@ class TestRunCommandBehavior:
             _, kwargs = mock_run.call_args
             assert kwargs.get('timeout') == 75
 
+    @pytest.mark.anyio
+    async def test_run_command_output_behavior(self, app):
+        """Verifies that running a command prints stdout on success, and prints error and exit code on failure"""
+        # Test success output
+        with patch('builtins.print') as mock_print:
+            await app.handle_escape_command('/run "echo hello"')
+            mock_print.assert_called_with("hello\n", end="")
+
+        # Test failure output
+        with patch('subprocess.run') as mock_run:
+            mock_run.return_value.returncode = 5
+            mock_run.return_value.stdout = "some stdout output"
+            mock_run.return_value.stderr = "some error stderr"
+            
+            with patch('builtins.print') as mock_print:
+                await app.handle_escape_command('/run "some_failing_command"')
+                mock_print.assert_any_call("some error stderr", end="")
+                mock_print.assert_any_call("Command exited with code 5")
+
+
