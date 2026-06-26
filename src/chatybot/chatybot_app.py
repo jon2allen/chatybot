@@ -1779,16 +1779,16 @@ class ChatybotApp:
                 self.buffer_manager.set_script_var('RUN_EXIT_CODE', '-1')
                 self.buffer_manager.set_script_var('LAST_COMPLETION', 
                     f"Blocked (safe mode): {danger}")
-                print(f"⚠️  Blocked: {danger}")
+                print(f"Blocked: {danger}")
                 return
             else:
-                confirm = input(f"⚠️  {danger} Execute anyway? (y/N): ")
+                confirm = input(f"Warning: {danger} Execute anyway? (y/N): ")
                 if confirm.lower() != 'y':
                     self.buffer_manager.set_script_var('RUN_COMPLETION', "Command aborted by user")
                     self.buffer_manager.set_script_var('RUN_ERROR', '')
                     self.buffer_manager.set_script_var('RUN_EXIT_CODE', '-1')
                     self.buffer_manager.set_script_var('LAST_COMPLETION', "Command aborted by user")
-                    print("❌ Command aborted")
+                    print("Command aborted")
                     return
         
         try:
@@ -1812,9 +1812,9 @@ class ChatybotApp:
             self.buffer_manager.set_script_var('LAST_COMPLETION', result.stdout)
             
             if result.returncode != 0:
-                print(f"⚠️  Command exited with code {result.returncode}")
+                print(f"Command exited with code {result.returncode}")
             else:
-                print(f"✅ Command executed")
+                print(f"Command executed")
                 
         except subprocess.TimeoutExpired:
             self.buffer_manager.set_script_var('RUN_COMPLETION', 
@@ -1823,19 +1823,19 @@ class ChatybotApp:
             self.buffer_manager.set_script_var('RUN_EXIT_CODE', '-2')
             self.buffer_manager.set_script_var('LAST_COMPLETION', 
                 f"Error: Command timed out after {timeout}s")
-            print(f"⏰ Timeout after {timeout}s")
+            print(f"Timeout after {timeout}s")
         except FileNotFoundError as e:
             self.buffer_manager.set_script_var('RUN_COMPLETION', '')
             self.buffer_manager.set_script_var('RUN_ERROR', f"Command not found: {e.filename}")
             self.buffer_manager.set_script_var('RUN_EXIT_CODE', '-1')
             self.buffer_manager.set_script_var('LAST_COMPLETION', '')
-            print(f"❌ Command not found: {e.filename}")
+            print(f"Command not found: {e.filename}")
         except Exception as e:
             self.buffer_manager.set_script_var('RUN_COMPLETION', '')
             self.buffer_manager.set_script_var('RUN_ERROR', str(e))
             self.buffer_manager.set_script_var('RUN_EXIT_CODE', '-1')
             self.buffer_manager.set_script_var('LAST_COMPLETION', '')
-            print(f"⚠️  Error: {e}")
+            print(f"Error: {e}")
 
     def dispatch_tool(self, invocation_json: str = None) -> str:
         """
@@ -1856,7 +1856,7 @@ class ChatybotApp:
             invocation_json = self.buffer_manager.get_script_var('LAST_COMPLETION') or ""
         
         if not invocation_json.strip():
-            print("⚠️  No tool invocation to dispatch")
+            print("No tool invocation to dispatch")
             return ""
             
         # Extract clean tool call if possible, to be robust to conversational formatting
@@ -1877,7 +1877,7 @@ class ChatybotApp:
             
             # Check if dispatcher exists
             if not os.path.exists(dispatcher_path):
-                print(f"⚠️  Dispatcher not found: {dispatcher_path}")
+                print(f"Dispatcher not found: {dispatcher_path}")
                 return ""
             
             # Run the dispatcher
@@ -1895,14 +1895,14 @@ class ChatybotApp:
             self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', str(result.returncode))
             
             if result.returncode != 0:
-                print(f"⚠️  Tool dispatch failed: {result.stderr}")
+                print(f"Tool dispatch failed: {result.stderr}")
                 return f"Error: Tool execution failed with exit code {result.returncode}: {result.stderr or result.stdout or 'Unknown error'}"
             else:
-                print(f"✅ Tool dispatched successfully")
+                print(f"Tool dispatched successfully")
                 return result.stdout
             
         except Exception as e:
-            print(f"⚠️  Error dispatching tool: {e}")
+            print(f"Error dispatching tool: {e}")
             self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
             self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', str(e))
             self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '-1')
@@ -2123,7 +2123,7 @@ class ChatybotApp:
                 with open(config_path, 'r') as f:
                     config = toml.load(f)
             except (ImportError, FileNotFoundError, Exception):
-                print("⚠️  Could not load tools_config.toml")
+                print("Could not load tools_config.toml")
                 return ""
         
         # Load custom agentic instructions if present
@@ -3092,7 +3092,7 @@ class ChatybotApp:
             try:
                 shlex.split(stripped_command)
             except ValueError as e:
-                print(f"⚠️  Error: {e}")
+                print(f"Error: {e}")
                 print("Tip: Mix quotes: /run find . -name \"*.md\"")
                 print("     Or: /run \"find . -name '*.md'\"")
                 print("     Escape inner quotes: /run \"find . -name \\\"*.md\\\"\"")
@@ -3107,12 +3107,12 @@ class ChatybotApp:
 
         elif cmd == "/run_safe":
             self.safe_mode = True
-            print("✅ Safe mode enabled - dangerous patterns require confirmation")
+            print("Safe mode enabled - dangerous patterns require confirmation")
             return True
 
         elif cmd == "/run_unsafe":
             self.safe_mode = False
-            print("⚠️  Safe mode disabled - dangerous commands allowed without confirmation")
+            print("Safe mode disabled - dangerous commands allowed without confirmation")
             return True
 
         elif cmd == "/tool":
@@ -3131,10 +3131,10 @@ class ChatybotApp:
                     self.tool_mode = True
                     # Inject into current prompt context
                     self.buffer_manager.set_script_var('TOOL_CONTEXT', context)
-                    print("✅ Tool mode enabled - tool definitions loaded")
+                    print("Tool mode enabled - tool definitions loaded")
                     print(f"   {len(context.split(chr(10)))} lines of tool context available")
                 else:
-                    print("⚠️  No tools available to load")
+                    print("No tools available to load")
                 return True
             
             elif subcmd == "off":
@@ -3142,7 +3142,7 @@ class ChatybotApp:
                 self.tool_mode = False
                 self.tool_context = ""
                 self.buffer_manager.set_script_var('TOOL_CONTEXT', '')
-                print("✅ Tool mode disabled")
+                print("Tool mode disabled")
                 return True
             
             elif subcmd == "loop":
@@ -3164,7 +3164,7 @@ class ChatybotApp:
                         try:
                             val = int(arg.split("=")[1])
                             if val > 100 and not has_force:
-                                print("⚠️  Warning: Loop counts greater than 100 require the 'force' flag. Capping at 100.")
+                                print("Warning: Loop counts greater than 100 require the 'force' flag. Capping at 100.")
                                 max_turns = 100
                             else:
                                 max_turns = val
@@ -3174,7 +3174,7 @@ class ChatybotApp:
                         try:
                             val = int(arg)
                             if val > 100 and not has_force:
-                                print("⚠️  Warning: Loop counts greater than 100 require the 'force' flag. Capping at 100.")
+                                print("Warning: Loop counts greater than 100 require the 'force' flag. Capping at 100.")
                                 max_turns = 100
                             else:
                                 max_turns = val
@@ -3193,7 +3193,7 @@ class ChatybotApp:
                     print(self.agentic_instructions or self.default_agentic_instructions)
                     print("=========================================\n")
                 else:
-                    print("⚠️  No tools available or tool context could not be generated.")
+                    print("No tools available or tool context could not be generated.")
                 return True
             
             else:
@@ -3206,7 +3206,7 @@ class ChatybotApp:
                             json_str = f.read()
                         self.dispatch_tool(json_str)
                     except Exception as e:
-                        print(f"⚠️  Error reading file {arg}: {e}")
+                        print(f"Error reading file {arg}: {e}")
                 else:
                     # Provide JSON directly - dispatch it
                     self.dispatch_tool(arg)
