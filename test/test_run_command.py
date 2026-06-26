@@ -98,7 +98,7 @@ class TestRunCommandBehavior:
         with patch('builtins.print') as mock_print:
             await app.handle_escape_command('/run "echo hello')
             # Should print error message
-            mock_print.assert_any_call("⚠️  Error: No closing quotation")
+            mock_print.assert_any_call("Error: No closing quotation")
 
     @pytest.mark.anyio
     async def test_tool_mode_toggle(self, app):
