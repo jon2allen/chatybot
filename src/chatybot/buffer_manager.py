@@ -187,6 +187,18 @@ class BufferManager:
         self.script_vars[var_name] = var_value
         print(f"Variable '{var_name}' set.")
 
+    def get_script_var(self, var_name: str) -> Optional[str]:
+        """
+        Get a script variable value.
+        
+        Args:
+            var_name: Name of the variable
+            
+        Returns:
+            Value of the variable, or None if not found
+        """
+        return self.script_vars.get(var_name)
+
     def detect_image_format(self, file_path: str) -> str:
         """Detect image MIME type from file extension."""
         ext = Path(file_path).suffix.lower()
@@ -426,7 +438,7 @@ class BufferManager:
         text_prompt, _ = self.replace_placeholders(prompt, include_images=False)
         return text_prompt
     
-    def show_memory_usage(self, search_buffer: list = None, detail: bool = False, debug: bool = False) -> None:
+    def show_memory_usage(self, search_buffer: list = None, detail: bool = False, debug: bool = False, chat_history: list = None) -> None:
         """Show size of the file buffer, filebanks, image banks, and script variables in KB."""
         if debug:
             print("\n--- SCRIPT_VARS DEBUG METADATA ---")
@@ -506,6 +518,12 @@ class BufferManager:
                     item_size = len(item_str.encode('utf-8')) / 1024
                     item_preview = item_str.strip().replace('\n', ' ')[:50]
                     print(f"    [{idx}] {item_size:.2f} KB | {item_preview}...")
+        
+        # LAST_RESPONSE (from chat history)
+        if chat_history is not None and chat_history:
+            last_response = chat_history[-1][1]
+            last_response_size = len(last_response.encode('utf-8')) / 1024
+            print(f"{'LAST_RESPONSE':<20} {last_response_size:>10.2f}")
             
         # Script Variables
         for var_name, var_value in self.script_vars.items():
@@ -561,6 +579,11 @@ class BufferManager:
                     print(f"  [{i}] PROMPT: {prompt[:100]}{'...' if len(prompt) > 100 else ''}")
                     print(f"      RESPONSE: {response[:100]}{'...' if len(response) > 100 else ''}")
                 
+            # Show LAST_RESPONSE
+            if chat_history is not None and chat_history:
+                last_response = chat_history[-1][1]
+                print(f"LAST_RESPONSE: {last_response[:200]}{'...' if len(last_response) > 200 else ''}")
+            
             for var_name, var_value in self.script_vars.items():
                 print(f"SCRIPT_VAR '{var_name}': {var_value}")
             print("--- END DUMP ---\n")

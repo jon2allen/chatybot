@@ -477,7 +477,7 @@ class HelpSystem:
             category="debug",
             short_desc="Show size of buffers and variables",
             usage="/mem",
-            long_desc="Display memory usage information including buffer sizes and script variable counts.",
+            long_desc="Display memory usage information including buffer sizes, LAST_RESPONSE, and script variable counts.",
             examples=["/mem"]
         ))
         
@@ -486,8 +486,8 @@ class HelpSystem:
             category="debug",
             short_desc="Print content of buffers or variables",
             usage="/dump [varname|all]",
-            long_desc="Print the contents of buffers or script variables. Use 'all' to dump everything.",
-            examples=["/dump filebank1", "/dump all"]
+            long_desc="Print the contents of buffers or script variables. Use 'all' to dump everything. Supports LAST_RESPONSE.",
+            examples=["/dump filebank1", "/dump all", "/dump LAST_RESPONSE"]
         ))
         
         # Search command
@@ -508,6 +508,47 @@ class HelpSystem:
             usage="/quit",
             long_desc="Exit ChatyBot.",
             examples=["/quit"]
+        ))
+        
+        # Shell execution and tool extraction commands
+        self.register_command(CommandHelp(
+            name="/run",
+            category="scripting",
+            short_desc="Execute a shell command",
+            usage="/run <command>",
+            long_desc="Execute a shell command and store the output in RUN_COMPLETION (stdout), RUN_ERROR (stderr), RUN_EXIT_CODE (return code). Also stores in LAST_COMPLETION for backward compatibility. Supports variable substitution with ${VAR} syntax.",
+            examples=["/run echo hello", "/run df -h", "/run echo ${VAR}", "/echo ${RUN_COMPLETION}"],
+            see_also=["/run_safe", "/run_unsafe"]
+        ))
+        
+        self.register_command(CommandHelp(
+            name="/run_safe",
+            category="scripting",
+            short_desc="Enable safe mode for /run commands",
+            usage="/run_safe",
+            long_desc="Enable safe mode (default). In safe mode, dangerous shell commands (like rm -rf, sudo, etc.) are blocked or require explicit user confirmation.",
+            examples=["/run_safe"],
+            see_also=["/run_unsafe", "/run"]
+        ))
+        
+        self.register_command(CommandHelp(
+            name="/run_unsafe",
+            category="scripting",
+            short_desc="Disable safe mode for /run commands",
+            usage="/run_unsafe",
+            long_desc="Disable safe mode. Dangerous shell commands will be allowed without confirmation. Use with caution!",
+            examples=["/run_unsafe"],
+            see_also=["/run_safe", "/run"]
+        ))
+        
+        self.register_command(CommandHelp(
+            name="/tool",
+            category="scripting",
+            short_desc="Manage tool mode and dispatch tool invocations",
+            usage="/tool [on|off|prompt|<json_file.json>|<json_invocation>]",
+            long_desc="Manage tool mode for LLM tool calling. When tool mode is on, tool definitions from tools_config.toml are available for the LLM to use.\n\nSubcommands:\n  /tool on - Enable tool mode, inject tool definitions into context\n  /tool off - Disable tool mode\n  /tool prompt - Show the prompts injected during tool operation\n  /tool <file.json> - Dispatch tool invocation from JSON file\n  /tool [json] - Dispatch a tool invocation directly (uses LAST_COMPLETION if no argument provided)",
+            examples=["/tool on", "/tool off", "/tool prompt", "/tool", "/tool find1.json", "/tool {\"tool\": \"list_directory\", \"arguments\": {\"path\": \".\"}}"],
+            see_also=["/run"]
         ))
     
     def register_command(self, cmd_help: CommandHelp) -> None:
