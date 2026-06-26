@@ -1813,30 +1813,40 @@ class ChatybotApp:
             self.buffer_manager.set_script_var('LAST_COMPLETION', result.stdout)
             
             if result.returncode != 0:
+                err_text = result.stderr or result.stdout or ""
+                if err_text:
+                    print(err_text, end="")
+                if err_text and not err_text.endswith('\n'):
+                    print()
                 print(f"Command exited with code {result.returncode}")
             else:
-                print(f"Command executed")
+                if result.stdout:
+                    print(result.stdout, end="")
                 
         except subprocess.TimeoutExpired:
-            self.buffer_manager.set_script_var('RUN_COMPLETION', 
-                f"Error: Command timed out after {timeout}s")
+            error_msg = f"Error: Command timed out after {timeout}s"
+            self.buffer_manager.set_script_var('RUN_COMPLETION', error_msg)
             self.buffer_manager.set_script_var('RUN_ERROR', '')
             self.buffer_manager.set_script_var('RUN_EXIT_CODE', '-2')
-            self.buffer_manager.set_script_var('LAST_COMPLETION', 
-                f"Error: Command timed out after {timeout}s")
-            print(f"Timeout after {timeout}s")
+            self.buffer_manager.set_script_var('LAST_COMPLETION', error_msg)
+            print(error_msg)
+            print("Command exited with code -2")
         except FileNotFoundError as e:
+            error_msg = f"Error: Command not found: {e.filename}"
             self.buffer_manager.set_script_var('RUN_COMPLETION', '')
-            self.buffer_manager.set_script_var('RUN_ERROR', f"Command not found: {e.filename}")
+            self.buffer_manager.set_script_var('RUN_ERROR', error_msg)
             self.buffer_manager.set_script_var('RUN_EXIT_CODE', '-1')
             self.buffer_manager.set_script_var('LAST_COMPLETION', '')
-            print(f"Command not found: {e.filename}")
+            print(error_msg)
+            print("Command exited with code -1")
         except Exception as e:
+            error_msg = f"Error: {e}"
             self.buffer_manager.set_script_var('RUN_COMPLETION', '')
-            self.buffer_manager.set_script_var('RUN_ERROR', str(e))
+            self.buffer_manager.set_script_var('RUN_ERROR', error_msg)
             self.buffer_manager.set_script_var('RUN_EXIT_CODE', '-1')
             self.buffer_manager.set_script_var('LAST_COMPLETION', '')
-            print(f"Error: {e}")
+            print(error_msg)
+            print("Command exited with code -1")
 
     def dispatch_tool(self, invocation_json: str = None) -> str:
         """
