@@ -336,6 +336,38 @@ class TestRunCommandBehavior:
         assert call2["tool"] == "list_directory"
 
     @pytest.mark.anyio
+    async def test_native_tool_calls_mapping(self, app):
+        """Verifies that native tool_calls in API response are successfully mapped to JSON blocks in chat_completion"""
+        app.initialize()
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_message = MagicMock()
+        
+        # Configure tool call object
+        mock_tool_call = MagicMock()
+        mock_tool_call.function.name = "list_directory"
+        mock_tool_call.function.arguments = '{"path": "/github2"}'
+        
+        mock_message.content = None
+        mock_message.tool_calls = [mock_tool_call]
+        mock_message.reasoning_content = None
+        mock_message.reasoning = None
+        
+        mock_response.choices = [MagicMock(message=mock_message)]
+        mock_response.usage.prompt_tokens = 100
+        mock_response.usage.completion_tokens = 15
+        
+        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+        
+        with patch.object(app, 'get_openai_client', return_value=mock_client):
+            res = await app.chat_completion("hello world", stream=False)
+            
+            # The result should be formatted as a JSON tool call block
+            assert "list_directory" in res
+            assert "/github2" in res
+            assert "```json" in res
+
+    @pytest.mark.anyio
     async def test_tool_prompt_subcommand(self, app):
         """Verifies that the /tool prompt escape command generates/shows the correct context and instructions"""
         app.generate_tool_context = MagicMock(return_value="=== AVAILABLE TOOLS ===\ntool: list_directory")
