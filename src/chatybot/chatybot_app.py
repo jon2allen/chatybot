@@ -2246,6 +2246,9 @@ class ChatybotApp:
         # If the last completion was natural language (not a tool call), request an initial tool call from the LLM
         if not self.extract_tool_call(current_response):
             print("Last completion was not a tool call. Requesting initial tool call from LLM...")
+            if getattr(self, 'rate_limit_delay', 0.0) > 0.0:
+                print(f"Pausing for {self.rate_limit_delay}s rate limit delay...")
+                await asyncio.sleep(self.rate_limit_delay)
             current_response = await self.chat_completion(temp_history, stream=self.streaming_enabled)
         
         print(f"Starting agentic tool loop (max turns: {max_turns})...")
@@ -2303,6 +2306,9 @@ class ChatybotApp:
                 
             # Request next completion from LLM using the temporary history context
             print(f"[Turn {turn_count+1}/{max_turns}] Requesting next completion...")
+            if getattr(self, 'rate_limit_delay', 0.0) > 0.0:
+                print(f"Pausing for {self.rate_limit_delay}s rate limit delay...")
+                await asyncio.sleep(self.rate_limit_delay)
             current_response = await self.chat_completion(temp_history, stream=self.streaming_enabled)
             
         # Clean up loop state
@@ -2353,6 +2359,11 @@ class ChatybotApp:
         if 'tool_timeout' in config_section:
             try:
                 self.tool_timeout = int(config_section.get('tool_timeout'))
+            except (ValueError, TypeError):
+                pass
+        if 'rate_limit_delay' in config_section:
+            try:
+                self.rate_limit_delay = float(config_section.get('rate_limit_delay'))
             except (ValueError, TypeError):
                 pass
 
