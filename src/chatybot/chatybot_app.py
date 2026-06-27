@@ -2124,6 +2124,14 @@ class ChatybotApp:
         Extract a tool call JSON block from conversational text.
         Returns a dictionary if a valid tool call is found, and None otherwise.
         """
+        calls = self.extract_tool_calls(text)
+        return calls[0] if calls else None
+
+    def extract_tool_calls(self, text: str) -> List[Dict[str, Any]]:
+        """
+        Extract all tool call JSON blocks from conversational text.
+        Returns a list of dictionaries for all valid tool calls found.
+        """
         import json
         import re
 
@@ -2160,44 +2168,46 @@ class ChatybotApp:
                 return data
             return None
 
-        text_stripped = text.strip()
-        
-        # 1. Try to parse the entire text as JSON
-        try:
-            cleaned = clean_json_string(text_stripped)
-            data = json.loads(cleaned)
-            res = normalize_tool_call(data)
-            if res:
-                return res
-        except Exception:
-            pass
-
-        # 2. Try finding a JSON block enclosed in markdown code fences
-        code_block_match = re.search(r'```(?:json)?\s*(\{[\s\S]*?\})\s*```', text)
-        if code_block_match:
-            try:
-                cleaned = clean_json_string(code_block_match.group(1).strip())
-                data = json.loads(cleaned)
-                res = normalize_tool_call(data)
-                if res:
-                    return res
-            except Exception:
-                pass
-
-        # 3. Try searching for any balanced { ... } containing "tool"
-        first_brace = text.find('{')
-        last_brace = text.rfind('}')
-        if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
-            try:
-                cleaned = clean_json_string(text[first_brace:last_brace+1])
-                data = json.loads(cleaned)
-                res = normalize_tool_call(data)
-                if res:
-                    return res
-            except Exception:
-                pass
-
-        return None
+        # Parse to find all balanced JSON objects { ... } in the text
+        tool_calls = []
+        i = 0
+        n = len(text)
+        while i < n:
+            if text[i] == '{':
+                brace_count = 1
+                j = i + 1
+                in_quote = False
+                escaped = False
+                while j < n and brace_count > 0:
+                    char = text[j]
+                    if escaped:
+                        escaped = False
+                    elif char == '\\':
+                        escaped = True
+                    elif char == '"':
+                        in_quote = not in_quote
+                    elif not in_quote:
+                        if char == '{':
+                            brace_count += 1
+                        elif char == '}':
+                            brace_count -= 1
+                    j += 1
+                
+                if brace_count == 0:
+                    candidate = text[i:j]
+                    try:
+                        cleaned = clean_json_string(candidate)
+                        data = json.loads(cleaned)
+                        res = normalize_tool_call(data)
+                        if res:
+                            tool_calls.append(res)
+                            # Move index to the end of this parsed block
+                            i = j - 1
+                    except Exception:
+                        pass
+            i += 1
+            
+        return tool_calls
 
     async def execute_tool_loop(self, max_turns: int) -> None:
         """
@@ -2241,8 +2251,8 @@ class ChatybotApp:
         print(f"Starting agentic tool loop (max turns: {max_turns})...")
         
         while turn_count < max_turns:
-            tool_call = self.extract_tool_call(current_response)
-            if not tool_call:
+            tool_calls = self.extract_tool_calls(current_response)
+            if not tool_calls:
                 # Terminal state reached: model produced a natural-language response instead of a JSON tool call
                 final_natural_language_response = current_response
                 print("Terminal state reached (natural language response). Exiting loop.")
@@ -2251,27 +2261,32 @@ class ChatybotApp:
             # Document the tool call assistant response in temp history
             temp_history.append({"role": "assistant", "content": current_response})
             
-            tool_name = tool_call.get("tool")
-            tool_args = tool_call.get("arguments", {})
-            print(f"[Turn {turn_count+1}/{max_turns}] LLM requested tool: {tool_name}")
-            print(f"   Arguments: {json.dumps(tool_args)}")
-            
-            # Execute the tool and capture result
-            self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
-            try:
-                # dispatch_tool writes result to TOOL_DISPATCH_RESULT and returns the stdout string
-                result_str = self.dispatch_tool(json.dumps(tool_call))
-            except Exception as e:
-                result_str = json.dumps({"status": "error", "message": f"Dispatch execution error: {str(e)}"})
-                self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', result_str)
-                self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
+            results = []
+            for tc in tool_calls:
+                tool_name = tc.get("tool")
+                tool_args = tc.get("arguments", {})
+                print(f"[Turn {turn_count+1}/{max_turns}] LLM requested tool: {tool_name}")
+                print(f"   Arguments: {json.dumps(tool_args)}")
                 
-            print(f"Tool Result: {result_str}")
+                # Execute the tool and capture result
+                self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
+                try:
+                    # dispatch_tool writes result to TOOL_DISPATCH_RESULT and returns the stdout string
+                    result_str = self.dispatch_tool(json.dumps(tc))
+                except Exception as e:
+                    result_str = json.dumps({"status": "error", "message": f"Dispatch execution error: {str(e)}"})
+                    self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', result_str)
+                    self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
+                    
+                print(f"Tool Result: {result_str}")
+                results.append(f"Tool: {tool_name}\nArguments: {json.dumps(tool_args)}\nResult: {result_str}")
             
             # Append the tool result back to the temp history as a user message
-            temp_history.append({"role": "user", "content": f"Tool execution result: {result_str}"})
+            combined_results = "\n\n".join(results)
+            temp_history.append({"role": "user", "content": f"Tool execution results:\n{combined_results}"})
             
             turn_count += 1
+
             if turn_count >= max_turns:
                 print(f"Reached maximum tool loop turns ({max_turns}).")
                 print("[Final Turn] Requesting final summary completion...")
