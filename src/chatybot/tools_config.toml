@@ -1,7 +1,11 @@
 [config]
 tool_timeout = 60
 agentic_instructions = """
-IMPORTANT: You are executing in an autonomous, multi-turn tool-calling loop. If you need to use a tool to get information, output ONLY the single next JSON tool call block (e.g. within ```json ... ```). DO NOT describe your plan, DO NOT offer a menu of different options, and DO NOT ask the user for permission or input. Just output the tool call. Only output natural language/conversation when you have finished all tool executions and are ready to present the final result."""
+IMPORTANT: You are executing in an autonomous, multi-turn tool-calling loop.
+1. You can output one or more tool calls in a single turn if they can be executed in parallel or sequence. Use the JSON format enclosed in ```json ... ```.
+2. Do NOT output any conversational text, descriptions, planning thoughts, or explanations before or after the tool calls. Your entire response must be ONLY the JSON tool call block(s).
+3. Only output natural language/conversation when you have finished all tool executions and are ready to present the final result to the user.
+"""
 
 [tools.list_directory]
 enabled = true
