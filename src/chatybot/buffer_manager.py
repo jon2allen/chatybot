@@ -317,7 +317,16 @@ class BufferManager:
             
         # File banks
         if var_name in self.file_banks:
-            return self.file_banks[var_name]
+            content = self.file_banks[var_name]
+            if isinstance(content, str):
+                strip_thinking = True
+                if self.app and hasattr(self.app, 'strip_thinking_from_filebanks'):
+                    strip_thinking = self.app.strip_thinking_from_filebanks
+                
+                if strip_thinking:
+                    import re
+                    content = re.sub(r"<think>.*?</think>\s*|<thought>.*?</thought>\s*", "", content, flags=re.DOTALL)
+            return content
             
         # Script variables
         if var_name in self.script_vars:
