@@ -766,6 +766,19 @@ class ChatybotApp:
             # Wrap user prompt with nanbeige_code specific formatting
             messages[0]["content"] = f"<think></think> {messages[0]['content']}, no comentary or explaination. use response tokens only. code only, code only"
 
+        if getattr(self, 'in_tool_loop', False) and messages:
+            for msg in reversed(messages):
+                if msg.get("role") == "user":
+                    content = msg.get("content", "")
+                    if isinstance(content, str) and "Do not output any more tool calls" in content:
+                        break
+                    reminder = "\n\n(Reminder: You are in a tool loop. You MUST output ONLY the JSON tool call(s) wrapped in ```json and ``` code fences. Do NOT write any conversational text, descriptions, or explanations before or after the JSON block.)"
+                    if isinstance(content, str):
+                        msg["content"] = content + reminder
+                    elif isinstance(content, list):
+                        msg["content"].append({"type": "text", "text": reminder})
+                    break
+
         if is_old_gemma:
             # Fallback: Prepend system message to the user message for older Gemma models
             if current_system_message:
@@ -1187,7 +1200,41 @@ class ChatybotApp:
                 else:
                     full_response = full_content
             else:
-                response = await client.chat.completions.create(**kwargs)
+                max_retries = 3
+                retry_count = 0
+                while retry_count < max_retries:
+                    response = await client.chat.completions.create(**kwargs)
+                    if not getattr(response, "choices", None):
+                        is_transient = False
+                        code = None
+                        try:
+                            if hasattr(response, "model_dump"):
+                                err_dict = response.model_dump().get("error", {})
+                                code = err_dict.get("code")
+                                msg_lower = str(err_dict.get("message", "")).lower()
+                                if code in (502, 503, 504, 429) or "timeout" in msg_lower or "limit" in msg_lower:
+                                    is_transient = True
+                        except Exception:
+                            pass
+                        
+                        if is_transient and retry_count < max_retries - 1:
+                            retry_count += 1
+                            sleep_time = 2 ** retry_count
+                            print(f"Transient error {code or 'timeout'} encountered. Retrying in {sleep_time}s...")
+                            await asyncio.sleep(sleep_time)
+                            continue
+                    break
+
+                if not getattr(response, "choices", None):
+                    error_info = ""
+                    try:
+                        if hasattr(response, "model_dump"):
+                            error_info = json.dumps(response.model_dump(), indent=2)
+                        else:
+                            error_info = str(response)
+                    except Exception:
+                        error_info = str(response)
+                    raise ValueError(f"API response did not return any choices. Response details: {error_info}")
                 message = response.choices[0].message
                 if self.debug_response_mode:
 
@@ -1372,6 +1419,8 @@ class ChatybotApp:
 
             return full_response
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             error_msg = f"Error during chat completion: {str(e)}"
             print(error_msg)
             if self.logging_manager.logging_active:
