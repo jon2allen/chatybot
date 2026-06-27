@@ -104,6 +104,8 @@ class ChatybotApp:
         self.in_tool_loop: bool = False
         self.agentic_instructions: str = ""
         self.tool_timeout: int = 30
+        self.rate_limit_delay: float = 0.0
+        self.strip_thinking_from_filebanks: bool = True
         self.default_agentic_instructions: str = (
             "IMPORTANT: You are executing in an autonomous, multi-turn tool-calling loop. "
             "If you need to use a tool to get information, output ONLY the single next JSON tool call "
@@ -2338,6 +2340,9 @@ class ChatybotApp:
             temp_history.append({"role": "user", "content": f"Tool execution results:\n{combined_results}"})
             
             turn_count += 1
+            if getattr(self, 'rate_limit_delay', 0.0) > 0.0:
+                print(f"Pausing for {self.rate_limit_delay}s rate limit delay...")
+                await asyncio.sleep(self.rate_limit_delay)
 
             if turn_count >= max_turns:
                 print(f"Reached maximum tool loop turns ({max_turns}).")
@@ -2355,9 +2360,6 @@ class ChatybotApp:
                 
             # Request next completion from LLM using the temporary history context
             print(f"[Turn {turn_count+1}/{max_turns}] Requesting next completion...")
-            if getattr(self, 'rate_limit_delay', 0.0) > 0.0:
-                print(f"Pausing for {self.rate_limit_delay}s rate limit delay...")
-                await asyncio.sleep(self.rate_limit_delay)
             current_response = await self.chat_completion(temp_history, stream=self.streaming_enabled)
             
         # Clean up loop state
@@ -2415,6 +2417,14 @@ class ChatybotApp:
                 self.rate_limit_delay = float(config_section.get('rate_limit_delay'))
             except (ValueError, TypeError):
                 pass
+        if 'strip_thinking_from_filebanks' in config_section:
+            val = config_section.get('strip_thinking_from_filebanks')
+            if isinstance(val, bool):
+                self.strip_thinking_from_filebanks = val
+            elif str(val).lower() in ('true', '1', 'yes', 'on'):
+                self.strip_thinking_from_filebanks = True
+            elif str(val).lower() in ('false', '0', 'no', 'off'):
+                self.strip_thinking_from_filebanks = False
 
         tools = config.get('tools', {})
         if not tools:
