@@ -690,7 +690,6 @@ June 28th, 2026 (v0.6.0)
 
 June 27th, 2026
 ---------------
-- **Native Tool Calling Tracing Tools**: Added trace diagnostics in `scratch/` (`trace_openai_tools.py`, `trace_raw_tokens.py`, and `trace_mistral_stream.py`) to inspect raw payload tokens and stream chunk handling.
 - **Empty API Content Response Resolve**: Handled API response validation and mapped native `tool_calls` structures to prevent "empty content" parse issues for models like `devstral-2512`.
 - **Parallel Tool execution & Timeout Prevention**: Supported multiple parallel tool call extraction/execution and added configurable trace thinking exclusion parameters to prevent transient timeouts.
 - **Rate Limit Delay Configuration**: Introduced rate limit delays configurable via `tools_config.toml` and applied them to the autonomous tool loop.
