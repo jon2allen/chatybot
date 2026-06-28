@@ -545,9 +545,9 @@ class HelpSystem:
             name="/tool",
             category="scripting",
             short_desc="Manage tool mode and dispatch tool invocations",
-            usage="/tool [on|off|prompt|<json_file.json>|<json_invocation>]",
-            long_desc="Manage tool mode for LLM tool calling. When tool mode is on, tool definitions from tools_config.toml are available for the LLM to use.\n\nSubcommands:\n  /tool on - Enable tool mode, inject tool definitions into context\n  /tool off - Disable tool mode\n  /tool prompt - Show the prompts injected during tool operation\n  /tool <file.json> - Dispatch tool invocation from JSON file\n  /tool [json] - Dispatch a tool invocation directly (uses LAST_COMPLETION if no argument provided)",
-            examples=["/tool on", "/tool off", "/tool prompt", "/tool", "/tool find1.json", "/tool {\"tool\": \"list_directory\", \"arguments\": {\"path\": \".\"}}"],
+            usage="/tool [on|off|prompt|loop [turns|max|max=val] [force]|<json_file.json>|<json_invocation>]",
+            long_desc="Manage tool mode for LLM tool calling. When tool mode is on, tool definitions from tools_config.toml are available for the LLM to use.\n\nSubcommands:\n  /tool on - Enable tool mode, inject tool definitions into context\n  /tool off - Disable tool mode\n  /tool prompt - Show the prompts injected during tool operation\n  /tool loop [turns|max|max=val] [force] - Start the autonomous agentic tool loop. Runs for the specified number of turns (default 5). Use 'max' or 'max=100' to set limits. Loop counts greater than 100 require the 'force' flag.\n  /tool <file.json> - Dispatch tool invocation from JSON file\n  /tool [json] - Dispatch a tool invocation directly (uses LAST_COMPLETION if no argument provided)",
+            examples=["/tool on", "/tool off", "/tool prompt", "/tool loop", "/tool loop max", "/tool loop 150 force", "/tool find1.json", "/tool {\"tool\": \"list_directory\", \"arguments\": {\"path\": \".\"}}"],
             see_also=["/run"]
         ))
     
