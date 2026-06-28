@@ -682,7 +682,7 @@ chat --> Create a blog post outline about ${topic}
 
 ### Change log
 
-June 28th, 2026 (v0.5.6)
+June 28th, 2026 (v0.6.0)
 ------------------------
 - **Command Help System Expansion**: Updated the global `/help /tool` command definitions to fully document `/tool loop` subcommands including turn limits (`max`, `max=val`) and the `force` override parameters.
 - **ChatDSL Integration & Verification**: Validated and verified `/run` and `/tool` commands within `.chatdsl` scripts, adding robust unit tests for script parser compatibility, variable scoping, and conditional evaluations.
