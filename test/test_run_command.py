@@ -422,4 +422,37 @@ class TestRunCommandBehavior:
                 mock_print.assert_any_call("some error stderr", end="")
                 mock_print.assert_any_call("Command exited with code 5")
 
+    @pytest.mark.anyio
+    async def test_execute_script_tool_run(self, app):
+        """Verifies that running a ChatDSL script containing /run and /tool works correctly"""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.chatdsl', delete=False) as f:
+            f.write(
+                "set TEST_VAR = \"Hello World\"\n"
+                "/echo ${TEST_VAR}\n"
+                "/run echo \"Executed from ChatDSL\"\n"
+                "if ${RUN_EXIT_CODE} == 0 then /echo Run command succeeded!\n"
+                "/tool on\n"
+                "/tool off\n"
+            )
+            script_path = f.name
+
+        try:
+            with patch('subprocess.run') as mock_run, \
+                 patch('builtins.print') as mock_print:
+                mock_run.return_value.returncode = 0
+                mock_run.return_value.stdout = "Executed from ChatDSL\n"
+                mock_run.return_value.stderr = ""
+                
+                # Mock generate_tool_context to return tool headers
+                app.generate_tool_context = MagicMock(return_value="tool_context")
+                
+                await app.execute_script(script_path)
+                
+                # Verify that tool mode was toggled on and off
+                assert app.tool_mode is False  # Because "/tool off" ran last
+        finally:
+            if os.path.exists(script_path):
+                os.remove(script_path)
+
+
 
