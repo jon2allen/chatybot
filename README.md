@@ -682,6 +682,19 @@ chat --> Create a blog post outline about ${topic}
 
 ### Change log
 
+June 28th, 2026 (v0.5.6)
+------------------------
+- **Command Help System Expansion**: Updated the global `/help /tool` command definitions to fully document `/tool loop` subcommands including turn limits (`max`, `max=val`) and the `force` override parameters.
+- **ChatDSL Integration & Verification**: Validated and verified `/run` and `/tool` commands within `.chatdsl` scripts, adding robust unit tests for script parser compatibility, variable scoping, and conditional evaluations.
+- **Advanced Documentation Overhaul**: Detailed local shell execution (`/run`), autonomous tool loops (`/tool`), and `tools_config.toml` structure in the main README.
+
+June 27th, 2026
+---------------
+- **Native Tool Calling Tracing Tools**: Added trace diagnostics in `scratch/` (`trace_openai_tools.py`, `trace_raw_tokens.py`, and `trace_mistral_stream.py`) to inspect raw payload tokens and stream chunk handling.
+- **Empty API Content Response Resolve**: Handled API response validation and mapped native `tool_calls` structures to prevent "empty content" parse issues for models like `devstral-2512`.
+- **Parallel Tool execution & Timeout Prevention**: Supported multiple parallel tool call extraction/execution and added configurable trace thinking exclusion parameters to prevent transient timeouts.
+- **Rate Limit Delay Configuration**: Introduced rate limit delays configurable via `tools_config.toml` and applied them to the autonomous tool loop.
+
 June 24th, 2026 (v0.5.5)
 ------------------------
 - **Interactive Escape Command Variable Resolution**: Enabled resolving variables and subscripts inside interactive escape commands (e.g. `/filebank1 ${arr1[0]}`).
