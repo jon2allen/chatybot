@@ -215,6 +215,10 @@ chat --> Hello!      # Start a conversation
 | `/logging <start\|end>` | Start/stop logging | `/logging start` |
 | `/save <file> [all] [nothink\|withthink]` | Save last response or all history, with optional thinking stripping | `/save output.txt all nothink` |
 | `/script <path>` | Execute a script | `/script setup.dsl` |
+| `/run <command>` | Execute a shell command and capture stdout/stderr/exit code | `/run ls -la` |
+| `/run_safe` | Enable safe mode for shell execution (blocks dangerous commands) | `/run_safe` |
+| `/run_unsafe` | Disable safe mode (requires confirmation for dangerous commands) | `/run_unsafe` |
+| `/tool <subcommand>` | Manage native tool loop mode, inspect prompt context, or dispatch invocations | `/tool loop max=5` |
 | `/setdb <name>` | Select TinyDB database. Use `Null` to deactivate. | `/setdb knowledge` |
 | `/dblist` | List all TinyDB databases | `/dblist` |
 | `/searchdb <q>` | Search current database | `/searchdb "python"` |
@@ -412,6 +416,69 @@ Describe this image: {imagebank1}
 set debug = true
 if ${debug} then /temp 0.1
 if not ${debug} then /temp 0.7
+```
+
+### **Shell Execution & Autonomous Tool Calling (New!)**
+
+Chatybot supports local shell execution and fully autonomous agentic tool-calling loops.
+
+#### **1. Shell Execution (`/run`)**
+The `/run` command executes shell commands on the host machine and integrates outputs directly with the ChatDSL variable environment.
+*   **Command**: `/run <command>`
+*   **Variable Integration**: Execution automatically sets the following variables:
+    *   `${RUN_COMPLETION}`: Captures the command's stdout.
+    *   `${RUN_ERROR}`: Captures the command's stderr.
+    *   `${RUN_EXIT_CODE}`: Captures the exit code (e.g. `0` on success).
+    *   `${LAST_COMPLETION}`: Captures stdout for backwards compatibility.
+*   **Security Modes**:
+    *   `/run_safe` (Default): Restricts dangerous or destructive command patterns (like `rm -rf`, `sudo`, etc.) to prevent accidental damage.
+    *   `/run_unsafe`: Disables safe mode. Dangerous commands will still prompt for explicit user confirmation before running.
+
+*Example*:
+```dsl
+/run echo "Current Directory:" && pwd
+/echo Command exit status: ${RUN_EXIT_CODE}
+/echo Command output: ${RUN_COMPLETION}
+```
+
+#### **2. Autonomous Tool Loop (`/tool`)**
+You can enable native-like tool usage for LLMs, allowing them to autonomously select and execute local python functions in a multi-turn loop.
+*   **`/tool on`**: Enables tool mode and injects all active tool definitions from `tools_config.toml` into the LLM system prompt context.
+*   **`/tool off`**: Disables tool mode.
+*   **`/tool prompt`**: Displays the active tool injection context and system instructions.
+*   **`/tool loop [turns|max|max=val] [force]`**: Starts the autonomous execution loop. Chatybot will feed the model's requests to local tools, execute them, and feed results back to the model until:
+    *   The model returns a conversational natural-language answer (terminal state).
+    *   The maximum number of turns is reached (default 5; use `max` or `max=100` to increase). Loop counts greater than 100 require the `force` flag.
+*   **`/tool <file.json>` or `/tool <json_string>`**: Manually dispatch a specific tool invocation.
+
+*Example*:
+```dsl
+/tool on
+/tool loop 10
+# LLM will autonomously invoke file_utils, read contents, run commands, and reply with the final summary.
+```
+
+#### **3. Tool Configuration (`tools_config.toml`)**
+All agentic tools and execution configurations are managed in `src/chatybot/tools_config.toml` (which is copied to `~/.config/chatybot/tools_config.toml` upon initialization).
+
+*Example Configuration File*:
+```toml
+[config]
+tool_timeout = 60              # Execution timeout in seconds per tool
+rate_limit_delay = 2.0         # Rate limit sleep duration (seconds) between LLM calls
+strip_thinking_from_filebanks = true
+
+# Define individual tools
+[tools.list_directory]
+enabled = true
+description = "List contents of a directory"
+module = "chatybot.tools.file_utils"
+function = "list_directory"
+
+[tools.list_directory.parameters.path]
+type = "string"
+description = "Directory path to list"
+optional = true
 ```
 
 ### **Macro System (New!)**
