@@ -915,11 +915,19 @@ class ChatybotApp:
                 print("Payload:")
                 print("-----------------------------")
                 # Don't fail if kwargs can't be JSON serialized completely, fallback handled
+                payload_str = ""
                 try:
-                    print(json.dumps(kwargs, indent=2))
+                    payload_str = json.dumps(kwargs, indent=2)
                 except TypeError:
-                    print(str(kwargs))
+                    payload_str = str(kwargs)
+                print(payload_str)
                 print("---- end of payload ---")
+                payload_bytes = payload_str.encode('utf-8')
+                size_bytes = len(payload_bytes)
+                size_kb = size_bytes / 1024
+                est_tokens = max(1, int(size_bytes / 4))
+                print(f"Size: {size_bytes} bytes ({size_kb:.2f} KB) | Est. Tokens: ~{est_tokens} (industry avg)")
+
 
             # Capture payload for debug mode
             if self.debug_payload_mode:
@@ -3959,8 +3967,15 @@ class ChatybotApp:
                     print("-----------------------------")
                     print(f"POST {base_url}")
                     print(f"Headers: {{'Authorization': 'Bearer {masked_key}', 'Content-Type': 'application/json'}}")
-                    print(json.dumps(payload, indent=2))
+                    payload_str = json.dumps(payload, indent=2)
+                    print(payload_str)
                     print("---- end of payload ---")
+                    payload_bytes = payload_str.encode('utf-8')
+                    size_bytes = len(payload_bytes)
+                    size_kb = size_bytes / 1024
+                    est_tokens = max(1, int(size_bytes / 4))
+                    print(f"Size: {size_bytes} bytes ({size_kb:.2f} KB) | Est. Tokens: ~{est_tokens} (industry avg)")
+
 
                 results = ranker.rerank(query=query, top_n=top_n, verbose=False)
                 self.latest_rerank_results = results
