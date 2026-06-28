@@ -454,8 +454,9 @@ You can enable native-like tool usage for LLMs, allowing them to autonomously se
 *Example*:
 ```dsl
 /tool on
+chat --> find all markdown files
 /tool loop 10
-# LLM will autonomously invoke file_utils, read contents, run commands, and reply with the final summary.
+# LLM will autonomously execute tools in a loop for up to 10 turns (or until finished).
 ```
 
 #### **3. Tool Configuration (`tools_config.toml`)**
