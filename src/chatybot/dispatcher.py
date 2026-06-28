@@ -35,7 +35,9 @@ except ImportError:
     except ImportError:
         tomllib = None
 
-DEFAULT_CONFIG_PATH = "src/chatybot/tools_config.toml"
+DEFAULT_CONFIG_PATH = os.path.expanduser("~/.config/chatybot/tools_config.toml")
+if not os.path.exists(DEFAULT_CONFIG_PATH):
+    DEFAULT_CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tools_config.toml")
 
 
 def load_configs(config_path: str) -> Dict[str, Any]:

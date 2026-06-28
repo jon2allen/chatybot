@@ -2137,7 +2137,14 @@ class ChatybotApp:
         try:
             # Build the dispatcher command
             dispatcher_path = os.path.join(os.path.dirname(__file__), 'dispatcher.py')
-            config_path = os.path.join(os.path.dirname(__file__), 'tools_config.toml')
+            user_config_path = os.path.expanduser('~/.config/chatybot/tools_config.toml')
+            if not os.path.exists(user_config_path):
+                package_config = os.path.join(os.path.dirname(__file__), 'tools_config.toml')
+                if os.path.exists(package_config):
+                    import shutil
+                    os.makedirs(os.path.dirname(user_config_path), exist_ok=True)
+                    shutil.copy2(package_config, user_config_path)
+            config_path = user_config_path if os.path.exists(user_config_path) else os.path.join(os.path.dirname(__file__), 'tools_config.toml')
             
             # Check if dispatcher exists
             if not os.path.exists(dispatcher_path):
@@ -2396,7 +2403,14 @@ class ChatybotApp:
         """
         import os
         
-        config_path = os.path.join(os.path.dirname(__file__), 'tools_config.toml')
+        user_config_path = os.path.expanduser('~/.config/chatybot/tools_config.toml')
+        if not os.path.exists(user_config_path):
+            package_config = os.path.join(os.path.dirname(__file__), 'tools_config.toml')
+            if os.path.exists(package_config):
+                import shutil
+                os.makedirs(os.path.dirname(user_config_path), exist_ok=True)
+                shutil.copy2(package_config, user_config_path)
+        config_path = user_config_path if os.path.exists(user_config_path) else os.path.join(os.path.dirname(__file__), 'tools_config.toml')
         
         try:
             import tomllib
