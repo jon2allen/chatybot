@@ -102,6 +102,7 @@ class ChatybotApp:
         self.tool_mode: bool = False
         self.tool_context: str = ""
         self.in_tool_loop: bool = False
+        self.tool_auto: bool = False
         self.agentic_instructions: str = ""
         self.tool_timeout: int = 30
         self.rate_limit_delay: float = 0.0
@@ -1010,12 +1011,30 @@ class ChatybotApp:
 
                 buffer = ""
                 in_think_block = False
+                streaming_tool_calls = {}
 
                 async for chunk in response:
                     chunk_time = time.time()
                     if not chunk.choices:
                         continue
                     delta = chunk.choices[0].delta
+
+                    if getattr(delta, "tool_calls", None):
+                        for tc in delta.tool_calls:
+                            idx = tc.index if tc.index is not None else 0
+                            if idx not in streaming_tool_calls:
+                                streaming_tool_calls[idx] = {
+                                    "id": None,
+                                    "name": "",
+                                    "arguments": ""
+                                }
+                            if tc.id:
+                                streaming_tool_calls[idx]["id"] = tc.id
+                            if tc.function:
+                                if tc.function.name:
+                                    streaming_tool_calls[idx]["name"] += tc.function.name
+                                if tc.function.arguments:
+                                    streaming_tool_calls[idx]["arguments"] += tc.function.arguments
 
                     reasoning = getattr(
                         delta, "reasoning_content", getattr(delta, "reasoning", None)
@@ -1203,6 +1222,35 @@ class ChatybotApp:
                 elif in_think_block and self.show_thinking:
                     print("\033[0m", end="", flush=True)
                 print()  # New line after streaming
+                
+                if streaming_tool_calls:
+                    tool_calls_list = []
+                    for idx in sorted(streaming_tool_calls.keys()):
+                        tc_data = streaming_tool_calls[idx]
+                        tc_name = tc_data["name"]
+                        tc_args = tc_data["arguments"]
+                        if tc_name:
+                            if "." in tc_name:
+                                tc_name = tc_name.split(".")[-1]
+                            if isinstance(tc_args, str):
+                                try:
+                                    tc_args = json.loads(tc_args)
+                                except Exception:
+                                    pass
+                            tool_calls_list.append({
+                                "tool": tc_name,
+                                "arguments": tc_args
+                            })
+                    if tool_calls_list:
+                        if len(tool_calls_list) == 1:
+                            tool_json_block = f"```json\n{json.dumps(tool_calls_list[0])}\n```"
+                        else:
+                            tool_json_block = f"```json\n{json.dumps(tool_calls_list)}\n```"
+                        print(tool_json_block)
+                        if full_content:
+                            full_content += "\n\n" + tool_json_block
+                        else:
+                            full_content = tool_json_block
                 
                 # Build the standardized full response
                 if full_reasoning:
@@ -1406,6 +1454,14 @@ class ChatybotApp:
 
             if not self.in_tool_loop:
                 self.chat_history.append((prompt, full_response))
+                if self.tool_auto and self.extract_tool_calls(full_response):
+                    print("Tool call detected in response. Auto-launching agentic tool loop...")
+                    await self.execute_tool_loop(max_turns=5)
+                    if self.chat_history:
+                        _, final_resp = self.chat_history[-1]
+                        if self.logging_manager.logging_active:
+                            self.logging_manager.log_message(f"Assistant (Auto-loop final): {final_resp}\n")
+                        return final_resp
 
             # Log assistant entry with completion datetime and token count
             if self.logging_manager.logging_active:
@@ -3460,6 +3516,28 @@ class ChatybotApp:
                 self.tool_context = ""
                 self.buffer_manager.set_script_var('TOOL_CONTEXT', '')
                 print("Tool mode disabled")
+                return True
+            
+            elif subcmd == "auto":
+                if len(parts) > 2:
+                    auto_arg = parts[2].strip().lower()
+                    if auto_arg == "on":
+                        self.tool_auto = True
+                        context = self.generate_tool_context()
+                        if context:
+                            self.tool_mode = True
+                            self.buffer_manager.set_script_var('TOOL_CONTEXT', context)
+                            print("Tool auto mode enabled - tool definitions loaded")
+                        else:
+                            print("Tool auto mode enabled (warning: no tools available to load)")
+                    elif auto_arg == "off":
+                        self.tool_auto = False
+                        print("Tool auto mode disabled")
+                    else:
+                        print("Invalid option. Usage: /tool auto on|off")
+                else:
+                    state_str = "enabled" if self.tool_auto else "disabled"
+                    print(f"Tool auto mode is currently {state_str}")
                 return True
             
             elif subcmd == "loop":
