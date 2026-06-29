@@ -1731,6 +1731,109 @@ class ChatybotApp:
 
         return False
 
+    def split_commands(self, text: str) -> list[str]:
+        """Split a command string by semicolon (;), respecting quotes and comments."""
+        commands_list = []
+        current_command = []
+        in_quotes = False
+        quote_char = None
+        
+        i = 0
+        while i < len(text):
+            char = text[i]
+            
+            if in_quotes:
+                if char == quote_char:
+                    in_quotes = False
+                    quote_char = None
+                    current_command.append(char)
+                else:
+                    current_command.append(char)
+            else:
+                if char == "#":
+                    # Comment till end of string
+                    break
+                
+                if char in ('"', "'"):
+                    is_start_of_token = (i == 0 or text[i-1].isspace() or text[i-1] in ('=', ',', '(', '{', '[', ':', '|', '&'))
+                    if is_start_of_token:
+                        in_quotes = True
+                        quote_char = char
+                        current_command.append(char)
+                    else:
+                        current_command.append(char)
+                elif char == ";":
+                    if i + 1 < len(text) and text[i+1] == ";":
+                        cmd = "".join(current_command).strip()
+                        if cmd:
+                            commands_list.append(cmd)
+                        commands_list.append(";;")
+                        current_command = []
+                        i += 1
+                        continue
+                    else:
+                        cmd = "".join(current_command).strip()
+                        if cmd:
+                            commands_list.append(cmd)
+                        current_command = []
+                else:
+                    current_command.append(char)
+            i += 1
+            
+        cmd = "".join(current_command).strip()
+        if cmd:
+            commands_list.append(cmd)
+            
+        return commands_list
+
+    async def execute_line(self, line: str) -> None:
+        """Executes a single line of input, splitting by semicolon if it starts with '/'."""
+        if line.startswith("/"):
+            commands = self.split_commands(line)
+            for cmd in commands:
+                cmd = cmd.strip()
+                if not cmd:
+                    continue
+                if cmd.startswith("/"):
+                    if not cmd.lstrip().startswith("/setvar"):
+                        cmd = self.buffer_manager.replace_placeholders_legacy(cmd)
+                    result = await self.handle_escape_command(cmd)
+                    if result == "EXECUTE_PROMPT":
+                        temp_prompt = self.buffer_manager.prompt_buffer
+                        self.buffer_manager.prompt_buffer = ""
+                        await self.chat_completion(
+                            temp_prompt, stream=self.streaming_enabled
+                        )
+                        self.buffer_manager.prompt_buffer = ""
+                else:
+                    await self.chat_completion(cmd, stream=self.streaming_enabled)
+        else:
+            # Handle macro definitions for regular prompts
+            if line.lstrip().startswith("def "):
+                try:
+                    definition_line = line.lstrip()
+                    parsed = self.definition_grammar(definition_line).macro_def()
+                    name, params, template = parsed
+                    self.macros[name] = {"params": params, "template": template}
+                    print(f"Defined macro: {name} with {len(params)} parameters")
+                    return
+                except Exception:
+                    pass
+
+            # Handle macro expansion for regular prompts
+            if line.lstrip().startswith("%"):
+                expanded_prompt = self.process_macro_line(line)
+                if expanded_prompt.startswith("ERROR:"):
+                    print(expanded_prompt)
+                    return
+                else:
+                    print(f"Expanded macro: {expanded_prompt}")
+                    line = expanded_prompt
+
+            await self.chat_completion(
+                line, stream=self.streaming_enabled
+            )
+
     async def execute_script(self, script_path: str) -> None:
         """
         Execute a script file containing multiple commands.
@@ -4507,14 +4610,7 @@ class ChatybotApp:
                             readline.add_history(selected_command)
                         
                         # Execute the selected command
-                        if selected_command.startswith("/"):
-                            if not selected_command.lstrip().startswith("/setvar"):
-                                selected_command = self.buffer_manager.replace_placeholders_legacy(selected_command)
-                            await self.handle_escape_command(selected_command)
-                        else:
-                            response = await self.chat_completion(
-                                selected_command, stream=self.streaming_enabled
-                            )
+                        await self.execute_line(selected_command)
                     continue
 
                 # Add to input history (for non-history-search commands)
@@ -4527,49 +4623,7 @@ class ChatybotApp:
                 if not prompt.strip():
                     continue
 
-                if prompt.startswith("/"):
-                    if not prompt.lstrip().startswith("/setvar"):
-                        prompt = self.buffer_manager.replace_placeholders_legacy(prompt)
-                    result = await self.handle_escape_command(prompt)
-                    if result == "EXECUTE_PROMPT":
-                        # Execute the buffered prompt
-                        # Use the prompt buffer directly, then clear it to avoid duplication
-                        temp_prompt = self.buffer_manager.prompt_buffer
-                        self.buffer_manager.prompt_buffer = ""
-                        response = await self.chat_completion(
-                            temp_prompt, stream=self.streaming_enabled
-                        )
-                        self.buffer_manager.prompt_buffer = (
-                            ""  # Clear the buffer after execution
-                        )
-                    continue
-
-                # Handle macro definitions for regular prompts
-                if prompt.lstrip().startswith("def "):
-                    try:
-                        definition_line = prompt.lstrip()
-                        parsed = self.definition_grammar(definition_line).macro_def()
-                        name, params, template = parsed
-                        self.macros[name] = {"params": params, "template": template}
-                        print(f"Defined macro: {name} with {len(params)} parameters")
-                        continue
-                    except Exception:
-                        # If it's not a valid macro definition, treat it as regular text
-                        pass
-
-                # Handle macro expansion for regular prompts
-                if prompt.lstrip().startswith("%"):
-                    expanded_prompt = self.process_macro_line(prompt)
-                    if expanded_prompt.startswith("ERROR:"):
-                        print(expanded_prompt)
-                        continue
-                    else:
-                        print(f"Expanded macro: {expanded_prompt}")
-                        prompt = expanded_prompt
-
-                response = await self.chat_completion(
-                    prompt, stream=self.streaming_enabled
-                )
+                await self.execute_line(prompt)
 
             except KeyboardInterrupt:
                 print("\nGoodbye! Thanks for chatting.")
@@ -4589,6 +4643,7 @@ def run():
     """Entry point for the application."""
     import argparse
     import sys
+    import asyncio
 
     parser = argparse.ArgumentParser(description="Chatybot CLI")
     parser.add_argument(
@@ -4601,6 +4656,16 @@ def run():
         action="store_true",
         help="Launch the TUI configuration manager to edit the models list"
     )
+    parser.add_argument(
+        "--script",
+        help="Path to a ChatDSL script file to execute",
+        default=None
+    )
+    parser.add_argument(
+        "--run",
+        help="Execute a single chat query / prompt directly",
+        default=None
+    )
     args, unknown = parser.parse_known_args()
 
     if args.config_edit:
@@ -4612,6 +4677,31 @@ def run():
     # Also set the module-level app variable
     current_module = sys.modules[__name__]
     current_module.app = app
+
+    if args.script:
+        async def run_script():
+            app.initialize()
+            await app.execute_script(args.script)
+            app.logging_manager.stop_logging()
+            app.save_input_history()
+        try:
+            asyncio.run(run_script())
+        except KeyboardInterrupt:
+            print("\nGoodbye!")
+        sys.exit(0)
+
+    elif args.run:
+        async def run_query():
+            app.initialize()
+            await app.execute_line(args.run)
+            app.logging_manager.stop_logging()
+            app.save_input_history()
+        try:
+            asyncio.run(run_query())
+        except KeyboardInterrupt:
+            print("\nGoodbye!")
+        sys.exit(0)
+
     app.run()
 
 

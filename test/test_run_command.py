@@ -574,6 +574,84 @@ class TestRunCommandBehavior:
             # Since auto-loop is triggered by the reconstructed tool call JSON, execute_tool_loop should be called!
             app.execute_tool_loop.assert_called_once_with(max_turns=5)
 
+    def test_cli_option_script(self):
+        """Verifies that the --script option initializes the app, executes the script, and exits"""
+        from src.chatybot.chatybot_app import run
+        
+        with patch('sys.argv', ['chatybot', '--script', 'my_script.chatdsl']), \
+             patch('src.chatybot.chatybot_app.ChatybotApp.initialize') as mock_init, \
+             patch('src.chatybot.chatybot_app.ChatybotApp.execute_script', new_callable=AsyncMock) as mock_execute, \
+             patch('src.chatybot.chatybot_app.ChatybotApp.run') as mock_run_loop, \
+             patch('sys.exit', side_effect=SystemExit) as mock_exit:
+             
+            with pytest.raises(SystemExit):
+                run()
+            
+            mock_init.assert_called_once()
+            mock_execute.assert_called_once_with('my_script.chatdsl')
+            mock_run_loop.assert_not_called()
+            mock_exit.assert_called_once_with(0)
+
+    def test_cli_option_run_query(self):
+        """Verifies that the --run option with a normal query runs chat_completion and exits"""
+        from src.chatybot.chatybot_app import run
+        
+        with patch('sys.argv', ['chatybot', '--run', 'what is python']), \
+             patch('src.chatybot.chatybot_app.ChatybotApp.initialize') as mock_init, \
+             patch('src.chatybot.chatybot_app.ChatybotApp.chat_completion', new_callable=AsyncMock) as mock_chat, \
+             patch('src.chatybot.chatybot_app.ChatybotApp.handle_escape_command', new_callable=AsyncMock) as mock_escape, \
+             patch('src.chatybot.chatybot_app.ChatybotApp.run') as mock_run_loop, \
+             patch('sys.exit', side_effect=SystemExit) as mock_exit:
+             
+            with pytest.raises(SystemExit):
+                run()
+            
+            mock_init.assert_called_once()
+            mock_chat.assert_called_once_with('what is python', stream=False)
+            mock_escape.assert_not_called()
+            mock_run_loop.assert_not_called()
+            mock_exit.assert_called_once_with(0)
+
+    def test_cli_option_run_escape(self):
+        """Verifies that the --run option with an escape command executes handle_escape_command and exits"""
+        from src.chatybot.chatybot_app import run
+        
+        with patch('sys.argv', ['chatybot', '--run', '/tool auto on']), \
+             patch('src.chatybot.chatybot_app.ChatybotApp.initialize') as mock_init, \
+             patch('src.chatybot.chatybot_app.ChatybotApp.chat_completion', new_callable=AsyncMock) as mock_chat, \
+             patch('src.chatybot.chatybot_app.ChatybotApp.handle_escape_command', new_callable=AsyncMock) as mock_escape, \
+             patch('src.chatybot.chatybot_app.ChatybotApp.run') as mock_run_loop, \
+             patch('sys.exit', side_effect=SystemExit) as mock_exit:
+             
+            with pytest.raises(SystemExit):
+                run()
+            
+            mock_init.assert_called_once()
+            mock_escape.assert_called_once_with('/tool auto on')
+            mock_chat.assert_not_called()
+            mock_run_loop.assert_not_called()
+            mock_exit.assert_called_once_with(0)
+
+    def test_cli_option_run_chain(self):
+        """Verifies that the --run option handles chained escape and query commands correctly"""
+        from src.chatybot.chatybot_app import run
+        
+        with patch('sys.argv', ['chatybot', '--run', '/model devstral_1; list 5 cities']), \
+             patch('src.chatybot.chatybot_app.ChatybotApp.initialize') as mock_init, \
+             patch('src.chatybot.chatybot_app.ChatybotApp.chat_completion', new_callable=AsyncMock) as mock_chat, \
+             patch('src.chatybot.chatybot_app.ChatybotApp.handle_escape_command', new_callable=AsyncMock) as mock_escape, \
+             patch('src.chatybot.chatybot_app.ChatybotApp.run') as mock_run_loop, \
+             patch('sys.exit', side_effect=SystemExit) as mock_exit:
+             
+            with pytest.raises(SystemExit):
+                run()
+            
+            mock_init.assert_called_once()
+            mock_escape.assert_called_once_with('/model devstral_1')
+            mock_chat.assert_called_once_with('list 5 cities', stream=False)
+            mock_run_loop.assert_not_called()
+            mock_exit.assert_called_once_with(0)
+
 
 
 
