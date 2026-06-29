@@ -714,6 +714,24 @@ class TestRunCommandBehavior:
         assert tool_calls_3[0]["tool"] == "run_command"
         assert "git log" in tool_calls_3[0]["arguments"]["command"]
 
+    def test_extract_tool_calls_raw_newlines_in_quotes(self, app):
+        """Verifies that extract_tool_calls correctly parses JSON with raw/unescaped newlines inside quote literals"""
+        raw_completion = (
+            '{\n'
+            '  "tool": "run_command",\n'
+            '  "arguments": {\n'
+            '    "command": "cat << \'EOF\' > test.txt\n'
+            'line 1\n'
+            'line 2\n'
+            'EOF"\n'
+            '  }\n'
+            '}'
+        )
+        tool_calls = app.extract_tool_calls(raw_completion)
+        assert len(tool_calls) == 1
+        assert tool_calls[0]["tool"] == "run_command"
+        assert "line 1\nline 2" in tool_calls[0]["arguments"]["command"]
+
     def test_write_file_tool(self, app):
         """Verifies that the write_file tool writes and appends contents correctly"""
         with tempfile.TemporaryDirectory() as tmpdir:

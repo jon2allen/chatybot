@@ -2408,6 +2408,12 @@ class ChatybotApp:
                     i += 1
                     continue
                 
+                if in_quote and char == '\n':
+                    cleaned_chars.append('\\')
+                    cleaned_chars.append('n')
+                    i += 1
+                    continue
+                
                 if not in_quote:
                     if char == '#':
                         # Skip until next newline or end of string
