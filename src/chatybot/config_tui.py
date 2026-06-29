@@ -23,6 +23,18 @@ class ConfigTUI:
         self.models_list: List[Tuple[str, Any]] = []  # List of (alias, model_object)
         self.filtered_list: List[Tuple[str, Any]] = []
         
+        # Global settings list definition
+        self.global_settings_list = [
+            ("default_model", "Default Model", str),
+            ("system_message", "System Message", str),
+            ("temperature", "Temperature", float),
+            ("top_p", "Top P", float),
+            ("top_k", "Top K", int),
+            ("max_tokens", "Max Tokens", int),
+            ("frequency_penalty", "Freq Penalty", float),
+            ("presence_penalty", "Pres Penalty", float),
+        ]
+        
         # UI State
         self.selected_idx = 0
         self.scroll_offset = 0
@@ -167,6 +179,8 @@ class ConfigTUI:
                 if self.filtered_list:
                     alias, model = self.filtered_list[self.selected_idx]
                     self.delete_model_dialog(stdscr, alias, model)
+            elif ch == ord('g') or ch == ord('G'):
+                self.edit_global_settings_form(stdscr)
             elif ch == ord('s') or ch == ord('S'):
                 self.save_menu_dialog(stdscr)
             elif ch == curses.KEY_RESIZE:
@@ -252,7 +266,7 @@ class ConfigTUI:
             stdscr.addstr(h - 2, 2, f" {self.status_message} "[:w-4], color | curses.A_BOLD)
             
         # Key bindings bar
-        keys_bar = " ↑↓ Navigate │ ↵ Edit │ N New │ C Clone │ D Delete │ S Save │ Q Quit │ / Filter"
+        keys_bar = " ↑↓ Navigate │ ↵ Edit │ G Global │ N New │ C Clone │ D Delete │ S Save │ Q Quit │ / Filter"
         stdscr.addstr(h - 1, 0, keys_bar[:w-1], curses.color_pair(2))
         stdscr.refresh()
 
@@ -769,6 +783,161 @@ class ConfigTUI:
             
         # Open main editor form
         self.edit_model_form(stdscr, alias, model, is_new=True)
+
+    def edit_global_settings_form(self, stdscr):
+        """Edit global settings via popup form."""
+        h, w = stdscr.getmaxyx()
+        win_h, win_w = 20, 56
+        win_y = (h - win_h) // 2
+        win_x = (w - win_w) // 2
+        
+        win = curses.newwin(win_h, win_w, win_y, win_x)
+        win.keypad(True)
+        self.draw_dialog_border(win, "Global Settings")
+        
+        # Form field definitions: (y, x, width, key, label, dtype)
+        fields = []
+        y_start = 2
+        for idx, (key, label, dtype) in enumerate(self.global_settings_list):
+            y_pos = y_start + idx * 2
+            fields.append((y_pos, 4, 40, key, label, dtype))
+        
+        # Load current values
+        field_values = {}
+        for key, label, dtype in self.global_settings_list:
+            if self.config:
+                value = getattr(self.config, key, None)
+                field_values[key] = str(value) if value is not None else ""
+            else:
+                field_values[key] = ""
+        
+        # Buttons at bottom
+        buttons = ["[ OK ]", "[ Cancel ]"]
+        focus = 0  # 0 to len(fields)-1 are fields, then buttons
+        
+        def draw_form():
+            win.erase()
+            self.draw_dialog_border(win, "Global Settings")
+            
+            # Draw fields
+            for idx, (y_pos, x, width, key, label, dtype) in enumerate(fields):
+                value = field_values.get(key, "")
+                field_x = x + len(label) + 2
+                field_width = width - len(label) - 2
+                
+                # Draw label with focus indicator
+                if focus == idx:
+                    win.addstr(y_pos, x, "> ", curses.color_pair(2) | curses.A_BOLD)
+                    win.addstr(y_pos, x + 2, f"{label}:", curses.color_pair(2))
+                else:
+                    win.addstr(y_pos, x, f"  {label}:")
+                
+                # Draw input field box
+                win.addstr(y_pos, field_x, "[" + " " * (field_width - 2) + "]")
+                
+                # Draw value
+                if focus == idx:
+                    win.addstr(y_pos, field_x + 1, value[:field_width-2], curses.color_pair(2))
+                else:
+                    win.addstr(y_pos, field_x + 1, value[:field_width-2], curses.color_pair(1))
+            
+            # Draw buttons
+            for idx, btn in enumerate(buttons):
+                btn_x = 12 + (idx * 16)
+                btn_y = win_h - 3
+                if focus == len(fields) + idx:
+                    win.addstr(btn_y, btn_x, btn, curses.color_pair(2))
+                else:
+                    win.addstr(btn_y, btn_x, btn)
+            
+            # Draw help
+            win.addstr(win_h - 2, 4, "↑↓ Navigate │ ENTER Edit/Save │ ESC Cancel", curses.color_pair(3))
+            win.refresh()
+        
+        draw_form()
+        
+        while True:
+            ch = win.getch()
+            
+            if ch == 27:  # Escape
+                break
+            elif ch == curses.KEY_UP:
+                focus = (focus - 1) % (len(fields) + len(buttons))
+                draw_form()
+            elif ch == curses.KEY_DOWN:
+                focus = (focus + 1) % (len(fields) + len(buttons))
+                draw_form()
+            elif ch == curses.KEY_HOME:
+                focus = 0
+                draw_form()
+            elif ch == curses.KEY_END:
+                focus = len(fields) + len(buttons) - 1
+                draw_form()
+            elif ch in (10, 13):  # Enter
+                if focus < len(fields):
+                    # Edit the focused field
+                    y_pos, x, width, key, label, dtype = fields[focus]
+                    field_x = x + len(label) + 2
+                    field_width = width - len(label) - 2
+                    current_val = field_values.get(key, "")
+                    new_val = self.edit_text_input(win, y_pos, field_x, field_width, current_val, key)
+                    field_values[key] = new_val
+                    draw_form()
+                else:
+                    # Button pressed
+                    btn_idx = focus - len(fields)
+                    if btn_idx == 0:  # OK - save and exit
+                        self._save_global_settings(field_values)
+                        break
+                    elif btn_idx == 1:  # Cancel - exit without saving
+                        break
+            elif 32 <= ch <= 126:  # Printable character - direct edit of focused field
+                if focus < len(fields):
+                    key = fields[focus][3]
+                    field_values[key] = field_values.get(key, "") + chr(ch)
+                    draw_form()
+            elif ch in (curses.KEY_BACKSPACE, 127, 8):  # Backspace
+                if focus < len(fields):
+                    key = fields[focus][3]
+                    current = field_values.get(key, "")
+                    field_values[key] = current[:-1] if current else ""
+                    draw_form()
+        
+        win.clear()
+        win.refresh()
+        stdscr.clear()
+
+    def _save_global_settings(self, field_values: Dict[str, str]):
+        """Save global settings from field values."""
+        if not self.config:
+            return
+        
+        has_changes = False
+        for key, label, dtype in self.global_settings_list:
+            value_str = field_values.get(key, "").strip()
+            if not value_str:
+                # Empty value - set to None
+                new_value = None
+            else:
+                try:
+                    if dtype == int:
+                        new_value = int(value_str)
+                    elif dtype == float:
+                        new_value = float(value_str)
+                    else:  # str
+                        new_value = value_str
+                except ValueError:
+                    self.set_status(f"Invalid {label}: '{value_str}'", is_error=True)
+                    continue
+            
+            old_value = getattr(self.config, key, None)
+            if new_value != old_value:
+                setattr(self.config, key, new_value)
+                has_changes = True
+        
+        if has_changes:
+            self.has_changes = True
+            self.set_status("Global settings updated")
 
     def edit_model_form(self, stdscr, initial_alias: str, model: Any, is_new: bool = False):
         """Run form editor overlay."""
