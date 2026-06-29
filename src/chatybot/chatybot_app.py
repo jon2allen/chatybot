@@ -93,6 +93,7 @@ class ChatybotApp:
         self.auto_exit_pending: bool = False
         self.script_context: bool = False
         self.thoughtstyle: str = "none"
+        self.default_profile: Optional[str] = None
         
         # Run command settings
         self.safe_mode: bool = True
@@ -179,6 +180,26 @@ class ChatybotApp:
         # Load configuration
         self.config_manager.load_config()
 
+        # Load default profile from tools_config.toml under [config]
+        self.default_profile = None
+        user_config_path = os.path.expanduser('~/.config/chatybot/tools_config.toml')
+        config_path = user_config_path if os.path.exists(user_config_path) else os.path.join(os.path.dirname(__file__), 'tools_config.toml')
+        if os.path.exists(config_path):
+            try:
+                import tomllib
+                with open(config_path, 'rb') as f:
+                    tools_cfg = tomllib.load(f)
+            except Exception:
+                try:
+                    import toml
+                    with open(config_path, 'r') as f:
+                        tools_cfg = toml.load(f)
+                except Exception:
+                    tools_cfg = {}
+            
+            config_section = tools_cfg.get('config', {})
+            self.default_profile = config_section.get('default_profile')
+
         # Set up input history
         self.load_input_history()
 
@@ -194,7 +215,7 @@ class ChatybotApp:
                     "imagebank4", "imagebank5", "model", "listmodels", "logging", "save",
                     "codeonly", "codeoff", "multiline", "system", "temp", "maxtokens",
                     "top_p", "top_k", "freq_penalty", "pres_penalty", "reasoning", "effort", "seed",
-                    "stream", "script", "quit", "setdb", "dblist",
+                    "stream", "script", "source", "quit", "setdb", "dblist",
                     "searchdb", "dblog", "dbprint", "loadvar", "savevar",
                     "setvar", "notemode", "mem", "dump", "trace",
                     "thinking", "echo", "def", "reloadmacros",
@@ -3759,6 +3780,18 @@ class ChatybotApp:
             self.config_manager.list_models()
             return True
 
+        elif cmd == "/source":
+            if len(parts) < 2:
+                print("Usage: /source <file>")
+                return True
+            file_path = command.split(maxsplit=1)[1].strip(" \"'")
+            expanded_path = os.path.expanduser(file_path)
+            if not os.path.exists(expanded_path):
+                print(f"Error: Script file not found: {expanded_path}")
+                return True
+            await self.execute_script(expanded_path)
+            return True
+
         elif cmd == "/script":
             if len(parts) < 2:
                 print('Usage: /script <file> [x="value"] [y="value"] [z="value"]')
@@ -4553,6 +4586,7 @@ class ChatybotApp:
         print("  /debug <payload|response [raw]> - Activate debug mode for the next prompt.")
         print("  /echo <text> - Echo text to screen with variable substitution.")
         print("  /reloadmacros [file] - Reload macro definitions from macro.chatdsl or specified file.")
+        print("  /source <file> - Execute a script file in the current session without exiting.")
         print("  /script <file> [x=value y=value z=value] - Execute a script file with optional parameters.")
         print("  /quit | /exit - Exit the program.")
         print(
@@ -4623,6 +4657,24 @@ class ChatybotApp:
         print(
             f"Active model: {self.config_manager.get_model_config(self.config_manager.active_model_alias)['name']} (alias: {self.config_manager.active_model_alias})"
         )
+
+        # Load and execute profile script if specified via command line or config
+        profile_path = getattr(self, 'profile_to_load', None)
+        if not profile_path:
+            profile_path = self.default_profile
+            
+        if profile_path:
+            expanded_path = os.path.expanduser(profile_path)
+            if os.path.exists(expanded_path):
+                try:
+                    await self.execute_script(expanded_path)
+                except Exception as e:
+                    print(f"Error loading profile '{expanded_path}': {e}")
+            else:
+                # If specified via command line (--profile), warn the user if it doesn't exist.
+                # If it's just the default config path and it doesn't exist, ignore silently as requested.
+                if getattr(self, 'profile_to_load', None):
+                    print(f"Warning: Profile script not found: {expanded_path}")
 
         while True:
             try:
@@ -4704,6 +4756,11 @@ def run():
         help="Execute a single chat query / prompt directly",
         default=None
     )
+    parser.add_argument(
+        "--profile",
+        help="Path to a ChatDSL profile script to load at startup (drops into interactive REPL)",
+        default=None
+    )
     args, unknown = parser.parse_known_args()
 
     if args.config_edit:
@@ -4739,6 +4796,9 @@ def run():
         except KeyboardInterrupt:
             print("\nGoodbye!")
         sys.exit(0)
+
+    if args.profile:
+        app.profile_to_load = args.profile
 
     app.run()
 

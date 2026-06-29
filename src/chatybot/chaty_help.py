@@ -420,6 +420,17 @@ class HelpSystem:
             examples=["/script workflow.chatdsl", "/script generate.chatdsl x=5 y=10"],
             see_also=["set", "if", "wait"]
         ))
+
+        # Source command
+        self.register_command(CommandHelp(
+            name="/source",
+            category="script",
+            short_desc="Execute a script file in the current session",
+            usage="/source <file>",
+            long_desc="Execute a script file containing multiple commands in the current interactive session without exiting.",
+            examples=["/source ~/.chatybot_profile", "/source load_vars.chatdsl"],
+            see_also=["/script"]
+        ))
         
         # Database commands
         db_commands = [

@@ -176,6 +176,40 @@ line 2
         assert len(called_commands) == 1
         assert called_commands[0] == "/setvar val = ${arr1[0]}"
 
+    @pytest.mark.anyio
+    async def test_source_command(self, app):
+        """Test that /source executes a script path and returns True"""
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.chatdsl') as f:
+            f.write("# some comment\n/echo hello\n")
+            f.flush()
+            script_path = f.name
+            
+        try:
+            # Mock execute_script
+            mock_execute = AsyncMock()
+            app.execute_script = mock_execute
+            
+            result = await app.handle_escape_command(f"/source {script_path}")
+            assert result is True
+            mock_execute.assert_called_once_with(os.path.abspath(script_path))
+        finally:
+            os.unlink(script_path)
+
+    @pytest.mark.anyio
+    async def test_profile_startup(self, app):
+        """Test that main_loop loads and runs profile at startup"""
+        app.profile_to_load = "/some/profile.chatdsl"
+        
+        mock_execute = AsyncMock()
+        app.execute_script = mock_execute
+        
+        with patch('os.path.exists', return_value=True):
+            with patch('builtins.input', side_effect=KeyboardInterrupt()):
+                await app.main_loop()
+                
+        mock_execute.assert_called_once_with("/some/profile.chatdsl")
+
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
