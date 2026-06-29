@@ -62,11 +62,18 @@ class ConfigManager:
         if "system_message" in self.config:
             self.system_message = self.config["system_message"]
         
+        # Load default model if specified in config
+        if "default_model" in self.config:
+            self.default_model_alias = self.config["default_model"]
+            self.active_model_alias = self.default_model_alias
+        
         # Load max tokens if specified in config
         if "max_tokens" in self.config:
             self.max_tokens = self.config["max_tokens"]
         
         # Load other parameters if specified in config
+        if "temperature" in self.config:
+            self.temperature = self.config["temperature"]
         if "top_p" in self.config:
             self.top_p = self.config["top_p"]
         if "top_k" in self.config:

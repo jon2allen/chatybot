@@ -200,11 +200,17 @@ class ChatConfig(BaseModel):
     models: dict[str, ModelConfig] = {}
     """All model entries, keyed by their TOML alias (e.g. 'mistral_1')."""
 
-    system_message: Optional[str] = None
+    system_message: Optional[str] = "You are a helpful assistant."
     """Global default system message."""
+
+    default_model: Optional[str] = None
+    """Global default model alias."""
 
     max_tokens: Optional[int] = None
     """Global default max tokens."""
+
+    temperature: Optional[float] = None
+    """Global default temperature."""
 
     top_p: Optional[float] = None
     """Global default top_p."""
@@ -335,7 +341,9 @@ class ChatConfig(BaseModel):
         # 1. Global settings (if specified)
         global_params = {
             "system_message": self.system_message,
+            "default_model": self.default_model,
             "max_tokens": self.max_tokens,
+            "temperature": self.temperature,
             "top_p": self.top_p,
             "top_k": self.top_k,
             "frequency_penalty": self.frequency_penalty,
