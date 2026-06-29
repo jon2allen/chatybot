@@ -1,6 +1,7 @@
 [config]
 tool_timeout = 60
 rate_limit_delay = 2.0
+max_turns = 25
 strip_thinking_from_filebanks = true
 agentic_instructions = """
 IMPORTANT: You are executing in an autonomous, multi-turn tool-calling loop.

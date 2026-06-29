@@ -104,6 +104,7 @@ class ChatybotApp:
         self.tool_context: str = ""
         self.in_tool_loop: bool = False
         self.tool_auto: bool = False
+        self.max_turns: int = 25
         self.agentic_instructions: str = ""
         self.tool_timeout: int = 30
         self.rate_limit_delay: float = 0.0
@@ -201,6 +202,7 @@ class ChatybotApp:
             
             config_section = tools_cfg.get('config', {})
             self.default_profile = config_section.get('default_profile')
+            self.max_turns = config_section.get('max_turns', 25)
 
         # Set up input history
         self.load_input_history()
@@ -1479,7 +1481,7 @@ class ChatybotApp:
                 self.chat_history.append((prompt, full_response))
                 if self.tool_auto and self.extract_tool_calls(full_response):
                     print("Tool call detected in response. Auto-launching agentic tool loop...")
-                    await self.execute_tool_loop(max_turns=5)
+                    await self.execute_tool_loop(max_turns=self.max_turns)
                     if self.chat_history:
                         _, final_resp = self.chat_history[-1]
                         if self.logging_manager.logging_active:
@@ -2681,6 +2683,11 @@ class ChatybotApp:
                 self.rate_limit_delay = float(config_section.get('rate_limit_delay'))
             except (ValueError, TypeError):
                 pass
+        if 'max_turns' in config_section:
+            try:
+                self.max_turns = int(config_section.get('max_turns'))
+            except (ValueError, TypeError):
+                pass
         if 'strip_thinking_from_filebanks' in config_section:
             val = config_section.get('strip_thinking_from_filebanks')
             if isinstance(val, bool):
@@ -3727,7 +3734,7 @@ class ChatybotApp:
                 return True
             
             elif subcmd == "loop":
-                max_turns = 5
+                max_turns = self.max_turns
                 # Extract all remaining arguments as lowercase strings by splitting the rest of the string
                 loop_args = []
                 if len(parts) > 2:

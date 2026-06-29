@@ -276,9 +276,9 @@ class TestRunCommandBehavior:
         # Mock execute_tool_loop to assert max_turns passed to it
         app.execute_tool_loop = AsyncMock()
         
-        # Default with no args -> 5
+        # Default with no args -> app.max_turns
         await app.handle_escape_command("/tool loop")
-        app.execute_tool_loop.assert_called_with(5)
+        app.execute_tool_loop.assert_called_with(app.max_turns)
         
         # 'max' -> 100
         await app.handle_escape_command("/tool loop max")
@@ -509,7 +509,7 @@ class TestRunCommandBehavior:
             await app.chat_completion("some query", stream=False)
             
             # Since auto-loop is triggered, execute_tool_loop should have been called!
-            app.execute_tool_loop.assert_called_once_with(max_turns=5)
+            app.execute_tool_loop.assert_called_once_with(max_turns=app.max_turns)
 
     @pytest.mark.anyio
     async def test_tool_auto_mode_streaming(self, app):
@@ -572,7 +572,7 @@ class TestRunCommandBehavior:
             await app.chat_completion("some query", stream=True)
             
             # Since auto-loop is triggered by the reconstructed tool call JSON, execute_tool_loop should be called!
-            app.execute_tool_loop.assert_called_once_with(max_turns=5)
+            app.execute_tool_loop.assert_called_once_with(max_turns=app.max_turns)
 
     def test_cli_option_script(self):
         """Verifies that the --script option initializes the app, executes the script, and exits"""
