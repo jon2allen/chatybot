@@ -2361,25 +2361,48 @@ class ChatybotApp:
         import re
 
         def clean_json_string(s: str) -> str:
-            # Remove single line comments starting with // or #
-            lines = []
-            for line in s.split('\n'):
-                in_quote = False
-                cleaned_chars = []
-                i = 0
-                while i < len(line):
-                    if line[i] == '"' and (i == 0 or line[i-1] != '\\'):
-                        in_quote = not in_quote
-                        cleaned_chars.append(line[i])
-                    elif line[i:i+2] == '//' and not in_quote:
-                        break  # Skip the rest of the line
-                    elif line[i] == '#' and not in_quote:
-                        break  # Skip the rest of the line
-                    else:
-                        cleaned_chars.append(line[i])
+            # Remove single line comments starting with // or #, respecting quotes across newlines
+            cleaned_chars = []
+            in_quote = False
+            escaped = False
+            i = 0
+            n = len(s)
+            while i < n:
+                char = s[i]
+                if escaped:
+                    cleaned_chars.append(char)
+                    escaped = False
                     i += 1
-                lines.append("".join(cleaned_chars))
-            cleaned = "\n".join(lines)
+                    continue
+                
+                if char == '\\':
+                    cleaned_chars.append(char)
+                    escaped = True
+                    i += 1
+                    continue
+                
+                if char == '"':
+                    in_quote = not in_quote
+                    cleaned_chars.append(char)
+                    i += 1
+                    continue
+                
+                if not in_quote:
+                    if char == '#':
+                        # Skip until next newline or end of string
+                        while i < n and s[i] != '\n':
+                            i += 1
+                        continue
+                    elif s[i:i+2] == '//':
+                        # Skip until next newline or end of string
+                        while i < n and s[i] != '\n':
+                            i += 1
+                        continue
+                
+                cleaned_chars.append(char)
+                i += 1
+                
+            cleaned = "".join(cleaned_chars)
             # Remove trailing commas before closing braces/brackets
             cleaned = re.sub(r',\s*([\]}])', r'\1', cleaned)
             return cleaned
