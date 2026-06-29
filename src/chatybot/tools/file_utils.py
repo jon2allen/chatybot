@@ -72,3 +72,18 @@ def run_command(command: str) -> str:
         return result.stdout
     except Exception as e:
         return f"Error executing command: {e}"
+
+def write_file(path: str, content: str, append: bool = False) -> str:
+    """Write or append contents to a file."""
+    try:
+        dir_name = os.path.dirname(path)
+        if dir_name:
+            os.makedirs(dir_name, exist_ok=True)
+        mode = 'a' if append else 'w'
+        with open(path, mode, encoding='utf-8') as f:
+            f.write(content)
+        action = "Appended to" if append else "Wrote to"
+        return f"Success: {action} file '{path}'"
+    except Exception as e:
+        return f"Error writing file: {e}"
+

@@ -699,6 +699,43 @@ class TestRunCommandBehavior:
         assert tool_calls_2[0]["tool"] == "run_command"
         assert tool_calls_2[0]["arguments"]["command"] == "cat > test.txt\nhello"
 
+    def test_write_file_tool(self, app):
+        """Verifies that the write_file tool writes and appends contents correctly"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filepath = os.path.join(tmpdir, "test_write.txt")
+            
+            # Test write
+            invocation_write = {
+                "tool": "write_file",
+                "arguments": {
+                    "path": filepath,
+                    "content": "hello world\n"
+                }
+            }
+            res_write = app.dispatch_tool(json.dumps(invocation_write))
+            assert "success" in res_write
+            
+            with open(filepath, "r") as f:
+                content = f.read()
+            assert content == "hello world\n"
+            
+            # Test append
+            invocation_append = {
+                "tool": "write_file",
+                "arguments": {
+                    "path": filepath,
+                    "content": "additional text",
+                    "append": True
+                }
+            }
+            res_append = app.dispatch_tool(json.dumps(invocation_append))
+            assert "success" in res_append
+            
+            with open(filepath, "r") as f:
+                content = f.read()
+            assert content == "hello world\nadditional text"
+
+
 
 
 
