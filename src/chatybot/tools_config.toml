@@ -4,6 +4,7 @@ rate_limit_delay = 2.0
 strip_thinking_from_filebanks = true
 agentic_instructions = """
 IMPORTANT: You are executing in an autonomous, multi-turn tool-calling loop.
+Use tools ONLY when necessary to perform actions on the system or fetch external information. If the request can be answered directly using your general knowledge without tools, do not call any tools and answer directly in natural language.
 1. You can output one or more tool calls in a single turn if they can be executed in parallel or sequence. Use the JSON format enclosed in ```json ... ```.
 2. Do NOT output any conversational text, descriptions, planning thoughts, or explanations before or after the tool calls. Your entire response must be ONLY the JSON tool call block(s).
 3. Only output natural language/conversation when you have finished all tool executions and are ready to present the final result to the user.
