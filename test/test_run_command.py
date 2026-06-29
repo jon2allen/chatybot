@@ -652,6 +652,23 @@ class TestRunCommandBehavior:
             mock_run_loop.assert_not_called()
             mock_exit.assert_called_once_with(0)
 
+    def test_extract_tool_calls_multiline_with_comments(self, app):
+        """Verifies that extract_tool_calls handles multi-line JSON values containing comment characters within quotes correctly"""
+        raw_completion = (
+            '```json\n'
+            '{\n'
+            '  "tool": "run_command",\n'
+            '  "arguments": {\n'
+            '    "command": "cat > init_mitigation.md << \'EOF\'\\n# Database Initialization Mitigation Strategy\\n\\n## Current State Analysis\\nEOF"\n'
+            '  }\n'
+            '}\n'
+            '```'
+        )
+        tool_calls = app.extract_tool_calls(raw_completion)
+        assert len(tool_calls) == 1
+        assert tool_calls[0]["tool"] == "run_command"
+        assert "# Database" in tool_calls[0]["arguments"]["command"]
+
 
 
 
