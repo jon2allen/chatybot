@@ -669,6 +669,37 @@ class TestRunCommandBehavior:
         assert tool_calls[0]["tool"] == "run_command"
         assert "# Database" in tool_calls[0]["arguments"]["command"]
 
+    def test_extract_tool_calls_unbalanced_braces_repair(self, app):
+        """Verifies that extract_tool_calls correctly repairs and extracts unbalanced JSON blocks with missing closing quotes/braces at the end of completions"""
+        # Case 1: missing one closing brace at the end of the JSON object
+        raw_completion_1 = (
+            '```json\n'
+            '{\n'
+            '  "tool": "run_command",\n'
+            '  "arguments": {\n'
+            '    "command": "cat > test.txt\\nhello"\n'
+            '  }\n'
+            '}'
+        )
+        tool_calls_1 = app.extract_tool_calls(raw_completion_1)
+        assert len(tool_calls_1) == 1
+        assert tool_calls_1[0]["tool"] == "run_command"
+        assert tool_calls_1[0]["arguments"]["command"] == "cat > test.txt\nhello"
+
+        # Case 2: missing closing quote AND two closing braces at the end
+        raw_completion_2 = (
+            '```json\n'
+            '{\n'
+            '  "tool": "run_command",\n'
+            '  "arguments": {\n'
+            '    "command": "cat > test.txt\\nhello'
+        )
+        tool_calls_2 = app.extract_tool_calls(raw_completion_2)
+        assert len(tool_calls_2) == 1
+        assert tool_calls_2[0]["tool"] == "run_command"
+        assert tool_calls_2[0]["arguments"]["command"] == "cat > test.txt\nhello"
+
+
 
 
 

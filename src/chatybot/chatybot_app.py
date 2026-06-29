@@ -2453,6 +2453,21 @@ class ChatybotApp:
                             i = j - 1
                     except Exception:
                         pass
+                elif brace_count > 0 and j == n:
+                    candidate = text[i:j]
+                    if in_quote:
+                        candidate += '"'
+                    candidate += '}' * brace_count
+                    try:
+                        cleaned = clean_json_string(candidate)
+                        data = json.loads(cleaned)
+                        res = normalize_tool_call(data)
+                        if res:
+                            tool_calls.append(res)
+                            # Move index to the end of this parsed block
+                            i = j - 1
+                    except Exception:
+                        pass
             i += 1
             
         return tool_calls
