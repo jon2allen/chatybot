@@ -454,5 +454,126 @@ class TestRunCommandBehavior:
             if os.path.exists(script_path):
                 os.remove(script_path)
 
+    @pytest.mark.anyio
+    async def test_tool_auto_mode(self, app):
+        """Verifies /tool auto on/off command toggling, state verification, and auto-triggering behavior"""
+        from src.chatybot.chatybot_app import PatternMatcher
+        app.matcher = PatternMatcher(["/tool", "/run"])
+        
+        # Test default state
+        assert app.tool_auto is False
+
+        # Mock generate_tool_context to return tool headers
+        app.generate_tool_context = MagicMock(return_value="tool_context")
+
+        # Test command enabling
+        await app.handle_escape_command("/tool auto on")
+        assert app.tool_auto is True
+        assert app.tool_mode is True
+        assert app.buffer_manager.get_script_var('TOOL_CONTEXT') == "tool_context"
+
+        # Test command disabling
+        await app.handle_escape_command("/tool auto off")
+        assert app.tool_auto is False
+
+        # Test interactive /tool auto state query printout
+        with patch('builtins.print') as mock_print:
+            await app.handle_escape_command("/tool auto")
+            mock_print.assert_any_call("Tool auto mode is currently disabled")
+
+        # Re-enable tool auto
+        await app.handle_escape_command("/tool auto on")
+        assert app.tool_auto is True
+
+        # Mock execute_tool_loop to track execution
+        app.execute_tool_loop = AsyncMock()
+
+        # Call chat_completion but mock it returning a tool call
+        tool_call_json = '```json\n{"tool": "list_directory", "arguments": {"path": "."}}\n```'
+        
+        # When calling chat completion with tool auto on and a tool call in response:
+        with patch.object(app, 'extract_tool_calls', return_value=[{"tool": "list_directory", "arguments": {"path": "."}}]):
+            mock_client = MagicMock()
+            mock_message = MagicMock()
+            mock_message.content = tool_call_json
+            mock_message.tool_calls = None
+            mock_choice = MagicMock()
+            mock_choice.message = mock_message
+            mock_response = MagicMock()
+            mock_response.choices = [mock_choice]
+            mock_response.usage = None
+            
+            mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+            app.get_openai_client = MagicMock(return_value=mock_client)
+            
+            await app.chat_completion("some query", stream=False)
+            
+            # Since auto-loop is triggered, execute_tool_loop should have been called!
+            app.execute_tool_loop.assert_called_once_with(max_turns=5)
+
+    @pytest.mark.anyio
+    async def test_tool_auto_mode_streaming(self, app):
+        """Verifies tool auto-triggering works correctly when response is streamed with native tool_calls chunks"""
+        from src.chatybot.chatybot_app import PatternMatcher
+        app.matcher = PatternMatcher(["/tool", "/run"])
+        
+        # Enable tool auto mode
+        await app.handle_escape_command("/tool auto on")
+        assert app.tool_auto is True
+
+        # Mock execute_tool_loop to track execution
+        app.execute_tool_loop = AsyncMock()
+
+        # Simulate streaming chunk responses containing tool_calls deltas
+        class MockChoiceDeltaFunction:
+            def __init__(self, name=None, arguments=None):
+                self.name = name
+                self.arguments = arguments
+
+        class MockChoiceDeltaToolCall:
+            def __init__(self, index, id=None, function=None):
+                self.index = index
+                self.id = id
+                self.function = function
+
+        class MockChoiceDelta:
+            def __init__(self, content=None, tool_calls=None):
+                self.content = content
+                self.tool_calls = tool_calls
+
+        class MockChoice:
+            def __init__(self, delta):
+                self.delta = delta
+
+        class MockChunk:
+            def __init__(self, choices):
+                self.choices = choices
+
+        chunk1 = MockChunk([MockChoice(MockChoiceDelta(
+            tool_calls=[MockChoiceDeltaToolCall(index=0, id="call_1", function=MockChoiceDeltaFunction(name="list_directory"))]
+        ))])
+        chunk2 = MockChunk([MockChoice(MockChoiceDelta(
+            tool_calls=[MockChoiceDeltaToolCall(index=0, function=MockChoiceDeltaFunction(arguments='{"path"'))]
+        ))])
+        chunk3 = MockChunk([MockChoice(MockChoiceDelta(
+            tool_calls=[MockChoiceDeltaToolCall(index=0, function=MockChoiceDeltaFunction(arguments=': "."}'))]
+        ))])
+
+        async def mock_stream_generator():
+            yield chunk1
+            yield chunk2
+            yield chunk3
+
+        mock_client = MagicMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=mock_stream_generator())
+        app.get_openai_client = MagicMock(return_value=mock_client)
+
+        with patch.object(app, 'extract_tool_calls', return_value=[{"tool": "list_directory", "arguments": {"path": "."}}]):
+            await app.chat_completion("some query", stream=True)
+            
+            # Since auto-loop is triggered by the reconstructed tool call JSON, execute_tool_loop should be called!
+            app.execute_tool_loop.assert_called_once_with(max_turns=5)
+
+
 
 
