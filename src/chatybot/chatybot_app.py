@@ -110,7 +110,9 @@ class ChatybotApp:
         self.strip_thinking_from_filebanks: bool = True
         self.default_agentic_instructions: str = (
             "IMPORTANT: You are executing in an autonomous, multi-turn tool-calling loop. "
-            "If you need to use a tool to get information, output ONLY the single next JSON tool call "
+            "Use tools ONLY when necessary to perform actions on the system or fetch external information. "
+            "If the user's request can be answered directly using your general knowledge without tools, do not call any tools and answer directly in natural language. "
+            "If you need to use a tool, output ONLY the single next JSON tool call "
             "block (e.g. within ```json ... ```). DO NOT describe your plan, DO NOT offer a menu of "
             "different options, and DO NOT ask the user for permission or input. Just output the tool "
             "call. Only output natural language/conversation when you have finished all tool executions "
