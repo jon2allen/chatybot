@@ -699,6 +699,21 @@ class TestRunCommandBehavior:
         assert tool_calls_2[0]["tool"] == "run_command"
         assert tool_calls_2[0]["arguments"]["command"] == "cat > test.txt\nhello"
 
+        # Case 3: missing closing brace before markdown code fence backticks
+        raw_completion_3 = (
+            '```json\n'
+            '{\n'
+            '  "tool": "run_command",\n'
+            '  "arguments": {\n'
+            '    "command": "git log --oneline --since=\\"24 hours ago\\" --name-only --pretty=format:\\"%h %s\\" | head -50"\n'
+            '  }\n'
+            '```'
+        )
+        tool_calls_3 = app.extract_tool_calls(raw_completion_3)
+        assert len(tool_calls_3) == 1
+        assert tool_calls_3[0]["tool"] == "run_command"
+        assert "git log" in tool_calls_3[0]["arguments"]["command"]
+
     def test_write_file_tool(self, app):
         """Verifies that the write_file tool writes and appends contents correctly"""
         with tempfile.TemporaryDirectory() as tmpdir:

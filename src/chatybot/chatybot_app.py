@@ -2475,10 +2475,26 @@ class ChatybotApp:
                     except Exception:
                         pass
                 elif brace_count > 0 and j == n:
-                    candidate = text[i:j]
-                    if in_quote:
+                    candidate = text[i:j].rstrip("`\n\r \t")
+                    cand_in_quote = False
+                    cand_escaped = False
+                    cand_brace_count = 0
+                    for char in candidate:
+                        if cand_escaped:
+                            cand_escaped = False
+                        elif char == '\\':
+                            cand_escaped = True
+                        elif char == '"':
+                            cand_in_quote = not cand_in_quote
+                        elif not cand_in_quote:
+                            if char == '{':
+                                cand_brace_count += 1
+                            elif char == '}':
+                                cand_brace_count -= 1
+                    if cand_in_quote:
                         candidate += '"'
-                    candidate += '}' * brace_count
+                    if cand_brace_count > 0:
+                        candidate += '}' * cand_brace_count
                     try:
                         cleaned = clean_json_string(candidate)
                         data = json.loads(cleaned)
