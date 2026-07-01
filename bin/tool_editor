@@ -1,0 +1,28 @@
+#!/usr/bin/env python3
+"""
+Command-line entry point for the ChatyBot Tool Editor TUI.
+
+Usage: tool_editor
+
+Opens a split-panel curses interface for creating new ChatyBot tools.
+"""
+
+import sys
+import os
+
+# Add the src directory to path for imports
+# This script is in bin/, so project root is parent directory
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+src_dir = os.path.join(project_root, "src")
+if src_dir not in sys.path:
+    sys.path.insert(0, src_dir)
+
+# Also add project root for direct imports
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+from chatybot.tools.tool_editor import main
+
+if __name__ == "__main__":
+    import curses
+    curses.wrapper(main)
