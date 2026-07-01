@@ -152,6 +152,7 @@ Active escape commands:
   /stream - Toggle streaming responses.
   /trace <rawpayload|tps|tpsperf> <on|off> - Debugging options
   /script <file> - Execute a script file containing multiple commands.
+  /source <file> - Execute a script file dynamically in the current session.
   /quit | /exit - Exit the program.
   /setdb <dbname> - Create or select a TinyDB database. Use 'Null' to deactivate.
   /dblist - List all TinyDB databases in the db directory.
@@ -215,6 +216,7 @@ chat --> Hello!      # Start a conversation
 | `/logging <start\|end>` | Start/stop logging | `/logging start` |
 | `/save <file> [all] [nothink\|withthink]` | Save last response or all history, with optional thinking stripping | `/save output.txt all nothink` |
 | `/script <path>` | Execute a script | `/script setup.dsl` |
+| `/source <path>` | Execute a script dynamically in the current session | `/source ~/.chatybot_profile` |
 | `/run <command>` | Execute a shell command and capture stdout/stderr/exit code | `/run ls -la` |
 | `/run_safe` | Enable safe mode for shell execution (blocks dangerous commands) | `/run_safe` |
 | `/run_unsafe` | Disable safe mode (requires confirmation for dangerous commands) | `/run_unsafe` |
@@ -241,6 +243,9 @@ chat --> Hello!      # Start a conversation
 |-------------|-------------|---------|
 | `--config-edit` | Launch the TUI configuration manager to edit models | `chatybot --config-edit` |
 | `-c <path>` \| `--config <path>` | Path to alternate TOML configuration file | `chatybot -c ~/my_config.toml` |
+| `--script <path>` | Execute a script file and exit | `chatybot --script test.chatdsl` |
+| `--run <query>` | Execute a single query (prompts or chained escape commands) and exit | `chatybot --run "/model gpt4; list 5 cities"` |
+| `--profile <path>` | Load a startup script prior to entering the interactive REPL | `chatybot --profile ~/.chatybot_profile` |
 
 ---
 
@@ -448,7 +453,8 @@ You can enable native-like tool usage for LLMs, allowing them to autonomously se
 *   **`/tool prompt`**: Displays the active tool injection context and system instructions.
 *   **`/tool loop [turns|max|max=val] [force]`**: Starts the autonomous execution loop. Chatybot will feed the model's requests to local tools, execute them, and feed results back to the model until:
     *   The model returns a conversational natural-language answer (terminal state).
-    *   The maximum number of turns is reached (default 5; use `max` or `max=100` to increase). Loop counts greater than 100 require the `force` flag.
+    *   The maximum number of turns is reached (default 25; configurable via `max_turns` in `tools_config.toml`; use `max` or `max=100` to increase). Loop counts greater than 100 require the `force` flag.
+*   **`/tool auto [on|off]`**: Enables/disables auto-execution of the tool loop. When enabled, any tool call block detected in the LLM completion response automatically triggers the autonomous execution loop.
 *   **`/tool <file.json>` or `/tool <json_string>`**: Manually dispatch a specific tool invocation.
 
 *Example*:
@@ -467,6 +473,7 @@ All agentic tools and execution configurations are managed in `src/chatybot/tool
 [config]
 tool_timeout = 60              # Execution timeout in seconds per tool
 rate_limit_delay = 2.0         # Rate limit sleep duration (seconds) between LLM calls
+max_turns = 25                 # Maximum turn count for auto-loop or default loop
 strip_thinking_from_filebanks = true
 
 # Define individual tools
@@ -681,6 +688,17 @@ chat --> Create a blog post outline about ${topic}
 ```
 
 ### Change log
+
+July 1st, 2026 (v0.6.1)
+-----------------------
+- **User-Level Configuration Path**: Copied and loaded `tools_config.toml` from `~/.config/chatybot/` for pip installations to prevent read-only directory issues.
+- **Auto-Trigger Agentic Tool Loop**: Implemented the new `/tool auto [on|off]` subcommand to automatically run the agentic tool loop upon detecting tool calls, featuring custom streaming chunk reconstruction support.
+- **Semicolon Command Chaining**: Enabled chaining multiple escape commands and prompts on a single line separated by semicolons (`;`) via a new centralized `execute_line` execution helper. Supports CLI `--run` option command lists.
+- **Startup Profile Scripting**: Added a `--profile <script>` CLI option and `/source <script>` escape command to execute scripts in the current interactive session without exiting, with a new `default_profile` config setting.
+- **JSON Parsing Auto-Repair**: Upgraded the JSON extractor to handle raw newlines inside quote literals, ignore `#` or `//` comment characters within quotes, and automatically repair unbalanced JSON output payloads cut off mid-turn.
+- **New Built-in write_file System Tool**: Registered a new system tool `write_file` supporting both write and append operations.
+- **Refined Agentic Prompts**: Updated system prompt instructions and `tools_config.toml` defaults to prevent eager tool usage on general knowledge queries.
+- **Configurable Turn Limit**: Added a configurable `max_turns` limit parameter (default 25) to `tools_config.toml` under `[config]` for the auto-loop and `/tool loop`.
 
 June 28th, 2026 (v0.6.0)
 ------------------------
