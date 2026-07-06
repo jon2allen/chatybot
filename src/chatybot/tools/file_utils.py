@@ -12,6 +12,11 @@ def list_directory(path: str = ".") -> List[str]:
 def read_file(path: str) -> str:
     """Read contents of a file."""
     try:
+        if os.path.exists(path):
+            with open(path, 'rb') as f:
+                chunk = f.read(8192)
+                if b'\x00' in chunk:
+                    return "Error reading file: Binary file format is not supported."
         with open(path, 'r', encoding='utf-8', errors='ignore') as f:
             return f.read()
     except Exception as e:
