@@ -3,6 +3,7 @@ tool_timeout = 60
 rate_limit_delay = 2.0
 max_turns = 25
 strip_thinking_from_filebanks = true
+shell = true
 agentic_instructions = """
 IMPORTANT: You are executing in an autonomous, multi-turn tool-calling loop.
 Use tools ONLY when necessary to perform actions on the system or fetch external information. If the request can be answered directly using your general knowledge without tools, do not call any tools and answer directly in natural language.

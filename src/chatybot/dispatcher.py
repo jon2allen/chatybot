@@ -114,6 +114,12 @@ def validate_and_route(invocation: Dict[str, Any], config: Dict[str, Any]) -> Tu
     except (ImportError, AttributeError) as e:
         raise ImportError(f"Failed to import tool '{tool_name}': {str(e)}")
 
+    if tool_name == "run_command":
+        shell_config = config.get("config", {}).get("shell", True)
+        if isinstance(shell_config, str):
+            shell_config = shell_config.lower() in ("true", "1", "yes", "on")
+        args["shell"] = bool(shell_config)
+
     return func, [], args
 
 
