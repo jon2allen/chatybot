@@ -140,6 +140,15 @@ class TestBufferManager:
         assert isinstance(result, str)
         assert "Test content for buffer manager" in result
         assert "{filebank1}" not in result
+
+    def test_replace_placeholders_clear_unresolved(self, manager):
+        """Test that replace_placeholders_legacy clears unresolved placeholders when clear_unresolved is True (default)"""
+        prompt = "save to ${z} and {y[1]} and $x"
+        result = manager.replace_placeholders_legacy(prompt)
+        assert result == "save to and and"
+
+        result_keep = manager.replace_placeholders_legacy(prompt, clear_unresolved=False)
+        assert result_keep == prompt
     
     def test_show_memory_usage(self, manager, temp_file, capsys):
         """Test showing memory usage"""

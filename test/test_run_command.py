@@ -240,10 +240,18 @@ class TestRunCommandBehavior:
         """Verifies that the run_command tool executes safe commands and blocks unsafe ones"""
         from src.chatybot.tools.file_utils import run_command
         
-        # Test safe command execution
+        # Test safe command execution (default shell=True)
         res = run_command("echo hello_world")
         assert "hello_world" in res
         
+        # Test with shell=False explicitly
+        res_no_shell = run_command("echo hello_world_no_shell", shell=False)
+        assert "hello_world_no_shell" in res_no_shell
+
+        # Test chaining with shell=True (should succeed)
+        res_chained = run_command("echo hello && echo world")
+        assert "hello" in res_chained and "world" in res_chained
+
         # Test dangerous command blocking
         res_blocked = run_command("rm -rf /some/dir")
         assert "Blocked" in res_blocked
