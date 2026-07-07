@@ -1484,8 +1484,6 @@ class ChatybotApp:
                     await self.execute_tool_loop(max_turns=self.max_turns)
                     if self.chat_history:
                         _, final_resp = self.chat_history[-1]
-                        if self.logging_manager.logging_active:
-                            self.logging_manager.log_message(f"Assistant (Auto-loop final): {final_resp}\n")
                         return final_resp
 
             # Log assistant entry with completion datetime and token count
@@ -2618,6 +2616,15 @@ class ChatybotApp:
                     current_loop = []
                 current_loop.append(tool_record)
                 self.buffer_manager.set_script_var('AGENTIC_LOOP', current_loop)
+
+                # Log intermediate tool call if logging is active
+                if self.logging_manager.logging_active:
+                    self.logging_manager.log_message(
+                        f"[Turn {turn_count+1}] Tool Loop Execution:\n"
+                        f"  Tool: {tool_name}\n"
+                        f"  Arguments: {json.dumps(tool_args)}\n"
+                        f"  Result: {result_str}"
+                    )
             
             # Append the tool result back to the temp history as a user message
             combined_results = "\n\n".join(results)
@@ -2659,6 +2666,10 @@ class ChatybotApp:
         # Commit ONLY the final, natural-language outcome to the main chat_history (Option B)
         self.chat_history[-1] = (initial_prompt, final_natural_language_response)
         
+        # Log final response from inside the tool loop if logging is active
+        if self.logging_manager.logging_active:
+            self.logging_manager.log_message(f"Assistant (Agentic Loop Final): {final_natural_language_response}\n")
+            
         print("\nAgentic Tool Loop finished.")
         print(f"Final Response:\n{final_natural_language_response}")
 
