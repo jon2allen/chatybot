@@ -12,6 +12,11 @@ def list_directory(path: str = ".") -> List[str]:
 def read_file(path: str) -> str:
     """Read contents of a file."""
     try:
+        if os.path.exists(path):
+            with open(path, 'rb') as f:
+                chunk = f.read(8192)
+                if b'\x00' in chunk:
+                    return "Error reading file: Binary file format is not supported."
         with open(path, 'r', encoding='utf-8', errors='ignore') as f:
             return f.read()
     except Exception as e:
@@ -38,7 +43,7 @@ def find_files(path: str = ".", pattern: str = "*", search_term: str = None) -> 
         return [f"Error finding files: {e}"]
     return results
 
-def run_command(command: str) -> str:
+def run_command(command: str, shell: bool = True) -> str:
     """Execute a safe shell command and return its output."""
     import subprocess
     import shlex
@@ -59,14 +64,24 @@ def run_command(command: str) -> str:
             if re.search(pattern, command):
                 return f"Blocked: Dangerous command pattern detected ({desc})"
 
-        result = subprocess.run(
-            shlex.split(command),
-            shell=False,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            timeout=30
-        )
+        if shell:
+            result = subprocess.run(
+                command,
+                shell=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=30
+            )
+        else:
+            result = subprocess.run(
+                shlex.split(command),
+                shell=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=30
+            )
         if result.returncode != 0:
             return f"Command exited with code {result.returncode}\nStderr: {result.stderr}\nStdout: {result.stdout}"
         return result.stdout

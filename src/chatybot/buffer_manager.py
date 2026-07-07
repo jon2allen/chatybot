@@ -340,7 +340,7 @@ class BufferManager:
             
         return None
 
-    def replace_placeholders(self, prompt: str, include_images: bool = True) -> Tuple[str, List[Dict]]:
+    def replace_placeholders(self, prompt: str, include_images: bool = True, clear_unresolved: bool = False) -> Tuple[str, List[Dict]]:
         """
         Replace filebank, script variable, and imagebank placeholders in the prompt.
         Supports both ${VAR} and {VAR} syntaxes.
@@ -435,6 +435,16 @@ class BufferManager:
             unbraced_pat = rf"\${re.escape(key)}\b"
             text_prompt = re.sub(unbraced_pat, replace_base, text_prompt)
         
+        if clear_unresolved:
+            # 1. Braced subscript: ${var[idx]} or {var[idx]}
+            text_prompt = re.sub(r'\$?\{[a-zA-Z_]\w*\[-?\d+\]\}', "", text_prompt)
+            # 2. Unbraced subscript: $var[idx]
+            text_prompt = re.sub(r'\$[a-zA-Z_]\w*\[-?\d+\]', "", text_prompt)
+            # 3. Braced base: ${var} or {var}
+            text_prompt = re.sub(r'\$?\{[a-zA-Z_]\w*\}', "", text_prompt)
+            # 4. Unbraced base: $var
+            text_prompt = re.sub(r'\$[a-zA-Z_]\w*\b', "", text_prompt)
+
         # Clean up any remaining whitespace
         text_prompt = text_prompt.strip()
         while "  " in text_prompt:
@@ -442,9 +452,9 @@ class BufferManager:
         
         return text_prompt, multimodal_parts
     
-    def replace_placeholders_legacy(self, prompt: str) -> str:
+    def replace_placeholders_legacy(self, prompt: str, clear_unresolved: bool = True) -> str:
         """Legacy method for backward compatibility. Replaces text and ignores images."""
-        text_prompt, _ = self.replace_placeholders(prompt, include_images=False)
+        text_prompt, _ = self.replace_placeholders(prompt, include_images=False, clear_unresolved=clear_unresolved)
         return text_prompt
     
     def show_memory_usage(self, search_buffer: list = None, detail: bool = False, debug: bool = False, chat_history: list = None) -> None:

@@ -415,7 +415,7 @@ class TestArrayFeature:
         assert arr5[0] == "bob"
         assert arr5[1] == "mary"
         assert arr5[2] == "Jon"
-        assert arr5[3] == "${rpt}"
+        assert arr5[3] == ""
 
         arr7 = app.buffer_manager.script_vars["testarray7"]
         assert len(arr7) == 4
