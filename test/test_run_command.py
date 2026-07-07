@@ -792,6 +792,35 @@ class TestRunCommandBehavior:
             assert record["exit_code"] == 0
             assert record["status"] == "success"
 
+    @pytest.mark.anyio
+    async def test_tool_loop_logging(self, app):
+        """Verifies that the tool execution steps and final response are logged if logging is active"""
+        app.chat_history = [("Find files", '{"tool": "list_directory", "arguments": {"path": "."}}')]
+        app.chat_completion = AsyncMock(return_value="Here is the final response.")
+        
+        # Activate logging
+        app.logging_manager.logging_active = True
+        app.logging_manager.log_message = MagicMock()
+        
+        with patch('subprocess.run') as mock_run:
+            mock_run.return_value.returncode = 0
+            mock_run.return_value.stdout = '{"status": "success", "result": ["file1.txt"]}'
+            mock_run.return_value.stderr = ''
+            
+            await app.execute_tool_loop(max_turns=3)
+            
+            # Verify log_message was called for the intermediate step and the final response
+            assert app.logging_manager.log_message.call_count >= 2
+            
+            # Find the calls for intermediate tool executions and final responses
+            log_calls = [call[0][0] for call in app.logging_manager.log_message.call_args_list]
+            
+            # Check intermediate step
+            assert any("Tool Loop Execution:" in call and "list_directory" in call for call in log_calls)
+            # Check final response log
+            assert any("Assistant (Agentic Loop Final):" in call and "Here is the final response." in call for call in log_calls)
+
+
 
 
 
