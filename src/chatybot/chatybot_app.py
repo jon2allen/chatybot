@@ -2525,6 +2525,9 @@ class ChatybotApp:
         """
         import json
         
+        # Initialize or reset the AGENTIC_LOOP script variable
+        self.buffer_manager.set_script_var('AGENTIC_LOOP', [])
+
         if not self.chat_history:
             print("No prompt has been executed yet. Please run a prompt first.")
             return
@@ -2583,6 +2586,7 @@ class ChatybotApp:
                 
                 # Execute the tool and capture result
                 self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
+                self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '0')
                 try:
                     # dispatch_tool writes result to TOOL_DISPATCH_RESULT and returns the stdout string
                     result_str = self.dispatch_tool(json.dumps(tc))
@@ -2593,6 +2597,27 @@ class ChatybotApp:
                     
                 print(f"Tool Result: {result_str}")
                 results.append(f"Tool: {tool_name}\nArguments: {json.dumps(tool_args)}\nResult: {result_str}")
+
+                # Extract exit code and determine status
+                try:
+                    exit_code_val = int(self.buffer_manager.get_script_var('TOOL_DISPATCH_EXIT_CODE') or 0)
+                except ValueError:
+                    exit_code_val = 1
+
+                tool_record = {
+                    "turn": turn_count + 1,
+                    "tool": tool_name,
+                    "arguments": tool_args,
+                    "result": result_str,
+                    "exit_code": exit_code_val,
+                    "status": "success" if exit_code_val == 0 else "error"
+                }
+
+                current_loop = self.buffer_manager.get_script_var('AGENTIC_LOOP') or []
+                if not isinstance(current_loop, list):
+                    current_loop = []
+                current_loop.append(tool_record)
+                self.buffer_manager.set_script_var('AGENTIC_LOOP', current_loop)
             
             # Append the tool result back to the temp history as a user message
             combined_results = "\n\n".join(results)

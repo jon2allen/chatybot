@@ -768,6 +768,31 @@ class TestRunCommandBehavior:
                 content = f.read()
             assert content == "hello world\nadditional text"
 
+    @pytest.mark.anyio
+    async def test_tool_loop_agentic_loop_variable(self, app):
+        """Verifies that the AGENTIC_LOOP script variable accumulates tool records during tool loop runs"""
+        app.chat_history = [("Find files", '{"tool": "list_directory", "arguments": {"path": "."}}')]
+        app.chat_completion = AsyncMock(return_value="Here is the final response.")
+        
+        with patch('subprocess.run') as mock_run:
+            mock_run.return_value.returncode = 0
+            mock_run.return_value.stdout = '{"status": "success", "result": ["file1.txt"]}'
+            mock_run.return_value.stderr = ''
+            
+            await app.execute_tool_loop(max_turns=3)
+            
+            agentic_loop = app.buffer_manager.get_script_var('AGENTIC_LOOP')
+            assert isinstance(agentic_loop, list)
+            assert len(agentic_loop) == 1
+            record = agentic_loop[0]
+            assert record["turn"] == 1
+            assert record["tool"] == "list_directory"
+            assert record["arguments"] == {"path": "."}
+            assert "success" in record["result"]
+            assert record["exit_code"] == 0
+            assert record["status"] == "success"
+
+
 
 
 
