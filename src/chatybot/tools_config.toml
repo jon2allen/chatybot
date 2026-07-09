@@ -57,7 +57,8 @@ optional = true
 
 [tools.run_command]
 enabled = true
-description = "Execute a shell command safely. Use shell=False, command will be split into tokens. Example: 'find . -name *.chatdsl -exec ls -l {} +'"
+description = """Execute a shell command safely. Use shell=False, command will be split into tokens. Example: 'find . -name *.chatdsl -exec ls -l {} +'
+cd does not persist between calls. Use absolute paths in every command; don't issue cd as a setup command, it has no effect on what follows"""
 module = "chatybot.tools.file_utils"
 function = "run_command"
 
