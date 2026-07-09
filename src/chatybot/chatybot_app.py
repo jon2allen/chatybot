@@ -111,6 +111,7 @@ class ChatybotApp:
         self.tool_timeout: int = 30
         self.rate_limit_delay: float = 0.0
         self.strip_thinking_from_filebanks: bool = True
+        self.tool_overrides: Dict[str, bool] = {}
         self.default_agentic_instructions: str = (
             "IMPORTANT: You are executing in an autonomous, multi-turn tool-calling loop. "
             "Use tools ONLY when necessary to perform actions on the system or fetch external information. "
@@ -2343,13 +2344,16 @@ class ChatybotApp:
                 print(f"Dispatcher not found: {dispatcher_path}")
                 return ""
             
-            # Run the dispatcher
+            # Run the dispatcher with overrides
+            env = os.environ.copy()
+            env["CHATYBOT_TOOL_OVERRIDES"] = json.dumps(self.tool_overrides)
             cmd = ['python3', dispatcher_path, tmp_path, '--config', config_path]
             result = subprocess.run(
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=self.tool_timeout
+                timeout=self.tool_timeout,
+                env=env
             )
             
             # Store result in buffer_manager
@@ -2728,16 +2732,9 @@ class ChatybotApp:
         print("\nAgentic Tool Loop finished.")
         print(f"Final Response:\n{final_natural_language_response}")
 
-    def generate_tool_context(self) -> str:
-        """
-        Generate tool definitions for LLM context injection.
-        Reads tools_config.toml and formats tool schemas in a way the LLM can understand.
-        
-        Returns:
-            Formatted string with tool definitions for LLM prompt
-        """
+    def _load_tools_config(self) -> dict:
+        """Loads and returns the TOML tool definitions configuration."""
         import os
-        
         user_config_path = os.path.expanduser('~/.config/chatybot/tools_config.toml')
         if not os.path.exists(user_config_path):
             package_config = os.path.join(os.path.dirname(__file__), 'tools_config.toml')
@@ -2750,15 +2747,27 @@ class ChatybotApp:
         try:
             import tomllib
             with open(config_path, 'rb') as f:
-                config = tomllib.load(f)
+                return tomllib.load(f)
         except (ImportError, FileNotFoundError, Exception):
             try:
                 import toml
                 with open(config_path, 'r') as f:
-                    config = toml.load(f)
+                    return toml.load(f)
             except (ImportError, FileNotFoundError, Exception):
-                print("Could not load tools_config.toml")
-                return ""
+                return {}
+
+    def generate_tool_context(self) -> str:
+        """
+        Generate tool definitions for LLM context injection.
+        Reads tools_config.toml and formats tool schemas in a way the LLM can understand.
+        
+        Returns:
+            Formatted string with tool definitions for LLM prompt
+        """
+        config = self._load_tools_config()
+        if not config:
+            print("Could not load tools_config.toml")
+            return ""
         
         # Load custom agentic instructions and tool timeout if present
         config_section = config.get('config', {})
@@ -2805,7 +2814,9 @@ class ChatybotApp:
         lines.append("")
         
         for tool_name, tool_meta in tools.items():
-            if not tool_meta.get('enabled', False):
+            config_enabled = tool_meta.get('enabled', False)
+            is_enabled = self.tool_overrides.get(tool_name, config_enabled)
+            if not is_enabled:
                 continue
             
             desc = tool_meta.get('description', 'No description')
@@ -3786,7 +3797,61 @@ class ChatybotApp:
             
             subcmd = parts[1].lower()
             
-            if subcmd == "on":
+            if subcmd == "list":
+                config = self._load_tools_config()
+                tools = config.get('tools', {})
+                if not tools:
+                    print("No tools defined in configuration.")
+                    return True
+                print("\nAvailable Tools:")
+                for tool_name, tool_meta in tools.items():
+                    config_enabled = tool_meta.get('enabled', False)
+                    is_enabled = self.tool_overrides.get(tool_name, config_enabled)
+                    status = "[ON] " if is_enabled else "[OFF]"
+                    desc = tool_meta.get('description', 'No description')
+                    print(f"  {status}  {tool_name:<16} - {desc}")
+                print("")
+                return True
+            
+            elif subcmd in ("enable", "disable"):
+                if len(parts) < 3:
+                    print(f"Usage: /tool {subcmd} <tool_name>|all")
+                    return True
+                
+                target = parts[2].strip()
+                config = self._load_tools_config()
+                tools = config.get('tools', {})
+                
+                target_value = (subcmd == "enable")
+                
+                if target.lower() == "all":
+                    for tool_name in tools.keys():
+                        self.tool_overrides[tool_name] = target_value
+                    print(f"All tools {'enabled' if target_value else 'disabled'}.")
+                else:
+                    if target not in tools:
+                        # Check case-insensitive
+                        matched_tool = None
+                        for t in tools.keys():
+                            if t.lower() == target.lower():
+                                matched_tool = t
+                                break
+                        if matched_tool:
+                            target = matched_tool
+                        else:
+                            print(f"Error: Tool '{target}' not found in configuration.")
+                            return True
+                    
+                    self.tool_overrides[target] = target_value
+                    print(f"Tool '{target}' {'enabled' if target_value else 'disabled'}.")
+                
+                # If tool mode is active, update the injected prompt context dynamically
+                if self.tool_mode:
+                    context = self.generate_tool_context()
+                    self.buffer_manager.set_script_var('TOOL_CONTEXT', context)
+                return True
+            
+            elif subcmd == "on":
                 # Enable tool mode - inject tool definitions into system prompt
                 context = self.generate_tool_context()
                 if context:
