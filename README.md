@@ -450,6 +450,9 @@ The `/run` command executes shell commands on the host machine and integrates ou
 You can enable native-like tool usage for LLMs, allowing them to autonomously select and execute local python functions in a multi-turn loop.
 *   **`/tool on`**: Enables tool mode and injects all active tool definitions from `tools_config.toml` into the LLM system prompt context.
 *   **`/tool off`**: Disables tool mode.
+*   **`/tool list`**: Lists all available tools, showing their enabled/disabled status and description.
+*   **`/tool enable <tool>|all`**: Dynamically enables a specific tool or all tools for the current session.
+*   **`/tool disable <tool>|all`**: Dynamically disables a specific tool or all tools, forcing an immediate prompt context refresh and runtime block in the dispatcher.
 *   **`/tool prompt`**: Displays the active tool injection context and system instructions.
 *   **`/tool loop [turns|max|max=val] [force]`**: Starts the autonomous execution loop. Chatybot will feed the model's requests to local tools, execute them, and feed results back to the model until:
     *   The model returns a conversational natural-language answer (terminal state).
@@ -688,6 +691,17 @@ chat --> Create a blog post outline about ${topic}
 ```
 
 ### Change log
+
+July 9th, 2026 (v0.6.1)
+-----------------------
+- **Dynamic Tool Management**: Implemented `/tool list`, `/tool enable <tool>`, and `/tool disable <tool>` to dynamically control available agentic tools during a session.
+- **Strict Context Syncing**: Ensured that LLM prompt context is strictly synchronized and regenerated on any runtime tool state change and loop execution.
+- **Environment Enforced Tool Override**: Integrated environment variable verification (`CHATYBOT_TOOL_OVERRIDES`) in subprocess execution to prevent disallowed tools from executing.
+- **Tool Execution Safeguards**: Added parallel tool call limits (`max_tool_calls_per_turn` config support) and handled excess tool calls gracefully. Added execution enhancements and payload debugging logging.
+- **Agentic Loop Metrics & Logging**: Saved detailed execution logs and metrics to the `AGENTIC_LOOP` script variable, and added step-by-step logging to `execute_tool_loop`.
+- **System Tooling Expansion**: Added a built-in `change_dir` tool, default shell command support for `run_command`, and safety checks to reject binary files in `read_file`.
+- **ChatDSL Variable Enhancements**: Automatically cleared undefined script variables to empty string instead of retaining syntax placeholders.
+- **Comprehensive Integration Testing**: Created `test21_tool_management.chatdsl` to validate all runtime overrides, enable/disable actions, context syncing, and dispatcher enforcement.
 
 July 1st, 2026 (v0.6.1)
 -----------------------
