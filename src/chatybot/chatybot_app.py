@@ -538,7 +538,11 @@ class ChatybotApp:
         Returns:
             Path to the chat history file
         """
-        path = os.path.expanduser("~/.local/share/chatybot")
+        import sys
+        if "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST"):
+            path = os.path.expanduser("~/.local/share/chatybot/test")
+        else:
+            path = os.path.expanduser("~/.local/share/chatybot")
         os.makedirs(path, exist_ok=True)
         return os.path.join(path, ".chat_history")
 
@@ -709,7 +713,7 @@ class ChatybotApp:
         model_name = model_config["name"]
         
         if isinstance(prompt, list):
-            messages = list(prompt)
+            messages = copy.deepcopy(prompt)
         else:
             if self.matcher.matches(prompt[:12]):
                print( "Error command verb at beginning:  " + prompt[:9] + " - use escape / sequence")
@@ -2356,6 +2360,14 @@ class ChatybotApp:
                 return f"Error: Tool execution failed with exit code {result.returncode}: {result.stderr or result.stdout or 'Unknown error'}"
             else:
                 print(f"Tool dispatched successfully")
+                if tool_call and tool_call.get('tool') == 'change_dir':
+                    path = tool_call.get('arguments', {}).get('path')
+                    if path:
+                        try:
+                            os.chdir(path)
+                            print(f"Main process updated CWD to: {os.getcwd()}")
+                        except Exception as e:
+                            print(f"Warning: Failed to update main process CWD to {path}: {e}")
                 return result.stdout
             
         except Exception as e:
