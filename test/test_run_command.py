@@ -828,6 +828,89 @@ class TestRunCommandBehavior:
             # Check final response log
             assert any("Assistant (Agentic Loop Final):" in call and "Here is the final response." in call for call in log_calls)
 
+    @pytest.mark.anyio
+    async def test_tool_enable_disable_list(self, app):
+        """Verifies that the /tool list, enable, and disable commands modify the tool_overrides dict and context appropriately."""
+        # Setup mock configs
+        mock_config = {
+            "tools": {
+                "list_directory": {
+                    "enabled": True,
+                    "description": "List contents of a directory"
+                },
+                "write_file": {
+                    "enabled": False,
+                    "description": "Write a file"
+                }
+            }
+        }
+        app._load_tools_config = MagicMock(return_value=mock_config)
+        
+        # 1. Test /tool list (checks that it prints and doesn't fail)
+        import sys
+        from io import StringIO
+        
+        captured_output = StringIO()
+        sys.stdout = captured_output
+        try:
+            res = await app.handle_escape_command("/tool list")
+            assert res is True
+        finally:
+            sys.stdout = sys.__stdout__
+            
+        output = captured_output.getvalue()
+        assert "list_directory" in output
+        assert "write_file" in output
+        assert "[ON] " in output
+        assert "[OFF]" in output
+        
+        # 2. Test /tool disable list_directory
+        res = await app.handle_escape_command("/tool disable list_directory")
+        assert res is True
+        assert app.tool_overrides["list_directory"] is False
+        
+        # 3. Test /tool enable write_file
+        res = await app.handle_escape_command("/tool enable write_file")
+        assert res is True
+        assert app.tool_overrides["write_file"] is True
+        
+        # 4. Test case-insensitivity on enable
+        res = await app.handle_escape_command("/tool enable WRITE_FILE")
+        assert res is True
+        assert app.tool_overrides["write_file"] is True
+        
+        # 5. Test error on non-existent tool
+        captured_output = StringIO()
+        sys.stdout = captured_output
+        try:
+            res = await app.handle_escape_command("/tool enable fake_tool")
+            assert res is True
+        finally:
+            sys.stdout = sys.__stdout__
+        assert "Error: Tool 'fake_tool' not found" in captured_output.getvalue()
+        
+        # 6. Test enable/disable all
+        res = await app.handle_escape_command("/tool disable all")
+        assert res is True
+        assert all(v is False for v in app.tool_overrides.values())
+        
+        res = await app.handle_escape_command("/tool enable all")
+        assert res is True
+        assert all(v is True for v in app.tool_overrides.values())
+        
+        # 7. Test context generation respects overrides
+        app.tool_mode = True
+        context = app.generate_tool_context()
+        # Since all tools are enabled, both should be in context
+        assert "list_directory" in context
+        assert "write_file" in context
+        
+        app.tool_overrides["write_file"] = False
+        context_after_disable = app.generate_tool_context()
+        assert "list_directory" in context_after_disable
+        assert "write_file" not in context_after_disable
+
+
 
 
 

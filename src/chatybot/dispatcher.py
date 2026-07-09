@@ -77,7 +77,17 @@ def validate_and_route(invocation: Dict[str, Any], config: Dict[str, Any]) -> Tu
         raise KeyError(f"The tool '{tool_name}' is not registered in the system.")
 
     tool_meta = tools_registry[tool_name]
-    if not tool_meta.get("enabled", False):
+    is_enabled = tool_meta.get("enabled", False)
+    overrides_env = os.environ.get("CHATYBOT_TOOL_OVERRIDES")
+    if overrides_env:
+        try:
+            overrides = json.loads(overrides_env)
+            if tool_name in overrides:
+                is_enabled = overrides[tool_name]
+        except Exception:
+            pass
+
+    if not is_enabled:
         raise PermissionError(f"Access Denied: Tool '{tool_name}' is currently disabled in configuration.")
 
     # Parameter Verification
