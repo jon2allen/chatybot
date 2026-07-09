@@ -2591,6 +2591,12 @@ class ChatybotApp:
             # Document the tool call assistant response in temp history
             temp_history.append({"role": "assistant", "content": current_response})
             
+            excess_calls = []
+            if len(tool_calls) > self.max_tool_calls_per_turn:
+                print(f"Warning: {len(tool_calls)} tool calls requested. Capping at {self.max_tool_calls_per_turn} parallel tool calls per turn.")
+                excess_calls = tool_calls[self.max_tool_calls_per_turn:]
+                tool_calls = tool_calls[:self.max_tool_calls_per_turn]
+
             results = []
             for tc in tool_calls:
                 tool_name = tc.get("tool")
@@ -2642,6 +2648,37 @@ class ChatybotApp:
                         f"  Result: {result_str}"
                     )
             
+            for tc in excess_calls:
+                tool_name = tc.get("tool")
+                tool_args = tc.get("arguments", {})
+                err_msg = f"Error: Only max {self.max_tool_calls_per_turn} tool calls are allowed per turn. This tool call was not executed."
+                print(f"[Turn {turn_count+1}/{max_turns}] Skipping tool: {tool_name} (exceeded parallel limit)")
+                results.append(f"Tool: {tool_name}\nArguments: {json.dumps(tool_args)}\nResult: {err_msg}")
+                
+                # Extract exit code and determine status
+                tool_record = {
+                    "turn": turn_count + 1,
+                    "tool": tool_name,
+                    "arguments": tool_args,
+                    "result": err_msg,
+                    "exit_code": 1,
+                    "status": "error"
+                }
+                current_loop = self.buffer_manager.get_script_var('AGENTIC_LOOP') or []
+                if not isinstance(current_loop, list):
+                    current_loop = []
+                current_loop.append(tool_record)
+                self.buffer_manager.set_script_var('AGENTIC_LOOP', current_loop)
+
+                # Log intermediate tool call if logging is active
+                if self.logging_manager.logging_active:
+                    self.logging_manager.log_message(
+                        f"[Turn {turn_count+1}] Tool Loop Execution (SKIPPED - EXCEEDED LIMIT):\n"
+                        f"  Tool: {tool_name}\n"
+                        f"  Arguments: {json.dumps(tool_args)}\n"
+                        f"  Result: {err_msg}"
+                    )
+
             # Append the tool result back to the temp history as a user message
             combined_results = "\n\n".join(results)
             temp_history.append({"role": "user", "content": f"Tool execution results:\n{combined_results}"})
