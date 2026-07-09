@@ -4810,6 +4810,7 @@ class ChatybotApp:
         print("  /run <command> - Execute a shell command and store output in RUN_COMPLETION (and LAST_COMPLETION).")
         print("  /run_safe - Enable safe mode (block dangerous commands).")
         print("  /run_unsafe - Disable safe mode (allow dangerous commands).")
+        print("  /tool [on|off|list|enable <tool>|disable <tool>|prompt|loop|auto] - Manage tool mode and dispatch tool loops/invocations.")
         print("\nScript-specific features:")
         print("  set <name> = <value> - Define a variable")
         print("  ${name} - Reference a variable")
