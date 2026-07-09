@@ -12,6 +12,7 @@ import re
 import shlex
 import random
 import json
+import copy
 from datetime import datetime
 from typing import Dict, Any, List, Tuple, Optional, Callable, Union
 import logging
@@ -105,6 +106,7 @@ class ChatybotApp:
         self.in_tool_loop: bool = False
         self.tool_auto: bool = False
         self.max_turns: int = 25
+        self.max_tool_calls_per_turn: int = 10
         self.agentic_instructions: str = ""
         self.tool_timeout: int = 30
         self.rate_limit_delay: float = 0.0
@@ -198,11 +200,13 @@ class ChatybotApp:
                     with open(config_path, 'r') as f:
                         tools_cfg = toml.load(f)
                 except Exception:
+                    print("could not load tools_config.toml, continuing ")
                     tools_cfg = {}
             
             config_section = tools_cfg.get('config', {})
             self.default_profile = config_section.get('default_profile')
             self.max_turns = config_section.get('max_turns', 25)
+            self.max_tool_calls_per_turn = config_section.get('max_tool_calls_per_turn', 10)
 
         # Set up input history
         self.load_input_history()
@@ -2722,6 +2726,11 @@ class ChatybotApp:
         if 'max_turns' in config_section:
             try:
                 self.max_turns = int(config_section.get('max_turns'))
+            except (ValueError, TypeError):
+                pass
+        if 'max_tool_calls_per_turn' in config_section:
+            try:
+                self.max_tool_calls_per_turn = int(config_section.get('max_tool_calls_per_turn'))
             except (ValueError, TypeError):
                 pass
         if 'strip_thinking_from_filebanks' in config_section:
