@@ -1,0 +1,44 @@
+# Test Case 21: Tool Management Subcommands and Runtime Overrides
+# Description: Verify /tool list, enable, disable, auto, prompt, loop, and dispatching.
+
+# Switch to the requested devstral_1 model
+/model devstral_1
+
+# Display /help /tool
+/help /tool
+
+# 1. Initial tool list
+/tool list
+
+# 2. Disable list_directory and show list to verify [OFF] status
+/tool disable list_directory
+/tool list
+
+# 3. Test that dispatching a disabled tool gets blocked by the dispatcher
+/tool {"tool": "list_directory", "arguments": {"path": "."}}
+
+# 4. Re-enable list_directory and show list to verify [ON] status
+/tool enable list_directory
+/tool list
+
+# 5. Test that dispatching an enabled tool succeeds
+/tool {"tool": "list_directory", "arguments": {"path": "."}}
+
+# 6. Turn on tool mode and verify prompt contains list_directory
+/tool on
+/tool prompt
+
+# 7. Disable list_directory and show prompt to verify it was removed from LLM context
+/tool disable list_directory
+/tool prompt
+
+# 8. Re-enable list_directory for loop testing
+/tool enable list_directory
+
+# 9. Test tool auto mode toggles
+/tool auto on
+/tool auto off
+
+# 10. Execute a simple autonomous tool execution using the tool loop
+List the files in the current directory.
+/tool loop 3
