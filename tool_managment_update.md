@@ -19,7 +19,8 @@ This update adds runtime, session-based tool enable/disable capabilities and too
 1. **In-Memory State**: Added a `self.tool_overrides` dictionary to the `ChatybotApp` instance. This overrides the default TOML configuration (`enabled = true/false`) only for the duration of the current session.
 2. **Context Regeneration**: When `/tool enable` or `/tool disable` is invoked:
    - It updates the in-memory overrides.
-   - If tool mode is active (`self.tool_mode`), it immediately regenerates the tool context and updates the `TOOL_CONTEXT` script variable, updating the LLM's system prompt context on the fly.
+   - It immediately regenerates the tool context and updates the `TOOL_CONTEXT` script variable (if `self.tool_mode` is active) and prints a refresh confirmation.
+   - In addition, entering the `/tool loop` (via `execute_tool_loop`) or enabling auto-loop mode (`/tool auto on`) will always force-reload the latest tool configurations and refresh the prompt context before running.
 3. **Subprocess Isolation Enforced**:
    - `dispatcher.py` runs as a separate subprocess and loads `tools_config.toml` from disk.
    - To respect in-memory overrides, the overrides are serialized to JSON and passed to the dispatcher subprocess via the `CHATYBOT_TOOL_OVERRIDES` environment variable.

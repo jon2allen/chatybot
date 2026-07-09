@@ -2557,12 +2557,11 @@ class ChatybotApp:
         # Enable tool loop state
         self.in_tool_loop = True
 
-        # Ensure tool mode is enabled when entering the loop
-        if not self.tool_mode or not self.tool_context:
-            context = self.generate_tool_context()
-            if context:
-                self.tool_mode = True
-                self.buffer_manager.set_script_var('TOOL_CONTEXT', context)
+        # Always reload and refresh the tool context when starting the loop
+        context = self.generate_tool_context()
+        if context:
+            self.tool_mode = True
+            self.buffer_manager.set_script_var('TOOL_CONTEXT', context)
         
         # Build the temporary history buffer starting with past turns to preserve context
         temp_history = []
@@ -3845,10 +3844,11 @@ class ChatybotApp:
                     self.tool_overrides[target] = target_value
                     print(f"Tool '{target}' {'enabled' if target_value else 'disabled'}.")
                 
-                # If tool mode is active, update the injected prompt context dynamically
+                # Regenerate tool context to update in-memory state and refresh variable context if active
+                context = self.generate_tool_context()
                 if self.tool_mode:
-                    context = self.generate_tool_context()
                     self.buffer_manager.set_script_var('TOOL_CONTEXT', context)
+                print("Prompt context refreshed with updated tools.")
                 return True
             
             elif subcmd == "on":
