@@ -944,23 +944,25 @@ class ChatybotApp:
             start_time = time.time()
 
             if self.trace_raw_payload:
-
-
-                print("Payload:")
-                print("-----------------------------")
-                # Don't fail if kwargs can't be JSON serialized completely, fallback handled
                 payload_str = ""
                 try:
                     payload_str = json.dumps(kwargs, indent=2)
                 except TypeError:
                     payload_str = str(kwargs)
-                print(payload_str)
-                print("---- end of payload ---")
                 payload_bytes = payload_str.encode('utf-8')
                 size_bytes = len(payload_bytes)
                 size_kb = size_bytes / 1024
                 est_tokens = max(1, int(size_bytes / 4))
-                print(f"Size: {size_bytes} bytes ({size_kb:.2f} KB) | Est. Tokens: ~{est_tokens} (industry avg)")
+                size_info = f"Size: {size_bytes} bytes ({size_kb:.2f} KB) | Est. Tokens: ~{est_tokens} (industry avg)"
+
+                print("Payload:")
+                print("-----------------------------")
+                print(payload_str)
+                print("---- end of payload ---")
+                print(size_info)
+
+                log_content = f"Payload:\n---------------------\n{payload_str}\n---- end of payload ---\n{size_info}"
+                self.logging_manager.log_message(log_content)
 
 
             # Capture payload for debug mode
@@ -4354,18 +4356,28 @@ class ChatybotApp:
                         "top_n": top_n,
                         "documents": chunked_docs
                     }
-                    print("Payload:")
-                    print("-----------------------------")
-                    print(f"POST {base_url}")
-                    print(f"Headers: {{'Authorization': 'Bearer {masked_key}', 'Content-Type': 'application/json'}}")
                     payload_str = json.dumps(payload, indent=2)
-                    print(payload_str)
-                    print("---- end of payload ---")
                     payload_bytes = payload_str.encode('utf-8')
                     size_bytes = len(payload_bytes)
                     size_kb = size_bytes / 1024
                     est_tokens = max(1, int(size_bytes / 4))
-                    print(f"Size: {size_bytes} bytes ({size_kb:.2f} KB) | Est. Tokens: ~{est_tokens} (industry avg)")
+                    size_info = f"Size: {size_bytes} bytes ({size_kb:.2f} KB) | Est. Tokens: ~{est_tokens} (industry avg)"
+
+                    print("Payload:")
+                    print("-----------------------------")
+                    print(f"POST {base_url}")
+                    print(f"Headers: {{'Authorization': 'Bearer {masked_key}', 'Content-Type': 'application/json'}}")
+                    print(payload_str)
+                    print("---- end of payload ---")
+                    print(size_info)
+
+                    log_content = (
+                        f"Rerank Payload:\n---------------------\n"
+                        f"POST {base_url}\n"
+                        f"Headers: {{'Authorization': 'Bearer {masked_key}', 'Content-Type': 'application/json'}}\n"
+                        f"{payload_str}\n---- end of payload ---\n{size_info}"
+                    )
+                    self.logging_manager.log_message(log_content)
 
 
                 results = ranker.rerank(query=query, top_n=top_n, verbose=False)
