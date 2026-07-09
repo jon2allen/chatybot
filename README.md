@@ -692,7 +692,7 @@ chat --> Create a blog post outline about ${topic}
 
 ### Change log
 
-July 9th, 2026 (v0.6.1)
+July 9th, 2026 (v0.6.2)
 -----------------------
 - **Dynamic Tool Management**: Implemented `/tool list`, `/tool enable <tool>`, and `/tool disable <tool>` to dynamically control available agentic tools during a session.
 - **Strict Context Syncing**: Ensured that LLM prompt context is strictly synchronized and regenerated on any runtime tool state change and loop execution.
