@@ -102,3 +102,12 @@ def write_file(path: str, content: str, append: bool = False) -> str:
     except Exception as e:
         return f"Error writing file: {e}"
 
+def change_dir(path: str) -> str:
+    """Change the current working directory."""
+    try:
+        os.chdir(path)
+        return f"Success: Changed working directory to '{os.getcwd()}'"
+    except Exception as e:
+        return f"Error changing directory: {e}"
+
+
