@@ -2547,7 +2547,7 @@ class ChatybotApp:
         import json
         
         # Initialize or reset the AGENTIC_LOOP script variable
-        self.buffer_manager.set_script_var('AGENTIC_LOOP', [])
+        self.buffer_manager.set_script_var('AGENTIC_LOOP', [], allow_protected=True)
 
         if not self.chat_history:
             print("No prompt has been executed yet. Please run a prompt first.")
@@ -2643,7 +2643,7 @@ class ChatybotApp:
                 if not isinstance(current_loop, list):
                     current_loop = []
                 current_loop.append(tool_record)
-                self.buffer_manager.set_script_var('AGENTIC_LOOP', current_loop)
+                self.buffer_manager.set_script_var('AGENTIC_LOOP', current_loop, allow_protected=True)
 
                 # Log intermediate tool call if logging is active
                 if self.logging_manager.logging_active:
@@ -2674,7 +2674,7 @@ class ChatybotApp:
                 if not isinstance(current_loop, list):
                     current_loop = []
                 current_loop.append(tool_record)
-                self.buffer_manager.set_script_var('AGENTIC_LOOP', current_loop)
+                self.buffer_manager.set_script_var('AGENTIC_LOOP', current_loop, allow_protected=True)
 
                 # Log intermediate tool call if logging is active
                 if self.logging_manager.logging_active:
@@ -4771,7 +4771,9 @@ class ChatybotApp:
                             print(f"Warning: Variable '{clean_var_name}' already contains {'image data' if is_existing_image else 'JSON'}. Not overwritten.")
                             return True
             
-            self.buffer_manager.set_script_var(clean_var_name, var_value)
+            success = self.buffer_manager.set_script_var(clean_var_name, var_value)
+            if not success:
+                return True
             return True
 
         elif cmd == "/reloadmacros":

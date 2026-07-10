@@ -182,10 +182,33 @@ class BufferManager:
         else:
             print(content[:100] + ("..." if len(content) > 100 else ""))
     
-    def set_script_var(self, var_name: str, var_value: Any) -> None:
-        """Set a script variable."""
+    def is_protected_var(self, var_name: str) -> bool:
+        """Check if a variable is protected and cannot be modified via /setvar."""
+        protected_vars = {
+            'AGENTIC_LOOP',  # Used for tracking agentic tool loop execution
+            'CHAT_HISTORY',  # System-managed chat history
+            'LAST_RESPONSE', # System-managed last response
+        }
+        return var_name in protected_vars
+
+    def set_script_var(self, var_name: str, var_value: Any, allow_protected: bool = False) -> bool:
+        """Set a script variable.
+        
+        Args:
+            var_name: Name of the variable
+            var_value: Value to set
+            allow_protected: If False (default), protected variables cannot be modified
+        
+        Returns:
+            True if variable was set successfully, False if protected and not allowed
+        """
+        if not allow_protected and self.is_protected_var(var_name):
+            print(f"Error: '{var_name}' is a protected variable and cannot be modified.")
+            return False
+        
         self.script_vars[var_name] = var_value
         print(f"Variable '{var_name}' set.")
+        return True
 
     def get_script_var(self, var_name: str) -> Optional[str]:
         """
