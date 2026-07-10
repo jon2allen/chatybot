@@ -211,6 +211,20 @@ class TestBufferManager:
         assert "SEARCH_BUFFER:" in captured.out
         assert "test content" in captured.out
 
+    def test_protected_variables(self, manager):
+        """Test that protected variables cannot be modified by set_script_var unless explicitly allowed"""
+        # Test modifying a normal variable works
+        assert manager.set_script_var("normal_var", "value") is True
+        assert manager.get_script_var("normal_var") == "value"
+
+        # Test modifying protected variables fails without allow_protected=True
+        assert manager.set_script_var("AGENTIC_LOOP", ["record1"]) is False
+        assert manager.get_script_var("AGENTIC_LOOP") is None
+
+        # Test modifying protected variables succeeds with allow_protected=True
+        assert manager.set_script_var("AGENTIC_LOOP", ["record1"], allow_protected=True) is True
+        assert manager.get_script_var("AGENTIC_LOOP") == ["record1"]
+
 
 class TestImageBanks:
     """Test suite for Image Bank functionality"""
