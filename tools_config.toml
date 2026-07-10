@@ -23,6 +23,11 @@ type = "string"
 description = "Directory path to list"
 optional = true
 
+[tools.list_directory.parameters.details]
+type = "boolean"
+description = "If true, returns detailed file metadata (size, type, modification date)"
+optional = true
+
 [tools.read_file]
 enabled = true
 description = "Read the contents of a file"
@@ -53,6 +58,11 @@ optional = true
 [tools.find_files.parameters.search_term]
 type = "string"
 description = "Literal text substring to search for inside files (does NOT support regex or logical operators like '|')"
+optional = true
+
+[tools.find_files.parameters.details]
+type = "boolean"
+description = "If true, returns detailed file metadata (size, path, type, modification date)"
 optional = true
 
 [tools.run_command]

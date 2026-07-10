@@ -2,10 +2,46 @@ import os
 import fnmatch
 from typing import List, Dict, Any
 
-def list_directory(path: str = ".") -> List[str]:
+import datetime
+
+def list_directory(path: str = ".", details: bool = False) -> List[Any]:
     """List contents of a directory."""
     try:
-        return os.listdir(path)
+        if not details:
+            return os.listdir(path)
+        
+        results = []
+        with os.scandir(path) as entries:
+            for entry in entries:
+                try:
+                    stat_info = entry.stat()
+                    mtime = datetime.datetime.fromtimestamp(stat_info.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
+                    
+                    if entry.is_dir(follow_symlinks=False):
+                        entry_type = "directory"
+                        size = 0
+                    elif entry.is_file(follow_symlinks=False):
+                        entry_type = "file"
+                        size = stat_info.st_size
+                    else:
+                        entry_type = "other"
+                        size = stat_info.st_size
+                        
+                    results.append({
+                        "name": entry.name,
+                        "type": entry_type,
+                        "size": size,
+                        "modified": mtime
+                    })
+                except Exception:
+                    # Fallback if stat fails for a specific entry
+                    results.append({
+                        "name": entry.name,
+                        "type": "unknown",
+                        "size": 0,
+                        "modified": "unknown"
+                    })
+        return results
     except Exception as e:
         return [f"Error listing directory: {e}"]
 
@@ -22,8 +58,8 @@ def read_file(path: str) -> str:
     except Exception as e:
         return f"Error reading file: {e}"
 
-def find_files(path: str = ".", pattern: str = "*", search_term: str = None) -> List[str]:
-    """Find files matching pattern, optionally containing search_term."""
+def find_files(path: str = ".", pattern: str = "*", search_term: str = None, details: bool = False) -> List[Any]:
+    """Find files matching pattern, optionally containing search_term and metadata."""
     results = []
     try:
         for root, dirs, files in os.walk(path):
@@ -33,12 +69,32 @@ def find_files(path: str = ".", pattern: str = "*", search_term: str = None) -> 
                     if search_term:
                         try:
                             with open(full_path, 'r', encoding='utf-8', errors='ignore') as f:
-                                if search_term in f.read():
-                                    results.append(full_path)
+                                if search_term not in f.read():
+                                    continue
                         except Exception:
-                            pass
-                    else:
+                            continue
+                    
+                    if not details:
                         results.append(full_path)
+                    else:
+                        try:
+                            stat_info = os.stat(full_path)
+                            mtime = datetime.datetime.fromtimestamp(stat_info.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
+                            results.append({
+                                "name": file,
+                                "path": full_path,
+                                "type": "file",
+                                "size": stat_info.st_size,
+                                "modified": mtime
+                            })
+                        except Exception:
+                            results.append({
+                                "name": file,
+                                "path": full_path,
+                                "type": "unknown",
+                                "size": 0,
+                                "modified": "unknown"
+                            })
     except Exception as e:
         return [f"Error finding files: {e}"]
     return results
