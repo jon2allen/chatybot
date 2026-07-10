@@ -128,6 +128,7 @@ class ChatybotApp:
         self.trace_tps: bool = False
         self.trace_tps_perf: bool = False
         self.trace_rerank: bool = False
+        self.trace_agentic_loop: bool = False
         self.debug_payload_mode: bool = False
         self.debug_response_mode: bool = False
         self.debug_response_raw: bool = False
@@ -2730,6 +2731,53 @@ class ChatybotApp:
             
         print("\nAgentic Tool Loop finished.")
         print(f"Final Response:\n{final_natural_language_response}")
+        
+        # Automatically show trace if agentic loop tracing is enabled
+        if self.trace_agentic_loop:
+            self.show_agentic_loop_trace()
+
+    def show_agentic_loop_trace(self) -> None:
+        """
+        Print a summary of the most recent agentic tool loop run.
+
+        Reads the AGENTIC_LOOP script variable (a list of per-call records
+        recorded by execute_tool_loop) and prints:
+          - total number of tool calls
+          - count of successes vs failures
+          - a numbered list of calls with status (SUCCESS/FAILED) beside each
+        """
+        loop_data = self.buffer_manager.get_script_var('AGENTIC_LOOP')
+        if not isinstance(loop_data, list) or not loop_data:
+            print("No agentic loop has been run yet.")
+            return
+
+        total = len(loop_data)
+        successes = sum(1 for r in loop_data if r.get("status") == "success")
+        failures = total - successes
+
+        print("\n=== AGENTIC LOOP TRACE ===")
+        print(f"Total tool calls: {total}  ({successes} success, {failures} failed)")
+        print("-" * 60)
+
+        for i, rec in enumerate(loop_data, 1):
+            tool_name = rec.get("tool", "unknown")
+            turn = rec.get("turn", "?")
+            status = rec.get("status", "error")
+            status_label = "SUCCESS" if status == "success" else "FAILED"
+            print(f"[{i}] Turn {turn} · {tool_name} — {status_label}")
+
+            if status != "success":
+                result = rec.get("result", "")
+                if isinstance(result, str):
+                    snippet = result.replace("\n", " ").strip()
+                    if len(snippet) > 120:
+                        snippet = snippet[:117] + "..."
+                else:
+                    snippet = str(result)
+                if snippet:
+                    print(f"      reason: {snippet}")
+
+        print("=" * 60)
 
     def _load_tools_config(self) -> dict:
         """Loads and returns the TOML tool definitions configuration."""
@@ -2884,8 +2932,17 @@ class ChatybotApp:
                 elif subcmd == "rerank":
                     self.trace_rerank = is_on
                     print(f"Trace rerank set to {is_on}")
+                elif subcmd == "agentic_loop":
+                    if not is_on:
+                        # "off" disables automatic trace display but keeps the data
+                        self.trace_agentic_loop = False
+                        print("Agentic loop trace display disabled.")
+                    else:
+                        # "on" enables automatic trace display after each loop
+                        self.trace_agentic_loop = True
+                        print("Agentic loop trace display enabled.")
                 else:
-                    print("Unknown /trace subcommand. Use rawpayload, tps, tpsperf, imagedbg, or rerank.")
+                    print("Unknown /trace subcommand. Use rawpayload, tps, tpsperf, imagedbg, rerank, or agentic_loop.")
             else:
                 print("Usage: /trace <rawpayload|tps|tpsperf|imagedbg|rerank> <on|off>")
             return True
@@ -4784,7 +4841,7 @@ class ChatybotApp:
         )
         print("  /seed <value> - Set seed (int, 'time', or 'random <min>,<max>').")
         print("  /stream - Toggle streaming responses.")
-        print("  /trace <rawpayload|tps|tpsperf|imagedbg|rerank> <on|off> - Debugging options")
+        print("  /trace <rawpayload|tps|tpsperf|imagedbg|rerank|agentic_loop> <on|off> - Debugging options")
         print("  /debug <payload|response [raw]> - Activate debug mode for the next prompt.")
         print("  /echo <text> - Echo text to screen with variable substitution.")
         print("  /reloadmacros [file] - Reload macro definitions from macro.chatdsl or specified file.")
