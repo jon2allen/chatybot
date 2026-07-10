@@ -371,11 +371,11 @@ class HelpSystem:
             name="/trace",
             category="debug",
             short_desc="Debugging options",
-            usage="/trace <rawpayload|tps|tpsperf|imagedbg> <on|off>",
-            long_desc="Enable or disable various debugging trace options.",
-            examples=["/trace rawpayload on", "/trace tps off"],
+            usage="/trace <rawpayload|tps|tpsperf|imagedbg|rerank|agentic_loop> <on|off>",
+            long_desc="Enable or disable various debugging trace options. For agentic_loop, 'on' enables automatic display of agentic tool loop trace after each loop completion (showing total calls, success/failure counts, and per-call status), and 'off' disables automatic display but preserves collected data. The trace data is always collected regardless of this setting.",
+            examples=["/trace rawpayload on", "/trace tps off", "/trace agentic_loop on"],
             parameters={
-                "subcommand": "rawpayload, tps, tpsperf, or imagedbg",
+                "subcommand": "rawpayload, tps, tpsperf, imagedbg, rerank, or agentic_loop",
                 "state": "on or off"
             }
         ))
