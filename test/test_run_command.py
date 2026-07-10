@@ -123,7 +123,7 @@ class TestRunCommandBehavior:
         """Verifies executing tool payloads parsed from LAST_COMPLETION"""
         # Set LAST_COMPLETION to a valid json invocation
         invocation = {"tool": "list_directory", "arguments": {"path": "."}}
-        app.buffer_manager.set_script_var('LAST_COMPLETION', json.dumps(invocation))
+        app.buffer_manager.set_script_var('LAST_COMPLETION', json.dumps(invocation), allow_protected=True)
         
         # Mock subprocess.run for dispatcher.py execution
         with patch('subprocess.run') as mock_run:

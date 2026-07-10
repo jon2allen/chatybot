@@ -20,9 +20,26 @@ class ScriptVars(UserDict):
     def __init__(self, manager, *args, **kwargs):
         self.manager = manager
         self.types: Dict[str, str] = {}
+        self._is_user_write: bool = False
+        self.protected_vars = {
+            'AGENTIC_LOOP',
+            'CHAT_HISTORY',
+            'LAST_RESPONSE',
+            'TOOL_CONTEXT',
+            'TOOL_DISPATCH_RESULT',
+            'TOOL_DISPATCH_ERROR',
+            'TOOL_DISPATCH_EXIT_CODE',
+            'RUN_COMPLETION',
+            'RUN_ERROR',
+            'RUN_EXIT_CODE',
+            'LAST_COMPLETION',
+            'latest_rerank',
+        }
         super().__init__(*args, **kwargs)
 
     def __setitem__(self, key: str, value: Any):
+        if self._is_user_write and key in self.protected_vars:
+            raise ValueError(f"'{key}' is a protected variable and cannot be modified.")
         # 1. Native Python Array / Dict / JSON Detection
         if isinstance(value, list):
             self.types[key] = "array"
@@ -184,12 +201,10 @@ class BufferManager:
     
     def is_protected_var(self, var_name: str) -> bool:
         """Check if a variable is protected and cannot be modified via /setvar."""
-        protected_vars = {
-            'AGENTIC_LOOP',  # Used for tracking agentic tool loop execution
-            'CHAT_HISTORY',  # System-managed chat history
-            'LAST_RESPONSE', # System-managed last response
-        }
-        return var_name in protected_vars
+        protected = getattr(self.script_vars, 'protected_vars', None)
+        if protected is not None:
+            return var_name in protected
+        return False
 
     def set_script_var(self, var_name: str, var_value: Any, allow_protected: bool = False) -> bool:
         """Set a script variable.
@@ -197,18 +212,24 @@ class BufferManager:
         Args:
             var_name: Name of the variable
             var_value: Value to set
-            allow_protected: If False (default), protected variables cannot be modified
+            allow_protected: If True, bypasses protection check even if this is a user write.
         
         Returns:
             True if variable was set successfully, False if protected and not allowed
         """
-        if not allow_protected and self.is_protected_var(var_name):
-            print(f"Error: '{var_name}' is a protected variable and cannot be modified.")
+        old_user_write = getattr(self.script_vars, '_is_user_write', False)
+        if allow_protected and hasattr(self.script_vars, '_is_user_write'):
+            self.script_vars._is_user_write = False
+        try:
+            self.script_vars[var_name] = var_value
+            print(f"Variable '{var_name}' set.")
+            return True
+        except ValueError as e:
+            print(f"Error: {e}")
             return False
-        
-        self.script_vars[var_name] = var_value
-        print(f"Variable '{var_name}' set.")
-        return True
+        finally:
+            if allow_protected and hasattr(self.script_vars, '_is_user_write'):
+                self.script_vars._is_user_write = old_user_write
 
     def get_script_var(self, var_name: str) -> Optional[str]:
         """
