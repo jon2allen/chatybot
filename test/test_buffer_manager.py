@@ -217,13 +217,30 @@ class TestBufferManager:
         assert manager.set_script_var("normal_var", "value") is True
         assert manager.get_script_var("normal_var") == "value"
 
-        # Test modifying protected variables fails without allow_protected=True
-        assert manager.set_script_var("AGENTIC_LOOP", ["record1"]) is False
-        assert manager.get_script_var("AGENTIC_LOOP") is None
+        # Under user write context, modifying protected variables fails without allow_protected=True
+        manager.script_vars._is_user_write = True
+        try:
+            assert manager.set_script_var("AGENTIC_LOOP", ["record1"]) is False
+            assert manager.get_script_var("AGENTIC_LOOP") is None
 
-        # Test modifying protected variables succeeds with allow_protected=True
-        assert manager.set_script_var("AGENTIC_LOOP", ["record1"], allow_protected=True) is True
-        assert manager.get_script_var("AGENTIC_LOOP") == ["record1"]
+            # Test modifying protected variables succeeds with allow_protected=True
+            assert manager.set_script_var("AGENTIC_LOOP", ["record1"], allow_protected=True) is True
+            assert manager.get_script_var("AGENTIC_LOOP") == ["record1"]
+
+            # Test direct assignment raises ValueError
+            with pytest.raises(ValueError) as exc_info:
+                manager.script_vars["AGENTIC_LOOP"] = ["record2"]
+            assert "is a protected variable and cannot be modified" in str(exc_info.value)
+
+            # Test that newly protected variables (like RUN_COMPLETION) are also protected
+            assert manager.set_script_var("RUN_COMPLETION", "output") is False
+            assert manager.set_script_var("RUN_COMPLETION", "output", allow_protected=True) is True
+            assert manager.get_script_var("RUN_COMPLETION") == "output"
+
+            with pytest.raises(ValueError):
+                manager.script_vars["RUN_COMPLETION"] = "hack"
+        finally:
+            manager.script_vars._is_user_write = False
 
 
 class TestImageBanks:

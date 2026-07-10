@@ -119,6 +119,30 @@ class TestArrayFeature:
         assert "Error: Invalid array format" in captured.out
         assert "bad_arr" not in app.buffer_manager.script_vars
 
+    def test_setvar_protected_variables(self, app, capsys):
+        """Test that interactive /setvar command blocks overwriting protected variables"""
+        # 1. Attempting to overwrite a protected scalar (e.g. RUN_COMPLETION)
+        command = '/setvar RUN_COMPLETION "malicious user output"'
+        result = asyncio.run(app.handle_escape_command(command))
+        assert result is True
+        assert app.buffer_manager.script_vars.get("RUN_COMPLETION") is None
+        
+        captured = capsys.readouterr()
+        assert "Error: 'RUN_COMPLETION' is a protected variable and cannot be modified." in captured.out
+
+        # 2. Attempting to overwrite a protected array (e.g. AGENTIC_LOOP)
+        command_arr = '/setvar AGENTIC_LOOP[] = ["bad_turn"]'
+        result_arr = asyncio.run(app.handle_escape_command(command_arr))
+        assert result_arr is True
+        assert app.buffer_manager.script_vars.get("AGENTIC_LOOP") is None
+
+        # 3. Inside script execution command (set cmd)
+        script_cmd = 'set RUN_COMPLETION = "malicious output"'
+        dummy_handler = lambda x: True
+        res_script = asyncio.run(app.execute_script_command(script_cmd, dummy_handler))
+        assert res_script is True
+        assert app.buffer_manager.script_vars.get("RUN_COMPLETION") is None
+
     def test_macro_expansion_with_single_array(self, app):
         """Test that calling a macro with an array expands the macro once for each array element"""
         # Define macro
