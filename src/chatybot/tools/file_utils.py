@@ -46,7 +46,7 @@ def list_directory(path: str = ".", details: bool = False) -> List[Any]:
         return [f"Error listing directory: {e}"]
 
 def read_file(path: str) -> str:
-    """Read contents of a file."""
+    """Read contents of a file with line numbers."""
     try:
         if os.path.exists(path):
             with open(path, 'rb') as f:
@@ -54,7 +54,11 @@ def read_file(path: str) -> str:
                 if b'\x00' in chunk:
                     return "Error reading file: Binary file format is not supported."
         with open(path, 'r', encoding='utf-8', errors='ignore') as f:
-            return f.read()
+            lines = f.readlines()
+            numbered_lines = []
+            for i, line in enumerate(lines, 1):
+                numbered_lines.append(f"{i}: {line.rstrip('\r\n')}\n")
+            return ''.join(numbered_lines)
     except Exception as e:
         return f"Error reading file: {e}"
 
