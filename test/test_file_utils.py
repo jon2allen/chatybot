@@ -6,7 +6,7 @@ Unit tests for file_utils module (specifically read_file binary checks).
 import os
 import pytest
 import tempfile
-from src.chatybot.tools.file_utils import read_file, list_directory, find_files
+from src.chatybot.tools.file_utils import read_file, list_directory, find_files, grep_search
 
 
 def test_read_file_text():
@@ -124,5 +124,48 @@ def test_find_files_detailed():
         assert entry["size"] == 12
         assert "modified" in entry
         assert entry["modified"] != "unknown"
+
+
+def test_grep_search_literal():
+    """Test searching for a literal term using grep_search."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        file_path = os.path.join(tmpdir, "test_file.txt")
+        with open(file_path, "w") as f:
+            f.write("Line 1: apple\nLine 2: Banana\nLine 3: Cherry\n")
+        
+        # Test case-sensitive match
+        results = grep_search("Banana", path=tmpdir)
+        assert len(results) == 1
+        assert results[0]["line_number"] == 2
+        assert results[0]["content"] == "Line 2: Banana"
+        assert results[0]["file"] == file_path
+
+        # Test case-insensitive match
+        results_ci = grep_search("banana", path=tmpdir, case_insensitive=True)
+        assert len(results_ci) == 1
+
+        # Test no match
+        results_none = grep_search("durian", path=tmpdir)
+        assert len(results_none) == 0
+
+
+def test_grep_search_regex():
+    """Test searching for a regular expression pattern using grep_search."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        file_path = os.path.join(tmpdir, "test_file.txt")
+        with open(file_path, "w") as f:
+            f.write("apple\nBanana\nCherry\n")
+            
+        # Test regex pattern
+        results = grep_search("^[BC]", path=tmpdir, is_regex=True)
+        assert len(results) == 2
+        lines = [r["content"] for r in results]
+        assert "Banana" in lines
+        assert "Cherry" in lines
+
+        # Test invalid regex
+        results_invalid = grep_search("[invalid", path=tmpdir, is_regex=True)
+        assert len(results_invalid) == 1
+        assert "error" in results_invalid[0]
 
 

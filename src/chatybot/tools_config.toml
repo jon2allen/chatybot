@@ -98,3 +98,50 @@ type = "boolean"
 description = "If true, appends content instead of overwriting"
 optional = true
 
+[tools.change_dir]
+enabled = true
+description = "Change the current working directory"
+module = "chatybot.tools.file_utils"
+function = "change_dir"
+
+[tools.change_dir.parameters.path]
+type = "string"
+description = "The path to the new working directory"
+optional = false
+
+[tools.grep_search]
+enabled = true
+description = "Search for exact patterns or regex matches across files, returning line numbers and content snippets"
+module = "chatybot.tools.file_utils"
+function = "grep_search"
+
+[tools.grep_search.parameters.query]
+type = "string"
+description = "The text pattern or regular expression to search for"
+optional = false
+
+[tools.grep_search.parameters.path]
+type = "string"
+description = "Starting directory or file path"
+optional = true
+
+[tools.grep_search.parameters.pattern]
+type = "string"
+description = "Filename glob pattern (e.g. *.py)"
+optional = true
+
+[tools.grep_search.parameters.case_insensitive]
+type = "boolean"
+description = "If true, ignores case during match"
+optional = true
+
+[tools.grep_search.parameters.is_regex]
+type = "boolean"
+description = "If true, treats query as a regular expression pattern"
+optional = true
+
+[tools.grep_search.parameters.max_matches]
+type = "integer"
+description = "Maximum number of matches to return (default 100)"
+optional = true
+

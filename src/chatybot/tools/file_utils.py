@@ -1,7 +1,7 @@
 import os
 import fnmatch
 from typing import List, Dict, Any
-
+import re
 import datetime
 
 def list_directory(path: str = ".", details: bool = False) -> List[Any]:
@@ -169,5 +169,62 @@ def change_dir(path: str) -> str:
         return f"Success: Changed working directory to '{os.getcwd()}'"
     except Exception as e:
         return f"Error changing directory: {e}"
+
+def grep_search(
+    query: str,
+    path: str = ".",
+    pattern: str = "*",
+    case_insensitive: bool = False,
+    is_regex: bool = False,
+    max_matches: int = 100
+) -> List[Dict[str, Any]]:
+    """
+    Search for a literal string or regular expression in files.
+    Returns a list of matches containing the filename, line number, and line content.
+    """
+    results = []
+    flags = re.IGNORECASE if case_insensitive else 0
+
+    try:
+        if is_regex:
+            regex = re.compile(query, flags)
+        else:
+            regex = re.compile(re.escape(query), flags)
+    except Exception as e:
+        return [{"error": f"Invalid regular expression: {e}"}]
+
+    try:
+        for root, _, files in os.walk(path):
+            for file in files:
+                if not fnmatch.fnmatch(file, pattern):
+                    continue
+                
+                full_path = os.path.join(root, file)
+                
+                try:
+                    with open(full_path, 'rb') as f:
+                        if b'\x00' in f.read(8192):
+                            continue
+                except Exception:
+                    continue
+
+                try:
+                    with open(full_path, 'r', encoding='utf-8', errors='ignore') as f:
+                        for line_num, line in enumerate(f, 1):
+                            if regex.search(line):
+                                results.append({
+                                    "file": full_path,
+                                    "line_number": line_num,
+                                    "content": line.rstrip('\r\n')
+                                })
+                                
+                                if len(results) >= max_matches:
+                                    return results
+                except Exception:
+                    continue
+    except Exception as e:
+        return [{"error": f"Error during search: {e}"}]
+
+    return results
 
 
