@@ -34,6 +34,9 @@ class StdoutLoggingInterceptor:
     def flush(self):
         self.stdout.flush()
 
+    def __getattr__(self, name):
+        return getattr(self.stdout, name)
+
 
 class LoggingManager:
     """Manages logging to files with timestamps."""
