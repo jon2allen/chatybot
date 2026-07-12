@@ -10,14 +10,15 @@ from src.chatybot.tools.file_utils import read_file, list_directory, find_files
 
 
 def test_read_file_text():
-    """Test reading a standard text file returns its contents."""
+    """Test reading a standard text file returns its contents with line numbers."""
     with tempfile.NamedTemporaryFile(mode='w', delete=False, encoding='utf-8') as f:
         f.write("Hello, ChatyBot! This is standard text.")
         f.flush()
         temp_name = f.name
     try:
         content = read_file(temp_name)
-        assert content == "Hello, ChatyBot! This is standard text."
+        assert "1: Hello, ChatyBot! This is standard text." in content
+        assert not content.startswith("Error reading file:")
     finally:
         os.unlink(temp_name)
 

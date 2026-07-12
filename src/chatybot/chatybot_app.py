@@ -106,6 +106,7 @@ class ChatybotApp:
         self.in_tool_loop: bool = False
         self.tool_auto: bool = False
         self.max_turns: int = 25
+        self.max_tool_calls_per_turn: int = 10
         self.agentic_instructions: str = ""
         self.live_agentic_instructions: str = ""
         self.tool_timeout: int = 30
@@ -4010,7 +4011,6 @@ class ChatybotApp:
                 if sub_arg in ("edit_live", "live_edit"):
                     # Open the editor to edit agentic_instructions live (stored in self.live_agentic_instructions)
                     import tempfile
-                    import os
                     import subprocess
                     
                     context = self.tool_context or self.generate_tool_context()
