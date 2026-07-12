@@ -2337,7 +2337,7 @@ class ChatybotApp:
             invocation_json = json.dumps(tool_call)
         
         # Create a temporary file for the invocation
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp_file:
+        with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', suffix='.json', delete=False) as tmp_file:
             tmp_file.write(invocation_json)
             tmp_path = tmp_file.name
         
