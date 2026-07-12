@@ -176,7 +176,8 @@ def grep_search(
     pattern: str = "*",
     case_insensitive: bool = False,
     is_regex: bool = False,
-    max_matches: int = 100
+    max_matches: int = 100,
+    max_line_length: int = 1000
 ) -> List[Dict[str, Any]]:
     """
     Search for a literal string or regular expression in files.
@@ -193,35 +194,48 @@ def grep_search(
     except Exception as e:
         return [{"error": f"Invalid regular expression: {e}"}]
 
+    def search_file(file_path: str) -> bool:
+        try:
+            with open(file_path, 'rb') as f:
+                if b'\x00' in f.read(8192):
+                    return False
+        except Exception:
+            return False
+
+        try:
+            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                for line_num, line in enumerate(f, 1):
+                    if regex.search(line):
+                        content = line.rstrip('\r\n')
+                        if len(content) > max_line_length:
+                            content = content[:max_line_length] + " [TRUNCATED]"
+                        results.append({
+                            "file": file_path,
+                            "line_number": line_num,
+                            "content": content
+                        })
+                        if len(results) >= max_matches:
+                            return True
+        except Exception:
+            pass
+        return False
+
+    if os.path.isfile(path):
+        search_file(path)
+        return results
+
     try:
-        for root, _, files in os.walk(path):
+        for root, dirs, files in os.walk(path):
+            # Prune unwanted/hidden system and dependency folders
+            dirs[:] = [d for d in dirs if d not in ('.git', '__pycache__', 'node_modules', '.venv', 'build', 'dist', '.eggs')]
+            
             for file in files:
                 if not fnmatch.fnmatch(file, pattern):
                     continue
                 
                 full_path = os.path.join(root, file)
-                
-                try:
-                    with open(full_path, 'rb') as f:
-                        if b'\x00' in f.read(8192):
-                            continue
-                except Exception:
-                    continue
-
-                try:
-                    with open(full_path, 'r', encoding='utf-8', errors='ignore') as f:
-                        for line_num, line in enumerate(f, 1):
-                            if regex.search(line):
-                                results.append({
-                                    "file": full_path,
-                                    "line_number": line_num,
-                                    "content": line.rstrip('\r\n')
-                                })
-                                
-                                if len(results) >= max_matches:
-                                    return results
-                except Exception:
-                    continue
+                if search_file(full_path):
+                    return results
     except Exception as e:
         return [{"error": f"Error during search: {e}"}]
 

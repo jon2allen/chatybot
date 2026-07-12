@@ -169,3 +169,33 @@ def test_grep_search_regex():
         assert "error" in results_invalid[0]
 
 
+def test_grep_search_edge_cases():
+    """Test grep_search edge cases (line truncation, single file search, folder pruning)."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Create a single file with a very long line
+        file_path = os.path.join(tmpdir, "long_line.txt")
+        long_line = "a" * 1500 + "MATCH"
+        with open(file_path, "w") as f:
+            f.write(long_line + "\n")
+
+        # Test single file search directly via path
+        results_file = grep_search("MATCH", path=file_path)
+        assert len(results_file) == 1
+        assert results_file[0]["file"] == file_path
+        # Test line truncation
+        assert len(results_file[0]["content"]) < 1500
+        assert results_file[0]["content"].endswith(" [TRUNCATED]")
+
+        # Test directory pruning (e.g., matching a pattern inside a pruned folder should not return matches)
+        pruned_dir = os.path.join(tmpdir, ".git")
+        os.makedirs(pruned_dir)
+        pruned_file = os.path.join(pruned_dir, "config")
+        with open(pruned_file, "w") as f:
+            f.write("MATCH\n")
+
+        results_dir = grep_search("MATCH", path=tmpdir)
+        # Should match the file in root (long_line.txt), but not the one in .git/
+        assert len(results_dir) == 1
+        assert results_dir[0]["file"] == file_path
+
+
