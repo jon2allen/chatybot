@@ -106,8 +106,8 @@ class ChatybotApp:
         self.in_tool_loop: bool = False
         self.tool_auto: bool = False
         self.max_turns: int = 25
-        self.max_tool_calls_per_turn: int = 10
         self.agentic_instructions: str = ""
+        self.live_agentic_instructions: str = ""
         self.tool_timeout: int = 30
         self.rate_limit_delay: float = 0.0
         self.strip_thinking_from_filebanks: bool = True
@@ -764,7 +764,7 @@ class ChatybotApp:
                     current_system_message = self.tool_context
 
             # Append agentic prompt instruction whenever tool_mode is enabled
-            instr = self.agentic_instructions or self.default_agentic_instructions
+            instr = self.live_agentic_instructions or self.agentic_instructions or self.default_agentic_instructions
             agentic_prompt = f"\n\n{instr}"
             if current_system_message:
                 current_system_message += agentic_prompt
@@ -4002,13 +4002,87 @@ class ChatybotApp:
                 return True
             
             elif subcmd == "prompt":
+                # Check if there is an argument in parts[2]
+                sub_arg = ""
+                if len(parts) > 2:
+                    sub_arg = parts[2].strip().lower()
+                
+                if sub_arg in ("edit_live", "live_edit"):
+                    # Open the editor to edit agentic_instructions live (stored in self.live_agentic_instructions)
+                    import tempfile
+                    import os
+                    import subprocess
+                    
+                    context = self.tool_context or self.generate_tool_context()
+                    current_instr = self.live_agentic_instructions or self.agentic_instructions or self.default_agentic_instructions
+                    
+                    # Create temporary file formatted like /tool prompt
+                    with tempfile.NamedTemporaryFile(suffix=".txt", delete=False, mode="w", encoding="utf-8") as tf:
+                        tf.write("=== TOOL CONTEXT INJECTED INTO PROMPT ===\n")
+                        tf.write(context)
+                        tf.write("\n\n=== AGENTIC LOOP SYSTEM INSTRUCTIONS ===\n")
+                        tf.write("# Edit the instructions below this line. Changes are only active for this session.\n")
+                        tf.write("# To clear the live override and revert to tools_config.toml, delete all instructions below this header.\n")
+                        tf.write(current_instr)
+                        temp_path = tf.name
+                    
+                    try:
+                        # Determine editor
+                        default_editor = "notepad.exe" if os.name == "nt" else "nano"
+                        editor = os.environ.get("EDITOR", default_editor)
+                        
+                        # Open the editor
+                        print(f"Opening live prompt editor using '{editor}'...")
+                        subprocess.run([editor, temp_path], check=True)
+                        
+                        # Read and parse the modified content back
+                        with open(temp_path, "r", encoding="utf-8") as f:
+                            saved_content = f.read()
+                        
+                        # Extract the instructions below the header boundary
+                        marker = "=== AGENTIC LOOP SYSTEM INSTRUCTIONS ==="
+                        if marker in saved_content:
+                            parts_split = saved_content.split(marker, 1)
+                            instr_block = parts_split[1]
+                            
+                            # Filter out helper comment lines starting with '#'
+                            lines = instr_block.splitlines()
+                            filtered_lines = []
+                            for line in lines:
+                                if line.strip().startswith("#"):
+                                    continue
+                                filtered_lines.append(line)
+                            new_instr = "\n".join(filtered_lines).strip()
+                        else:
+                            # Fallback if marker was accidentally deleted
+                            new_instr = saved_content.strip()
+                        
+                        if not new_instr:
+                            self.live_agentic_instructions = ""
+                            print("Live prompt override cleared. Reset to tools_config.toml settings.")
+                        else:
+                            self.live_agentic_instructions = new_instr
+                            print("Active system prompt updated successfully for this session.")
+                    except Exception as e:
+                        print(f"Error editing live prompt: {e}")
+                    finally:
+                        try:
+                            os.unlink(temp_path)
+                        except Exception:
+                            pass
+                    return True
+                
                 # Show the prompt injected during tool operation
                 context = self.tool_context or self.generate_tool_context()
                 if context:
                     print("\n=== TOOL CONTEXT INJECTED INTO PROMPT ===")
                     print(context)
                     print("\n=== AGENTIC LOOP SYSTEM INSTRUCTIONS ===")
-                    print(self.agentic_instructions or self.default_agentic_instructions)
+                    active_instr = self.live_agentic_instructions or self.agentic_instructions or self.default_agentic_instructions
+                    if self.live_agentic_instructions:
+                        print(f" [Live Edit Override Active]\n{active_instr}")
+                    else:
+                        print(active_instr)
                     print("=========================================\n")
                 else:
                     print("No tools available or tool context could not be generated.")
