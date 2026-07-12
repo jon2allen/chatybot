@@ -191,7 +191,10 @@ class ChatybotApp:
         # Load default profile from tools_config.toml under [config]
         self.default_profile = None
         user_config_path = os.path.expanduser('~/.config/chatybot/tools_config.toml')
-        config_path = user_config_path if os.path.exists(user_config_path) else os.path.join(os.path.dirname(__file__), 'tools_config.toml')
+        package_config = os.path.join(os.path.dirname(__file__), 'tools_config.toml')
+        from .config_sync import sync_toml_file
+        sync_toml_file(package_config, user_config_path, "tools_config.toml")
+        config_path = user_config_path if os.path.exists(user_config_path) else package_config
         if os.path.exists(config_path):
             try:
                 import tomllib
@@ -2345,13 +2348,10 @@ class ChatybotApp:
             # Build the dispatcher command
             dispatcher_path = os.path.join(os.path.dirname(__file__), 'dispatcher.py')
             user_config_path = os.path.expanduser('~/.config/chatybot/tools_config.toml')
-            if not os.path.exists(user_config_path):
-                package_config = os.path.join(os.path.dirname(__file__), 'tools_config.toml')
-                if os.path.exists(package_config):
-                    import shutil
-                    os.makedirs(os.path.dirname(user_config_path), exist_ok=True)
-                    shutil.copy2(package_config, user_config_path)
-            config_path = user_config_path if os.path.exists(user_config_path) else os.path.join(os.path.dirname(__file__), 'tools_config.toml')
+            package_config = os.path.join(os.path.dirname(__file__), 'tools_config.toml')
+            from .config_sync import sync_toml_file
+            sync_toml_file(package_config, user_config_path, "tools_config.toml")
+            config_path = user_config_path if os.path.exists(user_config_path) else package_config
             
             # Check if dispatcher exists
             if not os.path.exists(dispatcher_path):
@@ -2796,13 +2796,10 @@ class ChatybotApp:
         """Loads and returns the TOML tool definitions configuration."""
         import os
         user_config_path = os.path.expanduser('~/.config/chatybot/tools_config.toml')
-        if not os.path.exists(user_config_path):
-            package_config = os.path.join(os.path.dirname(__file__), 'tools_config.toml')
-            if os.path.exists(package_config):
-                import shutil
-                os.makedirs(os.path.dirname(user_config_path), exist_ok=True)
-                shutil.copy2(package_config, user_config_path)
-        config_path = user_config_path if os.path.exists(user_config_path) else os.path.join(os.path.dirname(__file__), 'tools_config.toml')
+        package_config = os.path.join(os.path.dirname(__file__), 'tools_config.toml')
+        from .config_sync import sync_toml_file
+        sync_toml_file(package_config, user_config_path, "tools_config.toml")
+        config_path = user_config_path if os.path.exists(user_config_path) else package_config
         
         try:
             import tomllib

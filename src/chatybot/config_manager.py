@@ -34,18 +34,9 @@ class ConfigManager:
                 raise FileNotFoundError(f"Configuration file not found: '{config_path}'")
         else:
             config_path = os.path.expanduser("~/.config/chatybot/chat_config.toml")
-            # Create the config directory if it doesn't exist
-            os.makedirs(os.path.dirname(config_path), exist_ok=True)
-            
-            # Check if config exists in ~/.config, otherwise try local and copy
-            if not os.path.exists(config_path):
-                local_config = os.path.join(os.path.dirname(__file__), "chat_config.toml")
-                if os.path.exists(local_config):
-                    import shutil
-                    shutil.copy2(local_config, config_path)
-                    print(f"Copied local '{local_config}' to '{config_path}'")
-                else:
-                    raise FileNotFoundError(f"Configuration file not found. Please create '{config_path}'.")
+            local_config = os.path.join(os.path.dirname(__file__), "chat_config.toml")
+            from .config_sync import sync_toml_file
+            sync_toml_file(local_config, config_path, "chat_config.toml")
         
         from .config_model import ChatConfig
         try:
