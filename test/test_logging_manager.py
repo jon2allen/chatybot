@@ -166,6 +166,51 @@ class TestLoggingManager:
         for log_file in log_files:
             os.unlink(log_file)
 
+    def test_stdout_interceptor_active(self, manager):
+        """Test that stdout printing is captured by the interceptor and logged when active."""
+        import sys
+        old_stdout = sys.stdout
+        sys.stdout = manager.interceptor
+        
+        try:
+            manager.start_logging()
+            
+            # Print a message to stdout (captured by interceptor)
+            print("Stdout test message from print")
+            sys.stdout.flush()
+            
+            log_files = [f for f in os.listdir('.') if f.startswith('chatybot.log.')]
+            assert len(log_files) > 0
+            
+            with open(log_files[0], 'r') as f:
+                log_content = f.read()
+                
+            assert "Stdout test message from print" in log_content
+        finally:
+            sys.stdout = old_stdout
+            manager.stop_logging()
+            
+        # Clean up
+        log_files = [f for f in os.listdir('.') if f.startswith('chatybot.log.')]
+        for log_file in log_files:
+            os.unlink(log_file)
+
+    def test_stdout_interceptor_inactive(self, manager):
+        """Test that stdout printing is not logged when logging is inactive."""
+        import sys
+        old_stdout = sys.stdout
+        sys.stdout = manager.interceptor
+        
+        try:
+            # print to stdout (should not be logged)
+            print("Stdout inactive test message")
+            sys.stdout.flush()
+            
+            log_files = [f for f in os.listdir('.') if f.startswith('chatybot.log.')]
+            assert len(log_files) == 0
+        finally:
+            sys.stdout = old_stdout
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
