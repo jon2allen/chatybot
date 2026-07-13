@@ -2,40 +2,21 @@
 """
 Logging Manager Module
 Handles logging functionality for the application
+
+Uses pyio-intercept for thread-safe stdout interception with middleware chains.
 """
 
 import os
 import sys
+import threading
 from datetime import datetime
 from typing import Optional
 
-
-class StdoutLoggingInterceptor:
-    """Intercepts and buffers stdout writes to log complete lines to the active log file."""
-    def __init__(self, original_stdout, logging_manager):
-        self.stdout = original_stdout
-        self.logging_manager = logging_manager
-        self.buffer = []
-
-    def write(self, message: str):
-        # 1. Output to physical console (preserve layout, colors, margins)
-        self.stdout.write(message)
-        
-        # 2. Buffer for logging
-        self.buffer.append(message)
-        
-        # 3. Write to file if a newline is encountered and logging is active
-        if "\n" in message:
-            full_line = "".join(self.buffer).rstrip("\n")
-            if full_line.strip() and self.logging_manager.logging_active:
-                self.logging_manager.log_message(full_line)
-            self.buffer.clear()
-
-    def flush(self):
-        self.stdout.flush()
-
-    def __getattr__(self, name):
-        return getattr(self.stdout, name)
+try:
+    from pyio_intercept import StdoutIntercept
+    PYIO_INTERCEPT_AVAILABLE = True
+except ImportError:
+    PYIO_INTERCEPT_AVAILABLE = False
 
 
 class LoggingManager:
@@ -44,15 +25,60 @@ class LoggingManager:
     def __init__(self):
         self.logging_active: bool = False
         self.log_file: Optional[object] = None
-        # Hook sys.stdout to our interceptor to capture all console print outputs
+        self.buffer = []
+        self._lock = threading.Lock()
+        
+        # Store original stdout
         self.original_stdout = sys.stdout
-        self.interceptor = StdoutLoggingInterceptor(sys.stdout, self)
-        sys.stdout = self.interceptor
-
+        self._intercept_instance = None
+        self.interceptor = None  # Backward compatibility: expose interceptor
+        
+        # Install interceptor using pyio-intercept if available
+        self._install_interceptor()
+    
+    def _install_interceptor(self):
+        """Install stdout interceptor using pyio-intercept or fallback to custom implementation."""
+        if PYIO_INTERCEPT_AVAILABLE:
+            # Create logging action for pyio-intercept
+            def logging_action(payload, next_action, context):
+                # Pass through to original stdout first (preserve console output)
+                result = next_action(payload)
+                
+                # Buffer for logging
+                with self._lock:
+                    self.buffer.append(payload)
+                    
+                    # Write to file if a newline is encountered and logging is active
+                    if "\n" in payload:
+                        full_line = "".join(self.buffer).rstrip("\n")
+                        if full_line.strip() and self.logging_active:
+                            self.log_message(full_line)
+                        self.buffer.clear()
+                
+                return result
+            
+            # Create and install the interceptor
+            self._intercept_instance = StdoutIntercept(actions=[logging_action])
+            self._intercept_instance.install()
+            
+            # For backward compatibility, expose the proxy as the interceptor
+            # The proxy is what's installed on sys.stdout and has the write method
+            self.interceptor = self._intercept_instance._proxy
+            print("[LoggingManager] Using pyio-intercept for stdout interception (thread-safe)")
+        else:
+            # Fallback to custom implementation if pyio-intercept not available
+            self.interceptor = _FallbackStdoutInterceptor(sys.stdout, self)
+            sys.stdout = self.interceptor
+            print("[LoggingManager] WARNING: pyio-intercept not available, using fallback implementation")
+    
     def __del__(self):
         """Restore original stdout when manager is destroyed."""
-        if hasattr(self, 'original_stdout') and sys.stdout is self.interceptor:
-            sys.stdout = self.original_stdout
+        if PYIO_INTERCEPT_AVAILABLE and self._intercept_instance:
+            self._intercept_instance.uninstall()
+        elif not PYIO_INTERCEPT_AVAILABLE and hasattr(self, 'interceptor') and self.interceptor:
+            # Fallback cleanup
+            if sys.stdout is self.interceptor:
+                sys.stdout = self.original_stdout
     
     def start_logging(self) -> None:
         """
@@ -97,3 +123,34 @@ class LoggingManager:
             timestamp = self.format_datetime(datetime.now())
             self.log_file.write(f"{timestamp} - {message}\n")
             self.log_file.flush()
+
+
+class _FallbackStdoutInterceptor:
+    """Fallback interceptor when pyio-intercept is not available.
+    
+    Maintains backward compatibility with the original implementation.
+    """
+    def __init__(self, original_stdout, logging_manager):
+        self.stdout = original_stdout
+        self.logging_manager = logging_manager
+        self.buffer = []
+
+    def write(self, message: str):
+        # 1. Output to physical console (preserve layout, colors, margins)
+        self.stdout.write(message)
+        
+        # 2. Buffer for logging
+        self.buffer.append(message)
+        
+        # 3. Write to file if a newline is encountered and logging is active
+        if "\n" in message:
+            full_line = "".join(self.buffer).rstrip("\n")
+            if full_line.strip() and self.logging_manager.logging_active:
+                self.logging_manager.log_message(full_line)
+            self.buffer.clear()
+
+    def flush(self):
+        self.stdout.flush()
+
+    def __getattr__(self, name):
+        return getattr(self.stdout, name)

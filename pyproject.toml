@@ -16,7 +16,8 @@ dependencies = [
     "pygments",
     "parsley",
     "aiohttp",
-    "EasyRerank>=0.2.2"
+    "EasyRerank>=0.2.2",
+    "pyio-intercept>=0.1.0"
 ]
 
 [project.scripts]
