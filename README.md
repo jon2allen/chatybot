@@ -468,6 +468,19 @@ chat --> find all markdown files
 # LLM will autonomously execute tools in a loop for up to 10 turns (or until finished).
 ```
 
+#### **Built-in System Tools**
+The following tools are packaged by default and can be enabled/disabled dynamically:
+
+| Tool Name | Description | Key Parameters |
+|-----------|-------------|----------------|
+| `list_directory` | Lists the contents of a directory, optionally with detailed file metadata (size, mod time, etc.). | `path` (optional), `details` (optional) |
+| `read_file` | Reads the full text contents of a file on disk (rejects binary file patterns for safety). | `path` (required) |
+| `find_files` | Finds files matching a glob pattern, optionally filtering by containing a literal search term. | `path` (optional), `pattern` (optional), `search_term` (optional), `details` (optional) |
+| `write_file` | Writes content to a file, or appends to it if the `append` parameter is `true`. | `path` (required), `content` (required), `append` (optional) |
+| `change_dir` | Changes the current working directory for subsequent tool executions. | `path` (required) |
+| `grep_search` | Searches for exact pattern matches or regular expressions within files or directories. | `query` (required), `path` (optional), `pattern` (optional), `case_insensitive` (optional), `is_regex` (optional), `max_matches` (optional) |
+| `run_command` | Executes shell commands on the host machine using safe subprocess tokenization. | `command` (required) |
+
 #### **3. Tool Configuration (`tools_config.toml`)**
 All agentic tools and execution configurations are managed in `src/chatybot/tools_config.toml` (which is copied to `~/.config/chatybot/tools_config.toml` upon initialization).
 
