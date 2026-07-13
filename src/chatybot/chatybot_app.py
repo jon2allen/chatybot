@@ -1780,6 +1780,27 @@ class ChatybotApp:
             )
             return True
 
+        # Check if input looks like a command keyword but was not recognized
+        stripped = command.strip()
+        script_keywords = ['set', 'if', 'wait', 'def', '%', '#']
+        
+        if stripped:
+            first_word = stripped.split()[0] if stripped.split() else stripped
+            if first_word.lower() in script_keywords:
+                if first_word.lower() == 'set':
+                    print("Invalid set command format. Usage: set <name> = <value>")
+                elif first_word.lower() == 'if':
+                    print("Invalid if command format. Usage: if <condition> then <command>")
+                elif first_word.lower() == 'wait':
+                    print("Invalid wait command. Usage: wait <seconds>")
+                elif first_word.lower() == 'def':
+                    print("Invalid def command. Usage: def <name>(<params>) <template>")
+                elif first_word.lower() == '%':
+                    print("Invalid macro call. Usage: %<macro_name>(<args>)")
+                elif first_word.lower() == '#':
+                    print("Invalid comment. Usage: # <comment text>")
+                return True
+
         return False
 
     def split_commands(self, text: str) -> list[str]:
@@ -4889,7 +4910,9 @@ class ChatybotApp:
                 print(f"Reloaded macros from default file. {len(self.macros)} macros available.")
             return True
 
-        return False
+        else:
+            print(f"Error: Unknown command '{cmd}'. Type /help for available commands.")
+            return False
 
     def show_help(self) -> None:
         """Show help message with available commands."""
@@ -5014,7 +5037,7 @@ class ChatybotApp:
         """Main chat loop."""
         print("===========================")
         print("Chatybot.py                ")
-        print("Created by Jon Allen - 2025")
+        print("Created by Jon Allen - 2026")
         print("Version: 0.6.3             ")
         print("===========================")
         print(
