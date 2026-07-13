@@ -722,8 +722,20 @@ class ChatybotApp:
             messages = copy.deepcopy(prompt)
         else:
             if self.matcher.matches(prompt[:12]):
-               print( "Error command verb at beginning:  " + prompt[:9] + " - use escape / sequence")
-               return ""
+                # Check if the matched word is in quotes - if so, allow it to be sent to LLM
+                match = self.matcher.pattern.search(prompt[:12])
+                if match:
+                    matched_word = match.group()
+                    # Check if the word at the start of prompt is quoted
+                    if (prompt.startswith('"' + matched_word + '"') or 
+                        prompt.startswith("'" + matched_word + "'") or
+                        prompt.startswith('"' + matched_word) or
+                        prompt.startswith("'" + matched_word)):
+                        # Word is in quotes, allow it to be sent to LLM
+                        pass
+                    else:
+                        print( "Error command verb at beginning:  " + prompt[:9] + " - use escape / sequence or use quotes around command verb to send to LLM")
+                        return ""
             # Replace placeholders in the prompt - returns (text, image_list)
             full_prompt, image_list = self.buffer_manager.replace_placeholders(prompt)
 
