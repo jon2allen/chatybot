@@ -692,6 +692,13 @@ chat --> Create a blog post outline about ${topic}
 
 ### Change log
 
+July 12th, 2026 (v0.6.3)
+------------------------
+- **Automatic Configuration Synchronization**: Implemented `config_sync` utility which automatically merges packaged TOML default configurations into user configuration directories on startup.
+- **Deep Merging & Settings Preservation**: Supports recursively merging new model definitions and tools while fully preserving existing user customizations (like customized timeouts or disabled tools).
+- **Graceful Error Handling & Idempotency**: Detects and reports syntax/decode errors in configurations without silently overwriting user customizations, and runs at most once per file path per process.
+- **Verification Testing**: Created unit tests under `test_config_sync.py` and a functional mockup demo in `scratch/test_config_sync_mock.py` to verify config merge behavior.
+
 July 9th, 2026 (v0.6.2)
 -----------------------
 - **Dynamic Tool Management**: Implemented `/tool list`, `/tool enable <tool>`, and `/tool disable <tool>` to dynamically control available agentic tools during a session.
