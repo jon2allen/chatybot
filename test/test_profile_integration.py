@@ -71,3 +71,26 @@ class TestProfileIntegration:
         with patch('builtins.print') as mock_print:
             await app.handle_escape_command("/tool max_turns")
             mock_print.assert_called_with("Current max tool turns: 42")
+
+    def test_profile_help_documentation(self, app):
+        app.initialize()
+        # Verify HelpSystem registration
+        from src.chatybot.chaty_help import get_help_system
+        help_sys = get_help_system()
+        help_text = help_sys.get_help_text("/profile")
+        assert "/profile" in help_text
+        assert "Manage chat session profiles dynamically" in help_text
+        assert "list" in help_text
+        assert "edit" in help_text
+
+        # Verify show_help output contains /profile
+        with patch('builtins.print') as mock_print:
+            app.show_help()
+            called_args = [call[0][0] for call in mock_print.call_args_list if call[0]]
+            profile_line = [line for line in called_args if "/profile" in line]
+            assert len(profile_line) > 0
+            assert "Manage session profiles dynamically" in profile_line[0]
+
+        # Verify matcher autocomplete contains profile
+        assert "profile" in app.matcher.words
+

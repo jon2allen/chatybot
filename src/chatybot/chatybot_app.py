@@ -243,7 +243,7 @@ class ChatybotApp:
                     "imagebank4", "imagebank5", "model", "listmodels", "logging", "save",
                     "codeonly", "codeoff", "multiline", "system", "temp", "maxtokens",
                     "top_p", "top_k", "freq_penalty", "pres_penalty", "reasoning", "effort", "seed",
-                    "stream", "script", "source", "quit", "setdb", "dblist",
+                    "stream", "script", "source", "profile", "quit", "setdb", "dblist",
                     "searchdb", "dblog", "dbprint", "loadvar", "savevar",
                     "setvar", "notemode", "mem", "dump", "trace",
                     "thinking", "echo", "def", "reloadmacros",
@@ -5137,6 +5137,7 @@ class ChatybotApp:
         print("  /echo <text> - Echo text to screen with variable substitution.")
         print("  /reloadmacros [file] - Reload macro definitions from macro.chatdsl or specified file.")
         print("  /source <file> - Execute a script file in the current session without exiting.")
+        print("  /profile [list|use|clone|delete|export|import|show|edit] - Manage session profiles dynamically.")
         print("  /script <file> [x=value y=value z=value] - Execute a script file with optional parameters.")
         print("  /quit | /exit - Exit the program.")
         print(

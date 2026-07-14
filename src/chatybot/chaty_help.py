@@ -432,6 +432,31 @@ class HelpSystem:
             see_also=["/script"]
         ))
         
+        # Profile command
+        self.register_command(CommandHelp(
+            name="/profile",
+            category="script",
+            short_desc="Manage chat session profiles dynamically",
+            usage="/profile [list|use|clone|delete|export|import|show|edit] [args...]",
+            long_desc="Manage session profiles and their configurations. Supported subcommands:\n"
+                      "  list                 - List all available profiles and their descriptions\n"
+                      "  use <name>           - Apply/execute the specified profile script\n"
+                      "  clone <src> <dst>    - Copy an existing profile to a new name\n"
+                      "  delete <name>        - Delete a profile after confirmation\n"
+                      "  export <name> <file> - Export a profile script to a file path\n"
+                      "  import <file>        - Import a profile script from a file path\n"
+                      "  show <name>          - Display the script contents of a profile\n"
+                      "  edit [name]          - Launch the interactive curses profile editor",
+            examples=[
+                "/profile list",
+                "/profile use coding",
+                "/profile edit coding",
+                "/profile clone general development",
+                "/profile delete test_profile"
+            ],
+            see_also=["/source", "/script"]
+        ))
+        
         # Database commands
         db_commands = [
             ("setdb", "Create or select a TinyDB database", "/setdb <dbname>", "Use 'Null' to deactivate", ["/setdb mydb", "/setdb Null"]),

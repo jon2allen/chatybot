@@ -153,6 +153,7 @@ Active escape commands:
   /trace <rawpayload|tps|tpsperf> <on|off> - Debugging options
   /script <file> - Execute a script file containing multiple commands.
   /source <file> - Execute a script file dynamically in the current session.
+  /profile [list|use|clone|delete|export|import|show|edit] - Manage session profiles dynamically.
   /quit | /exit - Exit the program.
   /setdb <dbname> - Create or select a TinyDB database. Use 'Null' to deactivate.
   /dblist - List all TinyDB databases in the db directory.
@@ -217,6 +218,7 @@ chat --> Hello!      # Start a conversation
 | `/save <file> [all] [nothink\|withthink]` | Save last response or all history, with optional thinking stripping | `/save output.txt all nothink` |
 | `/script <path>` | Execute a script | `/script setup.dsl` |
 | `/source <path>` | Execute a script dynamically in the current session | `/source ~/.chatybot_profile` |
+| `/profile [subcommand]` | Manage session profiles dynamically (list, use, clone, delete, export, import, show, edit) | `/profile use coding` |
 | `/run <command>` | Execute a shell command and capture stdout/stderr/exit code | `/run ls -la` |
 | `/run_safe` | Enable safe mode for shell execution (blocks dangerous commands) | `/run_safe` |
 | `/run_unsafe` | Disable safe mode (requires confirmation for dangerous commands) | `/run_unsafe` |
