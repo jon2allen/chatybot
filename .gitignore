@@ -5,3 +5,5 @@ __pycache__/
 dist/
 *.egg-info/
 scratch/
+vmem/
+chatybot.vmem.*.log
