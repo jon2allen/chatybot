@@ -383,11 +383,17 @@ class HelpSystem:
         self.register_command(CommandHelp(
             name="/debug",
             category="debug",
-            short_desc="Activate debug mode",
-            usage="/debug <payload|response [raw]>",
-            long_desc="Activate debug mode for the next prompt. 'payload' captures the request payload, 'response raw' prints the raw response.",
-            examples=["/debug payload", "/debug response raw"],
-            parameters={"subcommand": "payload or response [raw]"}
+            short_desc="Activate debug mode or monitor virtual memory",
+            usage="/debug <payload|response [raw]|vmem [start|stop|status]>",
+            long_desc="Activate debug mode or manage virtual memory (vmem) monitoring. Supported options:\n"
+                      "  payload       - Capture next prompt payload for manual editing before execution\n"
+                      "  response      - Output a formatted JSON dump of the next completion response\n"
+                      "  response raw  - Output the raw unformatted completion response\n"
+                      "  vmem start    - Start background thread to log virtual memory and RSS stats every second\n"
+                      "  vmem stop     - Stop the active background virtual memory monitoring thread\n"
+                      "  vmem status   - Display current virtual memory and RSS usage and monitoring state",
+            examples=["/debug payload", "/debug response raw", "/debug vmem start", "/debug vmem status"],
+            parameters={"subcommand": "payload, response [raw], or vmem [start|stop|status]"}
         ))
         
         self.register_command(CommandHelp(

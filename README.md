@@ -209,7 +209,7 @@ chat --> Hello!      # Start a conversation
 | `/seed <value>` | Set PRNG Seed | `/seed time` |
 | `/stream` | Toggle streaming | `/stream` |
 | `/trace <cmd> <state>`| Trace tokens/payload | `/trace rawpayload on` |
-| `/debug payload` | Edit payload in editor and send to API | `/debug payload` |
+| `/debug <payload\|response [raw]\|vmem [start\|stop\|status]>` | Control debug modes or background virtual memory logging | `/debug vmem start` |
 | `/codeonly` | Enable code-only mode | `/codeonly` |
 | `/codeoff` | Disable code-only mode | `/codeoff` |
 | `/notemode <on\|off>` | Toggle note block separation | `/notemode on` |
