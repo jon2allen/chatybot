@@ -13,6 +13,7 @@ import shlex
 import random
 import json
 import copy
+import signal
 from datetime import datetime
 from typing import Dict, Any, List, Tuple, Optional, Callable, Union
 import logging
@@ -138,6 +139,10 @@ class ChatybotApp:
         # Seed configuration
         self.seed_config: Optional[Union[int, str, Tuple[str, int, int]]] = None
 
+        # Control-C handling state
+        self.control_c_count: int = 0
+        self.interrupt_requested: bool = False
+
         # Top-level parameters
         self.temperature: Optional[float] = None
         self.top_p: Optional[float] = None
@@ -249,6 +254,42 @@ class ChatybotApp:
         
         # Load default macros for interactive use
         self.load_macros()
+        
+        # Set up signal handler for Control-C
+        self.setup_signal_handler()
+
+    def setup_signal_handler(self) -> None:
+        """Set up signal handler for Control-C interrupts."""
+        def signal_handler(sig, frame):
+            if sig == signal.SIGINT:
+                self.control_c_count += 1
+                if self.control_c_count >= 2:
+                    # Second Ctrl+C - exit program
+                    print("\nExiting...")
+                    self.logging_manager.stop_logging()
+                    self.save_input_history()
+                    os._exit(0)
+                else:
+                    # First Ctrl+C - set flag for graceful interruption
+                    self.interrupt_requested = True
+        
+        signal.signal(signal.SIGINT, signal_handler)
+
+    async def interruptible_sleep(self, delay: float) -> None:
+        """
+        Sleep for specified delay but can be interrupted by Control-C.
+        Checks interrupt_requested flag periodically.
+        """
+        start_time = time.time()
+        remaining = delay
+        
+        while remaining > 0.1 and not self.interrupt_requested:  # Check every 100ms
+            await asyncio.sleep(min(0.1, remaining))
+            remaining = delay - (time.time() - start_time)
+        
+        if self.interrupt_requested:
+            self.interrupt_requested = False  # Reset flag since we're handling it
+            raise KeyboardInterrupt()
 
     def setup_macro_grammars(self):
         """Set up Parsley grammars for macro processing."""
@@ -2627,12 +2668,19 @@ class ChatybotApp:
             print("Last completion was not a tool call. Requesting initial tool call from LLM...")
             if getattr(self, 'rate_limit_delay', 0.0) > 0.0:
                 print(f"Pausing for {self.rate_limit_delay}s rate limit delay...")
-                await asyncio.sleep(self.rate_limit_delay)
+                await self.interruptible_sleep(self.rate_limit_delay)
             current_response = await self.chat_completion(temp_history, stream=self.streaming_enabled)
         
         print(f"Starting agentic tool loop (max turns: {max_turns})...")
         
         while turn_count < max_turns:
+            # Check for interrupt flag from signal handler
+            if self.interrupt_requested:
+                print("\nControl-C received. Breaking agentic tool loop...")
+                self.control_c_count = 0  # Reset counter after handling
+                self.interrupt_requested = False
+                break
+            
             tool_calls = self.extract_tool_calls(current_response)
             if not tool_calls:
                 # Terminal state reached: model produced a natural-language response instead of a JSON tool call
@@ -2738,7 +2786,7 @@ class ChatybotApp:
             turn_count += 1
             if getattr(self, 'rate_limit_delay', 0.0) > 0.0:
                 print(f"Pausing for {self.rate_limit_delay}s rate limit delay...")
-                await asyncio.sleep(self.rate_limit_delay)
+                await self.interruptible_sleep(self.rate_limit_delay)
 
             if turn_count >= max_turns:
                 print(f"Reached maximum tool loop turns ({max_turns}).")
@@ -5028,6 +5076,14 @@ class ChatybotApp:
         print("Multi-line mode. Enter your prompt (use ';;' on a new line to finish):")
         lines = []
         while True:
+            # Check for interrupt flag during multi-line input
+            if self.interrupt_requested:
+                print("\nInterrupted. Returning to prompt...")
+                self.control_c_count = 0
+                self.interrupt_requested = False
+                self.multi_line_mode = False
+                return ""
+            
             line = input()
             if line.strip() == ";;":
                 self.multi_line_mode = False
@@ -5076,6 +5132,13 @@ class ChatybotApp:
 
         while True:
             try:
+                # Check for interrupt flag at start of each loop iteration
+                if self.interrupt_requested:
+                    print("\nInterrupted. Returning to prompt...")
+                    self.control_c_count = 0
+                    self.interrupt_requested = False
+                    continue
+                
                 if self.multi_line_mode:
                     prompt = await self.get_multi_line_input()
                 else:
@@ -5114,10 +5177,22 @@ class ChatybotApp:
                 await self.execute_line(prompt)
 
             except KeyboardInterrupt:
-                print("\nGoodbye! Thanks for chatting.")
-                self.logging_manager.stop_logging()
-                self.save_input_history()
-                break
+                # Reset tool loop state if interrupted during tool operations
+                if hasattr(self, 'in_tool_loop') and self.in_tool_loop:
+                    self.in_tool_loop = False
+                
+                if self.control_c_count >= 2:
+                    # Second Ctrl+C - exit program
+                    print("\nGoodbye! Thanks for chatting.")
+                    self.logging_manager.stop_logging()
+                    self.save_input_history()
+                    break
+                else:
+                    # First Ctrl+C - return to prompt
+                    print("\nInterrupted. Returning to prompt...")
+                    self.control_c_count = 0  # Reset counter after handling
+                    self.interrupt_requested = False
+                    continue
             except Exception as e:
                 print(f"Error: {str(e)}")
 
