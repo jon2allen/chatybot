@@ -218,6 +218,15 @@ class ChatybotApp:
             self.default_profile = config_section.get('default_profile')
             self.max_turns = config_section.get('max_turns', 25)
             self.max_tool_calls_per_turn = config_section.get('max_tool_calls_per_turn', 10)
+            self.profile_dir = config_section.get('profile_dir', '~/.config/chatybot/profiles')
+            self.enable_profile_edit = config_section.get('enable_profile_edit', True)
+
+            # Seed presets on first run
+            from .profile_manager import ProfileManager
+            try:
+                ProfileManager(self.profile_dir).seed_presets()
+            except Exception as e:
+                print(f"Error seeding profile presets: {e}")
 
         # Set up input history
         self.load_input_history()
@@ -4079,6 +4088,17 @@ class ChatybotApp:
                             pass
                 await self.execute_tool_loop(max_turns)
                 return True
+
+            elif subcmd == "max_turns":
+                if len(parts) > 2:
+                    try:
+                        self.max_turns = int(parts[2].strip())
+                        print(f"Max tool turns set to {self.max_turns}")
+                    except ValueError:
+                        print("Invalid turn count. Usage: /tool max_turns <int>")
+                else:
+                    print(f"Current max tool turns: {self.max_turns}")
+                return True
             
             elif subcmd == "prompt":
                 # Check if there is an argument in parts[2]
@@ -4181,6 +4201,15 @@ class ChatybotApp:
                     # Provide JSON directly - dispatch it
                     self.dispatch_tool(arg)
                 return True
+
+        elif cmd == "/profile":
+            import shlex
+            try:
+                cmd_parts = shlex.split(command)
+            except ValueError:
+                cmd_parts = command.split()
+            await self.handle_profile_command(cmd_parts[1:])
+            return True
 
         elif cmd == "/stream":
             self.streaming_enabled = not self.streaming_enabled
@@ -4974,6 +5003,82 @@ class ChatybotApp:
             print(f"Error: Unknown command '{cmd}'. Type /help for available commands.")
             return False
 
+    async def handle_profile_command(self, args: list) -> None:
+        from .profile_manager import ProfileManager
+        pm = ProfileManager(getattr(self, 'profile_dir', '~/.config/chatybot/profiles'))
+        sub = args[0].lower() if args else "list"
+
+        if sub == "list":
+            profiles = pm.list_profiles()
+            if not profiles:
+                print("No profiles found in", pm.profile_dir)
+                return
+            print(f"\nAvailable Profiles  ({pm.profile_dir})")
+            print("─" * 60)
+            for fname in profiles:
+                try:
+                    meta = pm.read_meta(fname)
+                    print(f"  {fname:<30} {meta.description or meta.name}")
+                except Exception:
+                    print(f"  {fname}")
+            print()
+
+        elif sub == "use" and len(args) >= 2:
+            try:
+                path = pm._resolve_path(args[1])
+                await self.execute_script(path)
+                print(f"[profile] Applied: {args[1]}")
+            except Exception as e:
+                print(f"Error applying profile: {e}")
+
+        elif sub == "clone" and len(args) >= 3:
+            try:
+                dst = pm.clone_profile(args[1], args[2])
+                print(f"[profile] Cloned to {dst}")
+            except Exception as e:
+                print(f"Error cloning profile: {e}")
+
+        elif sub == "delete" and len(args) >= 2:
+            try:
+                confirm = input(f"Delete profile '{args[1]}'? [y/N] ").strip().lower()
+                if confirm == "y":
+                    pm.delete_profile(args[1])
+                    print(f"[profile] Deleted: {args[1]}")
+            except Exception as e:
+                print(f"Error deleting profile: {e}")
+
+        elif sub == "export" and len(args) >= 3:
+            try:
+                pm.export_profile(args[1], args[2])
+                print(f"[profile] Exported {args[1]} to {args[2]}")
+            except Exception as e:
+                print(f"Error exporting profile: {e}")
+
+        elif sub == "import" and len(args) >= 2:
+            try:
+                dst = pm.import_profile(args[1])
+                print(f"[profile] Imported to {dst}")
+            except Exception as e:
+                print(f"Error importing profile: {e}")
+
+        elif sub == "show" and len(args) >= 2:
+            try:
+                with open(pm._resolve_path(args[1]), "r", encoding="utf-8") as f:
+                    print(f.read())
+            except Exception as e:
+                print(f"Error showing profile: {e}")
+
+        elif sub == "edit":
+            name = args[1] if len(args) >= 2 else ""
+            try:
+                from .profile_editor import run_profile_editor
+                run_profile_editor(name, pm, self.config_manager)
+            except Exception as e:
+                print(f"Error running profile editor: {e}")
+
+        else:
+            print("Usage: /profile [list|use|clone|delete|export|import|show|edit] [args...]")
+
     def show_help(self) -> None:
         """Show help message with available commands."""
         print("Active escape commands:")
@@ -5118,7 +5223,13 @@ class ChatybotApp:
             profile_path = self.default_profile
             
         if profile_path:
-            expanded_path = os.path.expanduser(profile_path)
+            from .profile_manager import ProfileManager
+            pm = ProfileManager(getattr(self, 'profile_dir', '~/.config/chatybot/profiles'))
+            try:
+                expanded_path = pm._resolve_path(profile_path)
+            except Exception:
+                expanded_path = os.path.expanduser(profile_path)
+
             if os.path.exists(expanded_path):
                 try:
                     await self.execute_script(expanded_path)
@@ -5234,11 +5345,47 @@ def run():
         help="Path to a ChatDSL profile script to load at startup (drops into interactive REPL)",
         default=None
     )
+    parser.add_argument(
+        "--profile-edit", metavar="NAME", nargs="?", const="",
+        help="Open TUI profile editor. Optionally specify profile name to edit/create."
+    )
+    parser.add_argument(
+        "--profile-list", action="store_true",
+        help="List all available profiles"
+    )
     args, unknown = parser.parse_known_args()
 
     if args.config_edit:
         from .config_tui import main as tui_main
         sys.exit(tui_main(config_path=args.config))
+
+    if args.profile_list:
+        tmp = ChatybotApp(config_path=args.config)
+        tmp.initialize()
+        from .profile_manager import ProfileManager
+        pm = ProfileManager(getattr(tmp, 'profile_dir', '~/.config/chatybot/profiles'))
+        profiles = pm.list_profiles()
+        if not profiles:
+            print("No profiles found in", pm.profile_dir)
+            sys.exit(0)
+        print(f"\nAvailable Profiles  ({pm.profile_dir})")
+        print("─" * 60)
+        for fname in profiles:
+            try:
+                meta = pm.read_meta(fname)
+                print(f"  {fname:<30} {meta.description or meta.name}")
+            except Exception:
+                print(f"  {fname}")
+        print()
+        sys.exit(0)
+
+    if args.profile_edit is not None:
+        tmp = ChatybotApp(config_path=args.config)
+        tmp.initialize()
+        from .profile_manager import ProfileManager
+        from .profile_editor import run_profile_editor
+        pm = ProfileManager(getattr(tmp, 'profile_dir', '~/.config/chatybot/profiles'))
+        sys.exit(run_profile_editor(args.profile_edit, pm, tmp.config_manager))
 
     global app
     app = ChatybotApp(config_path=args.config)

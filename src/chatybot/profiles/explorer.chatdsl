@@ -1,0 +1,9 @@
+# @name: Explorer Mode
+# @description: Safe read-only exploration for browsing and querying
+
+/model mistral_1
+/tool disable run_command
+/tool disable run_safe
+/tool disable run_unsafe
+/tool disable setdb
+/reasoning off

@@ -1,0 +1,10 @@
+# @name: Development Profile
+# @description: Optimized for coding, debugging, and technical assistance
+
+/model devstral_1
+/tool auto on
+/tool on
+/reasoning on
+/effort medium
+/trace tps on
+/tool max_turns 75
