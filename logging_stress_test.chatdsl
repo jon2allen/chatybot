@@ -1,0 +1,53 @@
+# Logging System Stress Test and Verification ChatDSL Script
+# Configures the runtime to exercise standard logging and pyio-intercept thread safety.
+
+# 1. Enable automatic tool execution
+/tool auto on
+
+# 2. Start the logging interceptor session
+/logging start
+
+# 3. Define test variables and print them (testing variable expansion + stdout logging)
+set test_header = "=================== LOGGING STRESS TEST START ==================="
+/echo ${test_header}
+
+set test_msg = "Logging system active. Running multiline and external command stress tests..."
+/echo ${test_msg}
+
+# 4. Run external terminal processes (testing interception of large/rapid outputs from sub-processes)
+/run echo "--- [Stdout Interception] Listing current project workspace ---"
+/run pwd
+/run ls -la
+/run ls -la src/chatybot/
+
+# 5. Execute an agentic multi-turn prompt to trigger autonomous tool executions.
+# Under '/tool auto on', this will execute multiple tools in sequence.
+# This exercises stdout interception during complex agentic loops with parallel tool runs.
+/multiline
+Please perform the following operations using your tools:
+1. List the contents of the 'src/chatybot/profiles' directory.
+2. Find all '*.chatdsl' files in the project.
+3. Read the first 10 lines of 'src/chatybot/logging_manager.py'.
+Then summarize the results.
+;;
+
+# 6. Test logging toggle and verify logs are not captured while inactive
+/echo "Stopping logging session to test toggle capability..."
+/logging end
+
+/echo "--- [SKIP] This line is printed while logging is INACTIVE and should not be logged. ---"
+/run echo "--- [SKIP] This subprocess output should not be logged. ---"
+
+# 7. Resume logging and print final diagnostic stats
+/logging start
+/echo "--- [RESUME] Logging session resumed in a new file. ---"
+
+# Dump system memory and variables to test stdout dumping logging
+/mem
+/dump test_header
+/dump test_msg
+
+/echo "=================== LOGGING STRESS TEST COMPLETE ==================="
+
+# 8. Deactivate logging cleanly
+/logging end
