@@ -136,6 +136,11 @@ class ChatybotApp:
         self.debug_response_raw: bool = False
         self.debug_payload_data: dict = {}
 
+        # Virtual Memory Monitoring state
+        self.vmem_monitor_thread: Optional[object] = None
+        self.vmem_monitor_active: bool = False
+        self.vmem_log_file: Optional[str] = None
+
         # Seed configuration
         self.seed_config: Optional[Union[int, str, Tuple[str, int, int]]] = None
 
@@ -3065,10 +3070,20 @@ class ChatybotApp:
                         self.debug_response_mode = True
                         self.debug_response_raw = False
                         print("Debug response mode activated. Next completion will print a JSON dump of the response.")
+                elif subcmd == "vmem":
+                    action = parts[2].lower() if len(parts) >= 3 else "status"
+                    if action == "start":
+                        self.start_vmem_monitoring()
+                    elif action == "stop":
+                        self.stop_vmem_monitoring()
+                    elif action == "status":
+                        self.show_vmem_status()
+                    else:
+                        print("Unknown vmem action. Use /debug vmem <start|stop|status>")
                 else:
-                    print("Unknown /debug subcommand. Use payload, response, or response raw.")
+                    print("Unknown /debug subcommand. Use payload, response, response raw, or vmem.")
             else:
-                print("Usage: /debug <payload|response [raw]>")
+                print("Usage: /debug <payload|response [raw]|vmem [start|stop|status]>")
             return True
 
         elif cmd == "/prompt":
@@ -5079,6 +5094,119 @@ class ChatybotApp:
         else:
             print("Usage: /profile [list|use|clone|delete|export|import|show|edit] [args...]")
 
+    def start_vmem_monitoring(self) -> None:
+        """Start monitoring virtual memory size of the process in a separate thread."""
+        if getattr(self, 'vmem_monitor_active', False):
+            print(f"Virtual memory monitoring is already active. Logging to '{self.vmem_log_file}'.")
+            return
+
+        import threading
+        import time
+        from datetime import datetime
+
+        self.vmem_monitor_active = True
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.vmem_log_file = f"chatybot.vmem.{timestamp}.log"
+
+        def monitor_loop():
+            # Write a header to the log file
+            try:
+                with open(self.vmem_log_file, "a", encoding="utf-8") as f:
+                    f.write(f"--- Virtual Memory Monitoring Started: {datetime.now()} ---\n")
+                    f.write("Timestamp, VmSize (kB), VmRSS (kB)\n")
+            except Exception as e:
+                print(f"[vmem] Error initializing log file: {e}")
+                self.vmem_monitor_active = False
+                return
+
+            while self.vmem_monitor_active:
+                vmsize = 0
+                vmrss = 0
+                try:
+                    with open("/proc/self/status", "r") as proc_f:
+                        for line in proc_f:
+                            if line.startswith("VmSize:"):
+                                parts = line.split()
+                                if len(parts) >= 2:
+                                    vmsize = int(parts[1])
+                            elif line.startswith("VmRSS:"):
+                                parts = line.split()
+                                if len(parts) >= 2:
+                                    vmrss = int(parts[1])
+                except Exception:
+                    pass
+
+                # If on non-Linux system or procFS read failed, try psutil as fallback
+                if vmsize == 0:
+                    try:
+                        import psutil
+                        process = psutil.Process()
+                        info = process.memory_info()
+                        vmsize = info.vms // 1024
+                        vmrss = info.rss // 1024
+                    except Exception:
+                        pass
+
+                # Write to special log file
+                if vmsize > 0 or vmrss > 0:
+                    try:
+                        log_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        with open(self.vmem_log_file, "a", encoding="utf-8") as f:
+                            f.write(f"{log_time}, {vmsize}, {vmrss}\n")
+                    except Exception:
+                        pass
+
+                time.sleep(1.0)
+
+        self.vmem_monitor_thread = threading.Thread(target=monitor_loop, daemon=True)
+        self.vmem_monitor_thread.start()
+        print(f"Virtual memory monitoring started. Writing to '{self.vmem_log_file}' every second.")
+
+    def stop_vmem_monitoring(self) -> None:
+        """Stop virtual memory monitoring."""
+        if not getattr(self, 'vmem_monitor_active', False):
+            print("Virtual memory monitoring is not active.")
+            return
+
+        self.vmem_monitor_active = False
+        print(f"Virtual memory monitoring stopped. Final log saved to '{self.vmem_log_file}'.")
+
+    def show_vmem_status(self) -> None:
+        """Show the current virtual memory and monitoring status."""
+        active = getattr(self, 'vmem_monitor_active', False)
+        vmsize = 0
+        vmrss = 0
+        try:
+            with open("/proc/self/status", "r") as proc_f:
+                for line in proc_f:
+                    if line.startswith("VmSize:"):
+                        parts = line.split()
+                        if len(parts) >= 2:
+                            vmsize = int(parts[1])
+                    elif line.startswith("VmRSS:"):
+                        parts = line.split()
+                        if len(parts) >= 2:
+                            vmrss = int(parts[1])
+        except Exception:
+            pass
+
+        if vmsize == 0:
+            try:
+                import psutil
+                process = psutil.Process()
+                info = process.memory_info()
+                vmsize = info.vms // 1024
+                vmrss = info.rss // 1024
+            except Exception:
+                pass
+
+        print("Virtual Memory Status:")
+        print(f"  Active Monitoring: {'ON' if active else 'OFF'}")
+        if active:
+            print(f"  Log File: {self.vmem_log_file}")
+        print(f"  Current VmSize (Virtual Memory): {vmsize} kB ({vmsize / 1024:.2f} MB)")
+        print(f"  Current VmRSS (Resident Physical): {vmrss} kB ({vmrss / 1024:.2f} MB)")
+
     def show_help(self) -> None:
         """Show help message with available commands."""
         print("Active escape commands:")
@@ -5133,7 +5261,7 @@ class ChatybotApp:
         print("  /seed <value> - Set seed (int, 'time', or 'random <min>,<max>').")
         print("  /stream - Toggle streaming responses.")
         print("  /trace <rawpayload|tps|tpsperf|imagedbg|rerank|agentic_loop> <on|off> - Debugging options")
-        print("  /debug <payload|response [raw]> - Activate debug mode for the next prompt.")
+        print("  /debug <payload|response [raw]|vmem [start|stop|status]> - Control debugging features or monitor virtual memory.")
         print("  /echo <text> - Echo text to screen with variable substitution.")
         print("  /reloadmacros [file] - Reload macro definitions from macro.chatdsl or specified file.")
         print("  /source <file> - Execute a script file in the current session without exiting.")
