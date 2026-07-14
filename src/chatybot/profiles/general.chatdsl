@@ -1,0 +1,6 @@
+# @name: General Assistance Profile
+# @description: Balanced assistance with restricted tool access
+
+/model mistral_1
+/tool off
+/reasoning off
