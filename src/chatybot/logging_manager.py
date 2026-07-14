@@ -39,21 +39,27 @@ class LoggingManager:
     def _install_interceptor(self):
         """Install stdout interceptor using pyio-intercept or fallback to custom implementation."""
         if PYIO_INTERCEPT_AVAILABLE:
+            import weakref
+            self_weak = weakref.ref(self)
             # Create logging action for pyio-intercept
             def logging_action(payload, next_action, context):
                 # Pass through to original stdout first (preserve console output)
                 result = next_action(payload)
                 
+                manager = self_weak()
+                if manager is None:
+                    return result
+                
                 # Buffer for logging
-                with self._lock:
-                    self.buffer.append(payload)
+                with manager._lock:
+                    manager.buffer.append(payload)
                     
                     # Write to file if a newline is encountered and logging is active
                     if "\n" in payload:
-                        full_line = "".join(self.buffer).rstrip("\n")
-                        if full_line.strip() and self.logging_active:
-                            self.log_message(full_line)
-                        self.buffer.clear()
+                        full_line = "".join(manager.buffer).rstrip("\n")
+                        if full_line.strip() and manager.logging_active:
+                            manager.log_message(full_line)
+                        manager.buffer.clear()
                 
                 return result
             
@@ -132,7 +138,8 @@ class _FallbackStdoutInterceptor:
     """
     def __init__(self, original_stdout, logging_manager):
         self.stdout = original_stdout
-        self.logging_manager = logging_manager
+        import weakref
+        self._logging_manager_ref = weakref.ref(logging_manager)
         self.buffer = []
 
     def write(self, message: str):
@@ -144,9 +151,11 @@ class _FallbackStdoutInterceptor:
         
         # 3. Write to file if a newline is encountered and logging is active
         if "\n" in message:
-            full_line = "".join(self.buffer).rstrip("\n")
-            if full_line.strip() and self.logging_manager.logging_active:
-                self.logging_manager.log_message(full_line)
+            manager = self._logging_manager_ref()
+            if manager is not None:
+                full_line = "".join(self.buffer).rstrip("\n")
+                if full_line.strip() and manager.logging_active:
+                    manager.log_message(full_line)
             self.buffer.clear()
 
     def flush(self):
