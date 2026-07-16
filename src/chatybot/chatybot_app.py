@@ -18,6 +18,10 @@ from datetime import datetime
 from typing import Dict, Any, List, Tuple, Optional, Callable, Union
 import logging
 import atexit
+import sys
+import ctypes
+import ctypes.util
+import struct
 from .pattern import PatternMatcher
 
 
@@ -5102,18 +5106,37 @@ class ChatybotApp:
 
         import threading
         import time
+        import os
+        import sys
+        import ctypes
+        import ctypes.util
         from datetime import datetime
 
         self.vmem_monitor_active = True
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.vmem_log_file = f"chatybot.vmem.{timestamp}.log"
 
+        def get_phys_footprint(pid: int) -> int:
+            if sys.platform != "darwin":
+                return 0
+            try:
+                libproc = ctypes.CDLL(ctypes.util.find_library("libproc") or "libproc.dylib")
+                RUSAGE_INFO_V4 = 4
+                buffer = (ctypes.c_byte * 1024)()
+                ret = libproc.proc_pid_rusage(pid, RUSAGE_INFO_V4, ctypes.byref(buffer))
+                if ret != 0:
+                    return 0
+                import struct
+                return struct.unpack_from("Q", buffer, 72)[0]
+            except Exception:
+                return 0
+
         def monitor_loop():
             # Write a header to the log file
             try:
                 with open(self.vmem_log_file, "a", encoding="utf-8") as f:
                     f.write(f"--- Virtual Memory Monitoring Started: {datetime.now()} ---\n")
-                    f.write("Timestamp, VmSize (kB), VmRSS (kB)\n")
+                    f.write("Timestamp, VmSize (kB), VmRSS (kB), PhysFootprint (kB)\n")
             except Exception as e:
                 print(f"[vmem] Error initializing log file: {e}")
                 self.vmem_monitor_active = False
@@ -5122,17 +5145,18 @@ class ChatybotApp:
             while self.vmem_monitor_active:
                 vmsize = 0
                 vmrss = 0
+                phys_footprint = 0
                 try:
                     with open("/proc/self/status", "r") as proc_f:
                         for line in proc_f:
                             if line.startswith("VmSize:"):
                                 parts = line.split()
                                 if len(parts) >= 2:
-                                    vmsize = int(parts[1])
+                                     vmsize = int(parts[1])
                             elif line.startswith("VmRSS:"):
                                 parts = line.split()
                                 if len(parts) >= 2:
-                                    vmrss = int(parts[1])
+                                     vmrss = int(parts[1])
                 except Exception:
                     pass
 
@@ -5147,12 +5171,15 @@ class ChatybotApp:
                     except Exception:
                         pass
 
+                if sys.platform == "darwin":
+                    phys_footprint = get_phys_footprint(os.getpid()) // 1024
+
                 # Write to special log file
                 if vmsize > 0 or vmrss > 0:
                     try:
                         log_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         with open(self.vmem_log_file, "a", encoding="utf-8") as f:
-                            f.write(f"{log_time}, {vmsize}, {vmrss}\n")
+                            f.write(f"{log_time}, {vmsize}, {vmrss}, {phys_footprint}\n")
                     except Exception:
                         pass
 
@@ -5176,6 +5203,7 @@ class ChatybotApp:
         active = getattr(self, 'vmem_monitor_active', False)
         vmsize = 0
         vmrss = 0
+        phys_footprint = 0
         try:
             with open("/proc/self/status", "r") as proc_f:
                 for line in proc_f:
@@ -5200,12 +5228,30 @@ class ChatybotApp:
             except Exception:
                 pass
 
+        import sys
+        if sys.platform == "darwin":
+            import os
+            import ctypes
+            import ctypes.util
+            import struct
+            try:
+                libproc = ctypes.CDLL(ctypes.util.find_library("libproc") or "libproc.dylib")
+                RUSAGE_INFO_V4 = 4
+                buffer = (ctypes.c_byte * 1024)()
+                ret = libproc.proc_pid_rusage(os.getpid(), RUSAGE_INFO_V4, ctypes.byref(buffer))
+                if ret == 0:
+                    phys_footprint = struct.unpack_from("Q", buffer, 72)[0] // 1024
+            except Exception:
+                pass
+
         print("Virtual Memory Status:")
         print(f"  Active Monitoring: {'ON' if active else 'OFF'}")
         if active:
             print(f"  Log File: {self.vmem_log_file}")
         print(f"  Current VmSize (Virtual Memory): {vmsize} kB ({vmsize / 1024:.2f} MB)")
         print(f"  Current VmRSS (Resident Physical): {vmrss} kB ({vmrss / 1024:.2f} MB)")
+        if sys.platform == "darwin":
+            print(f"  Current PhysFootprint (Actual Footprint): {phys_footprint} kB ({phys_footprint / 1024:.2f} MB)")
 
     def show_help(self) -> None:
         """Show help message with available commands."""
