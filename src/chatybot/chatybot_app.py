@@ -5386,7 +5386,7 @@ class ChatybotApp:
         print("===========================")
         print("Chatybot.py                ")
         print("Created by Jon Allen - 2026")
-        print("Version: 0.6.3             ")
+        print("Version: 0.6.4             ")
         print("===========================")
         print(
             f"Active model: {self.config_manager.get_model_config(self.config_manager.active_model_alias)['name']} (alias: {self.config_manager.active_model_alias})"
