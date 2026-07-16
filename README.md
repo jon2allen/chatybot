@@ -714,6 +714,7 @@ July 16th, 2026 (v0.6.4)
 - **Cross-Platform Compatibility**: Added Linux-native `/proc/self/status` support, fallback to `psutil` on other systems, and macOS/Darwin physical footprint tracking (`proc_pid_rusage` via `ctypes` system calls).
 - **Interactive Debug Commands**: Introduced the `/debug vmem <start|stop|status>` escape command to control the monitor state, log locations, and query live memory usage.
 - **Dedicated Log Files**: Outputs metric captures with millisecond-resolution timestamps to dedicated log files (`chatybot.vmem.<timestamp>.log`).
+- **New replace_file_content Tool**: Packaged a new built-in system tool to replace specific target string blocks within files.
 - **Help System & Test Integration**: Integrated commands into `/help /debug`, CLI auto-complete, and verified correctness with the `test/test_vmem.py` test suite.
 
 July 12th, 2026 (v0.6.3)
