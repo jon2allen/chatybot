@@ -241,4 +241,26 @@ def grep_search(
 
     return results
 
+def replace_file_content(path: str, target: str, replacement: str) -> str:
+    """Replace target content with replacement content in the file at path."""
+    try:
+        if not os.path.exists(path):
+            return f"Error: File '{path}' does not exist."
+        
+        with open(path, 'r', encoding='utf-8', errors='ignore') as f:
+            content = f.read()
+        
+        if target not in content:
+            return f"Error: Target content not found in file '{path}'."
+        
+        occurrences = content.count(target)
+        new_content = content.replace(target, replacement)
+        
+        with open(path, 'w', encoding='utf-8') as f:
+            f.write(new_content)
+            
+        return f"Success: Replaced {occurrences} occurrence(s) of target in '{path}'"
+    except Exception as e:
+        return f"Error replacing file content: {e}"
+
 

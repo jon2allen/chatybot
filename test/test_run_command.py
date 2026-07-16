@@ -776,6 +776,30 @@ class TestRunCommandBehavior:
                 content = f.read()
             assert content == "hello world\nadditional text"
 
+    def test_replace_file_content_tool(self, app):
+        """Verifies that the replace_file_content tool replaces content correctly"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filepath = os.path.join(tmpdir, "test_replace.txt")
+            with open(filepath, "w") as f:
+                f.write("hello world\nhello world\n")
+            
+            # Test replace
+            invocation_replace = {
+                "tool": "replace_file_content",
+                "arguments": {
+                    "path": filepath,
+                    "target": "world",
+                    "replacement": "there"
+                }
+            }
+            res_replace = app.dispatch_tool(json.dumps(invocation_replace))
+            assert "Success" in res_replace
+            assert "2 occurrence" in res_replace
+            
+            with open(filepath, "r") as f:
+                content = f.read()
+            assert content == "hello there\nhello there\n"
+
     @pytest.mark.anyio
     async def test_tool_loop_agentic_loop_variable(self, app):
         """Verifies that the AGENTIC_LOOP script variable accumulates tool records during tool loop runs"""
