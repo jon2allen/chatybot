@@ -6,7 +6,7 @@ Unit tests for file_utils module (specifically read_file binary checks).
 import os
 import pytest
 import tempfile
-from src.chatybot.tools.file_utils import read_file, list_directory, find_files, grep_search
+from src.chatybot.tools.file_utils import read_file, list_directory, find_files, grep_search, replace_file_content
 
 
 def test_read_file_text():
@@ -197,5 +197,29 @@ def test_grep_search_edge_cases():
         # Should match the file in root (long_line.txt), but not the one in .git/
         assert len(results_dir) == 1
         assert results_dir[0]["file"] == file_path
+
+
+def test_replace_file_content():
+    """Test replace_file_content replaces target content successfully."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        file_path = os.path.join(tmpdir, "test_replace.txt")
+        with open(file_path, "w") as f:
+            f.write("hello world\nhello world\n")
+        
+        # Test basic replacement
+        result = replace_file_content(file_path, "world", "there")
+        assert "Success: Replaced 2 occurrence(s)" in result
+        
+        with open(file_path, "r") as f:
+            content = f.read()
+        assert content == "hello there\nhello there\n"
+
+        # Test non-existent target
+        result_fail = replace_file_content(file_path, "nonexistent", "new")
+        assert "Error: Target content not found" in result_fail
+
+        # Test non-existent file
+        result_no_file = replace_file_content(os.path.join(tmpdir, "no_such_file.txt"), "hello", "hi")
+        assert "Error: File" in result_no_file
 
 
