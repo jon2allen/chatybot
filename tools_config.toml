@@ -144,3 +144,24 @@ optional = true
 type = "integer"
 description = "Maximum number of matches to return (default 100)"
 optional = true
+
+[tools.replace_file_content]
+enabled = true
+description = "Replace a specific block of text in a file with new content"
+module = "chatybot.tools.file_utils"
+function = "replace_file_content"
+
+[tools.replace_file_content.parameters.path]
+type = "string"
+description = "The path of the file to modify"
+optional = false
+
+[tools.replace_file_content.parameters.target]
+type = "string"
+description = "The exact block of text to be replaced"
+optional = false
+
+[tools.replace_file_content.parameters.replacement]
+type = "string"
+description = "The new text to replace the target block with"
+optional = false
