@@ -708,6 +708,14 @@ chat --> Create a blog post outline about ${topic}
 
 ### Change log
 
+July 16th, 2026 (v0.6.4)
+------------------------
+- **Virtual Memory Monitoring**: Implemented a background daemon thread that logs process memory metrics (`VmSize` and `VmRSS`) at 1-second intervals.
+- **Cross-Platform Compatibility**: Added Linux-native `/proc/self/status` support, fallback to `psutil` on other systems, and macOS/Darwin physical footprint tracking (`proc_pid_rusage` via `ctypes` system calls).
+- **Interactive Debug Commands**: Introduced the `/debug vmem <start|stop|status>` escape command to control the monitor state, log locations, and query live memory usage.
+- **Dedicated Log Files**: Outputs metric captures with millisecond-resolution timestamps to dedicated log files (`chatybot.vmem.<timestamp>.log`).
+- **Help System & Test Integration**: Integrated commands into `/help /debug`, CLI auto-complete, and verified correctness with the `test/test_vmem.py` test suite.
+
 July 12th, 2026 (v0.6.3)
 ------------------------
 - **Automatic Configuration Synchronization**: Implemented `config_sync` utility which automatically merges packaged TOML default configurations into user configuration directories on startup.
