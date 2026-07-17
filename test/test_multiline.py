@@ -153,6 +153,7 @@ line 2
         app.handle_escape_command = mock_handle_escape_command
         
         # Test case 1: Standard escape command via direct input
+        app.control_c_count = 2
         with patch('builtins.input', side_effect=["/dump ${arr1[0]}", KeyboardInterrupt()]):
             await app.main_loop()
             
@@ -161,6 +162,7 @@ line 2
         
         # Test case 2: Escape command resolved via history search (!)
         called_commands.clear()
+        app.control_c_count = 2
         app.handle_history_command = AsyncMock(return_value="/dump ${arr1[0]}")
         with patch('builtins.input', side_effect=["!1", KeyboardInterrupt()]):
             await app.main_loop()
@@ -170,6 +172,7 @@ line 2
 
         # Test case 3: /setvar command is NOT resolved (handled internally)
         called_commands.clear()
+        app.control_c_count = 2
         with patch('builtins.input', side_effect=["/setvar val = ${arr1[0]}", KeyboardInterrupt()]):
             await app.main_loop()
             
@@ -202,6 +205,7 @@ line 2
         
         mock_execute = AsyncMock()
         app.execute_script = mock_execute
+        app.control_c_count = 2
         
         with patch('os.path.exists', return_value=True):
             with patch('builtins.input', side_effect=KeyboardInterrupt()):
