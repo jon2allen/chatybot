@@ -4076,13 +4076,41 @@ class ChatybotApp:
             subcmd = parts[1].lower()
             
             if subcmd == "list":
+                import fnmatch
+                glob_pattern = parts[2].strip() if len(parts) > 2 else "*"
+                
                 config = self._load_tools_config()
                 tools = config.get('tools', {})
-                print("\nAvailable Local Tools:")
-                if not tools:
-                    print("  No local tools defined in configuration.")
+                
+                # Filter local tools
+                filtered_local = {}
+                for t_name, t_meta in tools.items():
+                    if fnmatch.fnmatch(t_name.lower(), glob_pattern.lower()):
+                        filtered_local[t_name] = t_meta
+                
+                # Filter MCP tools
+                filtered_mcp = {}
+                if self.mcp_manager and self.mcp_manager.cached_schemas:
+                    for server_name, tools_list in self.mcp_manager.cached_schemas.items():
+                        matching_mcp = []
+                        for tool in tools_list:
+                            mcp_tool_name = f"mcp__{server_name}__{tool.name}"
+                            if fnmatch.fnmatch(mcp_tool_name.lower(), glob_pattern.lower()):
+                                matching_mcp.append(tool)
+                        if matching_mcp:
+                            filtered_mcp[server_name] = matching_mcp
+
+                if glob_pattern != "*":
+                    print(f"\nAvailable Tools matching '{glob_pattern}':")
                 else:
-                    for tool_name, tool_meta in tools.items():
+                    print("\nAvailable Local Tools:")
+
+                if glob_pattern != "*":
+                    print("\nAvailable Local Tools:")
+                if not filtered_local:
+                    print("  No local tools match pattern." if glob_pattern != "*" else "  No local tools defined in configuration.")
+                else:
+                    for tool_name, tool_meta in filtered_local.items():
                         config_enabled = tool_meta.get('enabled', False)
                         is_enabled = self.tool_overrides.get(tool_name, config_enabled)
                         status = "[ON] " if is_enabled else "[OFF]"
@@ -4090,9 +4118,9 @@ class ChatybotApp:
                         print(f"  {status}  {tool_name:<16} - {desc}")
                 
                 # Print MCP Tools if active
-                if self.mcp_manager and self.mcp_manager.cached_schemas:
+                if filtered_mcp:
                     print("\nModel Context Protocol (MCP) Tools:")
-                    for server_name, tools_list in self.mcp_manager.cached_schemas.items():
+                    for server_name, tools_list in filtered_mcp.items():
                         print(f"  [{server_name}]")
                         for tool in tools_list:
                             mcp_tool_name = f"mcp__{server_name}__{tool.name}"
@@ -4100,12 +4128,15 @@ class ChatybotApp:
                             status = "[ON] " if is_enabled else "[OFF]"
                             desc = getattr(tool, "description", "No description") or "No description"
                             print(f"    {status}  {mcp_tool_name:<30} - {desc}")
+                elif self.mcp_manager and self.mcp_manager.cached_schemas:
+                    print("\nModel Context Protocol (MCP) Tools:")
+                    print("  No MCP tools match pattern.")
                 print("")
                 return True
             
             elif subcmd in ("enable", "disable"):
                 if len(parts) < 3:
-                    print(f"Usage: /tool {subcmd} <tool_name>|all")
+                    print(f"Usage: /tool {subcmd} <tool_name>|all|<glob_pattern>")
                     return True
                 
                 target = parts[2].strip()
@@ -4114,42 +4145,37 @@ class ChatybotApp:
                 
                 target_value = (subcmd == "enable")
                 
+                # Collect all available tools
+                all_tools = []
+                for tool_name in tools.keys():
+                    all_tools.append(tool_name)
+                if self.mcp_manager and self.mcp_manager.cached_schemas:
+                    for server_name, tools_list in self.mcp_manager.cached_schemas.items():
+                        for tool in tools_list:
+                            all_tools.append(f"mcp__{server_name}__{tool.name}")
+                
+                import fnmatch
+                
                 if target.lower() == "all":
-                    for tool_name in tools.keys():
-                        self.tool_overrides[tool_name] = target_value
-                    if self.mcp_manager and self.mcp_manager.cached_schemas:
-                        for server_name, tools_list in self.mcp_manager.cached_schemas.items():
-                            for tool in tools_list:
-                                mcp_tool_name = f"mcp__{server_name}__{tool.name}"
-                                self.tool_overrides[mcp_tool_name] = target_value
-                    print(f"All tools {'enabled' if target_value else 'disabled'}.")
+                    matched_tools = all_tools
                 else:
-                    is_mcp_tool = False
-                    if target.startswith("mcp__"):
-                        if self.mcp_manager and self.mcp_manager.cached_schemas:
-                            for server_name, tools_list in self.mcp_manager.cached_schemas.items():
-                                for tool in tools_list:
-                                    if f"mcp__{server_name}__{tool.name}" == target:
-                                        is_mcp_tool = True
-                                        break
-                                if is_mcp_tool:
-                                    break
+                    pattern = target.lower()
+                    matched_tools = [t for t in all_tools if fnmatch.fnmatch(t.lower(), pattern)]
                     
-                    if not is_mcp_tool and target not in tools:
-                        # Check case-insensitive
-                        matched_tool = None
-                        for t in tools.keys():
+                    # Fallback to exact case-insensitive match if target contains no glob chars and wasn't matched
+                    if not matched_tools and "*" not in target and "?" not in target:
+                        for t in all_tools:
                             if t.lower() == target.lower():
-                                matched_tool = t
+                                matched_tools = [t]
                                 break
-                        if matched_tool:
-                            target = matched_tool
-                        else:
-                            print(f"Error: Tool '{target}' not found in configuration.")
-                            return True
-                    
-                    self.tool_overrides[target] = target_value
-                    print(f"Tool '{target}' {'enabled' if target_value else 'disabled'}.")
+                
+                if not matched_tools:
+                    print(f"Error: No tools matched pattern '{target}'.")
+                    return True
+                
+                for t in matched_tools:
+                    self.tool_overrides[t] = target_value
+                    print(f"Tool '{t}' {'enabled' if target_value else 'disabled'}.")
                 
                 # Regenerate tool context to update in-memory state and refresh variable context if active
                 context = self.generate_tool_context()

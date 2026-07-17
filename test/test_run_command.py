@@ -913,7 +913,7 @@ class TestRunCommandBehavior:
             assert res is True
         finally:
             sys.stdout = sys.__stdout__
-        assert "Error: Tool 'fake_tool' not found" in captured_output.getvalue()
+        assert "Error: No tools matched pattern 'fake_tool'" in captured_output.getvalue()
         
         # 6. Test enable/disable all
         res = await app.handle_escape_command("/tool disable all")
@@ -935,6 +935,112 @@ class TestRunCommandBehavior:
         context_after_disable = app.generate_tool_context()
         assert "list_directory" in context_after_disable
         assert "write_file" not in context_after_disable
+
+    @pytest.mark.anyio
+    async def test_tool_glob_matching(self, app):
+        """Verifies that glob-style patterns can list, enable, and disable tools."""
+        # Setup mock configs with local and MCP tools
+        mock_config = {
+            "tools": {
+                "list_directory": {
+                    "enabled": True,
+                    "description": "List contents of a directory"
+                },
+                "write_file": {
+                    "enabled": True,
+                    "description": "Write a file"
+                },
+                "read_file": {
+                    "enabled": True,
+                    "description": "Read a file"
+                }
+            }
+        }
+        app._load_tools_config = MagicMock(return_value=mock_config)
+        
+        # Setup mock MCP client manager with cached schemas
+        mock_mcp = MagicMock()
+        class DummyTool:
+            def __init__(self, name, description=""):
+                self.name = name
+                self.description = description
+                self.inputSchema = {"properties": {}, "required": []}
+                
+        mock_mcp.cached_schemas = {
+            "gitserver": [
+                DummyTool("clone"),
+                DummyTool("commit")
+            ]
+        }
+        app.mcp_manager = mock_mcp
+
+        # Initialize overrides
+        app.tool_overrides = {}
+
+        # 1. Test /tool list with glob filter
+        import sys
+        from io import StringIO
+        
+        captured_output = StringIO()
+        sys.stdout = captured_output
+        try:
+            res = await app.handle_escape_command("/tool list *file*")
+            assert res is True
+        finally:
+            sys.stdout = sys.__stdout__
+            
+        output = captured_output.getvalue()
+        assert "write_file" in output
+        assert "read_file" in output
+        assert "list_directory" not in output
+        assert "gitserver" not in output
+
+        # 2. Test /tool list with MCP matching glob
+        captured_output = StringIO()
+        sys.stdout = captured_output
+        try:
+            res = await app.handle_escape_command("/tool list mcp__git*")
+            assert res is True
+        finally:
+            sys.stdout = sys.__stdout__
+            
+        output = captured_output.getvalue()
+        assert "mcp__gitserver__clone" in output
+        assert "mcp__gitserver__commit" in output
+        assert "write_file" not in output
+
+        # 3. Test /tool disable using glob pattern (e.g. *file*)
+        res = await app.handle_escape_command("/tool disable *file*")
+        assert res is True
+        assert app.tool_overrides["write_file"] is False
+        assert app.tool_overrides["read_file"] is False
+        # list_directory and MCP tools should remain untouched or defaulted (not disabled via override)
+        assert "list_directory" not in app.tool_overrides
+
+        # 4. Test /tool disable all mcp tools using mcp* glob
+        res = await app.handle_escape_command("/tool disable mcp*")
+        assert res is True
+        assert app.tool_overrides["mcp__gitserver__clone"] is False
+        assert app.tool_overrides["mcp__gitserver__commit"] is False
+        
+        # 5. Test /tool enable using glob pattern
+        res = await app.handle_escape_command("/tool enable *")
+        assert res is True
+        assert app.tool_overrides["list_directory"] is True
+        assert app.tool_overrides["write_file"] is True
+        assert app.tool_overrides["read_file"] is True
+        assert app.tool_overrides["mcp__gitserver__clone"] is True
+        assert app.tool_overrides["mcp__gitserver__commit"] is True
+
+        # 6. Test when no tools match a glob
+        captured_output = StringIO()
+        sys.stdout = captured_output
+        try:
+            res = await app.handle_escape_command("/tool disable non_existent*")
+            assert res is True
+        finally:
+            sys.stdout = sys.__stdout__
+        assert "Error: No tools matched pattern 'non_existent*'" in captured_output.getvalue()
 
 
 
