@@ -4188,8 +4188,8 @@ class ChatybotApp:
                         print(f"\nAvailable Tools matching '{glob_pattern}':")
                     
                     # Print header
-                    print(f"\n  {'STATUS':<6} {'TYPE':<6} {'NAME':<35} {'DESCRIPTION':<60}")
-                    print(f"  {'-'*6} {'-'*6} {'-'*35} {'-'*60}")
+                    print(f"\n  {'STATUS':<6} {'TYPE':<6} {'NAME':<45} {'DESCRIPTION':<60}")
+                    print(f"  {'-'*6} {'-'*6} {'-'*45} {'-'*60}")
                     
                     has_local = False
                     for tool_name, tool_meta in filtered_local.items():
@@ -4198,7 +4198,7 @@ class ChatybotApp:
                         is_enabled = self.tool_overrides.get(tool_name, config_enabled)
                         status_str = "[ON]" if is_enabled else "[OFF]"
                         desc = tool_meta.get('description', 'No description').strip().replace("\n", " ")
-                        print(f"  {status_str:<6} {'LOCAL':<6} {tool_name:<35} {desc[:60]:<60}")
+                        print(f"  {status_str:<6} {'LOCAL':<6} {tool_name:<45} {desc[:60]:<60}")
                     
                     if not has_local and glob_pattern == "*":
                         print("  (No local tools defined)")
@@ -4212,7 +4212,7 @@ class ChatybotApp:
                                 is_enabled = self.tool_overrides.get(mcp_tool_name, True)
                                 status_str = "[ON]" if is_enabled else "[OFF]"
                                 desc = (getattr(tool, "description", "No description") or "No description").strip().replace("\n", " ")
-                                print(f"  {status_str:<6} {'MCP':<6} {mcp_tool_name:<35} {desc[:60]:<60}")
+                                print(f"  {status_str:<6} {'MCP':<6} {mcp_tool_name:<45} {desc[:60]:<60}")
                     
                     if not has_mcp and self.mcp_manager and self.mcp_manager.cached_schemas and glob_pattern == "*":
                         print("  (No MCP tools active)")
