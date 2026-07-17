@@ -18,7 +18,8 @@ dependencies = [
     "aiohttp",
     "EasyRerank>=0.2.2",
     "pyio-intercept>=0.1.0",
-    "psutil"
+    "psutil",
+    "mcp"
 ]
 
 [project.scripts]
