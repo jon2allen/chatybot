@@ -178,6 +178,23 @@ ModelConfig = Annotated[
 
 
 # ============================================================================
+# MODEL CONTEXT PROTOCOL (MCP) CONFIG
+# ============================================================================
+
+class MCPServerConfig(BaseModel):
+    """Configuration for an individual MCP Server."""
+    command: str
+    args: list[str] = Field(default_factory=list)
+    persistent: bool = False
+    env: Optional[dict[str, str]] = None
+
+
+class MCPConfig(BaseModel):
+    """Configuration for all MCP Servers."""
+    servers: dict[str, MCPServerConfig] = Field(default_factory=dict)
+
+
+# ============================================================================
 # TOP-LEVEL CONFIG CONTAINER
 # ============================================================================
 
@@ -196,6 +213,9 @@ class ChatConfig(BaseModel):
         default_factory=ImageGenerationSettings
     )
     """Global image generation defaults."""
+
+    mcp: MCPConfig = Field(default_factory=MCPConfig)
+    """Model Context Protocol (MCP) server configuration."""
 
     models: dict[str, ModelConfig] = {}
     """All model entries, keyed by their TOML alias (e.g. 'mistral_1')."""
@@ -370,7 +390,25 @@ class ChatConfig(BaseModel):
                 lines.append(f'{k} = {v}')
         lines.append("")
 
-        # 2. Categorize models to match the original TOML organization
+        # 3. Model Context Protocol (MCP) settings
+        if self.mcp and self.mcp.servers:
+            lines.append("# ============================================================================")
+            lines.append("# MODEL CONTEXT PROTOCOL (MCP) SERVERS")
+            lines.append("# ============================================================================")
+            lines.append("")
+            for server_name, server_cfg in self.mcp.servers.items():
+                lines.append(f"[mcp.servers.{server_name}]")
+                lines.append(f'command = "{server_cfg.command}"')
+                if server_cfg.args:
+                    formatted_args = ", ".join(f'"{arg}"' for arg in server_cfg.args)
+                    lines.append(f'args = [{formatted_args}]')
+                lines.append(f'persistent = {str(server_cfg.persistent).lower()}')
+                if server_cfg.env:
+                    formatted_env = ", ".join(f'{k} = "{v}"' for k, v in server_cfg.env.items())
+                    lines.append(f'env = {{ {formatted_env} }}')
+                lines.append("")
+
+        # 4. Categorize models to match the original TOML organization
         categories: dict[str, list[tuple[str, ModelConfig]]] = {
             "CHAT MODELS": [],
             "OPENROUTER MODELS": [],
