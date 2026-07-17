@@ -405,7 +405,7 @@ class TestRunCommandBehavior:
             mock_run.return_value.returncode = 0
             mock_run.return_value.stdout = "success"
             
-            res = app.dispatch_tool('{"tool": "list_directory"}')
+            res = await app.dispatch_tool('{"tool": "list_directory"}')
             assert res == "success"
             mock_run.assert_called_once()
             _, kwargs = mock_run.call_args
@@ -740,7 +740,8 @@ class TestRunCommandBehavior:
         assert tool_calls[0]["tool"] == "run_command"
         assert "line 1\nline 2" in tool_calls[0]["arguments"]["command"]
 
-    def test_write_file_tool(self, app):
+    @pytest.mark.anyio
+    async def test_write_file_tool(self, app):
         """Verifies that the write_file tool writes and appends contents correctly"""
         with tempfile.TemporaryDirectory() as tmpdir:
             filepath = os.path.join(tmpdir, "test_write.txt")
@@ -753,7 +754,7 @@ class TestRunCommandBehavior:
                     "content": "hello world\n"
                 }
             }
-            res_write = app.dispatch_tool(json.dumps(invocation_write))
+            res_write = await app.dispatch_tool(json.dumps(invocation_write))
             assert "success" in res_write
             
             with open(filepath, "r") as f:
@@ -769,14 +770,15 @@ class TestRunCommandBehavior:
                     "append": True
                 }
             }
-            res_append = app.dispatch_tool(json.dumps(invocation_append))
+            res_append = await app.dispatch_tool(json.dumps(invocation_append))
             assert "success" in res_append
             
             with open(filepath, "r") as f:
                 content = f.read()
             assert content == "hello world\nadditional text"
 
-    def test_replace_file_content_tool(self, app):
+    @pytest.mark.anyio
+    async def test_replace_file_content_tool(self, app):
         """Verifies that the replace_file_content tool replaces content correctly"""
         with tempfile.TemporaryDirectory() as tmpdir:
             filepath = os.path.join(tmpdir, "test_replace.txt")
@@ -792,7 +794,7 @@ class TestRunCommandBehavior:
                     "replacement": "there"
                 }
             }
-            res_replace = app.dispatch_tool(json.dumps(invocation_replace))
+            res_replace = await app.dispatch_tool(json.dumps(invocation_replace))
             assert "Success" in res_replace
             assert "2 occurrence" in res_replace
             
