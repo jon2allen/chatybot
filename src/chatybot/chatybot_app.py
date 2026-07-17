@@ -4077,7 +4077,19 @@ class ChatybotApp:
             
             if subcmd == "list":
                 import fnmatch
-                glob_pattern = parts[2].strip() if len(parts) > 2 else "*"
+                
+                # Parse detail mode and glob pattern
+                detail_mode = False
+                glob_pattern = "*"
+                if len(parts) > 2:
+                    sub_parts = parts[2].strip().split()
+                    if "detail" in [p.lower() for p in sub_parts]:
+                        detail_mode = True
+                        remaining_parts = [p for p in sub_parts if p.lower() != "detail"]
+                        if remaining_parts:
+                            glob_pattern = remaining_parts[0]
+                    else:
+                        glob_pattern = sub_parts[0]
                 
                 config = self._load_tools_config()
                 tools = config.get('tools', {})
@@ -4100,37 +4112,110 @@ class ChatybotApp:
                         if matching_mcp:
                             filtered_mcp[server_name] = matching_mcp
 
-                if glob_pattern != "*":
-                    print(f"\nAvailable Tools matching '{glob_pattern}':")
-                else:
-                    print("\nAvailable Local Tools:")
+                if detail_mode:
+                    if glob_pattern != "*":
+                        print(f"\nDetailed Tools matching '{glob_pattern}':")
+                    else:
+                        print("\nDetailed Tools Configuration:")
 
-                if glob_pattern != "*":
                     print("\nAvailable Local Tools:")
-                if not filtered_local:
-                    print("  No local tools match pattern." if glob_pattern != "*" else "  No local tools defined in configuration.")
+                    if not filtered_local:
+                        print("  No local tools match pattern." if glob_pattern != "*" else "  No local tools defined in configuration.")
+                    else:
+                        for tool_name, tool_meta in filtered_local.items():
+                            config_enabled = tool_meta.get('enabled', False)
+                            is_enabled = self.tool_overrides.get(tool_name, config_enabled)
+                            status = "[ON]" if is_enabled else "[OFF]"
+                            desc = tool_meta.get('description', 'No description')
+                            print(f"\n**{tool_name}**  {status}")
+                            print(f"Description: {desc}")
+                            params = tool_meta.get('parameters', {})
+                            if params:
+                                print("Parameters:")
+                                for param_name, param_rules in params.items():
+                                    param_type = param_rules.get('type', 'string')
+                                    param_desc = param_rules.get('description', '')
+                                    optional = param_rules.get('optional', False)
+                                    required = " (optional)" if optional else " (required)"
+                                    print(f"  - {param_name}: {param_type}{required} - {param_desc}")
+                    
+                    # Print MCP Tools if active
+                    if filtered_mcp:
+                        print("\nModel Context Protocol (MCP) Tools:")
+                        for server_name, tools_list in filtered_mcp.items():
+                            print(f"  [{server_name}]")
+                            for tool in tools_list:
+                                mcp_tool_name = f"mcp__{server_name}__{tool.name}"
+                                is_enabled = self.tool_overrides.get(mcp_tool_name, True)
+                                status = "[ON]" if is_enabled else "[OFF]"
+                                desc = getattr(tool, "description", "No description") or "No description"
+                                print(f"\n**{mcp_tool_name}**  {status}")
+                                print(f"Description: {desc}")
+                                
+                                # Extract input schema properties
+                                input_schema = getattr(tool, "inputSchema", {})
+                                if hasattr(input_schema, "get"):
+                                    properties = input_schema.get("properties", {})
+                                    required_list = input_schema.get("required", [])
+                                else:
+                                    properties = {}
+                                    required_list = []
+                                
+                                if properties:
+                                    print("Parameters:")
+                                    for param_name, param_meta in properties.items():
+                                        if hasattr(param_meta, "get"):
+                                            param_type = param_meta.get("type")
+                                            if not param_type and "anyOf" in param_meta:
+                                                types = [t.get("type") for t in param_meta["anyOf"] if t.get("type") != "null" and t.get("type")]
+                                                param_type = "|".join(types) if types else "string"
+                                            elif not param_type:
+                                                param_type = "string"
+                                            param_desc = param_meta.get("description", "")
+                                        else:
+                                            param_type = "string"
+                                            param_desc = ""
+                                            
+                                        is_optional = param_name not in required_list
+                                        required_str = " (optional)" if is_optional else " (required)"
+                                        print(f"  - {param_name}: {param_type}{required_str} - {param_desc}")
+                    elif self.mcp_manager and self.mcp_manager.cached_schemas:
+                        print("\nModel Context Protocol (MCP) Tools:")
+                        print("  No MCP tools match pattern.")
                 else:
+                    # Columnar layout for single-line view
+                    if glob_pattern != "*":
+                        print(f"\nAvailable Tools matching '{glob_pattern}':")
+                    
+                    # Print header
+                    print(f"\n  {'STATUS':<6} {'TYPE':<6} {'NAME':<35} {'DESCRIPTION':<60}")
+                    print(f"  {'-'*6} {'-'*6} {'-'*35} {'-'*60}")
+                    
+                    has_local = False
                     for tool_name, tool_meta in filtered_local.items():
+                        has_local = True
                         config_enabled = tool_meta.get('enabled', False)
                         is_enabled = self.tool_overrides.get(tool_name, config_enabled)
-                        status = "[ON] " if is_enabled else "[OFF]"
-                        desc = tool_meta.get('description', 'No description')
-                        print(f"  {status}  {tool_name:<16} - {desc}")
-                
-                # Print MCP Tools if active
-                if filtered_mcp:
-                    print("\nModel Context Protocol (MCP) Tools:")
-                    for server_name, tools_list in filtered_mcp.items():
-                        print(f"  [{server_name}]")
-                        for tool in tools_list:
-                            mcp_tool_name = f"mcp__{server_name}__{tool.name}"
-                            is_enabled = self.tool_overrides.get(mcp_tool_name, True)
-                            status = "[ON] " if is_enabled else "[OFF]"
-                            desc = getattr(tool, "description", "No description") or "No description"
-                            print(f"    {status}  {mcp_tool_name:<30} - {desc}")
-                elif self.mcp_manager and self.mcp_manager.cached_schemas:
-                    print("\nModel Context Protocol (MCP) Tools:")
-                    print("  No MCP tools match pattern.")
+                        status_str = "[ON]" if is_enabled else "[OFF]"
+                        desc = tool_meta.get('description', 'No description').strip().replace("\n", " ")
+                        print(f"  {status_str:<6} {'LOCAL':<6} {tool_name:<35} {desc[:60]:<60}")
+                    
+                    if not has_local and glob_pattern == "*":
+                        print("  (No local tools defined)")
+                        
+                    has_mcp = False
+                    if filtered_mcp:
+                        for server_name, tools_list in filtered_mcp.items():
+                            for tool in tools_list:
+                                has_mcp = True
+                                mcp_tool_name = f"mcp__{server_name}__{tool.name}"
+                                is_enabled = self.tool_overrides.get(mcp_tool_name, True)
+                                status_str = "[ON]" if is_enabled else "[OFF]"
+                                desc = (getattr(tool, "description", "No description") or "No description").strip().replace("\n", " ")
+                                print(f"  {status_str:<6} {'MCP':<6} {mcp_tool_name:<35} {desc[:60]:<60}")
+                    
+                    if not has_mcp and self.mcp_manager and self.mcp_manager.cached_schemas and glob_pattern == "*":
+                        print("  (No MCP tools active)")
                 print("")
                 return True
             

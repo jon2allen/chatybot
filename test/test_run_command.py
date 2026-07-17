@@ -1042,6 +1042,20 @@ class TestRunCommandBehavior:
             sys.stdout = sys.__stdout__
         assert "Error: No tools matched pattern 'non_existent*'" in captured_output.getvalue()
 
+        # 7. Test /tool list detail
+        captured_output = StringIO()
+        sys.stdout = captured_output
+        try:
+            res = await app.handle_escape_command("/tool list detail *directory*")
+            assert res is True
+        finally:
+            sys.stdout = sys.__stdout__
+            
+        output = captured_output.getvalue()
+        assert "**list_directory**" in output
+        assert "Description: List contents of a directory" in output
+        assert "write_file" not in output
+
 
 
 
