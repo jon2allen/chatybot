@@ -106,6 +106,7 @@ class ChatybotApp:
         self.run_timeout: int = 30
         
         # Tool mode settings
+        self.mcp_manager = None
         self.tool_mode: bool = False
         self.tool_context: str = ""
         self.in_tool_loop: bool = False
@@ -202,6 +203,10 @@ class ChatybotApp:
         # Load configuration
         self.config_manager.load_config()
 
+        # Initialize MCP Client Manager
+        from .mcp_client import MCPClientManager
+        self.mcp_manager = MCPClientManager(self.config_manager.config)
+
         # Load default profile from tools_config.toml under [config]
         self.default_profile = None
         user_config_path = os.path.expanduser('~/.config/chatybot/tools_config.toml')
@@ -263,8 +268,9 @@ class ChatybotApp:
 
                  )
 
-        # Register save function to be called on exit
+        # Register save and cleanup functions to be called on exit
         atexit.register(self.save_input_history)
+        atexit.register(self.cleanup_mcp_sync)
         
         # Initialize macro processing system
         self.macros = {}
@@ -286,12 +292,26 @@ class ChatybotApp:
                     print("\nExiting...")
                     self.logging_manager.stop_logging()
                     self.save_input_history()
+                    self.cleanup_mcp_sync()
                     os._exit(0)
                 else:
                     # First Ctrl+C - set flag for graceful interruption
                     self.interrupt_requested = True
         
         signal.signal(signal.SIGINT, signal_handler)
+
+    def cleanup_mcp_sync(self) -> None:
+        """Synchronously cleanup MCP manager and active sessions on exit."""
+        if hasattr(self, "mcp_manager") and self.mcp_manager:
+            try:
+                try:
+                    loop = asyncio.get_running_loop()
+                    loop.create_task(self.mcp_manager.shutdown())
+                except RuntimeError:
+                    loop = asyncio.get_event_loop()
+                    loop.run_until_complete(self.mcp_manager.shutdown())
+            except Exception:
+                pass
 
     async def interruptible_sleep(self, delay: float) -> None:
         """
@@ -2403,7 +2423,7 @@ class ChatybotApp:
             print(error_msg)
             print("Command exited with code -1")
 
-    def dispatch_tool(self, invocation_json: str = None) -> str:
+    async def dispatch_tool(self, invocation_json: str = None) -> str:
         """
         Dispatch a tool invocation to the dispatcher.
         
@@ -2411,11 +2431,12 @@ class ChatybotApp:
             invocation_json: JSON string containing tool invocation. If None, uses LAST_COMPLETION.
         
         Returns:
-            JSON result from dispatcher as string
+            JSON result from dispatcher or MCP server as string
         """
         import subprocess
         import tempfile
         import os
+        import json
         
         # Use LAST_COMPLETION if no invocation_json provided
         if invocation_json is None:
@@ -2426,10 +2447,52 @@ class ChatybotApp:
             return ""
             
         # Extract clean tool call if possible, to be robust to conversational formatting
-        import json
         tool_call = self.extract_tool_call(invocation_json)
         if tool_call:
             invocation_json = json.dumps(tool_call)
+        else:
+            try:
+                tool_call = json.loads(invocation_json)
+            except Exception:
+                pass
+        
+        if tool_call and isinstance(tool_call, dict):
+            tool_name = tool_call.get("tool", "")
+            if tool_name.startswith("mcp__"):
+                parts = tool_name.split("__", 2)
+                if len(parts) >= 3:
+                    server_name = parts[1]
+                    mcp_tool_name = parts[2]
+                    arguments = tool_call.get("arguments", {})
+                    
+                    is_enabled = self.tool_overrides.get(tool_name, True)
+                    if not is_enabled:
+                        err_msg = f"Error: Tool '{tool_name}' is currently disabled."
+                        self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
+                        self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', err_msg)
+                        self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '-1')
+                        print(err_msg)
+                        return err_msg
+                    
+                    print(f"Executing MCP tool '{mcp_tool_name}' on server '{server_name}'...")
+                    try:
+                        if not self.mcp_manager:
+                            raise RuntimeError("MCP client manager is not initialized.")
+                        
+                        result_str = await self.mcp_manager.execute_tool(server_name, mcp_tool_name, arguments)
+                        
+                        self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', result_str)
+                        self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', '')
+                        self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '0')
+                        print("MCP tool executed successfully")
+                        return result_str
+                    except Exception as e:
+                        err_msg = f"MCP tool execution failed: {e}"
+                        print(err_msg)
+                        self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
+                        self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', err_msg)
+                        self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
+                        return f"Error: {err_msg}"
         
         # Create a temporary file for the invocation
         with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', suffix='.json', delete=False) as tmp_file:
@@ -2727,7 +2790,7 @@ class ChatybotApp:
                 self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '0')
                 try:
                     # dispatch_tool writes result to TOOL_DISPATCH_RESULT and returns the stdout string
-                    result_str = self.dispatch_tool(json.dumps(tc))
+                    result_str = await self.dispatch_tool(json.dumps(tc))
                 except Exception as e:
                     result_str = json.dumps({"status": "error", "message": f"Dispatch execution error: {str(e)}"})
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', result_str)
@@ -2959,8 +3022,6 @@ class ChatybotApp:
                 self.strip_thinking_from_filebanks = False
 
         tools = config.get('tools', {})
-        if not tools:
-            return ""
         
         # Build tool context string
         lines = []
@@ -2989,6 +3050,48 @@ class ChatybotApp:
                     optional = param_rules.get('optional', False)
                     required = " (optional)" if optional else " (required)"
                     lines.append(f"  - {param_name}: {param_type}{required} - {param_desc}")
+        
+        # Append MCP tools to prompt context
+        if self.mcp_manager and self.mcp_manager.cached_schemas:
+            for server_name, tools_list in self.mcp_manager.cached_schemas.items():
+                for tool in tools_list:
+                    # Formatted name
+                    mcp_tool_name = f"mcp__{server_name}__{tool.name}"
+                    is_enabled = self.tool_overrides.get(mcp_tool_name, True)
+                    if not is_enabled:
+                        continue
+                    
+                    desc = getattr(tool, "description", "No description") or "No description"
+                    lines.append(f"\n**{mcp_tool_name}**")
+                    lines.append(f"Description: {desc}")
+                    
+                    # Extract input schema properties
+                    input_schema = getattr(tool, "inputSchema", {})
+                    if hasattr(input_schema, "get"):
+                        properties = input_schema.get("properties", {})
+                        required_list = input_schema.get("required", [])
+                    else:
+                        properties = {}
+                        required_list = []
+                    
+                    if properties:
+                        lines.append("Parameters:")
+                        for param_name, param_meta in properties.items():
+                            if hasattr(param_meta, "get"):
+                                param_type = param_meta.get("type")
+                                if not param_type and "anyOf" in param_meta:
+                                    types = [t.get("type") for t in param_meta["anyOf"] if t.get("type") != "null" and t.get("type")]
+                                    param_type = "|".join(types) if types else "string"
+                                elif not param_type:
+                                    param_type = "string"
+                                param_desc = param_meta.get("description", "")
+                            else:
+                                param_type = "string"
+                                param_desc = ""
+                                
+                            is_optional = param_name not in required_list
+                            required_str = " (optional)" if is_optional else " (required)"
+                            lines.append(f"  - {param_name}: {param_type}{required_str} - {param_desc}")
         
         lines.append("\n=== END TOOLS ===\n")
         
@@ -3967,7 +4070,7 @@ class ChatybotApp:
             # Handle /tool subcommands: on, off, or dispatch
             if len(parts) < 2:
                 # No subcommand - dispatch tool invocation from LAST_COMPLETION
-                self.dispatch_tool()
+                await self.dispatch_tool()
                 return True
             
             subcmd = parts[1].lower()
@@ -3975,16 +4078,28 @@ class ChatybotApp:
             if subcmd == "list":
                 config = self._load_tools_config()
                 tools = config.get('tools', {})
+                print("\nAvailable Local Tools:")
                 if not tools:
-                    print("No tools defined in configuration.")
-                    return True
-                print("\nAvailable Tools:")
-                for tool_name, tool_meta in tools.items():
-                    config_enabled = tool_meta.get('enabled', False)
-                    is_enabled = self.tool_overrides.get(tool_name, config_enabled)
-                    status = "[ON] " if is_enabled else "[OFF]"
-                    desc = tool_meta.get('description', 'No description')
-                    print(f"  {status}  {tool_name:<16} - {desc}")
+                    print("  No local tools defined in configuration.")
+                else:
+                    for tool_name, tool_meta in tools.items():
+                        config_enabled = tool_meta.get('enabled', False)
+                        is_enabled = self.tool_overrides.get(tool_name, config_enabled)
+                        status = "[ON] " if is_enabled else "[OFF]"
+                        desc = tool_meta.get('description', 'No description')
+                        print(f"  {status}  {tool_name:<16} - {desc}")
+                
+                # Print MCP Tools if active
+                if self.mcp_manager and self.mcp_manager.cached_schemas:
+                    print("\nModel Context Protocol (MCP) Tools:")
+                    for server_name, tools_list in self.mcp_manager.cached_schemas.items():
+                        print(f"  [{server_name}]")
+                        for tool in tools_list:
+                            mcp_tool_name = f"mcp__{server_name}__{tool.name}"
+                            is_enabled = self.tool_overrides.get(mcp_tool_name, True)
+                            status = "[ON] " if is_enabled else "[OFF]"
+                            desc = getattr(tool, "description", "No description") or "No description"
+                            print(f"    {status}  {mcp_tool_name:<30} - {desc}")
                 print("")
                 return True
             
@@ -4002,9 +4117,25 @@ class ChatybotApp:
                 if target.lower() == "all":
                     for tool_name in tools.keys():
                         self.tool_overrides[tool_name] = target_value
+                    if self.mcp_manager and self.mcp_manager.cached_schemas:
+                        for server_name, tools_list in self.mcp_manager.cached_schemas.items():
+                            for tool in tools_list:
+                                mcp_tool_name = f"mcp__{server_name}__{tool.name}"
+                                self.tool_overrides[mcp_tool_name] = target_value
                     print(f"All tools {'enabled' if target_value else 'disabled'}.")
                 else:
-                    if target not in tools:
+                    is_mcp_tool = False
+                    if target.startswith("mcp__"):
+                        if self.mcp_manager and self.mcp_manager.cached_schemas:
+                            for server_name, tools_list in self.mcp_manager.cached_schemas.items():
+                                for tool in tools_list:
+                                    if f"mcp__{server_name}__{tool.name}" == target:
+                                        is_mcp_tool = True
+                                        break
+                                if is_mcp_tool:
+                                    break
+                    
+                    if not is_mcp_tool and target not in tools:
                         # Check case-insensitive
                         matched_tool = None
                         for t in tools.keys():
@@ -4213,12 +4344,12 @@ class ChatybotApp:
                     try:
                         with open(arg, 'r') as f:
                             json_str = f.read()
-                        self.dispatch_tool(json_str)
+                        await self.dispatch_tool(json_str)
                     except Exception as e:
                         print(f"Error reading file {arg}: {e}")
                 else:
                     # Provide JSON directly - dispatch it
-                    self.dispatch_tool(arg)
+                    await self.dispatch_tool(arg)
                 return True
 
         elif cmd == "/profile":
@@ -5480,12 +5611,22 @@ class ChatybotApp:
                     self.interrupt_requested = False
                     continue
             except Exception as e:
+                if isinstance(e, StopIteration):
+                    raise
                 print(f"Error: {str(e)}")
 
     def run(self) -> None:
         """Run the application."""
         self.initialize()
-        asyncio.run(self.main_loop())
+        async def start_and_loop():
+            if self.mcp_manager:
+                await self.mcp_manager.startup()
+            try:
+                await self.main_loop()
+            finally:
+                if self.mcp_manager:
+                    await self.mcp_manager.shutdown()
+        asyncio.run(start_and_loop())
 
 
 def run():
@@ -5571,9 +5712,15 @@ def run():
     if args.script:
         async def run_script():
             app.initialize()
-            await app.execute_script(args.script)
-            app.logging_manager.stop_logging()
-            app.save_input_history()
+            if app.mcp_manager:
+                await app.mcp_manager.startup()
+            try:
+                await app.execute_script(args.script)
+            finally:
+                if app.mcp_manager:
+                    await app.mcp_manager.shutdown()
+                app.logging_manager.stop_logging()
+                app.save_input_history()
         try:
             asyncio.run(run_script())
         except KeyboardInterrupt:
@@ -5583,9 +5730,15 @@ def run():
     elif args.run:
         async def run_query():
             app.initialize()
-            await app.execute_line(args.run)
-            app.logging_manager.stop_logging()
-            app.save_input_history()
+            if app.mcp_manager:
+                await app.mcp_manager.startup()
+            try:
+                await app.execute_line(args.run)
+            finally:
+                if app.mcp_manager:
+                    await app.mcp_manager.shutdown()
+                app.logging_manager.stop_logging()
+                app.save_input_history()
         try:
             asyncio.run(run_query())
         except KeyboardInterrupt:
