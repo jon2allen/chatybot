@@ -87,9 +87,14 @@ class ProfileManager:
         if os.path.isabs(name_or_path) or name_or_path.startswith("~"):
             p = os.path.expanduser(name_or_path)
         else:
-            fname = name_or_path if name_or_path.endswith(".chatdsl") \
-                    else name_or_path + ".chatdsl"
-            p = os.path.join(self.profile_dir, fname)
-        if not os.path.exists(p):
-            raise FileNotFoundError(f"Profile not found: {p}")
-        return p
+            p = os.path.join(self.profile_dir, name_or_path)
+
+        if os.path.exists(p):
+            return p
+
+        if not p.endswith(".chatdsl"):
+            p_ext = p + ".chatdsl"
+            if os.path.exists(p_ext):
+                return p_ext
+
+        raise FileNotFoundError(f"Profile not found: {p}")
