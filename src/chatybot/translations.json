@@ -1,0 +1,133 @@
+{
+  "en": {
+    "aliases": {
+      "/help": "/help",
+      "/model": "/model",
+      "/tool": "/tool",
+      "/file": "/file",
+      "/logging": "/logging",
+      "/mem": "/mem",
+      "/exit": "/exit",
+      "/quit": "/quit",
+      "/clearfile": "/clearfile",
+      "/showfile": "/showfile",
+      "/multiline": "/multiline",
+      "/imagine": "/imagine",
+      "/run": "/run",
+      "/echo": "/echo"
+    },
+    "keywords": {
+      "set": "set"
+    },
+    "ui": {
+      "language_changed": "Language set to: {lang}",
+      "tool_enabled": "Tool '{tool}' enabled.",
+      "error_file_missing": "Error: File '{file}' does not exist.",
+      "script_error_header": "Error on line {line_num}: '{code}'"
+    }
+  },
+  "es": {
+    "aliases": {
+      "/ayuda": "/help",
+      "/modelo": "/model",
+      "/herramienta": "/tool",
+      "/archivo": "/file",
+      "/registro": "/logging",
+      "/memoria": "/mem",
+      "/salir": "/exit",
+      "/limpiar_archivo": "/clearfile",
+      "/mostrar_archivo": "/showfile",
+      "/multilinea": "/multiline",
+      "/imaginar": "/imagine",
+      "/ejecutar": "/run",
+      "/repetir": "/echo"
+    },
+    "keywords": {
+      "establecer": "set"
+    },
+    "ui": {
+      "language_changed": "Idioma establecido en: {lang}",
+      "tool_enabled": "Herramienta '{tool}' habilitada.",
+      "error_file_missing": "Error: El archivo '{file}' no existe.",
+      "script_error_header": "Error en la línea {line_num}: '{code}'"
+    }
+  },
+  "fr": {
+    "aliases": {
+      "/aide": "/help",
+      "/modele": "/model",
+      "/outil": "/tool",
+      "/fichier": "/file",
+      "/journal": "/logging",
+      "/memoire": "/mem",
+      "/quitter": "/exit",
+      "/vider_fichier": "/clearfile",
+      "/afficher_fichier": "/showfile",
+      "/multiligne": "/multiline",
+      "/imaginer": "/imagine",
+      "/lancer": "/run",
+      "/echo": "/echo"
+    },
+    "keywords": {
+      "definir": "set"
+    },
+    "ui": {
+      "language_changed": "Langue définie sur : {lang}",
+      "tool_enabled": "Outil '{tool}' activé.",
+      "error_file_missing": "Erreur : Le fichier '{file}' n'existe pas.",
+      "script_error_header": "Erreur à la ligne {line_num} : '{code}'"
+    }
+  },
+  "zh": {
+    "aliases": {
+      "/帮助": "/help",
+      "/模型": "/model",
+      "/工具": "/tool",
+      "/文件": "/file",
+      "/日志": "/logging",
+      "/内存": "/mem",
+      "/退出": "/exit",
+      "/清空文件": "/clearfile",
+      "/显示文件": "/showfile",
+      "/多行输入": "/multiline",
+      "/生图": "/imagine",
+      "/运行": "/run",
+      "/回显": "/echo"
+    },
+    "keywords": {
+      "设置": "set"
+    },
+    "ui": {
+      "language_changed": "语言设置为: {lang}",
+      "tool_enabled": "工具 '{tool}' 已启用。",
+      "error_file_missing": "错误: 文件 '{file}' 不存在。",
+      "script_error_header": "第 {line_num} 行出错: '{code}'"
+    }
+  },
+  "it": {
+    "aliases": {
+      "/aiuto": "/help",
+      "/modello": "/model",
+      "/strumento": "/tool",
+      "/file": "/file",
+      "/log": "/logging",
+      "/memoria": "/mem",
+      "/esci": "/exit",
+      "/svuota_file": "/clearfile",
+      "/mostra_file": "/showfile",
+      "/multilinea": "/multiline",
+      "/immagina": "/imagine",
+      "/esegui": "/run",
+      "/eco": "/echo"
+    },
+    "keywords": {
+      "imposta": "set"
+    },
+    "ui": {
+      "language_changed": "Lingua impostata su: {lang}",
+      "tool_enabled": "Strumento '{tool}' abilitato.",
+      "error_file_missing": "Errore: Il file '{file}' non esiste.",
+      "script_error_header": "Errore alla linea {line_num}: '{code}'"
+    }
+  }
+}

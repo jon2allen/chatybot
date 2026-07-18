@@ -1,0 +1,8 @@
+# @name: Prueba en Español
+# @description: Script de prueba para validar comandos y palabras clave en español
+
+establecer model = "devstral_1"
+/modelo devstral_1
+/herramienta auto activar
+/herramienta activar
+/repetir "Prueba de ChatDSL en español exitosa"

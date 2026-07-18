@@ -66,9 +66,11 @@ app = None  # Global app instance for database functions to access
 class ChatybotApp:
     """Main application class for Chatybot."""
 
-    def __init__(self, config_path: Optional[str] = None):
+    def __init__(self, config_path: Optional[str] = None, lang: str = "en"):
         """Initialize the Chatybot application."""
         # Initialize managers
+        from .localization import LocalizationManager
+        self.i18n = LocalizationManager(locale=lang)
         self.config_manager = ConfigManager(config_path=config_path)
         self.logging_manager = LoggingManager()
         self.buffer_manager = BufferManager(app=self)
@@ -2020,6 +2022,9 @@ class ChatybotApp:
             with open(script_path, "r") as f:
                 script_content = f.read()
 
+            # Preprocess to translate localized keywords and commands
+            script_content = self.i18n.translate_script(script_content)
+
             # Robust command extractor supporting multiline quotes and comments
             commands_list = []
             current_command = []
@@ -3113,7 +3118,8 @@ class ChatybotApp:
         parts = command.split(maxsplit=2)
         if self.logging_manager.logging_active:
             self.logging_manager.log_message(f"Escape command: {command}")
-        cmd = parts[0].lower()
+        raw_cmd = parts[0]
+        cmd = self.i18n.resolve_command(raw_cmd.lower())
 
         if cmd == "/help":
             # Handle /help with optional query argument
@@ -5780,6 +5786,11 @@ def run():
         "--profile-list", action="store_true",
         help="List all available profiles"
     )
+    parser.add_argument(
+        "--lang",
+        help="UI and scripting language (english/en, spanish/es, french/fr, chinese/zh, italian/it)",
+        default="en"
+    )
     args, unknown = parser.parse_known_args()
 
     if args.config_edit:
@@ -5787,7 +5798,7 @@ def run():
         sys.exit(tui_main(config_path=args.config))
 
     if args.profile_list:
-        tmp = ChatybotApp(config_path=args.config)
+        tmp = ChatybotApp(config_path=args.config, lang=args.lang)
         tmp.initialize()
         from .profile_manager import ProfileManager
         pm = ProfileManager(getattr(tmp, 'profile_dir', '~/.config/chatybot/profiles'))
@@ -5807,7 +5818,7 @@ def run():
         sys.exit(0)
 
     if args.profile_edit is not None:
-        tmp = ChatybotApp(config_path=args.config)
+        tmp = ChatybotApp(config_path=args.config, lang=args.lang)
         tmp.initialize()
         from .profile_manager import ProfileManager
         from .profile_editor import run_profile_editor
@@ -5815,7 +5826,7 @@ def run():
         sys.exit(run_profile_editor(args.profile_edit, pm, tmp.config_manager))
 
     global app
-    app = ChatybotApp(config_path=args.config)
+    app = ChatybotApp(config_path=args.config, lang=args.lang)
     # Also set the module-level app variable
     current_module = sys.modules[__name__]
     current_module.app = app

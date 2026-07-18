@@ -1,0 +1,8 @@
+# @name: 中文测试
+# @description: 用于验证中文命令和关键字的测试脚本
+
+设置 model = "devstral_1"
+/模型 devstral_1
+/工具 auto on
+/工具 on
+/回显 "中文 ChatDSL 测试成功"

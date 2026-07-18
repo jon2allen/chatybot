@@ -1,0 +1,8 @@
+# @name: Test en Français
+# @description: Script de test pour valider les commandes et mots-clés en français
+
+definir model = "devstral_1"
+/modele devstral_1
+/outil auto on
+/outil on
+/echo "Test ChatDSL en français réussi"

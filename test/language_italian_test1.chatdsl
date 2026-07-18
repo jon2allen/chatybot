@@ -1,0 +1,8 @@
+# @name: Test in Italiano
+# @description: Script di test per verificare i comandi e le parole chiave in italiano
+
+imposta model = "devstral_1"
+/modello devstral_1
+/strumento auto on
+/strumento on
+/eco "Test ChatDSL in italiano superato"
