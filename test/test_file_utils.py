@@ -125,6 +125,22 @@ def test_find_files_detailed():
         assert "modified" in entry
         assert entry["modified"] != "unknown"
 
+def test_find_files_finds_directories():
+    """Test that find_files also finds matching directories."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Create a directory matching a pattern
+        matching_dir = os.path.join(tmpdir, "matching_dir")
+        os.makedirs(matching_dir, exist_ok=True)
+        
+        matches = find_files(tmpdir, pattern="*dir", details=True)
+        # Should match matching_dir
+        matching_entries = [m for m in matches if m["name"] == "matching_dir"]
+        assert len(matching_entries) == 1
+        entry = matching_entries[0]
+        assert entry["path"] == matching_dir
+        assert entry["type"] == "directory"
+        assert "modified" in entry
+
 
 def test_grep_search_literal():
     """Test searching for a literal term using grep_search."""
