@@ -725,7 +725,8 @@ class ChatybotApp:
             return None
 
         # Display matches
-        print(f"\nchat --> ! {search_term}")
+        prompt_prefix = self.i18n.get_ui_string("chat_prompt", "chat --> ").rstrip()
+        print(f"\n{prompt_prefix}! {search_term}")
         print()
         for i, match in enumerate(matches, 1):
             print(f"   {i}. {match}")
@@ -5635,6 +5636,8 @@ class ChatybotApp:
         print("Chatybot.py                ")
         print("Created by Jon Allen - 2026")
         print("Version: 0.6.4             ")
+        lang_display = self.i18n.get_ui_string("native_lang_display", "Language: English")
+        print(f"{lang_display:<27}")
         print("===========================")
         print(
             f"Active model: {self.config_manager.get_model_config(self.config_manager.active_model_alias)['name']} (alias: {self.config_manager.active_model_alias})"
@@ -5676,7 +5679,8 @@ class ChatybotApp:
                 if self.multi_line_mode:
                     prompt = await self.get_multi_line_input()
                 else:
-                    prompt = input("chat --> ")
+                    prompt_prefix = self.i18n.get_ui_string("chat_prompt", "chat --> ")
+                    prompt = input(prompt_prefix)
                     if self.auto_exit_pending:
                         self.auto_exit_pending = False
                         if self.script_context and prompt.strip() == "/multiline":
