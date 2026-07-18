@@ -159,6 +159,17 @@ def test_resolve_path_by_alias():
         resolved2 = pm._resolve_path("target.chatdsl")
         assert resolved2 == path
 
+def test_resolve_path_fallback_absolute_home():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        pm = ProfileManager(tmpdir)
+        path = os.path.join(tmpdir, "my_custom_profile.chatdsl")
+        open(path, "w").close()
+        
+        # Test absolute path fallback
+        abs_no_ext = os.path.join(tmpdir, "my_custom_profile")
+        resolved = pm._resolve_path(abs_no_ext)
+        assert resolved == path
+
 def test_resolve_path_not_found():
     with tempfile.TemporaryDirectory() as tmpdir:
         pm = ProfileManager(tmpdir)
