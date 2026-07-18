@@ -139,15 +139,20 @@ class LocalizationManager:
             args = parts[1]
             keywords_map = self.catalog.get(self.locale, {}).get("keywords", {})
             
-            arg_words = args.split(maxsplit=1)
-            if arg_words:
-                subcmd = arg_words[0].lower()
-                if subcmd in keywords_map:
-                    canonical_sub = keywords_map[subcmd]
-                    if len(arg_words) > 1:
-                        args = f"{canonical_sub} {arg_words[1]}"
+            import re
+            pattern = re.compile(r'("[^"\\]*(?:\\.[^"\\]*)*"|\'[^\'\\]*(?:\\.[^\'\\]*)*\'|\S+)')
+            tokens = pattern.findall(args)
+            translated_tokens = []
+            for token in tokens:
+                if (token.startswith('"') and token.endswith('"')) or (token.startswith("'") and token.endswith("'")):
+                    translated_tokens.append(token)
+                else:
+                    token_lower = token.lower()
+                    if token_lower in keywords_map:
+                        translated_tokens.append(keywords_map[token_lower])
                     else:
-                        args = canonical_sub
-            return f"{first_word} {args}"
+                        translated_tokens.append(token)
+            
+            return f"{first_word} {' '.join(translated_tokens)}"
         else:
             return first_word
