@@ -25,7 +25,8 @@
       "error_file_missing": "Error: File '{file}' does not exist.",
       "script_error_header": "Error on line {line_num}: '{code}'",
       "native_lang_display": "Language: English",
-      "chat_prompt": "chat --> "
+      "chat_prompt": "chat --> ",
+      "active_model_info": "Active model: {model} (alias: {alias})"
     },
     "help": {
       "headers": {
@@ -82,7 +83,8 @@
       "error_file_missing": "Error: El archivo '{file}' no existe.",
       "script_error_header": "Error en la línea {line_num}: '{code}'",
       "native_lang_display": "Idioma: Español",
-      "chat_prompt": "charla --> "
+      "chat_prompt": "charla --> ",
+      "active_model_info": "Modelo activo: {model} (alias: {alias})"
     },
     "help": {
       "headers": {
@@ -235,7 +237,8 @@
       "error_file_missing": "Erreur : Le fichier '{file}' n'existe pas.",
       "script_error_header": "Erreur à la ligne {line_num} : '{code}'",
       "native_lang_display": "Langue: Français",
-      "chat_prompt": "discussion --> "
+      "chat_prompt": "discussion --> ",
+      "active_model_info": "Modèle actif : {model} (alias: {alias})"
     },
     "help": {
       "headers": {
@@ -358,7 +361,8 @@
       "error_file_missing": "错误: 文件 '{file}' 不存在。",
       "script_error_header": "第 {line_num} 行出错: '{code}'",
       "native_lang_display": "语言: 中文",
-      "chat_prompt": "聊天 --> "
+      "chat_prompt": "聊天 --> ",
+      "active_model_info": "当前模型: {model} (别名: {alias})"
     },
     "help": {
       "headers": {
@@ -481,7 +485,8 @@
       "error_file_missing": "Errore: Il file '{file}' non esiste.",
       "script_error_header": "Errore alla linea {line_num}: '{code}'",
       "native_lang_display": "Lingua: Italiano",
-      "chat_prompt": "conversazione --> "
+      "chat_prompt": "conversazione --> ",
+      "active_model_info": "Modello attivo: {model} (alias: {alias})"
     },
     "help": {
       "headers": {
