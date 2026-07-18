@@ -1,0 +1,19 @@
+# @name: 中文完整测试
+# @description: 运行所有本地化为中文的 ChatDSL 命令
+
+设置 model = "devstral_1"
+/回显 "--- 中文完整测试开始 ---"
+/帮助
+/模型
+/工具 list
+/日志 start
+/日志 end
+/文件 README.md
+/显示文件
+/清空文件
+/多行输入
+echo "你好";;
+/内存
+/运行 echo "中文 Shell 运行测试"
+/回显 "测试结束"
+/退出

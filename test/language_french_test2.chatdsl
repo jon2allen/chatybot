@@ -1,0 +1,19 @@
+# @name: Test Complet en Français
+# @description: Exécute toutes les commandes ChatDSL localisées en français
+
+definir model = "devstral_1"
+/echo "--- Début du test complet en français ---"
+/aide
+/modele
+/outil list
+/journal start
+/journal end
+/fichier README.md
+/afficher_fichier
+/vider_fichier
+/multiligne
+echo "bonjour";;
+/memoire
+/lancer echo "Exécution shell en français"
+/echo "Test terminé"
+/quitter

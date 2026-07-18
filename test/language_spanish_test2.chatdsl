@@ -1,0 +1,19 @@
+# @name: Prueba Completa en Español
+# @description: Ejercita todos los comandos de ChatDSL localizados en español
+
+establecer model = "devstral_1"
+/repetir "--- Iniciando prueba completa en español ---"
+/ayuda
+/modelo
+/herramienta list
+/registro start
+/registro end
+/archivo README.md
+/mostrar_archivo
+/limpiar_archivo
+/multilinea
+echo "hola";;
+/mem
+/ejecutar echo "Ejecución de shell en español"
+/repetir "Prueba finalizada"
+/salir
