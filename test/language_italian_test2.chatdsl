@@ -1,0 +1,19 @@
+# @name: Test Completo in Italiano
+# @description: Esegue tutti i comandi ChatDSL localizzati in italiano
+
+imposta model = "devstral_1"
+/eco "--- Inizio test completo in italiano ---"
+/aiuto
+/modello
+/strumento list
+/log start
+/log end
+/file README.md
+/mostra_file
+/svuota_file
+/multilinea
+echo "ciao";;
+/memoria
+/esegui echo "Esecuzione shell in italiano"
+/eco "Test completato"
+/esci
