@@ -63,10 +63,38 @@ def read_file(path: str) -> str:
         return f"Error reading file: {e}"
 
 def find_files(path: str = ".", pattern: str = "*", search_term: str = None, details: bool = False) -> List[Any]:
-    """Find files matching pattern, optionally containing search_term and metadata."""
+    """Find files and directories matching pattern, optionally containing search_term and metadata."""
     results = []
     try:
         for root, dirs, files in os.walk(path):
+            # Check matching directories (only if search_term is not specified)
+            if not search_term:
+                for d in dirs:
+                    if fnmatch.fnmatch(d, pattern):
+                        full_path = os.path.join(root, d)
+                        if not details:
+                            results.append(full_path)
+                        else:
+                            try:
+                                stat_info = os.stat(full_path)
+                                mtime = datetime.datetime.fromtimestamp(stat_info.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
+                                results.append({
+                                    "name": d,
+                                    "path": full_path,
+                                    "type": "directory",
+                                    "size": stat_info.st_size,
+                                    "modified": mtime
+                                })
+                            except Exception:
+                                results.append({
+                                    "name": d,
+                                    "path": full_path,
+                                    "type": "unknown_dir",
+                                    "size": 0,
+                                    "modified": "unknown"
+                                })
+            
+            # Check matching files
             for file in files:
                 if fnmatch.fnmatch(file, pattern):
                     full_path = os.path.join(root, file)
