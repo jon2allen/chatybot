@@ -116,3 +116,27 @@ async def test_app_integration_localized_command():
     assert await app.handle_escape_command("/ayuda") is True
     assert await app.handle_escape_command("/modelo") is True
     assert await app.handle_escape_command("/modelo devstral_1") is True
+
+def test_help_localization():
+    from src.chatybot.chaty_help import get_help_system
+    help_sys = get_help_system()
+    mgr_es = LocalizationManager("spanish")
+    
+    # 1. Full Help List Localization
+    help_text_es = help_sys.get_help_text(None, i18n=mgr_es)
+    assert "SISTEMA:" in help_text_es
+    assert "/ayuda - Muestra este mensaje de ayuda" in help_text_es
+    assert "ARCHIVO:" in help_text_es
+    assert "/archivo - Carga un archivo de texto en el búfer" in help_text_es
+    
+    # 2. Detailed Command Help Localization (with localized search)
+    detail_es = help_sys.get_help_text("/archivo", i18n=mgr_es)
+    assert "Categoría: Archivo" in detail_es
+    assert "Uso: /archivo <path>" in detail_es
+    assert "Carga un archivo de texto en el búfer" in detail_es
+    
+    # 3. Fallback: English search "/file" in Spanish mode resolves and outputs Spanish
+    detail_fallback = help_sys.get_help_text("/file", i18n=mgr_es)
+    assert "Categoría: Archivo" in detail_fallback
+    assert "Uso: /archivo <path>" in detail_fallback
+    assert "Carga un archivo de texto en el búfer" in detail_fallback

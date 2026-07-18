@@ -24,6 +24,26 @@
       "tool_enabled": "Tool '{tool}' enabled.",
       "error_file_missing": "Error: File '{file}' does not exist.",
       "script_error_header": "Error on line {line_num}: '{code}'"
+    },
+    "help": {
+      "headers": {
+        "category": "Category",
+        "usage": "Usage",
+        "parameters": "Parameters",
+        "examples": "Examples",
+        "aliases": "Aliases",
+        "see_also": "See also",
+        "no_commands": "No commands found matching '{query}'. Try /help for all commands."
+      },
+      "categories": {
+        "file": "file",
+        "system": "system",
+        "tool": "tool",
+        "image": "image",
+        "database": "database",
+        "rerank": "rerank"
+      },
+      "commands": {}
     }
   },
   "es": {
@@ -50,6 +70,79 @@
       "tool_enabled": "Herramienta '{tool}' habilitada.",
       "error_file_missing": "Error: El archivo '{file}' no existe.",
       "script_error_header": "Error en la línea {line_num}: '{code}'"
+    },
+    "help": {
+      "headers": {
+        "category": "Categoría",
+        "usage": "Uso",
+        "parameters": "Parámetros",
+        "examples": "Ejemplos",
+        "aliases": "Alias",
+        "see_also": "Ver también",
+        "no_commands": "No se encontraron comandos coincidentes con '{query}'. Pruebe /ayuda para ver todos."
+      },
+      "categories": {
+        "file": "Archivo",
+        "system": "Sistema",
+        "tool": "Herramienta",
+        "image": "Imagen",
+        "database": "Base de datos",
+        "rerank": "Reclasificación"
+      },
+      "commands": {
+        "/help": {
+          "short_desc": "Muestra este mensaje de ayuda",
+          "long_desc": "Muestra los comandos disponibles. Utilice '/ayuda <comando>' para obtener ayuda detallada o '/ayuda <palabra_clave>' para filtrar."
+        },
+        "/model": {
+          "short_desc": "Cambia el modelo activo o muestra el actual",
+          "long_desc": "Muestra el modelo configurado actualmente. Proporcione un alias para cambiar a otro modelo."
+        },
+        "/tool": {
+          "short_desc": "Administra el modo de herramienta y los bucles de ejecución",
+          "long_desc": "Habilita, deshabilita o lista herramientas disponibles para el chatbot AI."
+        },
+        "/file": {
+          "short_desc": "Carga un archivo de texto en el búfer",
+          "long_desc": "Lee el contenido de un archivo de texto y lo almacena en el búfer persistente para proporcionar contexto al modelo."
+        },
+        "/showfile": {
+          "short_desc": "Muestra el contenido del búfer de archivos",
+          "long_desc": "Muestra los primeros 100 caracteres del búfer. Utilice '/mostrar_archivo all' para ver todo."
+        },
+        "/clearfile": {
+          "short_desc": "Limpia el búfer de archivos",
+          "long_desc": "Vacía el contenido del búfer de archivos en memoria."
+        },
+        "/logging": {
+          "short_desc": "Inicia o detiene el registro de chat",
+          "long_desc": "Guarda el historial de la conversación en un archivo de registro en el disco local."
+        },
+        "/mem": {
+          "short_desc": "Muestra el tamaño de los búferes y variables del sistema",
+          "long_desc": "Proporciona información detallada sobre el uso de memoria en bytes de los búferes y variables activas."
+        },
+        "/exit": {
+          "short_desc": "Termina la sesión y sale de la aplicación",
+          "long_desc": "Guarda el historial de entrada y cierra ChatyBot de forma segura."
+        },
+        "/multiline": {
+          "short_desc": "Alterna el modo de entrada multilínea",
+          "long_desc": "Permite escribir prompts de varias líneas. Finalice con ';;' en una nueva línea para enviar."
+        },
+        "/imagine": {
+          "short_desc": "Genera una imagen a partir de un texto descriptivo",
+          "long_desc": "Utiliza un modelo de visión de IA para generar y guardar una imagen localmente."
+        },
+        "/run": {
+          "short_desc": "Ejecuta un comando de sistema en el shell local",
+          "long_desc": "Ejecuta comandos de terminal local de forma segura y captura el resultado."
+        },
+        "/echo": {
+          "short_desc": "Muestra texto en pantalla soportando sustitución de variables",
+          "long_desc": "Imprime mensajes de depuración o texto en consola. Útil en scripts de ChatDSL."
+        }
+      }
     }
   },
   "fr": {
@@ -76,6 +169,79 @@
       "tool_enabled": "Outil '{tool}' activé.",
       "error_file_missing": "Erreur : Le fichier '{file}' n'existe pas.",
       "script_error_header": "Erreur à la ligne {line_num} : '{code}'"
+    },
+    "help": {
+      "headers": {
+        "category": "Catégorie",
+        "usage": "Utilisation",
+        "parameters": "Paramètres",
+        "examples": "Exemples",
+        "aliases": "Alias",
+        "see_also": "Voir aussi",
+        "no_commands": "Aucune commande correspondante trouvée pour '{query}'. Essayez /aide pour toutes."
+      },
+      "categories": {
+        "file": "Fichier",
+        "system": "Système",
+        "tool": "Outil",
+        "image": "Image",
+        "database": "Base de données",
+        "rerank": "Réévaluation"
+      },
+      "commands": {
+        "/help": {
+          "short_desc": "Affiche ce message d'aide",
+          "long_desc": "Affiche les commandes disponibles. Utilisez '/aide <commande>' pour obtenir des détails."
+        },
+        "/model": {
+          "short_desc": "Change le modèle actif ou affiche le modèle actuel",
+          "long_desc": "Affiche le modèle configuré. Spécifiez un alias pour changer de modèle."
+        },
+        "/tool": {
+          "short_desc": "Gère le mode outil et la boucle d'exécution",
+          "long_desc": "Active, désactive ou liste les outils système disponibles pour le chatbot."
+        },
+        "/file": {
+          "short_desc": "Charge un fichier texte dans le cache",
+          "long_desc": "Lit le contenu d'un fichier texte et le stocke dans le cache persistant."
+        },
+        "/showfile": {
+          "short_desc": "Affiche le contenu du cache de fichiers",
+          "long_desc": "Affiche les 100 premiers caractères. Utilisez '/afficher_fichier all' pour tout voir."
+        },
+        "/clearfile": {
+          "short_desc": "Vide le cache de fichiers en mémoire",
+          "long_desc": "Efface le cache de fichiers persistant de la mémoire active."
+        },
+        "/logging": {
+          "short_desc": "Démarre ou arrête l'enregistrement de la session",
+          "long_desc": "Enregistre l'historique des requêtes et réponses dans un fichier journal local."
+        },
+        "/mem": {
+          "short_desc": "Affiche la taille des caches et des variables système",
+          "long_desc": "Indique la consommation de mémoire active par les caches de fichiers et variables."
+        },
+        "/exit": {
+          "short_desc": "Quitte l'application et ferme la session",
+          "long_desc": "Sauvegarde l'historique et quitte ChatyBot en toute sécurité."
+        },
+        "/multiline": {
+          "short_desc": "Bascule le mode de saisie multiligne",
+          "long_desc": "Permet de saisir des requêtes sur plusieurs lignes. Terminez par ';;' pour envoyer."
+        },
+        "/imagine": {
+          "short_desc": "Génère une image à partir d'une description textuelle",
+          "long_desc": "Génère et enregistre une image en local via un modèle d'IA génératif."
+        },
+        "/run": {
+          "short_desc": "Exécute une commande système dans le terminal local",
+          "long_desc": "Exécute en toute sécurité des commandes shell locales et capture la sortie."
+        },
+        "/echo": {
+          "short_desc": "Affiche du texte à l'écran avec substitution de variables",
+          "long_desc": "Imprime des variables ou du texte à la console, utile pour le débogage de scripts."
+        }
+      }
     }
   },
   "zh": {
@@ -102,6 +268,79 @@
       "tool_enabled": "工具 '{tool}' 已启用。",
       "error_file_missing": "错误: 文件 '{file}' 不存在。",
       "script_error_header": "第 {line_num} 行出错: '{code}'"
+    },
+    "help": {
+      "headers": {
+        "category": "类别",
+        "usage": "用法",
+        "parameters": "参数",
+        "examples": "示例",
+        "aliases": "别名",
+        "see_also": "参见",
+        "no_commands": "未找到匹配 '{query}' 的命令。尝试使用 /帮助 查看所有命令。"
+      },
+      "categories": {
+        "file": "文件",
+        "system": "系统",
+        "tool": "工具",
+        "image": "图像",
+        "database": "数据库",
+        "rerank": "重排"
+      },
+      "commands": {
+        "/help": {
+          "short_desc": "显示此帮助信息",
+          "long_desc": "显示所有可用命令的列表。使用 '/帮助 <命令>' 获得详细信息。"
+        },
+        "/model": {
+          "short_desc": "切换当前模型或显示当前模型",
+          "long_desc": "显示当前配置的模型。输入别名以切换到其他模型。"
+        },
+        "/tool": {
+          "short_desc": "管理工具模式及执行循环",
+          "long_desc": "启用、禁用或列出 AI 助手可用的系统工具。"
+        },
+        "/file": {
+          "short_desc": "将文本文件加载到缓冲区中",
+          "long_desc": "读取并加载文本文件内容，作为上下文信息发送给模型。"
+        },
+        "/showfile": {
+          "short_desc": "显示文件缓冲区内容",
+          "long_desc": "显示缓冲区的前 100 个字符。使用 '/显示文件 all' 显示完整内容。"
+        },
+        "/clearfile": {
+          "short_desc": "清空文件缓冲区",
+          "long_desc": "清除当前缓存在内存中的文件内容。"
+        },
+        "/logging": {
+          "short_desc": "启动或停止聊天记录日志",
+          "long_desc": "将对话的历史记录保存到本地磁盘日志文件中。"
+        },
+        "/mem": {
+          "short_desc": "显示缓冲区和系统变量的大小",
+          "long_desc": "显示当前加载的缓冲区和脚本变量所消耗的内存（字节数）。"
+        },
+        "/exit": {
+          "short_desc": "终止会话并退出程序",
+          "long_desc": "安全保存输入历史记录并退出 ChatyBot。"
+        },
+        "/multiline": {
+          "short_desc": "切换多行输入模式",
+          "long_desc": "允许在终端中进行多行文本输入。在新的一行输入 ';;' 即可发送。"
+        },
+        "/imagine": {
+          "short_desc": "根据描述性文本生成图像",
+          "long_desc": "调用图像生成模型生成图片并保存至本地文件夹。"
+        },
+        "/run": {
+          "short_desc": "在本地 Shell 中执行系统命令",
+          "long_desc": "在安全模式下执行本地终端命令并获取输出结果。"
+        },
+        "/echo": {
+          "short_desc": "在控制台输出文本（支持变量替换）",
+          "long_desc": "打印调试消息或文本，在编写 ChatDSL 脚本时非常有用。"
+        }
+      }
     }
   },
   "it": {
@@ -128,6 +367,79 @@
       "tool_enabled": "Strumento '{tool}' abilitato.",
       "error_file_missing": "Errore: Il file '{file}' non esiste.",
       "script_error_header": "Errore alla linea {line_num}: '{code}'"
+    },
+    "help": {
+      "headers": {
+        "category": "Categoria",
+        "usage": "Utilizzo",
+        "parameters": "Parametri",
+        "examples": "Esempi",
+        "aliases": "Alias",
+        "see_also": "Vedi anche",
+        "no_commands": "Nessun comando corrispondente trovato per '{query}'. Prova /aiuto per tutti."
+      },
+      "categories": {
+        "file": "File",
+        "system": "Sistema",
+        "tool": "Strumento",
+        "image": "Immagine",
+        "database": "Database",
+        "rerank": "Rirank"
+      },
+      "commands": {
+        "/help": {
+          "short_desc": "Mostra questo messaggio di aiuto",
+          "long_desc": "Mostra l'elenco dei comandi disponibili. Usa '/aiuto <comando>' per dettagli."
+        },
+        "/model": {
+          "short_desc": "Cambia il modello attivo o mostra quello corrente",
+          "long_desc": "Mostra il modello configurato. Fornisci un alias per cambiare modello."
+        },
+        "/tool": {
+          "short_desc": "Gestisce la modalità strumento e il ciclo di esecuzione",
+          "long_desc": "Abilita, disabilita o elenca gli strumenti di sistema per il chatbot."
+        },
+        "/file": {
+          "short_desc": "Carica un file di testo nel buffer",
+          "long_desc": "Legge il contenuto di un file e lo memorizza nel buffer persistente in memoria."
+        },
+        "/showfile": {
+          "short_desc": "Mostra il contenuto del buffer dei file",
+          "long_desc": "Visualizza i primi 100 caratteri. Usa '/mostra_file all' per vedere tutto."
+        },
+        "/clearfile": {
+          "short_desc": "Svuota il buffer dei file in memoria",
+          "long_desc": "Cancella il contenuto del buffer dei file dalla memoria attiva."
+        },
+        "/logging": {
+          "short_desc": "Avvia o interrompe la registrazione della chat",
+          "long_desc": "Salva la cronologia delle conversazioni in un file di log sul disco locale."
+        },
+        "/mem": {
+          "short_desc": "Mostra la dimensione dei buffer e delle variabili di sistema",
+          "long_desc": "Fornisce informazioni sul consumo di memoria di buffer e variabili attive."
+        },
+        "/exit": {
+          "short_desc": "Termina la sessione ed esce dall'applicazione",
+          "long_desc": "Salva la cronologia di input ed esce in sicurezza da ChatyBot."
+        },
+        "/multiline": {
+          "short_desc": "Alterna la modalità di input multilinea",
+          "long_desc": "Consente l'inserimento di messaggi su più righe. Digitare ';;' per inviare."
+        },
+        "/imagine": {
+          "short_desc": "Genera un'immagine da una descrizione testuale",
+          "long_desc": "Genera e salva un'immagine in locale utilizzando un modello IA generativo."
+        },
+        "/run": {
+          "short_desc": "Esegue un comando di sistema nel terminale locale",
+          "long_desc": "Esegue comandi di terminale locale in sicurezza e cattura l'output."
+        },
+        "/echo": {
+          "short_desc": "Mostra il testo sullo schermo con supporto alle variabili",
+          "long_desc": "Stampa messaggi o variabili in console, utile per il debug di script ChatDSL."
+        }
+      }
     }
   }
 }

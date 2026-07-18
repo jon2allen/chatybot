@@ -3125,9 +3125,9 @@ class ChatybotApp:
             # Handle /help with optional query argument
             if len(parts) > 1:
                 query = parts[1]
-                print(self.help_system.get_help_text(query))
+                print(self.help_system.get_help_text(query, i18n=self.i18n))
             else:
-                self.show_help()
+                print(self.help_system.get_help_text(None, i18n=self.i18n))
             return True
 
         elif cmd == "/trace":
