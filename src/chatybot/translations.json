@@ -128,7 +128,11 @@
       "habilitar": "enable",
       "deshab": "disable",
       "auto": "auto",
-      "bucle": "loop"
+      "bucle": "loop",
+      "detener": "stop",
+      "estado": "status",
+      "usar": "use",
+      "editar": "edit"
     },
     "ui": {
       "language_changed": "Idioma establecido en: {lang}",
@@ -335,7 +339,11 @@
       "activer": "enable",
       "desactiver": "disable",
       "auto": "auto",
-      "boucle": "loop"
+      "boucle": "loop",
+      "arreter": "stop",
+      "statut": "status",
+      "utiliser": "use",
+      "editer": "edit"
     },
     "ui": {
       "language_changed": "Langue définie sur : {lang}",
@@ -506,14 +514,18 @@
     "keywords": {
       "设置": "set",
       "启动": "start",
-      "停止": "end",
+      "停止": "stop",
+      "终止": "end",
       "开启": "on",
       "关闭": "off",
       "列表": "list",
       "启用": "enable",
       "禁用": "disable",
       "自动": "auto",
-      "循环": "loop"
+      "循环": "loop",
+      "状态": "status",
+      "使用": "use",
+      "编辑": "edit"
     },
     "ui": {
       "language_changed": "语言设置为: {lang}",
@@ -691,7 +703,11 @@
       "abilita": "enable",
       "disabilita": "disable",
       "auto": "auto",
-      "ciclo": "loop"
+      "ciclo": "loop",
+      "ferma": "stop",
+      "stato": "status",
+      "usa": "use",
+      "modifica": "edit"
     },
     "ui": {
       "language_changed": "Lingua impostata su: {lang}",
