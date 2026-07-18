@@ -624,10 +624,13 @@ class HelpSystem:
         keyword_lower = keyword.lower()
         return [cmd for cmd in self.commands.values() if cmd.matches_keyword(keyword_lower)]
     
-    def format_command_list(self, commands: List[CommandHelp]) -> str:
+    def format_command_list(self, commands: List[CommandHelp], i18n: Optional[Any] = None) -> str:
         """Format a list of commands for display."""
         if not commands:
-            return "No commands found."
+            msg = "No commands found."
+            if i18n:
+                msg = i18n.get_help_string("headers", "no_commands", msg)
+            return msg
         
         lines = []
         # Group by category for better organization
@@ -639,85 +642,189 @@ class HelpSystem:
         
         for category in sorted(categorized.keys()):
             category_commands = sorted(categorized[category], key=lambda c: c.name)
-            if category:
-                lines.append(f"\n{category.upper()}:")
+            display_category = category
+            if i18n:
+                display_category = i18n.get_help_string("categories", category, category)
+            
+            lines.append(f"\n{display_category.upper()}:")
             for cmd in category_commands:
-                lines.append(f"  {cmd.name} - {cmd.short_desc}")
+                display_name = cmd.name
+                display_desc = cmd.short_desc
+                if i18n:
+                    aliases = i18n.catalog.get(i18n.locale, {}).get("aliases", {})
+                    for loc, canonical in aliases.items():
+                        if canonical == cmd.name:
+                            display_name = loc
+                            break
+                    cmd_info = i18n.get_help_string("commands", cmd.name, {})
+                    if isinstance(cmd_info, dict):
+                        display_desc = cmd_info.get("short_desc", cmd.short_desc)
+                
+                lines.append(f"  {display_name} - {display_desc}")
         
         return "\n".join(lines)
     
-    def format_command_detail(self, cmd_help: CommandHelp) -> str:
+    def format_command_detail(self, cmd_help: CommandHelp, i18n: Optional[Any] = None) -> str:
         """Format detailed help for a single command."""
         lines = []
-        lines.append(f"\n{cmd_help.name}")
-        lines.append("=" * len(cmd_help.name))
         
-        if cmd_help.category:
-            lines.append(f"Category: {cmd_help.category}")
+        lbl_category = "Category"
+        lbl_usage = "Usage"
+        lbl_parameters = "Parameters"
+        lbl_examples = "Examples"
+        lbl_aliases = "Aliases"
+        lbl_see_also = "See also"
         
-        if cmd_help.usage:
-            lines.append(f"Usage: {cmd_help.usage}")
+        display_name = cmd_help.name
+        display_category = cmd_help.category
+        display_short = cmd_help.short_desc
+        display_long = cmd_help.long_desc
+        display_usage = cmd_help.usage
         
-        if cmd_help.short_desc:
-            lines.append(f"\n{cmd_help.short_desc}")
+        if i18n:
+            lbl_category = i18n.get_help_string("headers", "category", lbl_category)
+            lbl_usage = i18n.get_help_string("headers", "usage", lbl_usage)
+            lbl_parameters = i18n.get_help_string("headers", "parameters", lbl_parameters)
+            lbl_examples = i18n.get_help_string("headers", "examples", lbl_examples)
+            lbl_aliases = i18n.get_help_string("headers", "aliases", lbl_aliases)
+            lbl_see_also = i18n.get_help_string("headers", "see_also", lbl_see_also)
+            
+            aliases = i18n.catalog.get(i18n.locale, {}).get("aliases", {})
+            for loc, canonical in aliases.items():
+                if canonical == cmd_help.name:
+                    display_name = loc
+                    break
+            
+            display_category = i18n.get_help_string("categories", cmd_help.category, cmd_help.category)
+            
+            cmd_info = i18n.get_help_string("commands", cmd_help.name, {})
+            if isinstance(cmd_info, dict):
+                display_short = cmd_info.get("short_desc", cmd_help.short_desc)
+                display_long = cmd_info.get("long_desc", cmd_help.long_desc)
+            
+            for loc, canonical in aliases.items():
+                if canonical in display_usage:
+                    display_usage = display_usage.replace(canonical, loc)
         
-        if cmd_help.long_desc:
-            lines.append(f"\n{cmd_help.long_desc}")
+        lines.append(f"\n{display_name}")
+        lines.append("=" * len(display_name))
+        
+        if display_category:
+            lines.append(f"{lbl_category}: {display_category}")
+        
+        if display_usage:
+            lines.append(f"{lbl_usage}: {display_usage}")
+        
+        if display_short:
+            lines.append(f"\n{display_short}")
+        
+        if display_long:
+            lines.append(f"\n{display_long}")
         
         if cmd_help.parameters:
-            lines.append(f"\nParameters:")
+            lines.append(f"\n{lbl_parameters}:")
             for param, desc in cmd_help.parameters.items():
-                lines.append(f"  {param} - {desc}")
+                display_param_desc = desc
+                if i18n:
+                    cmd_info = i18n.get_help_string("commands", cmd_help.name, {})
+                    if isinstance(cmd_info, dict):
+                        display_param_desc = cmd_info.get("parameters", {}).get(param, desc)
+                lines.append(f"  {param} - {display_param_desc}")
         
         if cmd_help.examples:
-            lines.append(f"\nExamples:")
+            lines.append(f"\n{lbl_examples}:")
             for example in cmd_help.examples:
-                lines.append(f"  {example}")
+                display_example = example
+                if i18n:
+                    aliases = i18n.catalog.get(i18n.locale, {}).get("aliases", {})
+                    for loc, canonical in aliases.items():
+                        if canonical in display_example:
+                            display_example = display_example.replace(canonical, loc)
+                lines.append(f"  {display_example}")
         
         if cmd_help.aliases:
-            lines.append(f"\nAliases: {', '.join(cmd_help.aliases)}")
+            display_aliases = cmd_help.aliases
+            if i18n:
+                aliases_map = i18n.catalog.get(i18n.locale, {}).get("aliases", {})
+                translated_aliases = []
+                for alias in cmd_help.aliases:
+                    found = False
+                    for loc, canonical in aliases_map.items():
+                        if canonical == alias:
+                            translated_aliases.append(loc)
+                            found = True
+                            break
+                    if not found:
+                        translated_aliases.append(alias)
+                display_aliases = translated_aliases
+            lines.append(f"\n{lbl_aliases}: {', '.join(display_aliases)}")
         
         if cmd_help.see_also:
-            lines.append(f"\nSee also: {', '.join(cmd_help.see_also)}")
+            display_see_also = cmd_help.see_also
+            if i18n:
+                aliases_map = i18n.catalog.get(i18n.locale, {}).get("aliases", {})
+                translated_see_also = []
+                for item in cmd_help.see_also:
+                    found = False
+                    for loc, canonical in aliases_map.items():
+                        if canonical == item:
+                            translated_see_also.append(loc)
+                            found = True
+                            break
+                    if not found:
+                        translated_see_also.append(item)
+                display_see_also = translated_see_also
+            lines.append(f"\n{lbl_see_also}: {', '.join(display_see_also)}")
         
         return "\n".join(lines)
     
-    def get_help_text(self, query: Optional[str] = None) -> str:
+    def get_help_text(self, query: Optional[str] = None, i18n: Optional[Any] = None) -> str:
         """
-        Get help text based on query.
+         Get help text based on query.
         
-        Args:
-            query: None for full help, a command name for specific help, or a keyword for filtering
+         Args:
+             query: None for full help, a command name for specific help, or a keyword for filtering
+             i18n: LocalizationManager instance for translating output
         
-        Returns:
-            Formatted help text
+         Returns:
+             Formatted help text
         """
+        if query is not None and i18n is not None:
+            norm = query.lower()
+            if not norm.startswith("/"):
+                alias_with_slash = i18n.resolve_command("/" + norm)
+                if alias_with_slash.startswith("/"):
+                    query = alias_with_slash
+            else:
+                query = i18n.resolve_command(norm)
+
         if query is None:
-            # Full help - return all commands
-            return self.format_command_list(self.get_all_commands())
+            return self.format_command_list(self.get_all_commands(), i18n=i18n)
         
-        # If query starts with '/', treat it as a specific command request
         if query.startswith('/'):
             if query in self.commands:
-                return self.format_command_detail(self.commands[query])
+                return self.format_command_detail(self.commands[query], i18n=i18n)
             else:
-                # Try without leading slash
                 query_without_slash = query.lstrip('/')
                 if f"/{query_without_slash}" in self.commands:
-                    return self.format_command_detail(self.commands[f"/{query_without_slash}"])
+                    return self.format_command_detail(self.commands[f"/{query_without_slash}"], i18n=i18n)
                 else:
-                    # Filter by keyword if not found as command
                     filtered = self.filter_commands(query)
                     if not filtered:
-                        return f"No commands found matching '{query}'. Try /help for all commands."
-                    return self.format_command_list(filtered)
+                        msg = "No commands found matching '{query}'. Try /help for all commands."
+                        if i18n:
+                            msg = i18n.get_help_string("headers", "no_commands", msg)
+                        return msg.format(query=query)
+                    return self.format_command_list(filtered, i18n=i18n)
         
-        # Query doesn't start with '/', treat as keyword filter
         filtered = self.filter_commands(query)
         if not filtered:
-            return f"No commands found matching '{query}'. Try /help for all commands."
+            msg = "No commands found matching '{query}'. Try /help for all commands."
+            if i18n:
+                msg = i18n.get_help_string("headers", "no_commands", msg)
+            return msg.format(query=query)
         
-        return self.format_command_list(filtered)
+        return self.format_command_list(filtered, i18n=i18n)
 
 
 # Global help system instance

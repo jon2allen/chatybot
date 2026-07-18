@@ -42,6 +42,16 @@ class LocalizationManager:
         except Exception:
             return template
 
+    def get_help_string(self, section: str, key: str, default: str = None) -> str:
+        locale_data = self.catalog.get(self.locale, self.catalog.get("en", {}))
+        help_data = locale_data.get("help", {})
+        val = help_data.get(section, {}).get(key, default)
+        if val is None:
+            # Fallback to English
+            en_data = self.catalog.get("en", {}).get("help", {})
+            val = en_data.get(section, {}).get(key, default or key)
+        return val
+
     def print(self, key: str, default: str = None, **kwargs) -> None:
         print(self.get_ui_string(key, default, **kwargs))
 
