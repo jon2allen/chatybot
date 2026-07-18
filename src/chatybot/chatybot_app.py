@@ -5639,8 +5639,10 @@ class ChatybotApp:
         lang_display = self.i18n.get_ui_string("native_lang_display", "Language: English")
         print(f"{lang_display:<27}")
         print("===========================")
+        model_name = self.config_manager.get_model_config(self.config_manager.active_model_alias)['name']
+        model_alias = self.config_manager.active_model_alias
         print(
-            f"Active model: {self.config_manager.get_model_config(self.config_manager.active_model_alias)['name']} (alias: {self.config_manager.active_model_alias})"
+            self.i18n.get_ui_string("active_model_info", "Active model: {model} (alias: {alias})", model=model_name, alias=model_alias)
         )
 
         # Load and execute profile script if specified via command line or config
