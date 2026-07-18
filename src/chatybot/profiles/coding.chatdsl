@@ -5,6 +5,7 @@
 /tool auto on
 /tool on
 /reasoning on
-/effort medium
+#//effort medium
+# devstral_1 does not support effort
 /trace tps on
 /tool max_turns 75
