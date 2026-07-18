@@ -26,7 +26,9 @@
       "script_error_header": "Error on line {line_num}: '{code}'",
       "native_lang_display": "Language: English",
       "chat_prompt": "chat --> ",
-      "active_model_info": "Active model: {model} (alias: {alias})"
+      "active_model_info": "Active model: {model} (alias: {alias})",
+      "goodbye_message": "Goodbye! Thanks for chatting.",
+      "goodbye_short": "Goodbye!"
     },
     "help": {
       "headers": {
@@ -84,7 +86,9 @@
       "script_error_header": "Error en la línea {line_num}: '{code}'",
       "native_lang_display": "Idioma: Español",
       "chat_prompt": "charla --> ",
-      "active_model_info": "Modelo activo: {model} (alias: {alias})"
+      "active_model_info": "Modelo activo: {model} (alias: {alias})",
+      "goodbye_message": "¡Adiós! Gracias por chatear.",
+      "goodbye_short": "¡Adiós!"
     },
     "help": {
       "headers": {
@@ -238,7 +242,9 @@
       "script_error_header": "Erreur à la ligne {line_num} : '{code}'",
       "native_lang_display": "Langue: Français",
       "chat_prompt": "discussion --> ",
-      "active_model_info": "Modèle actif : {model} (alias: {alias})"
+      "active_model_info": "Modèle actif : {model} (alias: {alias})",
+      "goodbye_message": "Au revoir ! Merci d'avoir discuté.",
+      "goodbye_short": "Au revoir !"
     },
     "help": {
       "headers": {
@@ -362,7 +368,9 @@
       "script_error_header": "第 {line_num} 行出错: '{code}'",
       "native_lang_display": "语言: 中文",
       "chat_prompt": "聊天 --> ",
-      "active_model_info": "当前模型: {model} (别名: {alias})"
+      "active_model_info": "当前模型: {model} (别名: {alias})",
+      "goodbye_message": "再见！感谢您的使用。",
+      "goodbye_short": "再见！"
     },
     "help": {
       "headers": {
@@ -486,7 +494,9 @@
       "script_error_header": "Errore alla linea {line_num}: '{code}'",
       "native_lang_display": "Lingua: Italiano",
       "chat_prompt": "conversazione --> ",
-      "active_model_info": "Modello attivo: {model} (alias: {alias})"
+      "active_model_info": "Modello attivo: {model} (alias: {alias})",
+      "goodbye_message": "Arrivederci! Grazie per aver chattato.",
+      "goodbye_short": "Arrivederci!"
     },
     "help": {
       "headers": {

@@ -4553,7 +4553,7 @@ class ChatybotApp:
             return True
 
         elif cmd in ["/quit", "/exit"]:
-            print("Goodbye! Thanks for chatting.")
+            print(self.i18n.get_ui_string("goodbye_message", "Goodbye! Thanks for chatting."))
             self.logging_manager.stop_logging()
             self.save_input_history()
             exit(0)
@@ -5723,7 +5723,8 @@ class ChatybotApp:
                 
                 if self.control_c_count >= 2:
                     # Second Ctrl+C - exit program
-                    print("\nGoodbye! Thanks for chatting.")
+                    msg = self.i18n.get_ui_string("goodbye_message", "Goodbye! Thanks for chatting.")
+                    print(f"\n{msg}")
                     self.logging_manager.stop_logging()
                     self.save_input_history()
                     break
@@ -5852,7 +5853,8 @@ def run():
         try:
             asyncio.run(run_script())
         except KeyboardInterrupt:
-            print("\nGoodbye!")
+            msg = app.i18n.get_ui_string("goodbye_short", "Goodbye!")
+            print(f"\n{msg}")
         sys.exit(0)
 
     elif args.run:
@@ -5870,7 +5872,8 @@ def run():
         try:
             asyncio.run(run_query())
         except KeyboardInterrupt:
-            print("\nGoodbye!")
+            msg = app.i18n.get_ui_string("goodbye_short", "Goodbye!")
+            print(f"\n{msg}")
         sys.exit(0)
 
     if args.profile:
