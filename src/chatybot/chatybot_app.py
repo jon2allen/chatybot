@@ -3116,6 +3116,7 @@ class ChatybotApp:
             True if the command was handled, False otherwise, or "EXECUTE_PROMPT" for prompt execution
         """
         import re
+        command = self.i18n.translate_command_string(command)
         parts = command.split(maxsplit=2)
         if self.logging_manager.logging_active:
             self.logging_manager.log_message(f"Escape command: {command}")

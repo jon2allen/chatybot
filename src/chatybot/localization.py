@@ -117,3 +117,37 @@ class LocalizationManager:
             translated_lines.append(line)
 
         return "\n".join(translated_lines)
+
+    def translate_command_string(self, cmd_str: str) -> str:
+        """Translates a command string (command verb and its arguments) into canonical English."""
+        if self.locale == "en":
+            return cmd_str
+            
+        parts = cmd_str.split(maxsplit=1)
+        if not parts:
+            return cmd_str
+            
+        first_word = parts[0]
+        if first_word.startswith("/"):
+            first_word = self.resolve_command(first_word)
+        else:
+            reverse_map = self.get_reverse_aliases()
+            if first_word.lower() in reverse_map:
+                first_word = reverse_map[first_word.lower()]
+                
+        if len(parts) > 1:
+            args = parts[1]
+            keywords_map = self.catalog.get(self.locale, {}).get("keywords", {})
+            
+            arg_words = args.split(maxsplit=1)
+            if arg_words:
+                subcmd = arg_words[0].lower()
+                if subcmd in keywords_map:
+                    canonical_sub = keywords_map[subcmd]
+                    if len(arg_words) > 1:
+                        args = f"{canonical_sub} {arg_words[1]}"
+                    else:
+                        args = canonical_sub
+            return f"{first_word} {args}"
+        else:
+            return first_word

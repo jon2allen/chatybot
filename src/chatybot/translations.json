@@ -119,7 +119,16 @@
       "/reordenar": "/rerank"
     },
     "keywords": {
-      "establecer": "set"
+      "establecer": "set",
+      "iniciar": "start",
+      "terminar": "end",
+      "activar": "on",
+      "desactivar": "off",
+      "listar": "list",
+      "habilitar": "enable",
+      "deshab": "disable",
+      "auto": "auto",
+      "bucle": "loop"
     },
     "ui": {
       "language_changed": "Idioma establecido en: {lang}",
@@ -317,7 +326,16 @@
       "/reclasser": "/rerank"
     },
     "keywords": {
-      "definir": "set"
+      "definir": "set",
+      "demarrer": "start",
+      "fin": "end",
+      "on": "on",
+      "off": "off",
+      "lister": "list",
+      "activer": "enable",
+      "desactiver": "disable",
+      "auto": "auto",
+      "boucle": "loop"
     },
     "ui": {
       "language_changed": "Langue définie sur : {lang}",
@@ -486,7 +504,16 @@
       "/重排": "/rerank"
     },
     "keywords": {
-      "设置": "set"
+      "设置": "set",
+      "启动": "start",
+      "停止": "end",
+      "开启": "on",
+      "关闭": "off",
+      "列表": "list",
+      "启用": "enable",
+      "禁用": "disable",
+      "自动": "auto",
+      "循环": "loop"
     },
     "ui": {
       "language_changed": "语言设置为: {lang}",
@@ -655,7 +682,16 @@
       "/riordina": "/rerank"
     },
     "keywords": {
-      "imposta": "set"
+      "imposta": "set",
+      "avvia": "start",
+      "fine": "end",
+      "on": "on",
+      "off": "off",
+      "elenco": "list",
+      "abilita": "enable",
+      "disabilita": "disable",
+      "auto": "auto",
+      "ciclo": "loop"
     },
     "ui": {
       "language_changed": "Lingua impostata su: {lang}",
