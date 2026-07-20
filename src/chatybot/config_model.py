@@ -183,10 +183,16 @@ ModelConfig = Annotated[
 
 class MCPServerConfig(BaseModel):
     """Configuration for an individual MCP Server."""
-    command: str
+    command: Optional[str] = None
     args: list[str] = Field(default_factory=list)
     persistent: bool = False
     env: Optional[dict[str, str]] = None
+    url: Optional[str] = None
+    
+    @property
+    def is_http_server(self) -> bool:
+        """Check if this is an HTTP-based FastMCP server."""
+        return bool(self.url)
 
 
 class MCPConfig(BaseModel):
@@ -398,14 +404,19 @@ class ChatConfig(BaseModel):
             lines.append("")
             for server_name, server_cfg in self.mcp.servers.items():
                 lines.append(f"[mcp.servers.{server_name}]")
-                lines.append(f'command = "{server_cfg.command}"')
-                if server_cfg.args:
-                    formatted_args = ", ".join(f'"{arg}"' for arg in server_cfg.args)
-                    lines.append(f'args = [{formatted_args}]')
-                lines.append(f'persistent = {str(server_cfg.persistent).lower()}')
-                if server_cfg.env:
-                    formatted_env = ", ".join(f'{k} = "{v}"' for k, v in server_cfg.env.items())
-                    lines.append(f'env = {{ {formatted_env} }}')
+                
+                if server_cfg.is_http_server:
+                    lines.append(f'url = "{server_cfg.url}"')
+                    lines.append(f'persistent = {str(server_cfg.persistent).lower()}')
+                else:
+                    lines.append(f'command = "{server_cfg.command}"')
+                    if server_cfg.args:
+                        formatted_args = ", ".join(f'"{arg}"' for arg in server_cfg.args)
+                        lines.append(f'args = [{formatted_args}]')
+                    lines.append(f'persistent = {str(server_cfg.persistent).lower()}')
+                    if server_cfg.env:
+                        formatted_env = ", ".join(f'{k} = "{v}"' for k, v in server_cfg.env.items())
+                        lines.append(f'env = {{ {formatted_env} }}')
                 lines.append("")
 
         # 4. Categorize models to match the original TOML organization

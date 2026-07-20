@@ -2569,10 +2569,13 @@ class ChatybotApp:
     def extract_tool_calls(self, text: str) -> List[Dict[str, Any]]:
         """
         Extract all tool call JSON blocks from conversational text.
+        Supports standard JSON blocks, Gemma 4 native tool call syntax (<|tool_call>call:tool_name{...}<tool_call|>),
+        FunctionGemma syntax, unquoted keys, and single-quoted dictionaries.
         Returns a list of dictionaries for all valid tool calls found.
         """
         import json
         import re
+        from typing import Any, Dict, List, Optional
 
         def clean_json_string(s: str) -> str:
             # Remove single line comments starting with // or #, respecting quotes across newlines
@@ -2627,64 +2630,221 @@ class ChatybotApp:
             cleaned = re.sub(r',\s*([\]}])', r'\1', cleaned)
             return cleaned
 
-        def normalize_tool_call(data: Any) -> Optional[Dict[str, Any]]:
-            if isinstance(data, dict) and "tool" in data:
-                tool_name = str(data["tool"])
-                if "." in tool_name:
-                    tool_name = tool_name.split(".")[-1]
-                data["tool"] = tool_name
-                return data
+        def fix_unquoted_json(s: str) -> str:
+            buf = []
+            in_quote = False
+            quote_char = None
+            escaped = False
+            i = 0
+            n = len(s)
+            while i < n:
+                char = s[i]
+                if escaped:
+                    buf.append(char)
+                    escaped = False
+                    i += 1
+                    continue
+                if char == '\\':
+                    buf.append(char)
+                    escaped = True
+                    i += 1
+                    continue
+                if in_quote:
+                    if char == quote_char:
+                        in_quote = False
+                        buf.append('"')
+                    elif quote_char == "'" and char == '"':
+                        buf.append('\\"')
+                    else:
+                        buf.append(char)
+                    i += 1
+                    continue
+                else:
+                    if char in ('"', "'"):
+                        in_quote = True
+                        quote_char = char
+                        buf.append('"')
+                        i += 1
+                        continue
+                    else:
+                        buf.append(char)
+                        i += 1
+
+            buf_str = "".join(buf)
+            out = []
+            in_quote = False
+            escaped = False
+            i = 0
+            n = len(buf_str)
+            while i < n:
+                char = buf_str[i]
+                if escaped:
+                    out.append(char)
+                    escaped = False
+                    i += 1
+                    continue
+                if char == '\\':
+                    out.append(char)
+                    escaped = True
+                    i += 1
+                    continue
+                if char == '"':
+                    in_quote = not in_quote
+                    out.append(char)
+                    i += 1
+                    continue
+
+                if not in_quote:
+                    if char.isalpha() or char == '_':
+                        start = i
+                        while i < n and (buf_str[i].isalnum() or buf_str[i] == '_'):
+                            i += 1
+                        ident = buf_str[start:i]
+                        peek = i
+                        while peek < n and buf_str[peek].isspace():
+                            peek += 1
+                        if peek < n and buf_str[peek] == ':':
+                            out.append(f'"{ident}"')
+                        else:
+                            if ident == "True":
+                                out.append("true")
+                            elif ident == "False":
+                                out.append("false")
+                            elif ident == "None":
+                                out.append("null")
+                            else:
+                                out.append(ident)
+                        continue
+
+                out.append(char)
+                i += 1
+
+            return clean_json_string("".join(out))
+
+        def parse_json_or_dict(s: str) -> Optional[Dict[str, Any]]:
+            try:
+                cleaned = clean_json_string(s)
+                data = json.loads(cleaned)
+                if isinstance(data, dict):
+                    return data
+            except Exception:
+                pass
+
+            try:
+                fixed = fix_unquoted_json(s)
+                data = json.loads(fixed)
+                if isinstance(data, dict):
+                    return data
+            except Exception:
+                pass
+
+            try:
+                import ast
+                data = ast.literal_eval(s)
+                if isinstance(data, dict):
+                    return data
+            except Exception:
+                pass
+
             return None
 
-        # Parse to find all balanced JSON objects { ... } in the text
+        def normalize_tool_call(data: Any) -> Optional[Dict[str, Any]]:
+            if isinstance(data, dict):
+                if "tool" in data:
+                    tool_name = str(data["tool"])
+                    if "." in tool_name:
+                        tool_name = tool_name.split(".")[-1]
+                    data["tool"] = tool_name
+                    if "arguments" not in data:
+                        data["arguments"] = {k: v for k, v in data.items() if k != "tool"}
+                    return data
+                elif "name" in data:
+                    tool_name = str(data["name"])
+                    if "." in tool_name:
+                        tool_name = tool_name.split(".")[-1]
+                    args = data.get("arguments") if "arguments" in data else data.get("args") if "args" in data else data.get("parameters") if "parameters" in data else {k: v for k, v in data.items() if k != "name"}
+                    return {"tool": tool_name, "arguments": args}
+                elif "function" in data:
+                    tool_name = str(data["function"])
+                    if "." in tool_name:
+                        tool_name = tool_name.split(".")[-1]
+                    args = data.get("arguments") if "arguments" in data else data.get("args") if "args" in data else {k: v for k, v in data.items() if k != "function"}
+                    return {"tool": tool_name, "arguments": args}
+            return None
+
+        # Parse to find all tool calls in the text
         tool_calls = []
         i = 0
         n = len(text)
         while i < n:
             if text[i] == '{':
+                prefix = text[:i].rstrip()
+                # Match tool header before '{' if present (e.g. <|tool_call>call:run_command, call:run_command, <start_function_call>call:run_command)
+                header_match = re.search(
+                    r'(?:<\|?tool_call\|?>|<start_function_call>|<tool_call>|\bcall:)\s*(?:call:)?\s*([a-zA-Z0-9_\-\.]+)\s*\(?\s*$',
+                    prefix,
+                    re.IGNORECASE
+                )
+                explicit_tool_name = header_match.group(1) if header_match else None
+
                 brace_count = 1
                 j = i + 1
                 in_quote = False
                 escaped = False
+                quote_char = None
                 while j < n and brace_count > 0:
                     char = text[j]
                     if escaped:
                         escaped = False
                     elif char == '\\':
                         escaped = True
-                    elif char == '"':
-                        in_quote = not in_quote
+                    elif char in ('"', "'"):
+                        if not in_quote:
+                            in_quote = True
+                            quote_char = char
+                        elif char == quote_char:
+                            in_quote = False
                     elif not in_quote:
                         if char == '{':
                             brace_count += 1
                         elif char == '}':
                             brace_count -= 1
                     j += 1
-                
+
                 if brace_count == 0:
                     candidate = text[i:j]
-                    try:
-                        cleaned = clean_json_string(candidate)
-                        data = json.loads(cleaned)
-                        res = normalize_tool_call(data)
-                        if res:
-                            tool_calls.append(res)
-                            # Move index to the end of this parsed block
-                            i = j - 1
-                    except Exception:
-                        pass
+                    if explicit_tool_name:
+                        if "." in explicit_tool_name:
+                            explicit_tool_name = explicit_tool_name.split(".")[-1]
+                        args = parse_json_or_dict(candidate)
+                        if args is None:
+                            args = {}
+                        tool_calls.append({"tool": explicit_tool_name, "arguments": args})
+                        i = j - 1
+                    else:
+                        data = parse_json_or_dict(candidate)
+                        if data:
+                            res = normalize_tool_call(data)
+                            if res:
+                                tool_calls.append(res)
+                                i = j - 1
                 elif brace_count > 0 and j == n:
                     candidate = text[i:j].rstrip("`\n\r \t")
                     cand_in_quote = False
                     cand_escaped = False
                     cand_brace_count = 0
+                    cand_quote_char = None
                     for char in candidate:
                         if cand_escaped:
                             cand_escaped = False
                         elif char == '\\':
                             cand_escaped = True
-                        elif char == '"':
-                            cand_in_quote = not cand_in_quote
+                        elif char in ('"', "'"):
+                            if not cand_in_quote:
+                                cand_in_quote = True
+                                cand_quote_char = char
+                            elif char == cand_quote_char:
+                                cand_in_quote = False
                         elif not cand_in_quote:
                             if char == '{':
                                 cand_brace_count += 1
@@ -2694,18 +2854,23 @@ class ChatybotApp:
                         candidate += '"'
                     if cand_brace_count > 0:
                         candidate += '}' * cand_brace_count
-                    try:
-                        cleaned = clean_json_string(candidate)
-                        data = json.loads(cleaned)
-                        res = normalize_tool_call(data)
-                        if res:
-                            tool_calls.append(res)
-                            # Move index to the end of this parsed block
-                            i = j - 1
-                    except Exception:
-                        pass
+                    if explicit_tool_name:
+                        if "." in explicit_tool_name:
+                            explicit_tool_name = explicit_tool_name.split(".")[-1]
+                        args = parse_json_or_dict(candidate)
+                        if args is None:
+                            args = {}
+                        tool_calls.append({"tool": explicit_tool_name, "arguments": args})
+                        i = j - 1
+                    else:
+                        data = parse_json_or_dict(candidate)
+                        if data:
+                            res = normalize_tool_call(data)
+                            if res:
+                                tool_calls.append(res)
+                                i = j - 1
             i += 1
-            
+
         return tool_calls
 
     async def execute_tool_loop(self, max_turns: int) -> None:
