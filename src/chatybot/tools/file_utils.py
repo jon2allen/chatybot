@@ -47,6 +47,9 @@ def list_directory(path: str = ".", details: bool = False) -> List[Any]:
 
 def read_file(path: str) -> str:
     """Read contents of a file with line numbers."""
+    if os.name != 'nt':
+        if path and not os.path.isabs(path) and '/' not in path and '\\' not in path:
+            path = f"./{path}"
     try:
         if os.path.exists(path):
             with open(path, 'rb') as f:
