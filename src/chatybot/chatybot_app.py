@@ -260,7 +260,7 @@ class ChatybotApp:
                     "stream", "script", "source", "profile", "quit", "setdb", "dblist",
                     "searchdb", "dblog", "dbprint", "loadvar", "savevar",
                     "setvar", "notemode", "mem", "dump", "trace",
-                    "thinking", "echo", "def", "reloadmacros",
+                    "thinking", "echo", "def", "reloadmacros", "calc",
                     "imagine", "imagesize", "imagequality", "saveimage", "imagedir",
                     "listimages", "showimage", "loadimage", "documents", "rerank",
                     "run", "run_safe", "run_unsafe", "tool"
@@ -1745,8 +1745,8 @@ class ChatybotApp:
                 return True
 
         # Replace variables in the command (supporting subscripts and unbraced names)
-        # We do not replace variables on the command line for /setvar as it handles substitution internally (avoiding splitting elements with commas)
-        if command.lstrip().startswith("/setvar"):
+        # We do not replace variables on the command line for /setvar and /calc as they handle substitution internally
+        if command.lstrip().startswith("/setvar") or command.lstrip().startswith("/calc"):
             processed_command = command
         else:
             processed_command = self.buffer_manager.replace_placeholders_legacy(command)
@@ -1958,7 +1958,7 @@ class ChatybotApp:
                 if not cmd:
                     continue
                 if cmd.startswith("/"):
-                    if not cmd.lstrip().startswith("/setvar"):
+                    if not (cmd.lstrip().startswith("/setvar") or cmd.lstrip().startswith("/calc")):
                         cmd = self.buffer_manager.replace_placeholders_legacy(cmd)
                     result = await self.handle_escape_command(cmd)
                     if result == "EXECUTE_PROMPT":
@@ -5312,6 +5312,62 @@ class ChatybotApp:
             self.buffer_manager.dump_variables(var_name, SEARCHBUFFER, self.chat_history)
             return True
 
+        elif cmd == "/calc":
+            import shlex
+            rem_str = command[len(parts[0]):].strip()
+            if not rem_str:
+                print('Usage: /calc "<expression>" [var_name] or /calc "<expression>"')
+                return True
+
+            expr_str = ""
+            var_target = "CALC"
+
+            # Parse quoted string vs unquoted arguments
+            if rem_str.startswith('"') or rem_str.startswith("'"):
+                q = rem_str[0]
+                end_q = rem_str.rfind(q)
+                if end_q > 0:
+                    expr_str = rem_str[1:end_q]
+                    after_q = rem_str[end_q + 1:].strip()
+                    if after_q:
+                        var_target = after_q.split()[0]
+                else:
+                    expr_str = rem_str.strip('"\'')
+            else:
+                try:
+                    tokens = shlex.split(rem_str)
+                except Exception:
+                    tokens = rem_str.split()
+
+                if len(tokens) == 1:
+                    expr_str = tokens[0]
+                elif len(tokens) >= 2:
+                    last = tokens[-1].strip()
+                    if not any(op in last for op in "+-*/^()"):
+                        var_target = last
+                        expr_str = " ".join(tokens[:-1])
+                    else:
+                        expr_str = " ".join(tokens)
+
+            # Perform variable substitution on the expression string
+            expr_str = self.buffer_manager.replace_placeholders_legacy(expr_str, clear_unresolved=False)
+
+            try:
+                from mathparse import mathparse
+                try:
+                    result = mathparse.parse(expr_str, language='ENG')
+                except Exception:
+                    result = mathparse.parse(expr_str)
+                if result is None:
+                    print(f"Error: Could not parse math expression '{expr_str}'.")
+                else:
+                    # Save to target script var (allowing protected variables like CALC)
+                    self.buffer_manager.set_script_var(var_target, result, allow_protected=True)
+                    print(f"{var_target} = {result}")
+            except Exception as e:
+                print(f"Error evaluating math expression '{expr_str}': {e}")
+            return True
+
         elif cmd == "/setvar":
             if len(parts) < 3:
                 print("Usage: /setvar <varname> <value>")
@@ -5733,6 +5789,7 @@ class ChatybotApp:
         )
         print("  /savevar <varname> <filename> - Save a variable's contents to a file.")
         print("  /setvar <varname> <value> - Set a script variable. Supports {CHAT_HISTORY} and {LAST_RESPONSE} placeholders.")
+        print('  /calc "<expr>" [varname] - Evaluate a math expression using mathparse and store in a variable (default CALC).')
         print("  /documents <src>=<id> - Set the active rerank source: db=<name>, var=<name> (or CHAT_HISTORY or file), filebank=<1-5>, or dir=\"<path>\"")
         print("  /rerank \"<query>\" [, top_n=<n>] [, items=<n>] [, split=<sentence|line|paragraph>] - Semantically rerank source sentences/chunks.")
         print("  /mem [detail|debug] - Show size of buffers and script variables. Use 'detail' for element breakdowns, or 'debug' for metadata.")

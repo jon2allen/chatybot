@@ -513,6 +513,19 @@ class HelpSystem:
                 "/setvar quote_var 'This is an \"inner\" quote'"
             ]
         ))
+
+        self.register_command(CommandHelp(
+            name="/calc",
+            category="variable",
+            short_desc="Evaluate mathematical expressions using mathparse",
+            usage="/calc \"<expression>\" [var_name]",
+            long_desc="Parses and evaluates a math expression using mathparse. Results are saved to a protected script variable 'CALC' by default, or to a custom variable if specified.",
+            examples=[
+                "/calc \"Add one to ${test1}\"",
+                "/calc \"2 + 10\" test1",
+                "/calc \"fifty times two\""
+            ]
+        ))
         
         self.register_command(CommandHelp(
             name="/mem",

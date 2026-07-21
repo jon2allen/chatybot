@@ -34,6 +34,7 @@ class ScriptVars(UserDict):
             'RUN_EXIT_CODE',
             'LAST_COMPLETION',
             'latest_rerank',
+            'CALC',
         }
         super().__init__(*args, **kwargs)
 
