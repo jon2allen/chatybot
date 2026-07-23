@@ -223,56 +223,156 @@
         "/echo": {
           "short_desc": "Muestra texto en pantalla soportando sustitución de variables"
         },
-        "/filebank1": { "short_desc": "Administra el banco de archivos 1" },
-        "/filebank2": { "short_desc": "Administra el banco de archivos 2" },
-        "/filebank3": { "short_desc": "Administra el banco de archivos 3" },
-        "/filebank4": { "short_desc": "Administra el banco de archivos 4" },
-        "/filebank5": { "short_desc": "Administra el banco de archivos 5" },
-        "/imagebank1": { "short_desc": "Administra el banco de imágenes 1" },
-        "/imagebank2": { "short_desc": "Administra el banco de imágenes 2" },
-        "/imagebank3": { "short_desc": "Administra el banco de imágenes 3" },
-        "/imagebank4": { "short_desc": "Administra el banco de imágenes 4" },
-        "/imagebank5": { "short_desc": "Administra el banco de imágenes 5" },
-        "/imagesize": { "short_desc": "Establece la resolución de la imagen generada" },
-        "/imagequality": { "short_desc": "Establece la calidad de la imagen generada" },
-        "/saveimage": { "short_desc": "Guarda la última imagen generada" },
-        "/imagedir": { "short_desc": "Establece/obtiene el directorio predeterminado para guardar imágenes" },
-        "/listmodels": { "short_desc": "Muestra una lista de los modelos disponibles" },
-        "/temp": { "short_desc": "Establece la temperatura del modelo (creatividad)" },
-        "/maxtokens": { "short_desc": "Establece el número máximo de tokens a generar" },
-        "/top_p": { "short_desc": "Establece el parámetro de muestreo nucleus top_p" },
-        "/top_k": { "short_desc": "Establece el número de tokens más probables a considerar (top_k)" },
-        "/freq_penalty": { "short_desc": "Establece la penalización por repetición de palabras" },
-        "/pres_penalty": { "short_desc": "Establece la penalización por presencia de palabras nuevas" },
-        "/reasoning": { "short_desc": "Alterna el razonamiento interno en modelos compatibles" },
-        "/effort": { "short_desc": "Establece el nivel de esfuerzo de razonamiento del modelo" },
-        "/thinking": { "short_desc": "Alterna la visualización de los bloques de pensamiento" },
-        "/thoughtstyle": { "short_desc": "Establece el formato de prompt para desactivar razonamiento" },
-        "/seed": { "short_desc": "Establece la semilla aleatoria para resultados reproducibles" },
-        "/stream": { "short_desc": "Alterna la transmisión de respuestas en tiempo real" },
-        "/system": { "short_desc": "Establece un mensaje de sistema personalizado" },
-        "/codeonly": { "short_desc": "Activa el modo de generación exclusiva de código" },
-        "/codeoff": { "short_desc": "Desactiva el modo de generación exclusiva de código" },
-        "/prompt": { "short_desc": "Carga un prompt desde un archivo de texto" },
-        "/save": { "short_desc": "Guarda la última respuesta de chat en un archivo" },
-        "/notemode": { "short_desc": "Alterna el modo de notas para guardar respuestas" },
-        "/trace": { "short_desc": "Habilita o deshabilita opciones de depuración y traza" },
-        "/debug": { "short_desc": "Activa el modo de depuración o supervisa la memoria virtual" },
-        "/reloadmacros": { "short_desc": "Vuelve a cargar las definiciones de macros de ChatDSL" },
-        "/script": { "short_desc": "Ejecuta un archivo de script de ChatDSL con parámetros opcionales" },
-        "/source": { "short_desc": "Ejecuta un script de ChatDSL en la sesión actual interactiva" },
-        "/profile": { "short_desc": "Administra los perfiles de sesión de chat dinámicamente" },
-        "/setdb": { "short_desc": "Crea o selecciona una base de datos TinyDB" },
-        "/dblist": { "short_desc": "Muestra una lista de todas las bases de datos TinyDB" },
-        "/searchdb": { "short_desc": "Busca documentos en la base de datos seleccionada" },
-        "/dblog": { "short_desc": "Registra la última respuesta del chat en la base de datos" },
-        "/dbprint": { "short_desc": "Muestra el contenido completo de la base de datos seleccionada" },
-        "/loadvar": { "short_desc": "Carga el búfer de búsqueda o documentos en una variable" },
-        "/savevar": { "short_desc": "Guarda el contenido de una variable en un archivo" },
-        "/setvar": { "short_desc": "Establece una variable de script ChatDSL" },
-        "!": { "short_desc": "Busca y ejecuta un comando del historial" },
-        "/run_safe": { "short_desc": "Habilita el modo seguro para comandos de terminal (/run)" },
-        "/run_unsafe": { "short_desc": "Deshabilita el modo seguro para comandos de terminal (/run)" }
+        "/filebank1": {
+          "short_desc": "Administra el banco de archivos 1"
+        },
+        "/filebank2": {
+          "short_desc": "Administra el banco de archivos 2"
+        },
+        "/filebank3": {
+          "short_desc": "Administra el banco de archivos 3"
+        },
+        "/filebank4": {
+          "short_desc": "Administra el banco de archivos 4"
+        },
+        "/filebank5": {
+          "short_desc": "Administra el banco de archivos 5"
+        },
+        "/imagebank1": {
+          "short_desc": "Administra el banco de imágenes 1"
+        },
+        "/imagebank2": {
+          "short_desc": "Administra el banco de imágenes 2"
+        },
+        "/imagebank3": {
+          "short_desc": "Administra el banco de imágenes 3"
+        },
+        "/imagebank4": {
+          "short_desc": "Administra el banco de imágenes 4"
+        },
+        "/imagebank5": {
+          "short_desc": "Administra el banco de imágenes 5"
+        },
+        "/imagesize": {
+          "short_desc": "Establece la resolución de la imagen generada"
+        },
+        "/imagequality": {
+          "short_desc": "Establece la calidad de la imagen generada"
+        },
+        "/saveimage": {
+          "short_desc": "Guarda la última imagen generada"
+        },
+        "/imagedir": {
+          "short_desc": "Establece/obtiene el directorio predeterminado para guardar imágenes"
+        },
+        "/listmodels": {
+          "short_desc": "Muestra una lista de los modelos disponibles"
+        },
+        "/temp": {
+          "short_desc": "Establece la temperatura del modelo (creatividad)"
+        },
+        "/maxtokens": {
+          "short_desc": "Establece el número máximo de tokens a generar"
+        },
+        "/top_p": {
+          "short_desc": "Establece el parámetro de muestreo nucleus top_p"
+        },
+        "/top_k": {
+          "short_desc": "Establece el número de tokens más probables a considerar (top_k)"
+        },
+        "/freq_penalty": {
+          "short_desc": "Establece la penalización por repetición de palabras"
+        },
+        "/pres_penalty": {
+          "short_desc": "Establece la penalización por presencia de palabras nuevas"
+        },
+        "/reasoning": {
+          "short_desc": "Alterna el razonamiento interno en modelos compatibles"
+        },
+        "/effort": {
+          "short_desc": "Establece el nivel de esfuerzo de razonamiento del modelo"
+        },
+        "/thinking": {
+          "short_desc": "Alterna la visualización de los bloques de pensamiento"
+        },
+        "/thoughtstyle": {
+          "short_desc": "Establece el formato de prompt para desactivar razonamiento"
+        },
+        "/seed": {
+          "short_desc": "Establece la semilla aleatoria para resultados reproducibles"
+        },
+        "/stream": {
+          "short_desc": "Alterna la transmisión de respuestas en tiempo real"
+        },
+        "/system": {
+          "short_desc": "Establece un mensaje de sistema personalizado"
+        },
+        "/codeonly": {
+          "short_desc": "Activa el modo de generación exclusiva de código"
+        },
+        "/codeoff": {
+          "short_desc": "Desactiva el modo de generación exclusiva de código"
+        },
+        "/prompt": {
+          "short_desc": "Carga un prompt desde un archivo de texto"
+        },
+        "/save": {
+          "short_desc": "Guarda la última respuesta de chat en un archivo"
+        },
+        "/notemode": {
+          "short_desc": "Alterna el modo de notas para guardar respuestas"
+        },
+        "/trace": {
+          "short_desc": "Habilita o deshabilita opciones de depuración y traza"
+        },
+        "/debug": {
+          "short_desc": "Activa el modo de depuración o supervisa la memoria virtual"
+        },
+        "/reloadmacros": {
+          "short_desc": "Vuelve a cargar las definiciones de macros de ChatDSL"
+        },
+        "/script": {
+          "short_desc": "Ejecuta un archivo de script de ChatDSL con parámetros opcionales"
+        },
+        "/source": {
+          "short_desc": "Ejecuta un script de ChatDSL en la sesión actual interactiva"
+        },
+        "/profile": {
+          "short_desc": "Administra los perfiles de sesión de chat dinámicamente"
+        },
+        "/setdb": {
+          "short_desc": "Crea o selecciona una base de datos TinyDB"
+        },
+        "/dblist": {
+          "short_desc": "Muestra una lista de todas las bases de datos TinyDB"
+        },
+        "/searchdb": {
+          "short_desc": "Busca documentos en la base de datos seleccionada"
+        },
+        "/dblog": {
+          "short_desc": "Registra la última respuesta del chat en la base de datos"
+        },
+        "/dbprint": {
+          "short_desc": "Muestra el contenido completo de la base de datos seleccionada"
+        },
+        "/loadvar": {
+          "short_desc": "Carga el búfer de búsqueda o documentos en una variable"
+        },
+        "/savevar": {
+          "short_desc": "Guarda el contenido de una variable en un archivo"
+        },
+        "/setvar": {
+          "short_desc": "Establece una variable de script ChatDSL"
+        },
+        "!": {
+          "short_desc": "Busca y ejecuta un comando del historial"
+        },
+        "/run_safe": {
+          "short_desc": "Habilita el modo seguro para comandos de terminal (/run)"
+        },
+        "/run_unsafe": {
+          "short_desc": "Deshabilita el modo seguro para comandos de terminal (/run)"
+        }
       }
     }
   },
@@ -394,71 +494,201 @@
         "variable": "Variable"
       },
       "commands": {
-        "/help": { "short_desc": "Affiche ce message d'aide" },
-        "/model": { "short_desc": "Change le modèle actif ou affiche le modèle actuel" },
-        "/tool": { "short_desc": "Gère le mode outil et les boucles de contrôle de l'agent" },
-        "/file": { "short_desc": "Charge un fichier texte dans le cache" },
-        "/showfile": { "short_desc": "Affiche le contenu du cache de fichiers" },
-        "/clearfile": { "short_desc": "Vide le cache de fichiers" },
-        "/logging": { "short_desc": "Démarre ou arrête l'enregistrement de la session" },
-        "/mem": { "short_desc": "Affiche la taille des caches et des variables système" },
-        "/dump": { "short_desc": "Affiche le contenu des caches ou des variables" },
-        "/exit": { "short_desc": "Quitte la session active de ChatyBot" },
-        "/quit": { "short_desc": "Quitte la session active de ChatyBot" },
-        "/multiline": { "short_desc": "Bascule le mode de saisie multiligne" },
-        "/imagine": { "short_desc": "Génère une image à partir d'une description textuelle" },
-        "/run": { "short_desc": "Exécute une commande système dans le terminal local" },
-        "/echo": { "short_desc": "Affiche du texte à l'écran avec substitution de variables" },
-        "/filebank1": { "short_desc": "Gère le cache de fichiers 1" },
-        "/filebank2": { "short_desc": "Gère le cache de fichiers 2" },
-        "/filebank3": { "short_desc": "Gère le cache de fichiers 3" },
-        "/filebank4": { "short_desc": "Gère le cache de fichiers 4" },
-        "/filebank5": { "short_desc": "Gère le cache de fichiers 5" },
-        "/imagebank1": { "short_desc": "Gère le cache d'images 1" },
-        "/imagebank2": { "short_desc": "Gère le cache d'images 2" },
-        "/imagebank3": { "short_desc": "Gère le cache d'images 3" },
-        "/imagebank4": { "short_desc": "Gère le cache d'images 4" },
-        "/imagebank5": { "short_desc": "Gère le cache d'images 5" },
-        "/imagesize": { "short_desc": "Définit la résolution de l'image générée" },
-        "/imagequality": { "short_desc": "Définit la qualité de l'image générée" },
-        "/saveimage": { "short_desc": "Sauvegarde la dernière image générée" },
-        "/imagedir": { "short_desc": "Définit/affiche le répertoire de sauvegarde des images" },
-        "/listmodels": { "short_desc": "Liste tous les modèles disponibles dans la configuration" },
-        "/temp": { "short_desc": "Ajuste la température du modèle (créativité)" },
-        "/maxtokens": { "short_desc": "Définit le nombre maximal de tokens générés" },
-        "/top_p": { "short_desc": "Ajuste le paramètre de filtrage nucleus (top_p)" },
-        "/top_k": { "short_desc": "Définit le nombre de candidats à considérer (top_k)" },
-        "/freq_penalty": { "short_desc": "Ajuste la pénalité de fréquence pour éviter les répétitions" },
-        "/pres_penalty": { "short_desc": "Ajuste la pénalité de présence de nouveaux mots" },
-        "/reasoning": { "short_desc": "Active/désactive le raisonnement des modèles supportés" },
-        "/effort": { "short_desc": "Définit le niveau d'effort de raisonnement du modèle" },
-        "/thinking": { "short_desc": "Affiche ou masque les blocs de pensée internes" },
-        "/thoughtstyle": { "short_desc": "Définit le format de prompt pour désactiver le raisonnement" },
-        "/seed": { "short_desc": "Définit la graine de génération aléatoire" },
-        "/stream": { "short_desc": "Bascule l'affichage des réponses en temps réel" },
-        "/system": { "short_desc": "Définit une invite de système personnalisée" },
-        "/codeonly": { "short_desc": "Active la génération exclusive de code source" },
-        "/codeoff": { "short_desc": "Désactive la génération exclusive de code source" },
-        "/prompt": { "short_desc": "Charge une invite de prompt depuis un fichier" },
-        "/save": { "short_desc": "Sauvegarde la dernière réponse dans un fichier externe" },
-        "/notemode": { "short_desc": "Bascule le format de prise de notes lors de la sauvegarde" },
-        "/trace": { "short_desc": "Configure les options de traçage et débogage" },
-        "/debug": { "short_desc": "Active le débogage ou affiche l'état de la mémoire virtuelle" },
-        "/reloadmacros": { "short_desc": "Recharge les macros ChatDSL enregistrées" },
-        "/script": { "short_desc": "Exécute un script ChatDSL avec des paramètres" },
-        "/source": { "short_desc": "Exécute un script ChatDSL dans la session courante" },
-        "/profile": { "short_desc": "Gère dynamiquement les profils utilisateur du chatbot" },
-        "/setdb": { "short_desc": "Crée ou sélectionne une base de données TinyDB" },
-        "/dblist": { "short_desc": "Liste toutes les bases de données TinyDB actives" },
-        "/searchdb": { "short_desc": "Recherche dans la base de données sélectionnée" },
-        "/dblog": { "short_desc": "Enregistre la dernière réponse dans la base de données" },
-        "/dbprint": { "short_desc": "Affiche le contenu complet de la base de données sélectionnée" },
-        "/loadvar": { "short_desc": "Charge le tampon de recherche dans une variable" },
-        "/savevar": { "short_desc": "Sauvegarde le contenu d'une variable dans un fichier" },
-        "/setvar": { "short_desc": "Définit une variable globale de script ChatDSL" },
-        "!": { "short_desc": "Recherche et réexécute une commande de l'historique" },
-        "/run_safe": { "short_desc": "Active le mode sécurisé pour l'exécution shell (/run)" },
-        "/run_unsafe": { "short_desc": "Désactive le mode sécurisé pour l'exécution shell (/run)" }
+        "/help": {
+          "short_desc": "Affiche ce message d'aide"
+        },
+        "/model": {
+          "short_desc": "Change le modèle actif ou affiche le modèle actuel"
+        },
+        "/tool": {
+          "short_desc": "Gère le mode outil et les boucles de contrôle de l'agent"
+        },
+        "/file": {
+          "short_desc": "Charge un fichier texte dans le cache"
+        },
+        "/showfile": {
+          "short_desc": "Affiche le contenu du cache de fichiers"
+        },
+        "/clearfile": {
+          "short_desc": "Vide le cache de fichiers"
+        },
+        "/logging": {
+          "short_desc": "Démarre ou arrête l'enregistrement de la session"
+        },
+        "/mem": {
+          "short_desc": "Affiche la taille des caches et des variables système"
+        },
+        "/dump": {
+          "short_desc": "Affiche le contenu des caches ou des variables"
+        },
+        "/exit": {
+          "short_desc": "Quitte la session active de ChatyBot"
+        },
+        "/quit": {
+          "short_desc": "Quitte la session active de ChatyBot"
+        },
+        "/multiline": {
+          "short_desc": "Bascule le mode de saisie multiligne"
+        },
+        "/imagine": {
+          "short_desc": "Génère une image à partir d'une description textuelle"
+        },
+        "/run": {
+          "short_desc": "Exécute une commande système dans le terminal local"
+        },
+        "/echo": {
+          "short_desc": "Affiche du texte à l'écran avec substitution de variables"
+        },
+        "/filebank1": {
+          "short_desc": "Gère le cache de fichiers 1"
+        },
+        "/filebank2": {
+          "short_desc": "Gère le cache de fichiers 2"
+        },
+        "/filebank3": {
+          "short_desc": "Gère le cache de fichiers 3"
+        },
+        "/filebank4": {
+          "short_desc": "Gère le cache de fichiers 4"
+        },
+        "/filebank5": {
+          "short_desc": "Gère le cache de fichiers 5"
+        },
+        "/imagebank1": {
+          "short_desc": "Gère le cache d'images 1"
+        },
+        "/imagebank2": {
+          "short_desc": "Gère le cache d'images 2"
+        },
+        "/imagebank3": {
+          "short_desc": "Gère le cache d'images 3"
+        },
+        "/imagebank4": {
+          "short_desc": "Gère le cache d'images 4"
+        },
+        "/imagebank5": {
+          "short_desc": "Gère le cache d'images 5"
+        },
+        "/imagesize": {
+          "short_desc": "Définit la résolution de l'image générée"
+        },
+        "/imagequality": {
+          "short_desc": "Définit la qualité de l'image générée"
+        },
+        "/saveimage": {
+          "short_desc": "Sauvegarde la dernière image générée"
+        },
+        "/imagedir": {
+          "short_desc": "Définit/affiche le répertoire de sauvegarde des images"
+        },
+        "/listmodels": {
+          "short_desc": "Liste tous les modèles disponibles dans la configuration"
+        },
+        "/temp": {
+          "short_desc": "Ajuste la température du modèle (créativité)"
+        },
+        "/maxtokens": {
+          "short_desc": "Définit le nombre maximal de tokens générés"
+        },
+        "/top_p": {
+          "short_desc": "Ajuste le paramètre de filtrage nucleus (top_p)"
+        },
+        "/top_k": {
+          "short_desc": "Définit le nombre de candidats à considérer (top_k)"
+        },
+        "/freq_penalty": {
+          "short_desc": "Ajuste la pénalité de fréquence pour éviter les répétitions"
+        },
+        "/pres_penalty": {
+          "short_desc": "Ajuste la pénalité de présence de nouveaux mots"
+        },
+        "/reasoning": {
+          "short_desc": "Active/désactive le raisonnement des modèles supportés"
+        },
+        "/effort": {
+          "short_desc": "Définit le niveau d'effort de raisonnement du modèle"
+        },
+        "/thinking": {
+          "short_desc": "Affiche ou masque les blocs de pensée internes"
+        },
+        "/thoughtstyle": {
+          "short_desc": "Définit le format de prompt pour désactiver le raisonnement"
+        },
+        "/seed": {
+          "short_desc": "Définit la graine de génération aléatoire"
+        },
+        "/stream": {
+          "short_desc": "Bascule l'affichage des réponses en temps réel"
+        },
+        "/system": {
+          "short_desc": "Définit une invite de système personnalisée"
+        },
+        "/codeonly": {
+          "short_desc": "Active la génération exclusive de code source"
+        },
+        "/codeoff": {
+          "short_desc": "Désactive la génération exclusive de code source"
+        },
+        "/prompt": {
+          "short_desc": "Charge une invite de prompt depuis un fichier"
+        },
+        "/save": {
+          "short_desc": "Sauvegarde la dernière réponse dans un fichier externe"
+        },
+        "/notemode": {
+          "short_desc": "Bascule le format de prise de notes lors de la sauvegarde"
+        },
+        "/trace": {
+          "short_desc": "Configure les options de traçage et débogage"
+        },
+        "/debug": {
+          "short_desc": "Active le débogage ou affiche l'état de la mémoire virtuelle"
+        },
+        "/reloadmacros": {
+          "short_desc": "Recharge les macros ChatDSL enregistrées"
+        },
+        "/script": {
+          "short_desc": "Exécute un script ChatDSL avec des paramètres"
+        },
+        "/source": {
+          "short_desc": "Exécute un script ChatDSL dans la session courante"
+        },
+        "/profile": {
+          "short_desc": "Gère dynamiquement les profils utilisateur du chatbot"
+        },
+        "/setdb": {
+          "short_desc": "Crée ou sélectionne une base de données TinyDB"
+        },
+        "/dblist": {
+          "short_desc": "Liste toutes les bases de données TinyDB actives"
+        },
+        "/searchdb": {
+          "short_desc": "Recherche dans la base de données sélectionnée"
+        },
+        "/dblog": {
+          "short_desc": "Enregistre la dernière réponse dans la base de données"
+        },
+        "/dbprint": {
+          "short_desc": "Affiche le contenu complet de la base de données sélectionnée"
+        },
+        "/loadvar": {
+          "short_desc": "Charge le tampon de recherche dans une variable"
+        },
+        "/savevar": {
+          "short_desc": "Sauvegarde le contenu d'une variable dans un fichier"
+        },
+        "/setvar": {
+          "short_desc": "Définit une variable globale de script ChatDSL"
+        },
+        "!": {
+          "short_desc": "Recherche et réexécute une commande de l'historique"
+        },
+        "/run_safe": {
+          "short_desc": "Active le mode sécurisé pour l'exécution shell (/run)"
+        },
+        "/run_unsafe": {
+          "short_desc": "Désactive le mode sécurisé pour l'exécution shell (/run)"
+        }
       }
     }
   },
@@ -581,71 +811,201 @@
         "variable": "变量"
       },
       "commands": {
-        "/help": { "short_desc": "显示此帮助信息" },
-        "/model": { "short_desc": "切换当前模型或显示当前模型" },
-        "/tool": { "short_desc": "管理工具模式及智能体执行循环" },
-        "/file": { "short_desc": "将文本文件加载到缓冲区中" },
-        "/showfile": { "short_desc": "显示文件缓冲区内容" },
-        "/clearfile": { "short_desc": "清空文件缓冲区" },
-        "/logging": { "short_desc": "启动或停止聊天记录日志" },
-        "/mem": { "short_desc": "显示缓冲区和系统变量的大小" },
-        "/dump": { "short_desc": "打印缓冲区或变量的内容" },
-        "/exit": { "short_desc": "终止会话并退出程序" },
-        "/quit": { "short_desc": "终止会话并退出程序" },
-        "/multiline": { "short_desc": "切换多行输入模式" },
-        "/imagine": { "short_desc": "根据描述性文本生成图像" },
-        "/run": { "short_desc": "在本地 Shell 中执行系统命令" },
-        "/echo": { "short_desc": "在控制台输出文本（支持变量替换）" },
-        "/filebank1": { "short_desc": "管理文件库 1" },
-        "/filebank2": { "short_desc": "管理文件库 2" },
-        "/filebank3": { "short_desc": "管理文件库 3" },
-        "/filebank4": { "short_desc": "管理文件库 4" },
-        "/filebank5": { "short_desc": "管理文件库 5" },
-        "/imagebank1": { "short_desc": "管理图像库 1" },
-        "/imagebank2": { "short_desc": "管理图像库 2" },
-        "/imagebank3": { "short_desc": "管理图像库 3" },
-        "/imagebank4": { "short_desc": "管理图像库 4" },
-        "/imagebank5": { "short_desc": "管理图像库 5" },
-        "/imagesize": { "short_desc": "设置生成图像的分辨率" },
-        "/imagequality": { "short_desc": "设置生成图像的质量级别" },
-        "/saveimage": { "short_desc": "保存最后生成的图像" },
-        "/imagedir": { "short_desc": "设置或显示图像保存的默认目录" },
-        "/listmodels": { "short_desc": "列出配置文件中可用的模型" },
-        "/temp": { "short_desc": "调整模型输出的随机性（温度值）" },
-        "/maxtokens": { "short_desc": "设置单次生成的最大 Token 数量" },
-        "/top_p": { "short_desc": "调整核采样概率分布参数 (top_p)" },
-        "/top_k": { "short_desc": "设置生成时考虑的前 top_k 个最高概率候选词" },
-        "/freq_penalty": { "short_desc": "设置词频惩罚系数，避免词汇重复" },
-        "/pres_penalty": { "short_desc": "设置存在惩罚系数，引导模型涉及新话题" },
-        "/reasoning": { "short_desc": "开启或关闭支持模型的内部推理过程" },
-        "/effort": { "short_desc": "设置支持模型（如 o1 等）的推理努力程度" },
-        "/thinking": { "short_desc": "控制是否在输出中展示推理过程代码块" },
-        "/thoughtstyle": { "short_desc": "配置自动关闭推理的提示词模版格式" },
-        "/seed": { "short_desc": "设置随机种子以获取可重复结果" },
-        "/stream": { "short_desc": "切换是否流式输出生成响应" },
-        "/system": { "short_desc": "设置自定义的系统级指示 (System Prompt)" },
-        "/codeonly": { "short_desc": "启用纯代码输出模式（无任何额外解释）" },
-        "/codeoff": { "short_desc": "关闭纯代码输出模式" },
-        "/prompt": { "short_desc": "从指定文本文件中读取提示词" },
-        "/save": { "short_desc": "将最后一次的聊天生成内容保存至文件" },
-        "/notemode": { "short_desc": "切换是否以笔记格式保存内容" },
-        "/trace": { "short_desc": "配置详细的运行调试跟踪和分析选项" },
-        "/debug": { "short_desc": "进入调试模式或监测虚拟内存运行状态" },
-        "/reloadmacros": { "short_desc": "重新加载 ChatDSL 宏定义快捷键" },
-        "/script": { "short_desc": "运行携带参数的外部 ChatDSL 脚本" },
-        "/source": { "short_desc": "在当前交互式会话中直接运行外部脚本" },
-        "/profile": { "short_desc": "动态管理和切换用户的会话配置文件" },
-        "/setdb": { "short_desc": "创建或选择一个 TinyDB 数据库进行存取" },
-        "/dblist": { "short_desc": "列出当前目录下所有 TinyDB 数据库" },
-        "/searchdb": { "short_desc": "在当前选定数据库中检索全部文档" },
-        "/dblog": { "short_desc": "将最新的一轮回复存入当前选定数据库" },
-        "/dbprint": { "short_desc": "在终端中格式化并展示数据库内全部内容" },
-        "/loadvar": { "short_desc": "从搜索缓冲区或数据库载入文档内容到变量" },
-        "/savevar": { "short_desc": "将指定脚本变量的值保存至文件" },
-        "/setvar": { "short_desc": "定义或更新一个 ChatDSL 脚本变量" },
-        "!": { "short_desc": "从输入历史中搜索并再次运行指令" },
-        "/run_safe": { "short_desc": "为 Shell 外部命令执行开启防灾安全保护" },
-        "/run_unsafe": { "short_desc": "关闭外部 Shell 命令防灾保护并允许高危指令" }
+        "/help": {
+          "short_desc": "显示此帮助信息"
+        },
+        "/model": {
+          "short_desc": "切换当前模型或显示当前模型"
+        },
+        "/tool": {
+          "short_desc": "管理工具模式及智能体执行循环"
+        },
+        "/file": {
+          "short_desc": "将文本文件加载到缓冲区中"
+        },
+        "/showfile": {
+          "short_desc": "显示文件缓冲区内容"
+        },
+        "/clearfile": {
+          "short_desc": "清空文件缓冲区"
+        },
+        "/logging": {
+          "short_desc": "启动或停止聊天记录日志"
+        },
+        "/mem": {
+          "short_desc": "显示缓冲区和系统变量的大小"
+        },
+        "/dump": {
+          "short_desc": "打印缓冲区或变量的内容"
+        },
+        "/exit": {
+          "short_desc": "终止会话并退出程序"
+        },
+        "/quit": {
+          "short_desc": "终止会话并退出程序"
+        },
+        "/multiline": {
+          "short_desc": "切换多行输入模式"
+        },
+        "/imagine": {
+          "short_desc": "根据描述性文本生成图像"
+        },
+        "/run": {
+          "short_desc": "在本地 Shell 中执行系统命令"
+        },
+        "/echo": {
+          "short_desc": "在控制台输出文本（支持变量替换）"
+        },
+        "/filebank1": {
+          "short_desc": "管理文件库 1"
+        },
+        "/filebank2": {
+          "short_desc": "管理文件库 2"
+        },
+        "/filebank3": {
+          "short_desc": "管理文件库 3"
+        },
+        "/filebank4": {
+          "short_desc": "管理文件库 4"
+        },
+        "/filebank5": {
+          "short_desc": "管理文件库 5"
+        },
+        "/imagebank1": {
+          "short_desc": "管理图像库 1"
+        },
+        "/imagebank2": {
+          "short_desc": "管理图像库 2"
+        },
+        "/imagebank3": {
+          "short_desc": "管理图像库 3"
+        },
+        "/imagebank4": {
+          "short_desc": "管理图像库 4"
+        },
+        "/imagebank5": {
+          "short_desc": "管理图像库 5"
+        },
+        "/imagesize": {
+          "short_desc": "设置生成图像的分辨率"
+        },
+        "/imagequality": {
+          "short_desc": "设置生成图像的质量级别"
+        },
+        "/saveimage": {
+          "short_desc": "保存最后生成的图像"
+        },
+        "/imagedir": {
+          "short_desc": "设置或显示图像保存的默认目录"
+        },
+        "/listmodels": {
+          "short_desc": "列出配置文件中可用的模型"
+        },
+        "/temp": {
+          "short_desc": "调整模型输出的随机性（温度值）"
+        },
+        "/maxtokens": {
+          "short_desc": "设置单次生成的最大 Token 数量"
+        },
+        "/top_p": {
+          "short_desc": "调整核采样概率分布参数 (top_p)"
+        },
+        "/top_k": {
+          "short_desc": "设置生成时考虑的前 top_k 个最高概率候选词"
+        },
+        "/freq_penalty": {
+          "short_desc": "设置词频惩罚系数，避免词汇重复"
+        },
+        "/pres_penalty": {
+          "short_desc": "设置存在惩罚系数，引导模型涉及新话题"
+        },
+        "/reasoning": {
+          "short_desc": "开启或关闭支持模型的内部推理过程"
+        },
+        "/effort": {
+          "short_desc": "设置支持模型（如 o1 等）的推理努力程度"
+        },
+        "/thinking": {
+          "short_desc": "控制是否在输出中展示推理过程代码块"
+        },
+        "/thoughtstyle": {
+          "short_desc": "配置自动关闭推理的提示词模版格式"
+        },
+        "/seed": {
+          "short_desc": "设置随机种子以获取可重复结果"
+        },
+        "/stream": {
+          "short_desc": "切换是否流式输出生成响应"
+        },
+        "/system": {
+          "short_desc": "设置自定义的系统级指示 (System Prompt)"
+        },
+        "/codeonly": {
+          "short_desc": "启用纯代码输出模式（无任何额外解释）"
+        },
+        "/codeoff": {
+          "short_desc": "关闭纯代码输出模式"
+        },
+        "/prompt": {
+          "short_desc": "从指定文本文件中读取提示词"
+        },
+        "/save": {
+          "short_desc": "将最后一次的聊天生成内容保存至文件"
+        },
+        "/notemode": {
+          "short_desc": "切换是否以笔记格式保存内容"
+        },
+        "/trace": {
+          "short_desc": "配置详细的运行调试跟踪和分析选项"
+        },
+        "/debug": {
+          "short_desc": "进入调试模式或监测虚拟内存运行状态"
+        },
+        "/reloadmacros": {
+          "short_desc": "重新加载 ChatDSL 宏定义快捷键"
+        },
+        "/script": {
+          "short_desc": "运行携带参数的外部 ChatDSL 脚本"
+        },
+        "/source": {
+          "short_desc": "在当前交互式会话中直接运行外部脚本"
+        },
+        "/profile": {
+          "short_desc": "动态管理和切换用户的会话配置文件"
+        },
+        "/setdb": {
+          "short_desc": "创建或选择一个 TinyDB 数据库进行存取"
+        },
+        "/dblist": {
+          "short_desc": "列出当前目录下所有 TinyDB 数据库"
+        },
+        "/searchdb": {
+          "short_desc": "在当前选定数据库中检索全部文档"
+        },
+        "/dblog": {
+          "short_desc": "将最新的一轮回复存入当前选定数据库"
+        },
+        "/dbprint": {
+          "short_desc": "在终端中格式化并展示数据库内全部内容"
+        },
+        "/loadvar": {
+          "short_desc": "从搜索缓冲区或数据库载入文档内容到变量"
+        },
+        "/savevar": {
+          "short_desc": "将指定脚本变量的值保存至文件"
+        },
+        "/setvar": {
+          "short_desc": "定义或更新一个 ChatDSL 脚本变量"
+        },
+        "!": {
+          "short_desc": "从输入历史中搜索并再次运行指令"
+        },
+        "/run_safe": {
+          "short_desc": "为 Shell 外部命令执行开启防灾安全保护"
+        },
+        "/run_unsafe": {
+          "short_desc": "关闭外部 Shell 命令防灾保护并允许高危指令"
+        }
       }
     }
   },
@@ -768,71 +1128,517 @@
         "variable": "Variabili"
       },
       "commands": {
-        "/help": { "short_desc": "Mostra questo messaggio di aiuto" },
-        "/model": { "short_desc": "Cambia il modello attivo o mostra quello corrente" },
-        "/tool": { "short_desc": "Gestisce la modalità strumento e i cicli dell'agente autonomo" },
-        "/file": { "short_desc": "Carica un file di testo nel buffer" },
-        "/showfile": { "short_desc": "Mostra il contenuto del buffer dei file" },
-        "/clearfile": { "short_desc": "Svuota il buffer dei file" },
-        "/logging": { "short_desc": "Avvia o interrompe la registrazione della chat" },
-        "/mem": { "short_desc": "Mostra la dimensione dei buffer e delle variabili" },
-        "/dump": { "short_desc": "Stampa il contenuto di buffer o variabili" },
-        "/exit": { "short_desc": "Esci da ChatyBot in sicurezza" },
-        "/quit": { "short_desc": "Esci da ChatyBot in sicurezza" },
-        "/multiline": { "short_desc": "Alterna la modalità di input multilinea" },
-        "/imagine": { "short_desc": "Genera un'immagine da una descrizione testuale" },
-        "/run": { "short_desc": "Esegue un comando di sistema nel terminale locale" },
-        "/echo": { "short_desc": "Mostra il testo sullo schermo con supporto alle variabili" },
-        "/filebank1": { "short_desc": "Gestisce il banco di file 1" },
-        "/filebank2": { "short_desc": "Gestisce il banco di file 2" },
-        "/filebank3": { "short_desc": "Gestisce il banco di file 3" },
-        "/filebank4": { "short_desc": "Gestisce il banco di file 4" },
-        "/filebank5": { "short_desc": "Gestisce il banco di file 5" },
-        "/imagebank1": { "short_desc": "Gestisce il banco immagini 1" },
-        "/imagebank2": { "short_desc": "Gestisce il banco immagini 2" },
-        "/imagebank3": { "short_desc": "Gestisce il banco immagini 3" },
-        "/imagebank4": { "short_desc": "Gestisce il banco immagini 4" },
-        "/imagebank5": { "short_desc": "Gestisce il banco immagini 5" },
-        "/imagesize": { "short_desc": "Imposta la risoluzione per le immagini generate" },
-        "/imagequality": { "short_desc": "Imposta la qualità per le immagini generate" },
-        "/saveimage": { "short_desc": "Salva l'ultima immagine generata" },
-        "/imagedir": { "short_desc": "Imposta/mostra la directory predefinita di salvataggio immagini" },
-        "/listmodels": { "short_desc": "Elenca i modelli configurati nel file TOML" },
-        "/temp": { "short_desc": "Imposta il valore di temperatura del modello" },
-        "/maxtokens": { "short_desc": "Imposta il numero massimo di token generabili" },
-        "/top_p": { "short_desc": "Imposta il parametro nucleus top_p" },
-        "/top_k": { "short_desc": "Imposta il parametro top_k" },
-        "/freq_penalty": { "short_desc": "Imposta la penalità di frequenza del modello" },
-        "/pres_penalty": { "short_desc": "Imposta la penalità di presenza del modello" },
-        "/reasoning": { "short_desc": "Alterna la modalità di ragionamento interno per modelli supportati" },
-        "/effort": { "short_desc": "Imposta l'impegno di ragionamento (effort) del modello" },
-        "/thinking": { "short_desc": "Mostra o nasconde i blocchi di pensiero del modello" },
-        "/thoughtstyle": { "short_desc": "Imposta il prompt per disattivare il ragionamento" },
-        "/seed": { "short_desc": "Imposta il seed di generazione casuale" },
-        "/stream": { "short_desc": "Alterna lo streaming in tempo reale dei token" },
-        "/system": { "short_desc": "Imposta un messaggio di sistema personalizzato" },
-        "/codeonly": { "short_desc": "Abilita la generazione di solo codice senza spiegazioni" },
-        "/codeoff": { "short_desc": "Disabilita la generazione di solo codice" },
-        "/prompt": { "short_desc": "Carica un prompt da un file di testo" },
-        "/save": { "short_desc": "Salva l'ultima risposta ricevuta in un file" },
-        "/notemode": { "short_desc": "Alterna la formattazione a blocco note per i file salvati" },
-        "/trace": { "short_desc": "Configura le opzioni di tracciamento e debug del sistema" },
-        "/debug": { "short_desc": "Entra in modalità debug o monitora la memoria virtuale" },
-        "/reloadmacros": { "short_desc": "Ricarica le definizioni macro per ChatDSL" },
-        "/script": { "short_desc": "Esegue uno script ChatDSL passandogli parametri" },
-        "/source": { "short_desc": "Esegue uno script ChatDSL all'interno della sessione" },
-        "/profile": { "short_desc": "Gestisce e cambia il profilo della sessione corrente" },
-        "/setdb": { "short_desc": "Seleziona o crea un database TinyDB" },
-        "/dblist": { "short_desc": "Elenca tutti i database TinyDB configurati" },
-        "/searchdb": { "short_desc": "Cerca documenti all'interno del database corrente" },
-        "/dblog": { "short_desc": "Registra l'ultima conversazione sul database attivo" },
-        "/dbprint": { "short_desc": "Stampa tutto il contenuto del database a console" },
-        "/loadvar": { "short_desc": "Carica documenti o buffer di ricerca in una variabile" },
-        "/savevar": { "short_desc": "Salva il valore di una variabile in un file di testo" },
-        "/setvar": { "short_desc": "Definisce una variabile del ciclo script di ChatDSL" },
-        "!": { "short_desc": "Cerca e riavvia una istruzione dalla cronologia" },
-        "/run_safe": { "short_desc": "Abilita la modalità sicura per l'esecuzione shell (/run)" },
-        "/run_unsafe": { "short_desc": "Disabilita la modalità sicura per l'esecuzione shell (/run)" }
+        "/help": {
+          "short_desc": "Mostra questo messaggio di aiuto"
+        },
+        "/model": {
+          "short_desc": "Cambia il modello attivo o mostra quello corrente"
+        },
+        "/tool": {
+          "short_desc": "Gestisce la modalità strumento e i cicli dell'agente autonomo"
+        },
+        "/file": {
+          "short_desc": "Carica un file di testo nel buffer"
+        },
+        "/showfile": {
+          "short_desc": "Mostra il contenuto del buffer dei file"
+        },
+        "/clearfile": {
+          "short_desc": "Svuota il buffer dei file"
+        },
+        "/logging": {
+          "short_desc": "Avvia o interrompe la registrazione della chat"
+        },
+        "/mem": {
+          "short_desc": "Mostra la dimensione dei buffer e delle variabili"
+        },
+        "/dump": {
+          "short_desc": "Stampa il contenuto di buffer o variabili"
+        },
+        "/exit": {
+          "short_desc": "Esci da ChatyBot in sicurezza"
+        },
+        "/quit": {
+          "short_desc": "Esci da ChatyBot in sicurezza"
+        },
+        "/multiline": {
+          "short_desc": "Alterna la modalità di input multilinea"
+        },
+        "/imagine": {
+          "short_desc": "Genera un'immagine da una descrizione testuale"
+        },
+        "/run": {
+          "short_desc": "Esegue un comando di sistema nel terminale locale"
+        },
+        "/echo": {
+          "short_desc": "Mostra il testo sullo schermo con supporto alle variabili"
+        },
+        "/filebank1": {
+          "short_desc": "Gestisce il banco di file 1"
+        },
+        "/filebank2": {
+          "short_desc": "Gestisce il banco di file 2"
+        },
+        "/filebank3": {
+          "short_desc": "Gestisce il banco di file 3"
+        },
+        "/filebank4": {
+          "short_desc": "Gestisce il banco di file 4"
+        },
+        "/filebank5": {
+          "short_desc": "Gestisce il banco di file 5"
+        },
+        "/imagebank1": {
+          "short_desc": "Gestisce il banco immagini 1"
+        },
+        "/imagebank2": {
+          "short_desc": "Gestisce il banco immagini 2"
+        },
+        "/imagebank3": {
+          "short_desc": "Gestisce il banco immagini 3"
+        },
+        "/imagebank4": {
+          "short_desc": "Gestisce il banco immagini 4"
+        },
+        "/imagebank5": {
+          "short_desc": "Gestisce il banco immagini 5"
+        },
+        "/imagesize": {
+          "short_desc": "Imposta la risoluzione per le immagini generate"
+        },
+        "/imagequality": {
+          "short_desc": "Imposta la qualità per le immagini generate"
+        },
+        "/saveimage": {
+          "short_desc": "Salva l'ultima immagine generata"
+        },
+        "/imagedir": {
+          "short_desc": "Imposta/mostra la directory predefinita di salvataggio immagini"
+        },
+        "/listmodels": {
+          "short_desc": "Elenca i modelli configurati nel file TOML"
+        },
+        "/temp": {
+          "short_desc": "Imposta il valore di temperatura del modello"
+        },
+        "/maxtokens": {
+          "short_desc": "Imposta il numero massimo di token generabili"
+        },
+        "/top_p": {
+          "short_desc": "Imposta il parametro nucleus top_p"
+        },
+        "/top_k": {
+          "short_desc": "Imposta il parametro top_k"
+        },
+        "/freq_penalty": {
+          "short_desc": "Imposta la penalità di frequenza del modello"
+        },
+        "/pres_penalty": {
+          "short_desc": "Imposta la penalità di presenza del modello"
+        },
+        "/reasoning": {
+          "short_desc": "Alterna la modalità di ragionamento interno per modelli supportati"
+        },
+        "/effort": {
+          "short_desc": "Imposta l'impegno di ragionamento (effort) del modello"
+        },
+        "/thinking": {
+          "short_desc": "Mostra o nasconde i blocchi di pensiero del modello"
+        },
+        "/thoughtstyle": {
+          "short_desc": "Imposta il prompt per disattivare il ragionamento"
+        },
+        "/seed": {
+          "short_desc": "Imposta il seed di generazione casuale"
+        },
+        "/stream": {
+          "short_desc": "Alterna lo streaming in tempo reale dei token"
+        },
+        "/system": {
+          "short_desc": "Imposta un messaggio di sistema personalizzato"
+        },
+        "/codeonly": {
+          "short_desc": "Abilita la generazione di solo codice senza spiegazioni"
+        },
+        "/codeoff": {
+          "short_desc": "Disabilita la generazione di solo codice"
+        },
+        "/prompt": {
+          "short_desc": "Carica un prompt da un file di testo"
+        },
+        "/save": {
+          "short_desc": "Salva l'ultima risposta ricevuta in un file"
+        },
+        "/notemode": {
+          "short_desc": "Alterna la formattazione a blocco note per i file salvati"
+        },
+        "/trace": {
+          "short_desc": "Configura le opzioni di tracciamento e debug del sistema"
+        },
+        "/debug": {
+          "short_desc": "Entra in modalità debug o monitora la memoria virtuale"
+        },
+        "/reloadmacros": {
+          "short_desc": "Ricarica le definizioni macro per ChatDSL"
+        },
+        "/script": {
+          "short_desc": "Esegue uno script ChatDSL passandogli parametri"
+        },
+        "/source": {
+          "short_desc": "Esegue uno script ChatDSL all'interno della sessione"
+        },
+        "/profile": {
+          "short_desc": "Gestisce e cambia il profilo della sessione corrente"
+        },
+        "/setdb": {
+          "short_desc": "Seleziona o crea un database TinyDB"
+        },
+        "/dblist": {
+          "short_desc": "Elenca tutti i database TinyDB configurati"
+        },
+        "/searchdb": {
+          "short_desc": "Cerca documenti all'interno del database corrente"
+        },
+        "/dblog": {
+          "short_desc": "Registra l'ultima conversazione sul database attivo"
+        },
+        "/dbprint": {
+          "short_desc": "Stampa tutto il contenuto del database a console"
+        },
+        "/loadvar": {
+          "short_desc": "Carica documenti o buffer di ricerca in una variabile"
+        },
+        "/savevar": {
+          "short_desc": "Salva il valore di una variabile in un file di testo"
+        },
+        "/setvar": {
+          "short_desc": "Definisce una variabile del ciclo script di ChatDSL"
+        },
+        "!": {
+          "short_desc": "Cerca e riavvia una istruzione dalla cronologia"
+        },
+        "/run_safe": {
+          "short_desc": "Abilita la modalità sicura per l'esecuzione shell (/run)"
+        },
+        "/run_unsafe": {
+          "short_desc": "Disabilita la modalità sicura per l'esecuzione shell (/run)"
+        }
+      }
+    }
+  },
+  "ar": {
+    "aliases": {
+      "/مساعدة": "/help",
+      "/نموذج": "/model",
+      "/أداة": "/tool",
+      "/ملف": "/file",
+      "/سجل": "/logging",
+      "/ذاكرة": "/mem",
+      "/خروج": "/exit",
+      "/مسح_الملف": "/clearfile",
+      "/عرض_الملف": "/showfile",
+      "/متعدد_الأسطر": "/multiline",
+      "/تخيل": "/imagine",
+      "/شغل": "/run",
+      "/ترديد": "/echo",
+      "/مصدر": "/source",
+      "/سيناريو": "/script",
+      "/عرض_النماذج": "/listmodels",
+      "/نظام": "/system",
+      "/أقصى_توكن": "/maxtokens",
+      "/عقوبة_التكرار": "/freq_penalty",
+      "/عقوبة_الحضور": "/pres_penalty",
+      "/تفكير": "/reasoning",
+      "/جهد": "/effort",
+      "/عرض_التفكير": "/thinking",
+      "/نمط_التفكير": "/thoughtstyle",
+      "/مخزن_الملفات1": "/filebank1",
+      "/مخزن_الملفات2": "/filebank2",
+      "/مخزن_الملفات3": "/filebank3",
+      "/مخزن_الملفات4": "/filebank4",
+      "/مخزن_الملفات5": "/filebank5",
+      "/مخزن_الصور1": "/imagebank1",
+      "/مخزن_الصور2": "/imagebank2",
+      "/مخزن_الصور3": "/imagebank3",
+      "/مخزن_الصور4": "/imagebank4",
+      "/مخزن_الصور5": "/imagebank5",
+      "/تحميل_صورة": "/loadimage",
+      "/وضع_الملاحظات": "/notemode",
+      "/كود_فقط": "/codeonly",
+      "/إيقاف_الكود_فقط": "/codeoff",
+      "/حفظ": "/save",
+      "/حجم_الصورة": "/imagesize",
+      "/جودة_الصورة": "/imagequality",
+      "/مجلد_الصور": "/imagedir",
+      "/عرض_الصور": "/listimages",
+      "/عرض_معلومات_الصورة": "/showimage",
+      "/تشغيل_آمن": "/run_safe",
+      "/تشغيل_غير_آمن": "/run_unsafe",
+      "/تتبع": "/trace",
+      "/تصحيح": "/debug",
+      "/تحديد_قاعدة_البيانات": "/setdb",
+      "/قوائم_قواعد_البيانات": "/dblist",
+      "/بحث_قاعدة_البيانات": "/searchdb",
+      "/سجل_قاعدة_البيانات": "/dblog",
+      "/طباعة_قاعدة_البيانات": "/dbprint",
+      "/مستندات": "/documents",
+      "/إعادة_ترتيب": "/rerank"
+    },
+    "keywords": {
+      "حط": "set",
+      "بلش": "start",
+      "وقف": "stop",
+      "خلص": "end",
+      "شغال": "on",
+      "طافي": "off",
+      "عرض": "list",
+      "شغل": "enable",
+      "طفي": "disable",
+      "تلقائي": "auto",
+      "حلقة": "loop",
+      "وضع": "status",
+      "استخدم": "use",
+      "عدل": "edit",
+      "واطي": "low",
+      "وسط": "medium",
+      "عالي": "high",
+      "بلاش": "none",
+      "عادي": "standard"
+    },
+    "ui": {
+      "language_changed": "تغيرت اللغة لـ: {lang}",
+      "tool_enabled": "الأداة '{tool}' اشتغلت.",
+      "error_file_missing": "خطأ: الملف '{file}' مش موجود.",
+      "script_error_header": "خطأ بالسطر {line_num}: '{code}'",
+      "native_lang_display": "اللغة: عربي شامي",
+      "chat_prompt": "دردش --> ",
+      "active_model_info": "النموذج الشغال: {model} (الاسم المستعار: {alias})",
+      "goodbye_message": "مع السلامة! وشكراً على الدردشة.",
+      "goodbye_short": "مع السلامة!"
+    },
+    "help": {
+      "headers": {
+        "category": "الفئة",
+        "usage": "الاستخدام",
+        "parameters": "المعاملات",
+        "examples": "أمثلة",
+        "aliases": "الأسماء المستعارة",
+        "see_also": "انظر أيضاً",
+        "no_commands": "ما لقينا أوامر مطابقة لـ '{query}'. جرب /مساعدة لعرض كل الأوامر."
+      },
+      "categories": {
+        "file": "ملف",
+        "system": "نظام",
+        "tool": "أداة",
+        "image": "صورة",
+        "database": "قاعدة بيانات",
+        "rerank": "إعادة ترتيب",
+        "debug": "تصحيح",
+        "history": "السجل",
+        "input": "مدخلات",
+        "model": "نموذج",
+        "output": "مخرجات",
+        "script": "سيناريو",
+        "scripting": "برمجة",
+        "utility": "أدوات مساعدة",
+        "variable": "متغير"
+      },
+      "commands": {
+        "/help": {
+          "short_desc": "بيعرض معلومات المساعدة هاد"
+        },
+        "/model": {
+          "short_desc": "بيغير النموذج الشغال أو بيعرض الحالي"
+        },
+        "/tool": {
+          "short_desc": "بيتحكم بوضع الأدوات وحلقات عمل العميل الذكي"
+        },
+        "/file": {
+          "short_desc": "بيحمل ملف نصي على الذاكرة المؤقتة"
+        },
+        "/showfile": {
+          "short_desc": "بيعرض محتوى ملفات الذاكرة المؤقتة"
+        },
+        "/clearfile": {
+          "short_desc": "بيمسح ملفات الذاكرة المؤقتة"
+        },
+        "/logging": {
+          "short_desc": "بيبلش أو بيوقف تسجيل الدردشة"
+        },
+        "/mem": {
+          "short_desc": "بيعرض حجم الذاكرة المؤقتة والمتغيرات"
+        },
+        "/dump": {
+          "short_desc": "بيطبع محتوى الذاكرة المؤقتة أو المتغيرات"
+        },
+        "/exit": {
+          "short_desc": "بيطلع من البرنامج وبينهي الجلسة"
+        },
+        "/quit": {
+          "short_desc": "بيطلع من البرنامج وبينهي الجلسة"
+        },
+        "/multiline": {
+          "short_desc": "بيفعل أو بيلغي وضع الكتابة بأسطر متعددة"
+        },
+        "/imagine": {
+          "short_desc": "بيعمل صورة من الوصف المكتوب"
+        },
+        "/run": {
+          "short_desc": "بيشغل أمر نظام بالترمينال المحلي"
+        },
+        "/echo": {
+          "short_desc": "بيطبع نص على الشاشة مع تعويض المتغيرات"
+        },
+        "/filebank1": {
+          "short_desc": "بيتحكم بمخزن الملفات 1"
+        },
+        "/filebank2": {
+          "short_desc": "بيتحكم بمخزن الملفات 2"
+        },
+        "/filebank3": {
+          "short_desc": "بيتحكم بمخزن الملفات 3"
+        },
+        "/filebank4": {
+          "short_desc": "بيتحكم بمخزن الملفات 4"
+        },
+        "/filebank5": {
+          "short_desc": "بيتحكم بمخزن الملفات 5"
+        },
+        "/imagebank1": {
+          "short_desc": "بيتحكم بمخزن الصور 1"
+        },
+        "/imagebank2": {
+          "short_desc": "بيتحكم بمخزن الصور 2"
+        },
+        "/imagebank3": {
+          "short_desc": "بيتحكم بمخزن الصور 3"
+        },
+        "/imagebank4": {
+          "short_desc": "بيتحكم بمخزن الصور 4"
+        },
+        "/imagebank5": {
+          "short_desc": "بيتحكم بمخزن الصور 5"
+        },
+        "/imagesize": {
+          "short_desc": "بيحدد دقة الصورة اللي رح تنعمل"
+        },
+        "/imagequality": {
+          "short_desc": "بيحدد جودة الصورة اللي رح تنعمل"
+        },
+        "/saveimage": {
+          "short_desc": "بيحفظ آخر صورة انعملت"
+        },
+        "/imagedir": {
+          "short_desc": "بيحدد أو بيعرض مجلد حفظ الصور الافتراضي"
+        },
+        "/listmodels": {
+          "short_desc": "بيعرض كل النماذج المتاحة بالإعدادات"
+        },
+        "/temp": {
+          "short_desc": "بيحدد درجة حرارة النموذج (الإبداع)"
+        },
+        "/maxtokens": {
+          "short_desc": "بيحدد أقصى عدد توكن للمخرجات"
+        },
+        "/top_p": {
+          "short_desc": "بيحدد معامل top_p للنموذج"
+        },
+        "/top_k": {
+          "short_desc": "بيحدد معامل top_k للنموذج"
+        },
+        "/freq_penalty": {
+          "short_desc": "بيحدد عقوبة التكرار للنموذج"
+        },
+        "/pres_penalty": {
+          "short_desc": "بيحدد عقوبة التواجد للنموذج"
+        },
+        "/reasoning": {
+          "short_desc": "بيفعل أو بيعطل وضع التفكير للنماذج اللي بتدعمه"
+        },
+        "/effort": {
+          "short_desc": "بيحدد جهد التفكير للنموذج"
+        },
+        "/thinking": {
+          "short_desc": "بيعرض أو بيخفي خطوات تفكير النموذج"
+        },
+        "/thoughtstyle": {
+          "short_desc": "بيحدد نمط موجه تعطيل التفكير"
+        },
+        "/seed": {
+          "short_desc": "بيحدد البذرة العشوائية للتوليد"
+        },
+        "/stream": {
+          "short_desc": "بيفعل أو بيعطل عرض الرد بشكل مباشر"
+        },
+        "/system": {
+          "short_desc": "بيحدد رسالة نظام مخصصة"
+        },
+        "/codeonly": {
+          "short_desc": "بيفعل مخرجات الكود فقط بدون أي شرح"
+        },
+        "/codeoff": {
+          "short_desc": "بيوقف وضع الكود فقط"
+        },
+        "/prompt": {
+          "short_desc": "بيحمل موجه من ملف نصي"
+        },
+        "/save": {
+          "short_desc": "بيحفظ آخر رد بملف خارجي"
+        },
+        "/notemode": {
+          "short_desc": "بيفعل وضع الملاحظات عند الحفظ"
+        },
+        "/trace": {
+          "short_desc": "بيحدد خيارات التتبع والتصحيح بالنظام"
+        },
+        "/debug": {
+          "short_desc": "بيفعل وضع التصحيح أو بيعرض حالة الذاكرة الافتراضية"
+        },
+        "/reloadmacros": {
+          "short_desc": "بيعيد تحميل الماكرو لـ ChatDSL"
+        },
+        "/script": {
+          "short_desc": "بيشغل سيناريو ChatDSL مع معاملات"
+        },
+        "/source": {
+          "short_desc": "بيشغل سيناريو ChatDSL بنفس الجلسة"
+        },
+        "/profile": {
+          "short_desc": "بيتحكم وبيغير ملف التعريف للجلسة الحالية"
+        },
+        "/setdb": {
+          "short_desc": "بيحدد أو بيعمل قاعدة بيانات TinyDB جديدة"
+        },
+        "/dblist": {
+          "short_desc": "بيعرض كل قواعد بيانات TinyDB الشغالة"
+        },
+        "/searchdb": {
+          "short_desc": "بيبحث داخل قاعدة البيانات المحددة"
+        },
+        "/dblog": {
+          "short_desc": "بيحفظ آخر دردشة بقاعدة البيانات الشغالة"
+        },
+        "/dbprint": {
+          "short_desc": "بيطبع كل محتويات قاعدة البيانات الحالية"
+        },
+        "/loadvar": {
+          "short_desc": "بيحمل مستندات أو نتائج البحث بمتغير"
+        },
+        "/savevar": {
+          "short_desc": "بيحفظ قيمة متغير بملف نصي"
+        },
+        "/setvar": {
+          "short_desc": "بيحدد متغير لجلسة سيناريو ChatDSL"
+        },
+        "!": {
+          "short_desc": "بيبحث وبيشغل أمر من السجل"
+        },
+        "/run_safe": {
+          "short_desc": "بيفعل الوضع الآمن لتشغيل أوامر الشيل"
+        },
+        "/run_unsafe": {
+          "short_desc": "بيوقف الوضع الآمن لتشغيل أوامر الشيل"
+        }
       }
     }
   }

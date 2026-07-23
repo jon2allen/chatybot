@@ -5796,7 +5796,7 @@ def run():
     )
     parser.add_argument(
         "--lang",
-        help="UI and scripting language (english/en, spanish/es, french/fr, chinese/zh, italian/it)",
+        help="UI and scripting language (english/en, spanish/es, french/fr, chinese/zh, italian/it, arabic/ar)",
         default="en"
     )
     args, unknown = parser.parse_known_args()

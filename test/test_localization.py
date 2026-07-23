@@ -10,6 +10,12 @@ def test_localization_manager_init():
     mgr_it = LocalizationManager("it")
     assert mgr_it.locale == "it"
 
+    mgr_ar = LocalizationManager("levantine")
+    assert mgr_ar.locale == "ar"
+
+    mgr_ar_alias = LocalizationManager("apc")
+    assert mgr_ar_alias.locale == "ar"
+
     # Test fallback for unknown language
     mgr_unknown = LocalizationManager("german")
     assert mgr_unknown.locale == "en"
@@ -39,6 +45,12 @@ def test_resolve_command_alias():
     assert mgr_it.resolve_command("/aiuto") == "/help"
     assert mgr_it.resolve_command("/modello") == "/model"
     assert mgr_it.resolve_command("/strumento") == "/tool"
+
+    # Arabic resolving
+    mgr_ar = LocalizationManager("ar")
+    assert mgr_ar.resolve_command("/مساعدة") == "/help"
+    assert mgr_ar.resolve_command("/نموذج") == "/model"
+    assert mgr_ar.resolve_command("/أداة") == "/tool"
 
 def test_translate_script_preprocessor():
     # Spanish preprocessing
@@ -104,6 +116,22 @@ set model = "devstral_1"
 /echo "ciao"
 """
     assert mgr_it.translate_script(script_it) == expected_it
+
+    # Arabic preprocessing
+    mgr_ar = LocalizationManager("ar")
+    script_ar = """# Test script
+حط model = "devstral_1"
+/نموذج devstral_1
+/أداة auto on
+/ترديد "marhaba"
+"""
+    expected_ar = """# Test script
+set model = "devstral_1"
+/model devstral_1
+/tool auto on
+/echo "marhaba"
+"""
+    assert mgr_ar.translate_script(script_ar) == expected_ar
 
 @pytest.mark.anyio
 async def test_app_integration_localized_command():

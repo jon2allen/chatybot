@@ -10,7 +10,8 @@ class LocalizationManager:
         "es": "es", "spanish": "es",
         "fr": "fr", "french": "fr",
         "zh": "zh", "chinese": "zh",
-        "it": "it", "italian": "it"
+        "it": "it", "italian": "it",
+        "ar": "ar", "arabic": "ar", "levantine": "ar", "apc": "ar", "ajp": "ar"
     }
 
     def __init__(self, locale: str = "en"):
