@@ -43,6 +43,20 @@ def test_read_file_nonexistent():
     assert "Error reading file" in content
 
 
+def test_read_file_single_filename_non_windows():
+    """Test that a single filename in non-Windows assumes current dir (./<filename>)."""
+    filename = "temp_single_file_test.txt"
+    with open(filename, "w", encoding="utf-8") as f:
+        f.write("single file content")
+    try:
+        content = read_file(filename)
+        assert "1: single file content" in content
+    finally:
+        if os.path.exists(filename):
+            os.unlink(filename)
+
+
+
 def test_list_directory_basic():
     """Test list_directory returns a list of names when details=False."""
     with tempfile.TemporaryDirectory() as tmpdir:

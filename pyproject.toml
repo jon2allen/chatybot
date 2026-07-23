@@ -19,7 +19,8 @@ dependencies = [
     "EasyRerank>=0.2.2",
     "pyio-intercept>=0.1.0",
     "psutil",
-    "mcp"
+    "mcp",
+    "mathparse>=0.2.8"
 ]
 
 [project.scripts]

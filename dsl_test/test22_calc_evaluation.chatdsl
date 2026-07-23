@@ -1,0 +1,36 @@
+# Test Case 22: Math Evaluation via /calc Command
+# Description: Verify /calc functionality, script variable substitution, custom targets, protected variable CALC, word-based numbers, and conditional logic with calculated values.
+
+# 1. Basic math expression stored in default protected variable CALC
+/calc "5 + 15"
+/dump CALC
+
+# 2. Custom target script variable
+/calc "10 * 4" my_var
+/dump my_var
+
+# 3. Using variable substitution inside expression
+/setvar base_num 25
+/calc "${base_num} + 75" calc_sum
+/dump calc_sum
+
+# 4. Natural language / word-based expression evaluation
+/calc "fifty times two" word_calc
+/dump word_calc
+
+# 5. Math expression using previous calculation result
+/calc "${CALC} * 2" double_calc
+/dump double_calc
+
+# 6. In-place modification of existing script variable
+/setvar var1 5
+/calc "2 + ${var1}" var1
+/dump var1
+
+# 6. Verify protected variable behavior: /setvar cannot overwrite CALC
+/setvar CALC 999
+/dump CALC
+
+# 7. Check memory usage and dump all variables
+/mem detail
+/dump all
