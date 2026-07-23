@@ -60,7 +60,8 @@ def read_file(path: str) -> str:
             lines = f.readlines()
             numbered_lines = []
             for i, line in enumerate(lines, 1):
-                numbered_lines.append(f"{i}: {line.rstrip('\r\n')}\n")
+                stripped_line = line.rstrip('\r\n')
+                numbered_lines.append(f"{i}: {stripped_line}\n")
             return ''.join(numbered_lines)
     except Exception as e:
         return f"Error reading file: {e}"
