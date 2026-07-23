@@ -140,3 +140,22 @@ def test_help_localization():
     assert "Categoría: Archivo" in detail_fallback
     assert "Uso: /archivo <path>" in detail_fallback
     assert "Carga un archivo de texto en el búfer" in detail_fallback
+
+def test_cross_locale_fallback():
+    # Test that English/default locale can resolve and translate Chinese commands
+    mgr_en = LocalizationManager("en")
+    
+    # 1. Resolve Chinese command in English manager
+    assert mgr_en.resolve_command("/模型") == "/model"
+    assert mgr_en.resolve_command("/保存") == "/save"
+    assert mgr_en.resolve_command("/回显") == "/echo"
+    
+    # 2. Translate Chinese command string in English manager
+    assert mgr_en.translate_command_string("/模型 mistral_1") == "/model mistral_1"
+    assert mgr_en.translate_command_string("/保存 file.txt") == "/save file.txt"
+    assert mgr_en.translate_command_string("/回显 \"hello\"") == "/echo \"hello\""
+    
+    # 3. Translate script with Chinese keywords/commands in English manager
+    script = "设置 model = \"mistral_1\"\n/模型 mistral_1\n/保存 file.txt"
+    expected = "set model = \"mistral_1\"\n/model mistral_1\n/save file.txt"
+    assert mgr_en.translate_script(script) == expected

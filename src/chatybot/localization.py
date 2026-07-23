@@ -58,20 +58,36 @@ class LocalizationManager:
     def resolve_command(self, raw_cmd: str) -> str:
         """Resolve a localized slash command alias back to the canonical English command."""
         cmd_lower = raw_cmd.lower()
+        # First check the current locale
         locale_aliases = self.catalog.get(self.locale, {}).get("aliases", {})
-        return locale_aliases.get(cmd_lower, raw_cmd)
+        if cmd_lower in locale_aliases:
+            return locale_aliases[cmd_lower]
+        # Fallback to checking all locales
+        for loc, data in self.catalog.items():
+            aliases = data.get("aliases", {})
+            if cmd_lower in aliases:
+                return aliases[cmd_lower]
+        return raw_cmd
 
     def get_reverse_aliases(self) -> Dict[str, str]:
         """Return a mapping of localized commands and keywords to their English equivalents."""
         reverse_map = {}
-        locale_data = self.catalog.get(self.locale, {})
         
-        # Add keyword translations (e.g. "establecer" -> "set")
+        # 1. Add all translations from all locales as a baseline/fallback
+        for loc, data in self.catalog.items():
+            keywords = data.get("keywords", {})
+            for localized, canonical in keywords.items():
+                reverse_map[localized] = canonical
+            aliases = data.get("aliases", {})
+            for localized, canonical in aliases.items():
+                if localized != canonical:
+                    reverse_map[localized] = canonical
+                    
+        # 2. Override with current locale's specific definitions to preserve priority
+        locale_data = self.catalog.get(self.locale, {})
         keywords = locale_data.get("keywords", {})
         for localized, canonical in keywords.items():
             reverse_map[localized] = canonical
-            
-        # Add alias translations (e.g. "/ayuda" -> "/help")
         aliases = locale_data.get("aliases", {})
         for localized, canonical in aliases.items():
             if localized != canonical:
@@ -81,9 +97,6 @@ class LocalizationManager:
 
     def translate_script(self, script_content: str) -> str:
         """Preprocessing step: translates localized keywords and command verbs into canonical English."""
-        if self.locale == "en":
-            return script_content
-            
         reverse_map = self.get_reverse_aliases()
         if not reverse_map:
             return script_content
@@ -120,9 +133,6 @@ class LocalizationManager:
 
     def translate_command_string(self, cmd_str: str) -> str:
         """Translates a command string (command verb and its arguments) into canonical English."""
-        if self.locale == "en":
-            return cmd_str
-            
         parts = cmd_str.split(maxsplit=1)
         if not parts:
             return cmd_str
@@ -137,7 +147,10 @@ class LocalizationManager:
                 
         if len(parts) > 1:
             args = parts[1]
-            keywords_map = self.catalog.get(self.locale, {}).get("keywords", {})
+            keywords_map = {}
+            for loc, data in self.catalog.items():
+                keywords_map.update(data.get("keywords", {}))
+            keywords_map.update(self.catalog.get(self.locale, {}).get("keywords", {}))
             
             import re
             pattern = re.compile(r'("[^"\\]*(?:\\.[^"\\]*)*"|\'[^\'\\]*(?:\\.[^\'\\]*)*\'|\S+)')
