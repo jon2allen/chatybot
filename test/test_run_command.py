@@ -1056,6 +1056,36 @@ class TestRunCommandBehavior:
         assert "Description: List contents of a directory" in output
         assert "write_file" not in output
 
+    def test_gemma4_and_native_tool_call_extraction(self, app):
+        """Verifies parsing of Gemma 4 native tool call tags, FunctionGemma tags, unquoted keys, and Python dict structures"""
+        # Gemma 4 format with unquoted keys and <|tool_call> tags
+        text1 = '<|tool_call>call:run_command{command: "git status --porcelain"}<tool_call|>'
+        calls1 = app.extract_tool_calls(text1)
+        assert len(calls1) == 1
+        assert calls1[0]["tool"] == "run_command"
+        assert calls1[0]["arguments"] == {"command": "git status --porcelain"}
+
+        # Gemma 4 format with <|tool_call|> closing tag
+        text2 = '<|tool_call|>call:list_directory{path: "."}<|tool_call|>'
+        calls2 = app.extract_tool_calls(text2)
+        assert len(calls2) == 1
+        assert calls2[0]["tool"] == "list_directory"
+        assert calls2[0]["arguments"] == {"path": "."}
+
+        # FunctionGemma format with multiple args and Python booleans/None
+        text3 = '<start_function_call>call:find_files{path: ".", details: True, search_term: None}<end_function_call>'
+        calls3 = app.extract_tool_calls(text3)
+        assert len(calls3) == 1
+        assert calls3[0]["tool"] == "find_files"
+        assert calls3[0]["arguments"] == {"path": ".", "details": True, "search_term": None}
+
+        # Function call with parentheses
+        text4 = 'call:change_dir({path: "/home/user"})'
+        calls4 = app.extract_tool_calls(text4)
+        assert len(calls4) == 1
+        assert calls4[0]["tool"] == "change_dir"
+        assert calls4[0]["arguments"] == {"path": "/home/user"}
+
 
 
 

@@ -14,7 +14,8 @@
       "/multiline": "/multiline",
       "/imagine": "/imagine",
       "/run": "/run",
-      "/echo": "/echo"
+      "/echo": "/echo",
+      "/calc": "/calc"
     },
     "keywords": {
       "set": "set"
@@ -117,7 +118,9 @@
       "/imprimir_db": "/dbprint",
       "/documentos": "/documents",
       "/reordenar": "/rerank",
-      "/perfil": "/profile"
+      "/perfil": "/profile",
+      "/calcular": "/calc",
+      "/calc": "/calc"
     },
     "keywords": {
       "establecer": "set",
@@ -365,6 +368,9 @@
         "/setvar": {
           "short_desc": "Establece una variable de script ChatDSL"
         },
+        "/calc": {
+          "short_desc": "Evalúa expresiones matemáticas usando mathparse"
+        },
         "!": {
           "short_desc": "Busca y ejecuta un comando del historial"
         },
@@ -433,7 +439,9 @@
       "/journal_bd": "/dblog",
       "/imprimer_bd": "/dbprint",
       "/documents": "/documents",
-      "/reclasser": "/rerank"
+      "/reclasser": "/rerank",
+      "/calculer": "/calc",
+      "/calc": "/calc"
     },
     "keywords": {
       "definir": "set",
@@ -681,6 +689,9 @@
         "/setvar": {
           "short_desc": "Définit une variable globale de script ChatDSL"
         },
+        "/calc": {
+          "short_desc": "Évalue des expressions mathématiques à l'aide de mathparse"
+        },
         "!": {
           "short_desc": "Recherche et réexécute une commande de l'historique"
         },
@@ -751,7 +762,9 @@
       "/打印数据库": "/dbprint",
       "/文档源": "/documents",
       "/重排": "/rerank",
-      "/配置": "/profile"
+      "/配置": "/profile",
+      "/计算": "/calc",
+      "/calc": "/calc"
     },
     "keywords": {
       "设置": "set",
@@ -999,6 +1012,9 @@
         "/setvar": {
           "short_desc": "定义或更新一个 ChatDSL 脚本变量"
         },
+        "/calc": {
+          "short_desc": "使用 mathparse 计算数学表达式"
+        },
         "!": {
           "short_desc": "从输入历史中搜索并再次运行指令"
         },
@@ -1068,7 +1084,9 @@
       "/log_db": "/dblog",
       "/stampa_db": "/dbprint",
       "/documenti": "/documents",
-      "/riordina": "/rerank"
+      "/riordina": "/rerank",
+      "/calcola": "/calc",
+      "/calc": "/calc"
     },
     "keywords": {
       "imposta": "set",
@@ -1316,6 +1334,9 @@
         "/setvar": {
           "short_desc": "Definisce una variabile del ciclo script di ChatDSL"
         },
+        "/calc": {
+          "short_desc": "Valuta espressioni matematiche utilizzando mathparse"
+        },
         "!": {
           "short_desc": "Cerca e riavvia una istruzione dalla cronologia"
         },
@@ -1384,7 +1405,9 @@
       "/سجل_قاعدة_البيانات": "/dblog",
       "/طباعة_قاعدة_البيانات": "/dbprint",
       "/مستندات": "/documents",
-      "/إعادة_ترتيب": "/rerank"
+      "/إعادة_ترتيب": "/rerank",
+      "/احسب": "/calc",
+      "/calc": "/calc"
     },
     "keywords": {
       "حط": "set",
@@ -1631,6 +1654,9 @@
         },
         "/setvar": {
           "short_desc": "بيحدد متغير لجلسة سيناريو ChatDSL"
+        },
+        "/calc": {
+          "short_desc": "تقييم التعبيرات الرياضية باستخدام mathparse"
         },
         "!": {
           "short_desc": "بيبحث وبيشغل أمر من السجل"
