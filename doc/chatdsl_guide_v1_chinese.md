@@ -650,28 +650,28 @@ What are the key developments in ML in 2024?
 
 ```dsl
 # 列出可用的所有会话配置文件
-/profile list
+/配置 list
 
 # 加载并应用指定的配置文件
-/profile use my_profile
+/配置 use my_profile
 
 # 将当前的会话状态克隆另存为新配置文件
-/profile clone new_profile
+/配置 clone new_profile
 
 # 删除已有的配置文件
-/profile delete old_profile
+/配置 delete old_profile
 
 # 导出配置文件到指定位置
-/profile export my_profile export_path/
+/配置 export my_profile export_path/
 
 # 从硬盘位置导入已有的配置文件
-/profile import import_path/
+/配置 import import_path/
 
 # 显示当前激活的配置文件信息
-/profile show
+/配置 show
 
 # 在终端交互界面中直接编辑配置文件内容
-/profile edit
+/配置 edit
 ```
 
 ### 配置文件存储位置
@@ -824,7 +824,7 @@ src/chatybot/profiles/          # 系统预装的配置文件模板目录
 
 | 命令别名 | 类别 | 语法说明 | 功能说明描述 |
 |---------------|-----------|----------|-------------|
-| `/profile` | 配置 | `/profile <子命令> [参数]` | 会话配置文件的保存、恢复与 TUI 直接编辑管理 |
+| `/配置` | 配置 | `/配置 <子命令> [参数]` | 会话配置文件的保存、恢复与 TUI 直接编辑管理 |
 
 ### 终端历史查找指令
 
@@ -1066,9 +1066,9 @@ Write Python code to solve this problem.
 - `/dump [变量名|all]` - 导出打印出当前的脚本运行变量值
 
 ### 会话配置
-- `/profile list` - 列出本地可用的所有会话配置
-- `/profile use 配置名称` - 加载已有的配置
-- `/profile clone 新别名` - 复制当前状态到新配置下
+- `/配置 list` - 列出本地可用的所有会话配置
+- `/配置 use 配置名称` - 加载已有的配置
+- `/配置 clone 新别名` - 复制当前状态到新配置下
 
 ## 基础语法单元
 

@@ -650,28 +650,28 @@ What are the key developments in ML in 2024?
 
 ```dsl
 # Listar perfiles disponibles
-/profile list
+/perfil list
 
 # Usar un perfil
-/profile use mi_perfil
+/perfil use mi_perfil
 
 # Clonar sesión actual en un perfil nuevo
-/profile clone nuevo_perfil
+/perfil clone nuevo_perfil
 
 # Eliminar un perfil
-/profile delete perfil_viejo
+/perfil delete perfil_viejo
 
 # Exportar perfil
-/profile export mi_perfil ruta_exportacion/
+/perfil export mi_perfil ruta_exportacion/
 
 # Importar perfil
-/profile import ruta_importacion/
+/perfil import ruta_importacion/
 
 # Mostrar perfil actual
-/profile show
+/perfil show
 
 # Editar perfil en editor curses
-/profile edit
+/perfil edit
 ```
 
 ### Directorio de Perfiles
@@ -824,15 +824,15 @@ src/chatybot/profiles/          # Perfiles preestablecidos
 
 | Palabra Clave | Categoría | Sintaxis | Descripción |
 |---------------|-----------|----------|-------------|
-| `/profile` | Perfil | `/profile <subcmd> [args]` | Gestión de perfiles |
-| `/profile list` | Perfil | `/profile list` | Listar perfiles disponibles |
-| `/profile use` | Perfil | `/profile use <nombre>` | Cargar un perfil |
-| `/profile clone` | Perfil | `/profile clone <nombre>` | Clonar sesión actual |
-| `/profile delete` | Perfil | `/profile delete <nombre>` | Eliminar un perfil |
-| `/profile export` | Perfil | `/profile export <nombre> <ruta>` | Exportar perfil |
-| `/profile import` | Perfil | `/profile import <ruta>` | Importar perfil |
-| `/profile show` | Perfil | `/profile show` | Mostrar perfil actual |
-| `/profile edit` | Perfil | `/profile edit` | Editar perfil en TUI |
+| `/perfil` | Perfil | `/perfil <subcmd> [args]` | Gestión de perfiles |
+| `/perfil list` | Perfil | `/perfil list` | Listar perfiles disponibles |
+| `/perfil use` | Perfil | `/perfil use <nombre>` | Cargar un perfil |
+| `/perfil clone` | Perfil | `/perfil clone <nombre>` | Clonar sesión actual |
+| `/perfil delete` | Perfil | `/perfil delete <nombre>` | Eliminar un perfil |
+| `/perfil export` | Perfil | `/perfil export <nombre> <ruta>` | Exportar perfil |
+| `/perfil import` | Perfil | `/perfil import <ruta>` | Importar perfil |
+| `/perfil show` | Perfil | `/perfil show` | Mostrar perfil actual |
+| `/perfil edit` | Perfil | `/perfil edit` | Editar perfil en TUI |
 
 ### Comandos de Historial
 
@@ -1074,9 +1074,9 @@ Write Python code to solve this problem.
 - `/dump [var|all]` - Volcar variables
 
 ### Perfil
-- `/profile list` - Listar perfiles
-- `/profile use nombre` - Cargar perfil
-- `/profile clone nombre` - Clonar sesión
+- `/perfil list` - Listar perfiles
+- `/perfil use nombre` - Cargar perfil
+- `/perfil clone nombre` - Clonar sesión
 
 ## Elementos de Scripting
 

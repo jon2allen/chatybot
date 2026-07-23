@@ -116,7 +116,8 @@
       "/log_db": "/dblog",
       "/imprimir_db": "/dbprint",
       "/documentos": "/documents",
-      "/reordenar": "/rerank"
+      "/reordenar": "/rerank",
+      "/perfil": "/profile"
     },
     "keywords": {
       "establecer": "set",
@@ -749,7 +750,8 @@
       "/数据库日志": "/dblog",
       "/打印数据库": "/dbprint",
       "/文档源": "/documents",
-      "/重排": "/rerank"
+      "/重排": "/rerank",
+      "/配置": "/profile"
     },
     "keywords": {
       "设置": "set",
