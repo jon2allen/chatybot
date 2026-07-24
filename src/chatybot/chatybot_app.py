@@ -5379,6 +5379,8 @@ class ChatybotApp:
             expr_str = self.buffer_manager.replace_placeholders_legacy(expr_str, clear_unresolved=False)
 
             try:
+                from .tools.math_utils import ensure_mathparse_patched
+                ensure_mathparse_patched()
                 from mathparse import mathparse
                 try:
                     result = mathparse.parse(expr_str, language='ENG')

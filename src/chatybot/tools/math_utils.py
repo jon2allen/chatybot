@@ -8,16 +8,37 @@ from typing import Dict, Any, Optional
 from decimal import Decimal
 import mathparse.mathparse as mp
 
-# Patch mathparse.to_number to coerce float operands into Decimal,
-# preventing TypeError: unsupported operand type(s) for *: 'decimal.Decimal' and 'float'
-_orig_to_number = mp.to_number
-def _patched_to_number(val):
-    res = _orig_to_number(val)
-    if isinstance(res, float):
-        return Decimal(str(res))
-    return res
+def ensure_mathparse_patched():
+    """
+    Patches mathparse module:
+    1. Coerces float operands to Decimal in to_number to prevent mixed Decimal/float TypeErrors.
+    2. Fixes '^' operator precedence in to_postfix from 2 to 5 so exponentiation respects PEMDAS rules.
+    """
+    if getattr(mp, "_is_patched_for_chatybot", False):
+        return
 
-mp.to_number = _patched_to_number
+    _orig_to_number = mp.to_number
+    def _patched_to_number(val):
+        res = _orig_to_number(val)
+        if isinstance(res, float):
+            return Decimal(str(res))
+        return res
+    mp.to_number = _patched_to_number
+
+    _orig_to_postfix = mp.to_postfix
+    def _patched_to_postfix(tokens: list) -> list:
+        import inspect
+        src = inspect.getsource(_orig_to_postfix)
+        if "'^': 2" in src:
+            src_fixed = src.replace("'^': 2", "'^': 5")
+            exec(src_fixed, mp.__dict__)
+            return mp.to_postfix(tokens)
+        return _orig_to_postfix(tokens)
+
+    mp.to_postfix = _patched_to_postfix
+    mp._is_patched_for_chatybot = True
+
+ensure_mathparse_patched()
 
 
 def calculate(expression: str, target_variable: Optional[str] = None, app: Any = None) -> Dict[str, Any]:
