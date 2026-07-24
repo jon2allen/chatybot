@@ -88,3 +88,9 @@ def test_calculate_tool_mixed_decimal_float():
     assert res["status"] == "success"
     assert "4712.385" in str(res["result"])
 
+def test_calculate_tool_pi_and_exponentiation():
+    from chatybot.tools.math_utils import calculate
+    res = calculate("1/3 * pi * (15)^2 * 20")
+    assert res["status"] == "success"
+    assert "4712.38" in str(res["result"])
+
