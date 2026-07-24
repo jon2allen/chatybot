@@ -1086,6 +1086,52 @@ class TestRunCommandBehavior:
         assert calls4[0]["tool"] == "change_dir"
         assert calls4[0]["arguments"] == {"path": "/home/user"}
 
+    def test_xml_tool_call_extraction(self, app):
+        """Verifies parsing of XML-style <tool_call><function=...><parameter=...> syntax into canonical tool call dicts"""
+        raw_xml = '''
+Assistant: The user wants to find the average size of chatdsl files.
+<tool_call>
+<function=find_files>
+<parameter=pattern>
+*.chatdsl
+</parameter>
+<parameter=details>
+true
+</parameter>
+</function>
+</tool_call>
+'''
+        calls = app.extract_tool_calls(raw_xml)
+        assert len(calls) == 1
+        assert calls[0]["tool"] == "find_files"
+        assert calls[0]["arguments"] == {"pattern": "*.chatdsl", "details": True}
+
+    @pytest.mark.anyio
+    async def test_tool_translate_command(self, app):
+        """Verifies /tool translate command converts XML tool calls into canonical JSON string"""
+        raw_xml = '''
+<tool_call>
+<function=find_files>
+<parameter=pattern>*.chatdsl</parameter>
+<parameter=details>true</parameter>
+</function>
+</tool_call>
+'''
+        app.buffer_manager.set_script_var('LAST_COMPLETION', raw_xml)
+        import io, sys
+        captured = io.StringIO()
+        sys.stdout = captured
+        try:
+            res = await app.handle_escape_command("/tool translate")
+            assert res is True
+        finally:
+            sys.stdout = sys.__stdout__
+        
+        output = captured.getvalue()
+        assert '"tool": "find_files"' in output
+        assert '"pattern": "*.chatdsl"' in output
+        assert '"details": true' in output
+
 
 
 
