@@ -2593,12 +2593,81 @@ class ChatybotApp:
         """
         Extract all tool call JSON blocks from conversational text.
         Supports standard JSON blocks, Gemma 4 native tool call syntax (<|tool_call>call:tool_name{...}<tool_call|>),
-        FunctionGemma syntax, unquoted keys, and single-quoted dictionaries.
+        FunctionGemma syntax, XML-style function/parameter syntax (<tool_call><function=name><parameter=key>val</parameter></function></tool_call>),
+        unquoted keys, and single-quoted dictionaries.
         Returns a list of dictionaries for all valid tool calls found.
         """
         import json
         import re
         from typing import Any, Dict, List, Optional
+
+        def parse_xml_param_value(val_str: str) -> Any:
+            val_str = val_str.strip()
+            if not val_str:
+                return ""
+            if val_str.lower() == "true":
+                return True
+            if val_str.lower() == "false":
+                return False
+            if val_str.lower() in ("null", "none"):
+                return None
+            try:
+                if "." in val_str:
+                    return float(val_str)
+                return int(val_str)
+            except ValueError:
+                pass
+            if (val_str.startswith("{") and val_str.endswith("}")) or (val_str.startswith("[") and val_str.endswith("]")):
+                try:
+                    return json.loads(val_str)
+                except Exception:
+                    pass
+            if (val_str.startswith('"') and val_str.endswith('"')) or (val_str.startswith("'") and val_str.endswith("'")):
+                return val_str[1:-1]
+            return val_str
+
+        def extract_xml_tool_calls(s: str) -> List[Dict[str, Any]]:
+            xml_calls = []
+            fn_block_pattern = re.compile(
+                r'<function(?:[\s:=]+|[\s:=]*name\s*=\s*)["\']?([a-zA-Z0-9_\-\.]+)["\']?\s*>(.*?)</function[^>]*>',
+                re.IGNORECASE | re.DOTALL
+            )
+            for fn_match in fn_block_pattern.finditer(s):
+                tool_name = fn_match.group(1).strip()
+                if "." in tool_name:
+                    tool_name = tool_name.split(".")[-1]
+                fn_body = fn_match.group(2)
+                args = {}
+                param_pattern = re.compile(
+                    r'<parameter(?:[\s:=]+|[\s:=]*name\s*=\s*)["\']?([a-zA-Z0-9_\-\.]+)["\']?\s*(?:value=["\']?(.*?)["\']?)?\s*>(.*?)</parameter[^>]*>',
+                    re.IGNORECASE | re.DOTALL
+                )
+                param_matches = list(param_pattern.finditer(fn_body))
+                if param_matches:
+                    for p_match in param_matches:
+                        p_name = p_match.group(1).strip()
+                        p_val_attr = p_match.group(2)
+                        p_val_body = p_match.group(3)
+                        raw_val = p_val_attr if p_val_attr is not None else p_val_body
+                        args[p_name] = parse_xml_param_value(raw_val)
+                else:
+                    self_closing_pattern = re.compile(
+                        r'<parameter(?:[\s:=]+|[\s:=]*name\s*=\s*)["\']?([a-zA-Z0-9_\-\.]+)["\']?\s+value=["\']?(.*?)["\']?\s*/>',
+                        re.IGNORECASE
+                    )
+                    for sc_match in self_closing_pattern.finditer(fn_body):
+                        p_name = sc_match.group(1).strip()
+                        raw_val = sc_match.group(2)
+                        args[p_name] = parse_xml_param_value(raw_val)
+                xml_calls.append({"tool": tool_name, "arguments": args})
+            return xml_calls
+
+        # Clean JSON strings and helper procedures
+        xml_tool_calls = extract_xml_tool_calls(text)
+        tool_calls = []
+        for xcall in xml_tool_calls:
+            if xcall not in tool_calls:
+                tool_calls.append(xcall)
 
         def clean_json_string(s: str) -> str:
             # Remove single line comments starting with // or #, respecting quotes across newlines
@@ -2796,7 +2865,6 @@ class ChatybotApp:
             return None
 
         # Parse to find all tool calls in the text
-        tool_calls = []
         i = 0
         n = len(text)
         while i < n:
@@ -4759,6 +4827,27 @@ class ChatybotApp:
                     print("=========================================\n")
                 else:
                     print("No tools available or tool context could not be generated.")
+                return True
+            
+            elif subcmd in ("translate", "convert", "parse"):
+                # Translate any raw tool call format (XML, Gemma 4, JSON) into canonical JSON
+                raw_text = command.split(maxsplit=2)[2].strip() if len(parts) > 2 else (self.buffer_manager.get_script_var('LAST_COMPLETION') or "")
+                if not raw_text:
+                    print("No text or LAST_COMPLETION available to translate.")
+                    return True
+                
+                calls = self.extract_tool_calls(raw_text)
+                if not calls:
+                    print("No valid tool calls extracted from input text.")
+                    return True
+                
+                if len(calls) == 1:
+                    json_output = f"```json\n{json.dumps(calls[0], indent=2)}\n```"
+                else:
+                    json_output = f"```json\n{json.dumps(calls, indent=2)}\n```"
+                
+                print(json_output)
+                self.buffer_manager.set_script_var('LAST_TOOL_TRANSLATED', json.dumps(calls), allow_protected=True)
                 return True
             
             else:
