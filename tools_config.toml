@@ -165,3 +165,19 @@ optional = false
 type = "string"
 description = "The new text to replace the target block with"
 optional = false
+
+[tools.calculate]
+enabled = true
+description = "Safely evaluate a mathematical or natural language math expression using mathparse. Optionally save the calculated result into a script variable."
+module = "chatybot.tools.math_utils"
+function = "calculate"
+
+[tools.calculate.parameters.expression]
+type = "string"
+description = "The mathematical or natural language expression to evaluate (e.g. '100 * 4', 'fifty times two', '2 + ${val}')"
+optional = false
+
+[tools.calculate.parameters.target_variable]
+type = "string"
+description = "Optional script variable name to save the evaluation result into"
+optional = true

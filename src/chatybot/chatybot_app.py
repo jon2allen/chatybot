@@ -2550,6 +2550,24 @@ class ChatybotApp:
                             print(f"Main process updated CWD to: {os.getcwd()}")
                         except Exception as e:
                             print(f"Warning: Failed to update main process CWD to {path}: {e}")
+
+                # Automatically populate script_vars if tool call requested target_variable and tool succeeded
+                try:
+                    res_json = json.loads(result.stdout)
+                    if isinstance(res_json, dict) and res_json.get("status") == "success":
+                        inner_res = res_json.get("result", {})
+                        target_var = None
+                        val = None
+                        if isinstance(inner_res, dict):
+                            target_var = inner_res.get("target_variable")
+                            val = inner_res.get("result")
+                        if not target_var and tool_call and isinstance(tool_call, dict):
+                            target_var = tool_call.get("arguments", {}).get("target_variable")
+                        if target_var and val is not None:
+                            self.buffer_manager.set_script_var(str(target_var).strip(), val, allow_protected=True)
+                except Exception as e:
+                    pass
+
                 return result.stdout
             
         except Exception as e:

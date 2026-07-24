@@ -58,9 +58,19 @@ def load_configs(config_path: str) -> Dict[str, Any]:
             raise RuntimeError("The 'toml' package is required to parse tool definitions. Install with 'pip install toml'.")
 
 
+from decimal import Decimal
+
+class DecimalJSONEncoder(json.JSONEncoder):
+    """Custom JSON encoder to serialize Decimal objects without float precision loss."""
+    def default(self, obj):
+        if isinstance(obj, Decimal):
+            return int(obj) if obj % 1 == 0 else str(obj)
+        return super().default(obj)
+
+
 def write_json_response(data: Dict[str, Any], status_code: int = 0):
     """Prints a consistent JSON string to stdout and terminates."""
-    print(json.dumps(data, indent=2))
+    print(json.dumps(data, indent=2, cls=DecimalJSONEncoder))
     sys.exit(status_code)
 
 
@@ -129,6 +139,12 @@ def validate_and_route(invocation: Dict[str, Any], config: Dict[str, Any]) -> Tu
         if isinstance(shell_config, str):
             shell_config = shell_config.lower() in ("true", "1", "yes", "on")
         args["shell"] = bool(shell_config)
+
+    # Inject app context if function accepts it
+    import inspect
+    sig = inspect.signature(func)
+    if "app" in sig.parameters and invocation.get("app"):
+        args["app"] = invocation.get("app")
 
     return func, [], args
 

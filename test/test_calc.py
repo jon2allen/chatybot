@@ -53,3 +53,32 @@ async def test_execute_test22_chatdsl_script(app, capsys):
     assert "var1 = 7" in captured.out
     assert "Error: 'CALC' is a protected variable" in captured.out
 
+def test_calculate_tool_direct_result():
+    from chatybot.tools.math_utils import calculate
+    res = calculate("100 * 4")
+    assert res["status"] == "success"
+    assert res["result"] == 400
+    assert "target_variable" not in res
+    assert res["message"] == "Result: 400"
+
+def test_calculate_tool_word_expression():
+    from chatybot.tools.math_utils import calculate
+    res = calculate("fifty times two")
+    assert res["status"] == "success"
+    assert res["result"] == 100
+
+def test_calculate_tool_with_target_variable(app):
+    from chatybot.tools.math_utils import calculate
+    res = calculate("25 + 75", target_variable="total_sum", app=app)
+    assert res["status"] == "success"
+    assert res["result"] == 100
+    assert res["target_variable"] == "total_sum"
+    assert str(app.buffer_manager.get_script_var("total_sum")) == "100"
+
+def test_calculate_tool_invalid_expression():
+    from chatybot.tools.math_utils import calculate
+    res = calculate("100 * cat")
+    assert res["status"] == "error"
+    assert "Unsupported mathematical term" in res["message"]
+    assert res["result"] is None
+
