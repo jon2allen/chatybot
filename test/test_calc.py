@@ -82,3 +82,9 @@ def test_calculate_tool_invalid_expression():
     assert "Unsupported mathematical term" in res["message"]
     assert res["result"] is None
 
+def test_calculate_tool_mixed_decimal_float():
+    from chatybot.tools.math_utils import calculate
+    res = calculate("(1/3) * 3.14159 * 15 * 15 * 20")
+    assert res["status"] == "success"
+    assert "4712.385" in str(res["result"])
+

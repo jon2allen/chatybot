@@ -5,6 +5,20 @@ or store it in a target script variable.
 """
 
 from typing import Dict, Any, Optional
+from decimal import Decimal
+import mathparse.mathparse as mp
+
+# Patch mathparse.to_number to coerce float operands into Decimal,
+# preventing TypeError: unsupported operand type(s) for *: 'decimal.Decimal' and 'float'
+_orig_to_number = mp.to_number
+def _patched_to_number(val):
+    res = _orig_to_number(val)
+    if isinstance(res, float):
+        return Decimal(str(res))
+    return res
+
+mp.to_number = _patched_to_number
+
 
 def calculate(expression: str, target_variable: Optional[str] = None, app: Any = None) -> Dict[str, Any]:
     """
