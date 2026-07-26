@@ -108,5 +108,14 @@ async def test_calc_multilingual(app, capsys):
     await app.handle_escape_command('/calc "cinq plus trois" fre_test')
     assert str(app.buffer_manager.get_script_var("fre_test")) == "8"
 
+    # Test Arabic (ar -> Arabic preprocessor + Standard mathparse)
+    app.i18n.set_locale("ar")
+    await app.handle_escape_command('/calc "٥ زائد ١" ar_test')
+    assert str(app.buffer_manager.get_script_var("ar_test")) == "6"
+
+    await app.handle_escape_command('/calc "١٠ ضرب ٣" ar_test2')
+    assert str(app.buffer_manager.get_script_var("ar_test2")) == "30"
+
+
 
 

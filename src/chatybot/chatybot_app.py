@@ -5371,7 +5371,7 @@ class ChatybotApp:
             expr_str = self.buffer_manager.replace_placeholders_legacy(expr_str, clear_unresolved=False)
 
             try:
-                from .tools.math_utils import ensure_mathparse_patched
+                from .tools.math_utils import ensure_mathparse_patched, preprocess_multilingual_expression
                 ensure_mathparse_patched()
                 from mathparse import mathparse
                 lang_code = {
@@ -5381,6 +5381,7 @@ class ChatybotApp:
                     "zh": "CHI",
                     "it": "ITA"
                 }.get(self.i18n.locale, "ENG")
+                expr_str = preprocess_multilingual_expression(expr_str, self.i18n.locale)
                 try:
                     result = mathparse.parse(expr_str, language=lang_code)
                 except Exception:

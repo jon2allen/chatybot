@@ -41,6 +41,31 @@ def ensure_mathparse_patched():
 ensure_mathparse_patched()
 
 
+def preprocess_multilingual_expression(expr: str, locale: str) -> str:
+    """Preprocesses a mathematical expression for non-English locales (e.g. translating Arabic digits)."""
+    if locale == "ar":
+        # Eastern Arabic to Western Arabic digits
+        arabic_digits = {
+            '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4',
+            '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9'
+        }
+        for a_dig, w_dig in arabic_digits.items():
+            expr = expr.replace(a_dig, w_dig)
+        # Basic operators
+        terms = {
+            'زائد': '+',
+            'ناقص': '-',
+            'في': '*',
+            'ضرب': '*',
+            'على': '/',
+            'قسمة': '/',
+            'يساوي': '='
+        }
+        for term, op in terms.items():
+            expr = expr.replace(term, op)
+    return expr
+
+
 def calculate(expression: str, target_variable: Optional[str] = None, app: Any = None) -> Dict[str, Any]:
     """
     Evaluates a mathematical or natural language math expression.
@@ -63,14 +88,18 @@ def calculate(expression: str, target_variable: Optional[str] = None, app: Any =
 
         # Resolve language code based on application locale
         lang_code = "ENG"
+        locale = "en"
         if app and hasattr(app, "i18n"):
+            locale = app.i18n.locale
             lang_code = {
                 "en": "ENG",
                 "es": "ESP",
                 "fr": "FRE",
                 "zh": "CHI",
                 "it": "ITA"
-            }.get(app.i18n.locale, "ENG")
+            }.get(locale, "ENG")
+
+        expr_str = preprocess_multilingual_expression(expr_str, locale)
 
         # Try parsing with current language fallback
         try:
