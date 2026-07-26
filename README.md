@@ -63,6 +63,10 @@ chatybot is an interactive command-line tool that enables seamless communication
 - **Config Utility Views** - Interactive TUI for managing model configurations with vendor presets
 - **Native Array & Subscript Support** - Declare list variables with `[]` and access elements using index subscripts
 - **Extended Metadata Database Search** - `/searchdb` recursively searches through structured record metadata (JSON, lists, and dicts) for a target query
+- **Model Context Protocol (MCP)** - Dynamic host connecting to stdio-based MCP servers with robust session/lifecycle management
+- **Multilingual Support (i18n)** - Out-of-the-box support for Spanish, French, Chinese, Italian, and Levantine Arabic, featuring localized CLI strings and cross-locale command alias resolution
+- **Math Evaluation Engine** - Inline `/calc` calculation command and a patch-supported mathematical expression evaluation tool
+
 
 ---
 
@@ -280,6 +284,15 @@ Execute the script:
 ```bash
 /script setup.chatdsl
 ```
+
+#### **Multilingual ChatDSL Guides**
+To assist users in multiple languages, localized versions of the ChatDSL technical guide are available in the [doc](doc/) folder:
+- 📖 [Arabic ChatDSL Guide (العربية)](doc/chatdsl_guide_v1_arabic.md)
+- 📖 [Chinese ChatDSL Guide (简体中文)](doc/chatdsl_guide_v1_chinese.md)
+- 📖 [French ChatDSL Guide (Français)](doc/chatdsl_guide_v1_french.md)
+- 📖 [Italian ChatDSL Guide (Italiano)](doc/chatdsl_guide_v1_italian.md)
+- 📖 [Spanish ChatDSL Guide (Español)](doc/chatdsl_guide_v1_spanish.md)
+
 
 ### **ChatDSL Validation**
 For automated validation of `.chatdsl` files, use the `chatdsl_parse` utility:
@@ -707,6 +720,14 @@ chat --> Create a blog post outline about ${topic}
 ```
 
 ### Change log
+
+July 26th, 2026 (v0.7.0)
+------------------------
+- **Model Context Protocol (MCP)**: Native integration for hosts supporting stdio-based MCP servers with robust session/lifecycle management.
+- **Multilingual localization (i18n)**: Out-of-the-box support for Spanish, French, Chinese, Italian, and Levantine Arabic. Localizes help systems, REPL banners, goodbye exit lines, and supports cross-locale command alias resolution and script pre-translation.
+- **Math Evaluation Engine**: Features the `/calc` escape command and an interactive LLM calculation tool powered by custom precedence and Decimal coercion patches.
+- **Command Verb Validation**: Revamped prompt validation to safely identify unquoted/unescaped leading command verbs regardless of the active language, preventing accidental LLM traffic.
+- **Documentation**: Localized ChatDSL technical guides in Arabic, Chinese, French, Italian, and Spanish.
 
 July 16th, 2026 (v0.6.4)
 ------------------------
