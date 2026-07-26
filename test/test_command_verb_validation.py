@@ -1,0 +1,125 @@
+#!/usr/bin/env python3
+"""
+Unit tests for command verb validation in ChatybotApp.chat_completion
+"""
+
+import pytest
+import asyncio
+from unittest.mock import MagicMock, patch
+from src.chatybot.chatybot_app import ChatybotApp
+
+
+class TestCommandVerbValidation:
+    """Test suite for command verb validation logic"""
+
+    @pytest.fixture
+    def app(self):
+        """Create a ChatybotApp instance with clean state and mock dependencies"""
+        with patch('src.chatybot.chatybot_app.readline'), \
+             patch.object(ChatybotApp, 'load_input_history'), \
+             patch('src.chatybot.chatybot_app.ConfigManager') as mock_cfg:
+            cfg_instance = mock_cfg.return_value
+            cfg_instance.config = {
+                "models": {
+                    "test_model": {
+                        "name": "test-model",
+                        "base_url": "https://api.openai.com/v1",
+                        "api_key": "TEST_KEY"
+                    }
+                }
+            }
+            cfg_instance.active_model_alias = "test_model"
+            cfg_instance.get_model_config.return_value = cfg_instance.config["models"]["test_model"]
+            cfg_instance.system_message = ""
+            
+            application = ChatybotApp()
+            application.config_manager = cfg_instance
+            application.buffer_manager = MagicMock()
+            application.buffer_manager.replace_placeholders.side_effect = lambda p: (p, [])
+            application.buffer_manager.prompt_buffer = ""
+            application.buffer_manager.file_buffer = ""
+            
+            mock_client = MagicMock()
+            mock_completion = MagicMock()
+            mock_choice = MagicMock()
+            mock_choice.message.content = "OK response"
+            mock_choice.message.reasoning_content = None
+            mock_completion.choices = [mock_choice]
+            
+            async def mock_create(*args, **kwargs):
+                return mock_completion
+                
+            mock_client.chat.completions.create = mock_create
+            application.get_openai_client = MagicMock(return_value=mock_client)
+            yield application
+
+    def test_command_verb_unquoted_at_start(self, app, capsys):
+        """Test that unquoted command verbs at the start of prompt return error."""
+        unquoted_prompts = [
+            "help",
+            "help me write python code",
+            "model gpt4",
+            "file test.txt",
+            "run ls -la",
+            "save output.txt",
+            "debug payload",
+            "thoughtstyle gemma4",
+            "exit",
+            "loadimage1 cat.jpg",
+            "   help me",
+            "HELP ME",
+            "help: explain this"
+        ]
+        for prompt in unquoted_prompts:
+            result = asyncio.run(app.chat_completion(prompt))
+            assert result == "", f"Expected empty result for unquoted prompt: {prompt}"
+            captured = capsys.readouterr()
+            assert "Error command verb at beginning:" in captured.out
+
+    def test_command_verb_quoted_at_start(self, app, capsys):
+        """Test that quoted command verbs or prompts starting with quotes pass validation."""
+        quoted_prompts = [
+            '"help"',
+            "'help'",
+            '"help" me write code',
+            "'help' me write code",
+            '"help me write python code"',
+            "'help me write python code'",
+            '"model" is a concept',
+            '  "help me"',
+            '“help”',
+            '‘help’'
+        ]
+        for prompt in quoted_prompts:
+            result = asyncio.run(app.chat_completion(prompt))
+            assert result == "OK response", f"Expected success for quoted prompt: {prompt}"
+            captured = capsys.readouterr()
+            assert "Error command verb at beginning:" not in captured.out
+
+    def test_command_verb_as_non_first_word(self, app, capsys):
+        """Test that command verbs appearing later in the prompt (not as first word) are allowed."""
+        normal_prompts = [
+            "I need help with python",
+            "Please run this command",
+            "What model is this?",
+            "Show the file contents",
+            "Can you check the model performance?"
+        ]
+        for prompt in normal_prompts:
+            result = asyncio.run(app.chat_completion(prompt))
+            assert result == "OK response", f"Expected success for normal prompt: {prompt}"
+            captured = capsys.readouterr()
+            assert "Error command verb at beginning:" not in captured.out
+
+    def test_command_verb_substring_words(self, app, capsys):
+        """Test that words starting with command verb substrings (like helper, modeling) are allowed."""
+        substring_prompts = [
+            "helper function for math",
+            "modeling a new architecture",
+            "files in current folder"
+        ]
+        for prompt in substring_prompts:
+            result = asyncio.run(app.chat_completion(prompt))
+            assert result == "OK response", f"Expected success for substring prompt: {prompt}"
+            captured = capsys.readouterr()
+            assert "Error command verb at beginning:" not in captured.out
