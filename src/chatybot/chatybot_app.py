@@ -5374,8 +5374,15 @@ class ChatybotApp:
                 from .tools.math_utils import ensure_mathparse_patched
                 ensure_mathparse_patched()
                 from mathparse import mathparse
+                lang_code = {
+                    "en": "ENG",
+                    "es": "ESP",
+                    "fr": "FRE",
+                    "zh": "CHI",
+                    "it": "ITA"
+                }.get(self.i18n.locale, "ENG")
                 try:
-                    result = mathparse.parse(expr_str, language='ENG')
+                    result = mathparse.parse(expr_str, language=lang_code)
                 except Exception:
                     result = mathparse.parse(expr_str)
                 if result is None:

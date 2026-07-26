@@ -61,9 +61,20 @@ def calculate(expression: str, target_variable: Optional[str] = None, app: Any =
         if app and hasattr(app, "buffer_manager"):
             expr_str = app.buffer_manager.replace_placeholders_legacy(expr_str, clear_unresolved=False)
 
-        # Try parsing with ENG language fallback
+        # Resolve language code based on application locale
+        lang_code = "ENG"
+        if app and hasattr(app, "i18n"):
+            lang_code = {
+                "en": "ENG",
+                "es": "ESP",
+                "fr": "FRE",
+                "zh": "CHI",
+                "it": "ITA"
+            }.get(app.i18n.locale, "ENG")
+
+        # Try parsing with current language fallback
         try:
-            result = mathparse.parse(expr_str, language='ENG')
+            result = mathparse.parse(expr_str, language=lang_code)
         except Exception:
             result = mathparse.parse(expr_str)
 
