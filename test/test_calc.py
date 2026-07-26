@@ -88,9 +88,25 @@ def test_calculate_tool_mixed_decimal_float():
     assert res["status"] == "success"
     assert "4712.385" in str(res["result"])
 
+
 def test_calculate_tool_pi_and_exponentiation():
     from chatybot.tools.math_utils import calculate
     res = calculate("1/3 * pi * (15)^2 * 20")
     assert res["status"] == "success"
     assert "4712.38" in str(res["result"])
+
+
+@pytest.mark.anyio
+async def test_calc_multilingual(app, capsys):
+    # Test Spanish (es -> ESP)
+    app.i18n.set_locale("es")
+    await app.handle_escape_command('/calc "cinco + treinta" esp_test')
+    assert str(app.buffer_manager.get_script_var("esp_test")) == "35"
+
+    # Test French (fr -> FRE)
+    app.i18n.set_locale("fr")
+    await app.handle_escape_command('/calc "cinq plus trois" fre_test')
+    assert str(app.buffer_manager.get_script_var("fre_test")) == "8"
+
+
 
