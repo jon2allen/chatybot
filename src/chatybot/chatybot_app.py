@@ -807,7 +807,13 @@ class ChatybotApp:
                 match = re.match(r"^([a-zA-Z0-9_]+)", stripped_prompt)
                 if match:
                     first_word = match.group(1)
-                    if self.matcher.pattern.fullmatch(first_word):
+                    # Resolve localized commands to canonical English commands before matching
+                    canonical_word = first_word.lower()
+                    if hasattr(self, "i18n"):
+                        resolved = self.i18n.resolve_command("/" + canonical_word)
+                        if resolved.startswith("/"):
+                            canonical_word = resolved[1:]
+                    if self.matcher.pattern.fullmatch(canonical_word):
                         print(
                             f"Error command verb at beginning:  {first_word} - use escape / sequence or use quotes around command verb to send to LLM"
                         )
