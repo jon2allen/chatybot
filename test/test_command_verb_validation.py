@@ -123,3 +123,32 @@ class TestCommandVerbValidation:
             assert result == "OK response", f"Expected success for substring prompt: {prompt}"
             captured = capsys.readouterr()
             assert "Error command verb at beginning:" not in captured.out
+
+    def test_localized_command_verb_unquoted(self, app, capsys):
+        """Test that unquoted localized/translated command verbs (e.g. calcular, ayuda) return error."""
+        # Spanish locale testing
+        app.i18n.set_locale("es")
+        spanish_prompts = [
+            "calcular 2 + 2",
+            "ayuda",
+            "modelo gpt4"
+        ]
+        for prompt in spanish_prompts:
+            result = asyncio.run(app.chat_completion(prompt))
+            assert result == "", f"Expected empty result for Spanish unquoted prompt: {prompt}"
+            captured = capsys.readouterr()
+            assert "Error command verb at beginning:" in captured.out
+
+        # French locale testing
+        app.i18n.set_locale("fr")
+        french_prompts = [
+            "calculer 5 + 5",
+            "aide",
+            "modele claude"
+        ]
+        for prompt in french_prompts:
+            result = asyncio.run(app.chat_completion(prompt))
+            assert result == "", f"Expected empty result for French unquoted prompt: {prompt}"
+            captured = capsys.readouterr()
+            assert "Error command verb at beginning:" in captured.out
+
