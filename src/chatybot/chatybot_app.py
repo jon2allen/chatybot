@@ -77,6 +77,22 @@ class ChatybotApp:
         self.image_generator = ImageGenerator()
         self.image_manager = ImageManager()
         self.help_system = get_help_system()
+        self.matcher = PatternMatcher(
+            words=[
+                "help", "prompt", "file", "showfile", "clearfile",
+                "filebank", "filebank1", "filebank2", "filebank3", "filebank4", "filebank5",
+                "imagebank", "imagebank1", "imagebank2", "imagebank3", "imagebank4", "imagebank5",
+                "loadimage", "loadimage1", "loadimage2", "loadimage3", "loadimage4", "loadimage5",
+                "listimages", "showimage", "imagedir", "imagine", "saveimage", "imagesize", "imagequality",
+                "model", "listmodels", "logging", "save", "codeonly", "codeoff", "multiline",
+                "system", "temp", "maxtokens", "top_p", "top_k", "freq_penalty", "pres_penalty",
+                "reasoning", "effort", "thinking", "thoughtstyle", "seed", "echo", "def",
+                "reloadmacros", "calc", "stream", "script", "source", "profile", "quit", "exit",
+                "setdb", "dblist", "searchdb", "dblog", "dbprint", "documents", "rerank",
+                "loadvar", "savevar", "setvar", "notemode", "mem", "dump", "trace", "debug",
+                "run", "run_safe", "run_unsafe", "tool"
+            ]
+        )
 
         # Image generation settings
         self.image_size = "1024x1024"
@@ -251,24 +267,6 @@ class ChatybotApp:
         readline.set_completer(self.input_history_completer)
         readline.parse_and_bind("tab: complete")
         readline.set_completer_delims(" \t\n;") 
-        self.matcher =  PatternMatcher(
-                 words=[
-                    "help", "prompt", "file", "showfile", "clearfile",
-                    "filebank", "filebank1", "filebank2", "filebank3", "filebank4",
-                    "filebank5", "imagebank", "imagebank1", "imagebank2", "imagebank3",
-                    "imagebank4", "imagebank5", "model", "listmodels", "logging", "save",
-                    "codeonly", "codeoff", "multiline", "system", "temp", "maxtokens",
-                    "top_p", "top_k", "freq_penalty", "pres_penalty", "reasoning", "effort", "seed",
-                    "stream", "script", "source", "profile", "quit", "setdb", "dblist",
-                    "searchdb", "dblog", "dbprint", "loadvar", "savevar",
-                    "setvar", "notemode", "mem", "dump", "trace",
-                    "thinking", "echo", "def", "reloadmacros", "calc",
-                    "imagine", "imagesize", "imagequality", "saveimage", "imagedir",
-                    "listimages", "showimage", "loadimage", "documents", "rerank",
-                    "run", "run_safe", "run_unsafe", "tool"
-                    ]
-
-                 )
 
         # Register save and cleanup functions to be called on exit
         atexit.register(self.save_input_history)
@@ -803,20 +801,16 @@ class ChatybotApp:
         if isinstance(prompt, list):
             messages = copy.deepcopy(prompt)
         else:
-            if self.matcher.matches(prompt[:12]):
-                # Check if the matched word is in quotes - if so, allow it to be sent to LLM
-                match = self.matcher.pattern.search(prompt[:12])
+            stripped_prompt = prompt.lstrip()
+            # Check if prompt starts with a command verb without leading '/' or quotes
+            if stripped_prompt and not stripped_prompt.startswith(("/", '"', "'", "“", "‘")):
+                match = re.match(r"^([a-zA-Z0-9_]+)", stripped_prompt)
                 if match:
-                    matched_word = match.group()
-                    # Check if the word at the start of prompt is quoted
-                    if (prompt.startswith('"' + matched_word + '"') or 
-                        prompt.startswith("'" + matched_word + "'") or
-                        prompt.startswith('"' + matched_word) or
-                        prompt.startswith("'" + matched_word)):
-                        # Word is in quotes, allow it to be sent to LLM
-                        pass
-                    else:
-                        print( "Error command verb at beginning:  " + prompt[:9] + " - use escape / sequence or use quotes around command verb to send to LLM")
+                    first_word = match.group(1)
+                    if self.matcher.pattern.fullmatch(first_word):
+                        print(
+                            f"Error command verb at beginning:  {first_word} - use escape / sequence or use quotes around command verb to send to LLM"
+                        )
                         return ""
             # Replace placeholders in the prompt - returns (text, image_list)
             full_prompt, image_list = self.buffer_manager.replace_placeholders(prompt)
@@ -1505,8 +1499,6 @@ class ChatybotApp:
                     content = "".join(text_parts)
 
                 full_response += content
-
-                import re
 
                 if not self.show_thinking:
                     print_content = re.sub(
