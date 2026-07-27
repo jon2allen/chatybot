@@ -3895,7 +3895,7 @@ class ChatybotApp:
                         "devstral_1": 32768,
                         "devstral": 32768,
                         "nemotron": 128000,
-                        "kimi": 128000,
+                        "kimi": 262144,
                         "llama-3.3": 128000,
                         "llama-3.2": 128000,
                         "llama-3.1": 128000,
