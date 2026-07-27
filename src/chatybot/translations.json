@@ -123,6 +123,8 @@
       "/calc": "/calc"
     },
     "keywords": {
+      "informacion": "info",
+      "info": "info",
       "establecer": "set",
       "iniciar": "start",
       "terminar": "end",
@@ -444,6 +446,8 @@
       "/calc": "/calc"
     },
     "keywords": {
+      "informations": "info",
+      "info": "info",
       "definir": "set",
       "demarrer": "start",
       "fin": "end",
@@ -767,6 +771,8 @@
       "/calc": "/calc"
     },
     "keywords": {
+      "信息": "info",
+      "info": "info",
       "设置": "set",
       "启动": "start",
       "停止": "stop",
@@ -1089,6 +1095,8 @@
       "/calc": "/calc"
     },
     "keywords": {
+      "informazioni": "info",
+      "info": "info",
       "imposta": "set",
       "avvia": "start",
       "fine": "end",
@@ -1410,6 +1418,8 @@
       "/calc": "/calc"
     },
     "keywords": {
+      "معلومات": "info",
+      "info": "info",
       "حط": "set",
       "بلش": "start",
       "وقف": "stop",
