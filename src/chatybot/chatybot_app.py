@@ -3073,14 +3073,15 @@ class ChatybotApp:
                 break
             # Request next completion from LLM using the temporary history context
             current_loop = self.buffer_manager.get_script_var('AGENTIC_LOOP') or []
-            current_size = len(json.dumps(current_loop))
+            current_size_bytes = len(json.dumps(current_loop).encode('utf-8'))
+            current_size_kb = current_size_bytes / 1024
             if previous_loop_size > 0:
-                growth_pct = ((current_size - previous_loop_size) / previous_loop_size) * 100
+                growth_pct = ((current_size_bytes - previous_loop_size) / previous_loop_size) * 100
                 growth_str = f", growth: {growth_pct:+.1f}%"
             else:
                 growth_str = ""
-            print(f"[Turn {turn_count+1}/{max_turns}] Requesting next completion... (AGENTIC_LOOP size: {current_size} chars{growth_str})")
-            previous_loop_size = current_size
+            print(f"[Turn {turn_count+1}/{max_turns}] Requesting next completion... (AGENTIC_LOOP size: {current_size_kb:.2f} KB{growth_str})")
+            previous_loop_size = current_size_bytes
             current_response = await self.chat_completion(temp_history, stream=self.streaming_enabled)
             
         # Clean up loop state
