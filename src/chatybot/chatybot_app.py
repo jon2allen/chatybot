@@ -2931,6 +2931,7 @@ class ChatybotApp:
         current_response = last_completion
         turn_count = 0
         final_natural_language_response = ""
+        previous_loop_size = 0
 
         # If the last completion was natural language (not a tool call), request an initial tool call from the LLM
         if not self.extract_tool_call(current_response):
@@ -3070,9 +3071,16 @@ class ChatybotApp:
                 })
                 final_natural_language_response = await self.chat_completion(temp_history, stream=self.streaming_enabled)
                 break
-                
             # Request next completion from LLM using the temporary history context
-            print(f"[Turn {turn_count+1}/{max_turns}] Requesting next completion...")
+            current_loop = self.buffer_manager.get_script_var('AGENTIC_LOOP') or []
+            current_size = len(json.dumps(current_loop))
+            if previous_loop_size > 0:
+                growth_pct = ((current_size - previous_loop_size) / previous_loop_size) * 100
+                growth_str = f", growth: {growth_pct:+.1f}%"
+            else:
+                growth_str = ""
+            print(f"[Turn {turn_count+1}/{max_turns}] Requesting next completion... (AGENTIC_LOOP size: {current_size} chars{growth_str})")
+            previous_loop_size = current_size
             current_response = await self.chat_completion(temp_history, stream=self.streaming_enabled)
             
         # Clean up loop state
