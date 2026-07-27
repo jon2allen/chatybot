@@ -3850,22 +3850,29 @@ class ChatybotApp:
                 context_window = None
                 source = "Local Preset"
                 
-                vendor = model_config.get("vendor", "").lower()
-                if "openai" in vendor or "openrouter" in vendor:
+                try:
+                    client = self.get_openai_client(model_alias)
+                    model_info = client.models.retrieve(model_name)
+                    if hasattr(model_info, "context_window"):
+                        context_window = getattr(model_info, "context_window")
+                        source = "API (Live)"
+                    elif hasattr(model_info, "max_context_length"):
+                        context_window = getattr(model_info, "max_context_length")
+                        source = "API (Live)"
+                    elif isinstance(model_info, dict):
+                        context_window = model_info.get("context_window") or model_info.get("max_context_length")
+                        source = "API (Live)"
+                    elif hasattr(model_info, "extra_data") and isinstance(model_info.extra_data, dict):
+                        context_window = model_info.extra_data.get("context_window") or model_info.extra_data.get("max_context_length")
+                        source = "API (Live)"
+                except Exception:
+                    pass
+                
+                if context_window is not None and not isinstance(context_window, (int, float)):
                     try:
-                        client = self.get_openai_client(model_config)
-                        model_info = client.models.retrieve(model_name)
-                        if hasattr(model_info, "context_window"):
-                            context_window = getattr(model_info, "context_window")
-                            source = "API (Live)"
-                        elif isinstance(model_info, dict) and "context_window" in model_info:
-                            context_window = model_info["context_window"]
-                            source = "API (Live)"
-                        elif hasattr(model_info, "extra_data") and isinstance(model_info.extra_data, dict):
-                            context_window = model_info.extra_data.get("context_window")
-                            source = "API (Live)"
-                    except Exception:
-                        pass
+                        context_window = int(context_window)
+                    except (ValueError, TypeError):
+                        context_window = None
                 
                 # Fallback local presets
                 if not context_window:
@@ -3887,6 +3894,7 @@ class ChatybotApp:
                         "codestral-latest": 32768,
                         "devstral_1": 32768,
                         "devstral": 32768,
+                        "nemotron": 128000,
                         "gemma-2-9b-it": 8192,
                         "gemma-2-27b-it": 8192,
                         "qwen2.5-coder-32b-instruct": 128000,
