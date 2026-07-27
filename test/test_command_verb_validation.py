@@ -50,6 +50,11 @@ class TestCommandVerbValidation:
                 return mock_completion
                 
             mock_client.chat.completions.create = mock_create
+            
+            async def mock_retrieve(*args, **kwargs):
+                return MagicMock()
+            mock_client.models.retrieve = mock_retrieve
+            
             application.get_openai_client = MagicMock(return_value=mock_client)
             yield application
 
