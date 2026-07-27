@@ -4576,8 +4576,10 @@ class ChatybotApp:
                     
                     try:
                         # Determine editor
+                        config = self._load_tools_config()
+                        config_editor = config.get("config", {}).get("editor")
                         default_editor = "notepad.exe" if os.name == "nt" else "nano"
-                        editor = os.environ.get("EDITOR", default_editor)
+                        editor = config_editor or os.environ.get("EDITOR") or default_editor
                         
                         # Open the editor
                         print(f"Opening live prompt editor using '{editor}'...")

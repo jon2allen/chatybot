@@ -7,6 +7,7 @@ shell = true
 default_profile = ""
 profile_dir = "~/.config/chatybot/profiles"
 enable_profile_edit = true
+# editor = "nano"
 agentic_instructions = """
 IMPORTANT: You are executing in an autonomous, multi-turn tool-calling loop.
 Use tools ONLY when necessary to perform actions on the system or fetch external information. If the request can be answered directly using your general knowledge without tools, do not call any tools and answer directly in natural language.
