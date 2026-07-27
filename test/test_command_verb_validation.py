@@ -177,4 +177,13 @@ class TestCommandVerbValidation:
             captured = capsys.readouterr()
             assert "Error: Model alias 'nonexistent' not found in configuration." in captured.out
 
+        # Test localized /model info translation
+        app.i18n.set_locale("es")
+        translated_es = app.i18n.translate_command_string("/modelo informacion")
+        assert translated_es == "/model info"
+
+        app.i18n.set_locale("fr")
+        translated_fr = app.i18n.translate_command_string("/modele informations")
+        assert translated_fr == "/model info"
+
 
