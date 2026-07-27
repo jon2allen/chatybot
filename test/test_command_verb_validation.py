@@ -152,3 +152,24 @@ class TestCommandVerbValidation:
             captured = capsys.readouterr()
             assert "Error command verb at beginning:" in captured.out
 
+
+    @pytest.mark.anyio
+    async def test_model_info_command(self, app, capsys):
+        # Test /model info for the active model
+        await app.handle_escape_command("/model info")
+        captured = capsys.readouterr()
+        assert "Model Information: test-model (alias: test_model)" in captured.out
+        assert "Provider:        Unknown" in captured.out
+
+        # Test /model <alias> info for an existing model
+        await app.handle_escape_command("/model test_model info")
+        captured = capsys.readouterr()
+        assert "Model Information: test-model (alias: test_model)" in captured.out
+
+        # Test /model <alias> info for a nonexistent model
+        with patch.object(app.config_manager, "get_model_config", return_value=None):
+            await app.handle_escape_command("/model nonexistent info")
+            captured = capsys.readouterr()
+            assert "Error: Model alias 'nonexistent' not found in configuration." in captured.out
+
+

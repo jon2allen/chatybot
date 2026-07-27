@@ -3828,6 +3828,101 @@ class ChatybotApp:
             return True
 
         elif cmd == "/model":
+            is_info = False
+            model_alias = None
+            
+            if len(parts) >= 2:
+                p1 = parts[1].strip().lower()
+                if p1 == "info":
+                    is_info = True
+                    model_alias = self.config_manager.active_model_alias
+                elif len(parts) >= 3 and parts[2].strip().lower() == "info":
+                    is_info = True
+                    model_alias = parts[1].strip()
+            
+            if is_info:
+                model_config = self.config_manager.get_model_config(model_alias)
+                if not model_config:
+                    print(f"Error: Model alias '{model_alias}' not found in configuration.")
+                    return True
+                
+                model_name = model_config.get("name", "Unknown")
+                context_window = None
+                source = "Local Preset"
+                
+                vendor = model_config.get("vendor", "").lower()
+                if "openai" in vendor or "openrouter" in vendor:
+                    try:
+                        client = self.get_openai_client(model_config)
+                        model_info = client.models.retrieve(model_name)
+                        if hasattr(model_info, "context_window"):
+                            context_window = getattr(model_info, "context_window")
+                            source = "API (Live)"
+                        elif isinstance(model_info, dict) and "context_window" in model_info:
+                            context_window = model_info["context_window"]
+                            source = "API (Live)"
+                        elif hasattr(model_info, "extra_data") and isinstance(model_info.extra_data, dict):
+                            context_window = model_info.extra_data.get("context_window")
+                            source = "API (Live)"
+                    except Exception:
+                        pass
+                
+                # Fallback local presets
+                if not context_window:
+                    presets = {
+                        "gpt-4o": 128000,
+                        "gpt-4o-mini": 128000,
+                        "gpt-4": 8192,
+                        "gpt-4-turbo": 128000,
+                        "o1": 200000,
+                        "o1-mini": 128000,
+                        "o3-mini": 200000,
+                        "claude-3-5-sonnet": 200000,
+                        "claude-3-5-haiku": 200000,
+                        "claude-3-opus": 200000,
+                        "mistral-large-latest": 128000,
+                        "mistral-large-2512": 128000,
+                        "mistral-medium-latest": 32768,
+                        "mistral-small-latest": 32768,
+                        "codestral-latest": 32768,
+                        "devstral_1": 32768,
+                        "devstral": 32768,
+                        "gemma-2-9b-it": 8192,
+                        "gemma-2-27b-it": 8192,
+                        "qwen2.5-coder-32b-instruct": 128000,
+                        "deepseek-coder": 128000,
+                        "deepseek-chat": 128000,
+                        "deepseek-reasoner": 64000
+                    }
+                    for key, val in presets.items():
+                        if key in model_name.lower():
+                            context_window = val
+                            break
+                            
+                print(f"\nModel Information: {model_name} (alias: {model_alias})")
+                print("-" * (20 + len(model_name) + len(model_alias)))
+                print(f"Provider:        {model_config.get('vendor', 'Unknown')}")
+                print(f"Base URL:        {model_config.get('base_url', 'Default')}")
+                
+                if context_window:
+                    if context_window >= 1000:
+                        cw_str = f"{context_window:,} tokens ({context_window // 1000}k)"
+                    else:
+                        cw_str = f"{context_window} tokens"
+                    print(f"Context Limit:   {cw_str} [{source}]")
+                else:
+                    print(f"Context Limit:   Unknown")
+                
+                max_tok = model_config.get("max_tokens")
+                if max_tok:
+                    print(f"Max Output:      {max_tok} tokens (Configured)")
+                
+                temp = model_config.get("temperature")
+                if temp is not None:
+                    print(f"Temperature:     {temp}")
+                print("")
+                return True
+
             if len(parts) < 2:
                 # Show current model
                 model_config = self.config_manager.get_model_config(
