@@ -3852,7 +3852,7 @@ class ChatybotApp:
                 
                 try:
                     client = self.get_openai_client(model_alias)
-                    model_info = client.models.retrieve(model_name)
+                    model_info = await client.models.retrieve(model_name)
                     if hasattr(model_info, "context_window"):
                         context_window = getattr(model_info, "context_window")
                         source = "API (Live)"
