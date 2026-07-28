@@ -51,6 +51,16 @@ class ScriptVars(UserDict):
             super().__setitem__(key, value)
             return
 
+        if key == "CHAT_HISTORY" and isinstance(value, str):
+            try:
+                parsed = json.loads(value)
+                if isinstance(parsed, list):
+                    self.types[key] = "array"
+                    super().__setitem__(key, parsed)  # Store as native list
+                    return
+            except Exception:
+                pass
+
         str_val = str(value) if value is not None else ""
         super().__setitem__(key, str_val)
         
@@ -593,13 +603,22 @@ class BufferManager:
         for var_name, var_value in self.script_vars.items():
             var_type = self.script_vars.get_type(var_name)
             if var_type == "array":
-                num_items = len(var_value)
-                total_len = sum(len(str(x).encode('utf-8')) for x in var_value)
+                parsed = var_value
+                if isinstance(var_value, str):
+                    try:
+                        parsed = json.loads(var_value)
+                        if not isinstance(parsed, list):
+                            parsed = [parsed]
+                    except Exception:
+                        parsed = [var_value]
+                
+                num_items = len(parsed)
+                total_len = sum(len(str(x).encode('utf-8')) for x in parsed)
                 var_size = total_len / 1024
                 display_name = f"{var_name}[] ({num_items} items)"
                 print(f"{display_name:<20} {var_size:>10.2f}")
                 if detail:
-                    for idx, elem in enumerate(var_value):
+                    for idx, elem in enumerate(parsed):
                         elem_size = len(str(elem).encode('utf-8')) / 1024
                         elem_preview = str(elem).strip().replace('\n', ' ')[:40]
                         print(f"    [{idx}] {elem_size:.2f} KB | {elem_preview}")
