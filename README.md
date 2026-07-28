@@ -168,7 +168,7 @@ Active escape commands:
   /savevar <varname> <filename> - Save a variable's contents to a file.
   /setvar <varname> <value> - Set a script variable to a string.
   /mem - Show size of buffers and script variables.
-  /dump [varname|all] - Print content of buffers or script variables.
+  /dump [varname|varname[index]|all] - Print content of buffers, script variables, or specific array elements.
 
 Script-specific features:
   set <name> = <value> - Define a variable
@@ -242,7 +242,7 @@ chat --> Hello!      # Start a conversation
 | `/imagebank{1-5} clear` | Clear an image bank | `/imagebank1 clear` |
 | `/imagebank{1-5} show` | Show image bank info | `/imagebank1 show` |
 | `/mem` | Show memory size of buffers/variables | `/mem` |
-| `/dump [v\|all]` | Dump variables | `/dump all` |
+| `/dump [v\|v[idx]\|all]` | Dump variables or specific array elements | `/dump all` or `/dump arr[0]` |
 | `/quit` \| `/exit` | Exit the program | `/quit` |
 
 | **CLI Flag** | Description | Example |
