@@ -447,3 +447,21 @@ class TestArrayFeature:
         assert arr7[1] == "mary"
         assert arr7[2] == "Jon"
         assert arr7[3] == app.buffer_manager.script_vars["rpt"]
+
+    def test_json_string_array_subscript(self, app):
+        """Test subscripting of a JSON string array stored as a string."""
+        # Store as string, but type it as array (which mirrors /setvar behaviour)
+        app.buffer_manager.script_vars["json_array"] = '[{"name": "Alice"}, {"name": "Bob"}]'
+        # Force array type classification
+        app.buffer_manager.script_vars.types["json_array"] = "array"
+        
+        # Test subscript retrieval
+        item0 = app.buffer_manager.get_variable_value("json_array[0]")
+        assert "Alice" in item0
+        
+        item1 = app.buffer_manager.get_variable_value("json_array[1]")
+        assert "Bob" in item1
+        
+        # Test full resolution
+        all_items = app.buffer_manager.get_variable_value("json_array")
+        assert "{'name': 'Alice'}\n{'name': 'Bob'}" in all_items

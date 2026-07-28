@@ -337,10 +337,16 @@ class BufferManager:
                 raise KeyError(f"Variable '{var_name}' not found")
             var_value = self.script_vars[var_name]
             if self.script_vars.get_type(var_name) == "array":
+                parsed = var_value
+                if isinstance(var_value, str):
+                    try:
+                        parsed = json.loads(var_value)
+                    except Exception:
+                        pass
                 try:
-                    return str(var_value[index])
+                    return str(parsed[index])
                 except IndexError:
-                    raise IndexError(f"Index {index} out of bounds for array '{var_name}' of length {len(var_value)}")
+                    raise IndexError(f"Index {index} out of bounds for array '{var_name}' of length {len(parsed)}")
             else:
                 raise ValueError(f"Variable '{var_name}' is not an array")
         else:
@@ -351,7 +357,13 @@ class BufferManager:
                 raise KeyError(f"Variable '{name_with_subscript}' not found")
             var_value = self.script_vars[name_with_subscript]
             if self.script_vars.get_type(name_with_subscript) == "array":
-                return "\n".join(map(str, var_value))
+                parsed = var_value
+                if isinstance(var_value, str):
+                    try:
+                        parsed = json.loads(var_value)
+                    except Exception:
+                        pass
+                return "\n".join(map(str, parsed))
             return str(var_value)
 
     def resolve_text_variable(self, var_name: str) -> Optional[str]:
