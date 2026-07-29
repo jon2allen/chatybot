@@ -38,6 +38,26 @@ class ScriptVars(UserDict):
         }
         super().__init__(*args, **kwargs)
 
+    def _resolve_key(self, key: str) -> str:
+        if not isinstance(key, str):
+            return key
+        if key in self.data:
+            return key
+        key_upper = key.upper()
+        if key_upper in self.protected_vars and key_upper in self.data:
+            return key_upper
+        return key
+
+    def __getitem__(self, key: str):
+        return super().__getitem__(self._resolve_key(key))
+
+    def __contains__(self, key: str):
+        return super().__contains__(self._resolve_key(key))
+
+    def get_type(self, key: str) -> str:
+        """Returns the type identifier ('text', 'image', 'audio', 'array', 'json', 'base64')."""
+        return self.types.get(self._resolve_key(key), "text")
+
     def __setitem__(self, key: str, value: Any):
         if self._is_user_write and key in self.protected_vars:
             raise ValueError(f"'{key}' is a protected variable and cannot be modified.")
@@ -94,12 +114,9 @@ class ScriptVars(UserDict):
         self.types[key] = "text"
 
     def __delitem__(self, key: str):
-        super().__delitem__(key)
-        self.types.pop(key, None)
-
-    def get_type(self, key: str) -> str:
-        """Returns the type identifier ('text', 'image', 'audio', 'array', 'json', 'base64')."""
-        return self.types.get(key, "text")
+        resolved = self._resolve_key(key)
+        super().__delitem__(resolved)
+        self.types.pop(resolved, None)
 
 
 class BufferManager:
@@ -333,6 +350,19 @@ class BufferManager:
         if match:
             var_name = match.group(1)
             index = int(match.group(2))
+            if var_name.upper() == "CHAT_HISTORY":
+                chat_hist_val = self.resolve_text_variable("CHAT_HISTORY")
+                if chat_hist_val is not None:
+                    try:
+                        parsed = json.loads(chat_hist_val)
+                    except Exception:
+                        parsed = []
+                    try:
+                        return str(parsed[index])
+                    except IndexError:
+                        raise IndexError(f"Index {index} out of bounds for array '{var_name}' of length {len(parsed)}")
+                else:
+                    raise KeyError(f"Variable '{var_name}' not found")
             if var_name not in self.script_vars:
                 raise KeyError(f"Variable '{var_name}' not found")
             var_value = self.script_vars[var_name]
@@ -369,11 +399,11 @@ class BufferManager:
     def resolve_text_variable(self, var_name: str) -> Optional[str]:
         """Resolves text-safe variables only (blocks base64/multimodal data)."""
         # Special variables
-        if var_name == 'LAST_RESPONSE':
+        if var_name.upper() == 'LAST_RESPONSE':
             if self.app and self.app.chat_history:
                 return self.app.chat_history[-1][1]
             return ""
-        if var_name == 'CHAT_HISTORY':
+        if var_name.upper() == 'CHAT_HISTORY':
             if self.app and self.app.chat_history:
                 history_json = []
                 for p, r in self.app.chat_history:
@@ -478,6 +508,7 @@ class BufferManager:
                 continue
 
             # B. Array subscript replacement (supports braced `${key[index]}` and `{key[index]}`)
+            flags = re.IGNORECASE if key.upper() in self.script_vars.protected_vars or key.upper() in ('CHAT_HISTORY', 'LAST_RESPONSE') else 0
             sub_pat = rf"\$?\{{{re.escape(key)}\[(-?\d+)\]\}}"
             def replace_sub(m):
                 idx = m.group(1)
@@ -485,22 +516,22 @@ class BufferManager:
                     return self.get_variable_value(f"{key}[{idx}]")
                 except Exception:
                     return m.group(0)
-            text_prompt = re.sub(sub_pat, replace_sub, text_prompt)
+            text_prompt = re.sub(sub_pat, replace_sub, text_prompt, flags=flags)
 
             # C. Standard unbraced subscript ($key[index])
             unbraced_sub_pat = rf"\${re.escape(key)}\[(-?\d+)\]"
-            text_prompt = re.sub(unbraced_sub_pat, replace_sub, text_prompt)
+            text_prompt = re.sub(unbraced_sub_pat, replace_sub, text_prompt, flags=flags)
 
             # D. Base variable replacement (braced: `${key}` / `{key}`)
             braced_pat = rf"\$?\{{{re.escape(key)}\}}"
             def replace_base(m):
                 val = self.resolve_text_variable(key)
                 return str(val) if val is not None else m.group(0)
-            text_prompt = re.sub(braced_pat, replace_base, text_prompt)
+            text_prompt = re.sub(braced_pat, replace_base, text_prompt, flags=flags)
 
             # E. Standard unbraced variable ($key)
             unbraced_pat = rf"\${re.escape(key)}\b"
-            text_prompt = re.sub(unbraced_pat, replace_base, text_prompt)
+            text_prompt = re.sub(unbraced_pat, replace_base, text_prompt, flags=flags)
         
         if clear_unresolved:
             # 1. Braced subscript: ${var[idx]} or {var[idx]}
