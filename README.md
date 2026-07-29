@@ -360,6 +360,9 @@ Variables can be set manually, via search results, or in scripts:
 chat --> Hello ${username}, show me ${search_results}
 ```
 
+#### **Special & Protected Variable Case Insensitivity**
+All predefined system and protected variables (such as `CHAT_HISTORY`, `LAST_RESPONSE`, `AGENTIC_LOOP`, `TOOL_CONTEXT`, and `LAST_COMPLETION`) are case-insensitive. They can be referenced, subscripted, or dumped using any case variation (e.g. `${chat_history[0]}` or `/dump agentic_loop`). Custom user-defined script variables remain case-sensitive.
+
 #### **Quote and Escape Rules**
 * **Surrounding Quotes**: When setting a scalar variable (e.g., `/setvar name "Jon"` or `/setvar name = 'Jon'`), any surrounding single (`'`) or double (`"`) quotes are automatically stripped.
 * **Escaping is Forbidden**: The backslash escape character (`\`) is **strictly forbidden** inside variable values. Attempting to use `\` will result in an error. This prevents syntax errors inside the ChatDSL parser (which does not support backslash escapes).

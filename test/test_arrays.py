@@ -465,3 +465,63 @@ class TestArrayFeature:
         # Test full resolution
         all_items = app.buffer_manager.get_variable_value("json_array")
         assert "{'name': 'Alice'}\n{'name': 'Bob'}" in all_items
+
+    def test_chat_history_subscript_case_insensitive(self, app):
+        """Test case-insensitive subscripting and expansion of CHAT_HISTORY."""
+        app.chat_history = [
+            ("describe a merge sort", "Merge sort is..."),
+            ("give me novel variants", "Variants are...")
+        ]
+        
+        # Test get_variable_value for chat_history / CHAT_HISTORY case-insensitively
+        val_upper = app.buffer_manager.get_variable_value("CHAT_HISTORY[0]")
+        assert "describe a merge sort" in val_upper
+        assert "user" in val_upper
+
+        val_lower = app.buffer_manager.get_variable_value("chat_history[1]")
+        assert "Merge sort is..." in val_lower
+        assert "assistant" in val_lower
+
+        val_mixed = app.buffer_manager.get_variable_value("Chat_History[2]")
+        assert "give me novel variants" in val_mixed
+        assert "user" in val_mixed
+
+        # Test replace_placeholders case-insensitively
+        replaced_upper, _ = app.buffer_manager.replace_placeholders("${CHAT_HISTORY[0]}")
+        assert "describe a merge sort" in replaced_upper
+
+        replaced_lower, _ = app.buffer_manager.replace_placeholders("${chat_history[2]}")
+        assert "give me novel variants" in replaced_lower
+
+        replaced_mixed, _ = app.buffer_manager.replace_placeholders("${Chat_History[1]}")
+        assert "Merge sort is..." in replaced_mixed
+
+    def test_agentic_loop_subscript_case_insensitive(self, app):
+        """Test case-insensitive subscripting and expansion of AGENTIC_LOOP."""
+        # Initialize AGENTIC_LOOP in script variables
+        app.buffer_manager.script_vars['AGENTIC_LOOP'] = [
+            {"tool": "web_search", "status": "success"},
+            {"tool": "run_command", "status": "error"}
+        ]
+        
+        # Test case-insensitive lookup
+        val_upper = app.buffer_manager.get_variable_value("AGENTIC_LOOP[0]")
+        assert "web_search" in val_upper
+
+        val_lower = app.buffer_manager.get_variable_value("agentic_loop[1]")
+        assert "run_command" in val_lower
+
+        val_mixed = app.buffer_manager.get_variable_value("Agentic_Loop[0]")
+        assert "web_search" in val_mixed
+
+        # Test placeholder replacement case-insensitively
+        replaced_upper, _ = app.buffer_manager.replace_placeholders("${AGENTIC_LOOP[0]}")
+        assert "web_search" in replaced_upper
+
+        replaced_lower, _ = app.buffer_manager.replace_placeholders("${agentic_loop[1]}")
+        assert "run_command" in replaced_lower
+
+        replaced_mixed, _ = app.buffer_manager.replace_placeholders("${Agentic_Loop[0]}")
+        assert "web_search" in replaced_mixed
+
+
