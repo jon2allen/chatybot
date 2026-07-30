@@ -270,11 +270,21 @@ class ProfileManager:
 
         path = os.path.join(self.profile_dir, filename)
 
-        # Ensure version is set
+        # Ensure version is set and source_path is accurate
         if not profile.meta.version:
             profile = profile.with_updates(version=PROFILE_VERSION)
+        profile.meta.source_path = path
 
-        # Write to file
+        # If file exists on disk, detect and preserve any unmanaged custom content below the footer
+        if os.path.exists(path) and not profile.unmanaged_content:
+            try:
+                existing_profile = Profile.from_file(path)
+                if existing_profile.unmanaged_content:
+                    profile.unmanaged_content = existing_profile.unmanaged_content
+            except Exception:
+                pass
+
+        # Write to file (rebuilding managed header + footer + preserved custom content)
         content = profile.to_chatdsl()
         with open(path, "w", encoding="utf-8") as f:
             f.write(content)
