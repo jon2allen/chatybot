@@ -325,6 +325,16 @@ class ProfileTUI:
         self._select_initial_profile()
 
         while True:
+            h, w = stdscr.getmaxyx()
+            if h < 35 or w < 80:
+                self.draw_resize_warning(stdscr, req_h=35, req_w=80)
+                ch = stdscr.getch()
+                if ch == ord('q') or ch == ord('Q'):
+                    break
+                elif ch == curses.KEY_RESIZE:
+                    stdscr.clear()
+                continue
+
             self.draw_main_screen(stdscr)
             ch = stdscr.getch()
 
@@ -388,6 +398,26 @@ class ProfileTUI:
                 self.set_status("Profiles are saved individually when editing")
             elif ch == curses.KEY_RESIZE:
                 stdscr.clear()
+
+    def draw_resize_warning(self, stdscr, req_h: int = 35, req_w: int = 80):
+        """Draw screen prompt asking user to resize terminal if window is too small."""
+        stdscr.erase()
+        h, w = stdscr.getmaxyx()
+        msg1 = "Terminal size too small!"
+        msg2 = f"Current size: {w}x{h}"
+        msg3 = f"Please resize terminal to at least {req_w}x{req_h} (width x height)."
+        msg4 = "Press 'q' to quit."
+
+        if h >= 6:
+            if w > len(msg1) + 2:
+                stdscr.addstr(1, max(0, (w - len(msg1)) // 2), msg1, curses.color_pair(4) | curses.A_BOLD)
+            if w > len(msg2) + 2:
+                stdscr.addstr(2, max(0, (w - len(msg2)) // 2), msg2, curses.color_pair(3))
+            if w > len(msg3) + 2:
+                stdscr.addstr(4, max(0, (w - len(msg3)) // 2), msg3, curses.A_BOLD)
+            if w > len(msg4) + 2:
+                stdscr.addstr(5, max(0, (w - len(msg4)) // 2), msg4, curses.A_DIM)
+        stdscr.refresh()
 
     def draw_main_screen(self, stdscr):
         stdscr.erase()
@@ -741,7 +771,7 @@ class ProfileTUI:
         # Form field definitions
         # (key, label, y, value_x, field_width, f_type, options_list)
         fields = [
-            ("alias",            "Alias:",           2,  18, 24, "text", None),
+            ("alias",            "Alias:",           2,  20, 40, "text", None),
             ("name",             "Profile Type:",    3,  20, 40, "text", None),
             ("description",      "Description:",    4,  20, 40, "text", None),
 
