@@ -40,7 +40,7 @@ class TestProfileIntegration:
             await app.handle_profile_command(["list"])
             captured = capsys.readouterr()
             
-            assert "test.chatdsl" in captured.out
+            assert "test" in captured.out
             assert "Test desc" in captured.out
 
     @pytest.mark.anyio

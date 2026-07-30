@@ -1,9 +1,18 @@
 # @name: Explorer Mode
 # @description: Safe read-only exploration for browsing and querying
+# @version: 1.0
+# @author: ChatyBot
+# @created: 2026-01-01T00:00:00
 
 /model mistral_1
+/tool auto on
+/tool on
 /tool disable run_command
 /tool disable run_safe
 /tool disable run_unsafe
 /tool disable setdb
 /reasoning off
+/thinking off
+/effort none
+/temp 0.7
+/tool max_turns 25

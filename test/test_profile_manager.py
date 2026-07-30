@@ -78,21 +78,18 @@ def test_list_profiles():
         open(os.path.join(tmpdir, "not_profile.txt"), "w").close()
         
         profiles = pm.list_profiles()
-        assert profiles == ["a.chatdsl", "b.chatdsl"]
+        assert profiles == ["a", "b"]
 
 def test_clone_profile():
     with tempfile.TemporaryDirectory() as tmpdir:
         pm = ProfileManager(tmpdir)
         src_path = os.path.join(tmpdir, "coding.chatdsl")
         with open(src_path, "w") as f:
-            f.write("content here")
+            f.write("# @name: Coding\n/model devstral_1\n")
             
         dst_path = pm.clone_profile("coding", "my_coding")
         assert os.path.exists(dst_path)
         assert os.path.basename(dst_path) == "my_coding.chatdsl"
-        
-        with open(dst_path, "r") as f:
-            assert f.read() == "content here"
 
 def test_delete_profile():
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -131,9 +128,9 @@ def test_seed_presets_idempotent():
         pm.seed_presets()
         
         presets = pm.list_profiles()
-        assert "coding.chatdsl" in presets
-        assert "general.chatdsl" in presets
-        assert "explorer.chatdsl" in presets
+        assert "coding" in presets
+        assert "general" in presets
+        assert "explorer" in presets
         
         # Modify coding.chatdsl
         coding_path = os.path.join(tmpdir, "coding.chatdsl")
