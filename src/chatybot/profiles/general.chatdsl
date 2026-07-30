@@ -1,6 +1,13 @@
 # @name: General Assistance Profile
 # @description: Balanced assistance with restricted tool access
+# @version: 1.0
+# @author: ChatyBot
+# @created: 2026-01-01T00:00:00
 
 /model mistral_1
 /tool off
 /reasoning off
+/thinking off
+/effort none
+/temp 0.7
+/tool max_turns 25

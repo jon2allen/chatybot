@@ -870,14 +870,28 @@ class ProfileTUI:
                 win.refresh()
             elif ch in (10, 13):  # Enter
                 if preview_sel == 0:  # Save
+                    # Show immediate feedback in dialog
+                    win.addstr(win_h - 2, 2, " " * (win_w - 4))
+                    win.addstr(win_h - 2, 2, "Saving profile...", curses.color_pair(3) | curses.A_BOLD)
+                    win.refresh()
+                    curses.napms(200)
+
                     # Actually save the profile
                     result = self.apply_form_edits(profile_name, form_data, is_new, original_meta)
                     if not result:
                         # Show error in preview dialog before returning
-                        win.addstr(win_h - 2, 2, f"Error: {self.status_message}", curses.color_pair(4))
+                        win.addstr(win_h - 2, 2, " " * (win_w - 4))
+                        win.addstr(win_h - 2, 2, f"Error: {self.status_message}"[:win_w - 4], curses.color_pair(4))
                         win.refresh()
                         curses.napms(1500)  # Show error for 1.5 seconds
-                    return result
+                        return False
+                    
+                    # Show success feedback in dialog before closing
+                    win.addstr(win_h - 2, 2, " " * (win_w - 4))
+                    win.addstr(win_h - 2, 2, f"Successfully saved profile '{new_alias}'!", curses.color_pair(2) | curses.A_BOLD)
+                    win.refresh()
+                    curses.napms(400)  # Show success feedback briefly
+                    return True
                 else:  # Cancel
                     return False
             elif ch == 27:  # Escape
