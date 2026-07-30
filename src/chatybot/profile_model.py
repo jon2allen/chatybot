@@ -210,6 +210,9 @@ class ProfileMeta(BaseModel):
 # COMPLETE PROFILE MODEL
 # ============================================================================
 
+UNMANAGED_CONTENT_DELIMITER = "# ============================================================================\n# USER CUSTOM CONTENT / MESSAGES / VARIABLES BELOW THIS LINE\n# Note: Profile editor will not modify content below this line.\n# To edit this profile file directly: {}\n# ============================================================================"
+
+
 class Profile(BaseModel):
     """
     Complete chatybot profile model.
@@ -222,6 +225,9 @@ class Profile(BaseModel):
 
     config: ProfileConfig = Field(default_factory=ProfileConfig)
     """Runtime configuration settings."""
+
+    unmanaged_content: str = ""
+    """Custom user content below the unmanaged delimiter preserved without parsing."""
 
     # ------------------------------------------------------------------
     # Constructors
@@ -248,23 +254,23 @@ class Profile(BaseModel):
         if not resolved.exists():
             raise FileNotFoundError(f"Profile file not found: {path}")
 
-        meta = ProfileMeta()
-        config = ProfileConfig(model_alias="")
-
         with open(resolved, "r", encoding="utf-8") as f:
             content = f.read()
 
+        managed_part, unmanaged_part = cls._split_unmanaged_content(content)
+
         # Parse metadata from annotation comments
-        meta = cls._parse_meta(content)
+        meta = cls._parse_meta(managed_part)
+        meta.source_path = str(resolved)
 
         # Parse configuration from DSL commands
-        config = cls._parse_config(content)
+        config = cls._parse_config(managed_part)
 
         # Set default model if not specified
         if not config.model_alias:
             raise ValueError("Profile must specify a model alias with /model command")
 
-        return cls(meta=meta, config=config)
+        return cls(meta=meta, config=config, unmanaged_content=unmanaged_part)
 
     @classmethod
     def from_chatdsl_string(cls, chatdsl_str: str) -> "Profile":
@@ -277,13 +283,39 @@ class Profile(BaseModel):
         Returns:
             A validated Profile instance.
         """
-        meta = cls._parse_meta(chatdsl_str)
-        config = cls._parse_config(chatdsl_str)
+        managed_part, unmanaged_part = cls._split_unmanaged_content(chatdsl_str)
+        meta = cls._parse_meta(managed_part)
+        config = cls._parse_config(managed_part)
 
         if not config.model_alias:
             raise ValueError("Profile must specify a model alias with /model command")
 
-        return cls(meta=meta, config=config)
+        return cls(meta=meta, config=config, unmanaged_content=unmanaged_part)
+
+    @staticmethod
+    def _split_unmanaged_content(content: str) -> tuple[str, str]:
+        """Split content into managed header/commands and unmanaged custom body."""
+        delimiter = "# USER CUSTOM CONTENT / MESSAGES / VARIABLES BELOW THIS LINE"
+        if delimiter in content:
+            # Find the header block
+            idx = content.find(delimiter)
+            # Find the start of the delimiter section (e.g. preceding line)
+            start_idx = content.rfind("# ===", 0, idx)
+            if start_idx == -1:
+                start_idx = idx
+            
+            # Find the end of the delimiter header box
+            end_header = content.find("# ===", idx + len(delimiter))
+            if end_header != -1:
+                # Skip to end of line after final delimiter bar
+                newline_pos = content.find("\n", end_header)
+                if newline_pos != -1:
+                    managed = content[:start_idx]
+                    unmanaged = content[newline_pos + 1:]
+                    return managed, unmanaged
+            managed = content[:start_idx]
+            return managed, ""
+        return content, ""
 
     @staticmethod
     def _parse_meta(content: str) -> ProfileMeta:
@@ -533,6 +565,12 @@ class Profile(BaseModel):
         lines.append(f"/thinking {'on' if reasoning.show_thinking else 'off'}")
         if reasoning.effort != "none":
             lines.append(f"/effort {reasoning.effort}")
+
+        lines.append("")
+        path_str = self.meta.source_path or "<profile_file_path>"
+        lines.append(UNMANAGED_CONTENT_DELIMITER.format(path_str))
+        if self.unmanaged_content:
+            lines.append(self.unmanaged_content.rstrip("\n"))
 
         return "\n".join(lines) + "\n"
 

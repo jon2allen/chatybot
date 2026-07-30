@@ -738,6 +738,7 @@ class ProfileTUI:
             "reasoning": str(config.reasoning_settings.enabled).lower(),
             "show_thinking": str(config.reasoning_settings.show_thinking).lower(),
             "reasoning_effort": config.reasoning_settings.effort,
+            "_unmanaged_content": getattr(config, "_unmanaged_content", "") or (original_meta.source_path if original_meta and hasattr(original_meta, "unmanaged_content") else ""),
         }
 
         # Form field definitions
@@ -1026,9 +1027,11 @@ class ProfileTUI:
                 name=form_data["name"].strip(),
                 description=form_data["description"].strip(),
                 version=PROFILE_VERSION,
+                source_path=original_meta.source_path if original_meta else None,
             )
             
-            profile = Profile(meta=meta, config=config)
+            unmanaged = form_data.get("_unmanaged_content", "")
+            profile = Profile(meta=meta, config=config, unmanaged_content=unmanaged)
             chatdsl_content = profile.to_chatdsl()
             
         except Exception as e:
