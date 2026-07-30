@@ -5799,12 +5799,11 @@ class ChatybotApp:
                 print(f"Error showing profile: {e}")
 
         elif sub == "edit":
-            name = args[1] if len(args) >= 2 else ""
             try:
-                from .profile_editor import run_profile_editor
-                run_profile_editor(name, pm, self.config_manager)
+                from .profile_tui import run_profile_tui
+                run_profile_tui(profile_dir=pm.profile_dir, config_manager=self.config_manager)
             except Exception as e:
-                print(f"Error running profile editor: {e}")
+                print(f"Error running profile manager: {e}")
 
         else:
             print("Usage: /profile [list|use|clone|delete|export|import|show|edit] [args...]")
@@ -6290,10 +6289,12 @@ def run():
     if args.profile_edit is not None:
         tmp = ChatybotApp(config_path=args.config, lang=args.lang)
         tmp.initialize()
-        from .profile_manager import ProfileManager
-        from .profile_editor import run_profile_editor
-        pm = ProfileManager(getattr(tmp, 'profile_dir', '~/.config/chatybot/profiles'))
-        sys.exit(run_profile_editor(args.profile_edit, pm, tmp.config_manager))
+        from .profile_tui import run_profile_tui
+        sys.exit(run_profile_tui(
+            profile_dir=getattr(tmp, 'profile_dir', '~/.config/chatybot/profiles'),
+            config_manager=tmp.config_manager,
+            initial_profile=args.profile_edit if args.profile_edit else None
+        ))
 
     global app
     app = ChatybotApp(config_path=args.config, lang=args.lang)
