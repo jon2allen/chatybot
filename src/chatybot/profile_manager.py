@@ -514,8 +514,17 @@ class ProfileManager:
         if config.tool_settings.max_turns is not None:
             app.max_tool_turns = config.tool_settings.max_turns
 
-        # Disabled tools
-        app.disabled_tools = set(config.tool_settings.disabled_tools)
+        # Disabled tools (apply as false overrides in app.tool_overrides)
+        app.tool_overrides = getattr(app, "tool_overrides", {})
+        for disabled_pattern in config.tool_settings.disabled_tools:
+            import fnmatch
+            # If pattern contains glob wildcards (* or ?) and app context has tools, match all matching tools
+            if ("*" in disabled_pattern or "?" in disabled_pattern) and hasattr(app, "get_all_tool_names"):
+                for t_name in app.get_all_tool_names():
+                    if fnmatch.fnmatch(t_name.lower(), disabled_pattern.lower()):
+                        app.tool_overrides[t_name] = False
+            else:
+                app.tool_overrides[disabled_pattern] = False
 
         # Trace settings
         app.trace_tps = config.trace_settings.tps
