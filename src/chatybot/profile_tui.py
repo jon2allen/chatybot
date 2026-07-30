@@ -29,9 +29,9 @@ FIELD_HELP_DATABASE = {
         "tips": "Stored as <alias>.chatdsl in your profiles directory. Lowercase alphanumeric with underscores recommended.",
     },
     "name": {
-        "title": "Display Name",
-        "description": "Human-readable label for this profile displayed in profile lists and menus.",
-        "tips": "Example: 'Python Development', 'Safe Read-Only Explorer'.",
+        "title": "Profile Type",
+        "description": "Freeform label indicating the category or type of profile (e.g. 'Coding', 'General', 'Exploration').",
+        "tips": "Freeform text field. Example: 'Python Development', 'Safe Read-Only Explorer'.",
     },
     "description": {
         "title": "Profile Description",
@@ -425,7 +425,7 @@ class ProfileTUI:
         stdscr.addstr(2, 0, "-" * (w - 1), curses.A_DIM)
 
         # Table Headers
-        headers = f"  #   {'Name':<25} {'Model':<20} {'Description':<30}"
+        headers = f"  #   {'Alias':<18} {'Model':<16} {'Type':<18} {'Description':<25}"
         stdscr.addstr(3, 0, headers[:w-1], curses.A_BOLD)
         stdscr.addstr(4, 0, "  " + "-" * (w - 5), curses.A_DIM)
 
@@ -438,23 +438,20 @@ class ProfileTUI:
             y = 5 + idx
 
             # Formatting values
-            name_disp = meta.name if meta.name else name
+            alias_disp = name[:17]
+            type_disp = meta.name[:17] if meta.name else ""
+            desc_disp = meta.description[:24] if meta.description else ""
             model_disp = ""
-            desc_disp = meta.description[:28] if meta.description else ""
 
             # Try to get model from profile
             try:
                 profile = self.pm.load_profile(name)
-                model_disp = profile.config.model_alias
+                model_disp = profile.config.model_alias[:15]
             except Exception:
                 model_disp = "unknown"
 
-            # Truncation limits
-            name_disp = name_disp[:24]
-            model_disp = model_disp[:19]
-
             indicator = ">" if actual_idx == self.selected_idx else " "
-            row_text = f"{indicator}{actual_idx+1:<3} {name_disp:<25} {model_disp:<20} {desc_disp:<30}"
+            row_text = f"{indicator}{actual_idx+1:<3} {alias_disp:<18} {model_disp:<16} {type_disp:<18} {desc_disp:<25}"
 
             # Fill the rest of the row with spaces
             row_text = f"{row_text:<{w-1}}"[:w-1]
@@ -745,7 +742,7 @@ class ProfileTUI:
         # (key, label, y, value_x, field_width, f_type, options_list)
         fields = [
             ("alias",            "Alias:",           2,  18, 24, "text", None),
-            ("name",             "Display Name:",   3,  20, 30, "text", None),
+            ("name",             "Profile Type:",    3,  20, 40, "text", None),
             ("description",      "Description:",    4,  20, 40, "text", None),
 
             ("section_model",    "-- Model Settings --", 6, 4, 0, "header", None),
