@@ -210,7 +210,7 @@ class ProfileMeta(BaseModel):
 # COMPLETE PROFILE MODEL
 # ============================================================================
 
-UNMANAGED_CONTENT_DELIMITER = "# ============================================================================\n# USER CUSTOM CONTENT / MESSAGES / VARIABLES BELOW THIS LINE\n# Note: Profile editor will not modify content below this line.\n# To edit this profile file directly: {}\n# ============================================================================"
+UNMANAGED_CONTENT_DELIMITER = "# ============================================================================\n# USER CUSTOM CONTENT / MESSAGES / VARIABLES BELOW THIS LINE\n# Note: Profile editor will not modify content below this line.\n# Direct file location:\n# {}\n# ============================================================================"
 
 
 class Profile(BaseModel):
