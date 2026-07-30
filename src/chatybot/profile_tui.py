@@ -921,7 +921,8 @@ class ProfileTUI:
             True if user confirmed save, False otherwise
         """
         h, w = stdscr.getmaxyx()
-        win_h, win_w = 24, 70
+        win_h = min(36, h - 2)
+        win_w = min(82, w - 4)
         win_y = (h - win_h) // 2
         win_x = (w - win_w) // 2
         
