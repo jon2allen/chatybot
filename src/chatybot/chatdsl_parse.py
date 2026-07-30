@@ -180,7 +180,9 @@ class TParser:
         # Semantic reranking commands
         "documents", "rerank",
         # Shell execution commands
-        "run", "run_safe", "run_unsafe", "tool", "profile"
+        "run", "run_safe", "run_unsafe", "tool", "profile",
+        # Procedures & Local Scoping
+        "proc", "defproc", "endproc", "local"
     }
 
     def __init__(self, tokens: List[Token], verbose: bool = False):

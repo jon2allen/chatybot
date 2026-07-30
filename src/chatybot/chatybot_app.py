@@ -90,9 +90,14 @@ class ChatybotApp:
                 "reloadmacros", "calc", "stream", "script", "source", "profile", "quit", "exit",
                 "setdb", "dblist", "searchdb", "dblog", "dbprint", "documents", "rerank",
                 "loadvar", "savevar", "setvar", "notemode", "mem", "dump", "trace", "debug",
-                "run", "run_safe", "run_unsafe", "tool"
+                "run", "run_safe", "run_unsafe", "tool", "proc", "defproc", "endproc", "local"
             ]
         )
+
+        # Procedure processing system
+        self.procedures: Dict[str, Dict[str, Any]] = {}
+        self.proc_depth: int = 0
+        self.active_proc_stack: List[Dict[str, Any]] = []
 
         # Image generation settings
         self.image_size = "1024x1024"
@@ -1663,9 +1668,9 @@ class ChatybotApp:
             if hasattr(self.buffer_manager.script_vars, '_is_user_write'):
                 self.buffer_manager.script_vars._is_user_write = True
             try:
-                set_stripped = command.lstrip()
+                set_stripped = self.buffer_manager.replace_placeholders_legacy(command.lstrip())
                 # Use regex to parse "set var = value" supporting multiline (. matches anything with re.S)
-                match = re.match(r"set\s+(\w+(?:\[\])?)\s*=\s*(.*)", set_stripped, re.S)
+                match = re.match(r"set\s+([a-zA-Z_]\w*(?:\[\])?)\s*=\s*(.*)", set_stripped, re.S)
                 if match:
                     var_name = match.group(1)
                     var_value = match.group(2).strip()
@@ -1722,6 +1727,48 @@ class ChatybotApp:
                     return True
             except Exception as e:
                 print(f"Error parsing set command: {e}")
+                return True
+            finally:
+                if hasattr(self.buffer_manager.script_vars, '_is_user_write'):
+                    self.buffer_manager.script_vars._is_user_write = old_user_write
+
+        # Handle local variable declarations
+        if command.lstrip().startswith("local "):
+            old_user_write = getattr(self.buffer_manager.script_vars, '_is_user_write', False)
+            if hasattr(self.buffer_manager.script_vars, '_is_user_write'):
+                self.buffer_manager.script_vars._is_user_write = True
+            try:
+                local_stripped = command.lstrip()
+                match = re.match(r"local\s+([a-zA-Z_]\w*)\s*(?:=\s*(.*))?", local_stripped, re.S)
+                if match:
+                    var_name = match.group(1)
+                    raw_val = match.group(2)
+                    var_value = raw_val.strip() if raw_val is not None else ""
+                    
+                    if (var_value.startswith('"') and var_value.endswith('"')) or (var_value.startswith("'") and var_value.endswith("'")):
+                        var_value = var_value[1:-1]
+                    
+                    processed_value = self.buffer_manager.replace_placeholders_legacy(var_value) if var_value else ""
+                    
+                    if self.active_proc_stack:
+                        top_frame = self.active_proc_stack[-1]
+                        saved_vars = top_frame["saved_vars"]
+                        if var_name not in saved_vars:
+                            exists = var_name in self.buffer_manager.script_vars
+                            orig_val = self.buffer_manager.script_vars.get(var_name) if exists else None
+                            saved_vars[var_name] = (exists, orig_val)
+                        top_frame["local_vars"].add(var_name)
+                    
+                    try:
+                        self.buffer_manager.script_vars[var_name] = processed_value
+                    except ValueError as e:
+                        print(f"Error: {e}")
+                    return True
+                else:
+                    print("Invalid local command format. Usage: local <name> = <value>")
+                    return True
+            except Exception as e:
+                print(f"Error parsing local command: {e}")
                 return True
             finally:
                 if hasattr(self.buffer_manager.script_vars, '_is_user_write'):
@@ -1874,7 +1921,7 @@ class ChatybotApp:
 
         # Check if input looks like a command keyword but was not recognized
         stripped = command.strip()
-        script_keywords = ['set', 'if', 'wait', 'def', '%', '#']
+        script_keywords = ['set', 'if', 'wait', 'def', '%', '#', 'local', 'defproc', 'endproc']
         
         if stripped:
             first_word = stripped.split()[0] if stripped.split() else stripped
@@ -1887,6 +1934,12 @@ class ChatybotApp:
                     print("Invalid wait command. Usage: wait <seconds>")
                 elif first_word.lower() == 'def':
                     print("Invalid def command. Usage: def <name>(<params>) <template>")
+                elif first_word.lower() == 'local':
+                    print("Invalid local command format. Usage: local <name> = <value>")
+                elif first_word.lower() == 'defproc':
+                    print("Invalid defproc command. Usage: defproc <name>(<params>)")
+                elif first_word.lower() == 'endproc':
+                    print("Unexpected endproc keyword.")
                 elif first_word.lower() == '%':
                     print("Invalid macro call. Usage: %<macro_name>(<args>)")
                 elif first_word.lower() == '#':
@@ -1973,6 +2026,11 @@ class ChatybotApp:
                 else:
                     await self.chat_completion(cmd, stream=self.streaming_enabled)
         else:
+            # Handle procedure definitions for interactive input
+            if line.lstrip().startswith("defproc ") or line.strip() == "defproc":
+                await self.get_proc_definition_input(line)
+                return
+
             # Handle macro definitions for regular prompts
             if line.lstrip().startswith("def "):
                 try:
@@ -1998,6 +2056,42 @@ class ChatybotApp:
             await self.chat_completion(
                 line, stream=self.streaming_enabled
             )
+
+    async def get_proc_definition_input(self, header_line: str) -> None:
+        """Get procedure definition input interactively from the user."""
+        m = re.match(r"defproc\s+([a-zA-Z_]\w*)(?:\(([^)]*)\))?", header_line.lstrip())
+        if not m:
+            print("Invalid defproc format. Usage: defproc name(p1, p2)")
+            return
+        
+        proc_name = m.group(1)
+        params_str = m.group(2)
+        params = [p.strip() for p in params_str.split(',')] if params_str else []
+        
+        print(f"Entering procedure definition for '{proc_name}'. Enter commands (type 'endproc' on a line by itself to finish):")
+        body_lines = []
+        while True:
+            if getattr(self, 'interrupt_requested', False):
+                print("\nInterrupted. Cancelling procedure definition...")
+                self.control_c_count = 0
+                self.interrupt_requested = False
+                return
+            
+            try:
+                line = input("(proc)> ")
+            except EOFError:
+                break
+            
+            stripped = line.strip()
+            if stripped == "endproc":
+                break
+            if line.lstrip().startswith("defproc ") or stripped == "defproc":
+                print("Error: Nested defproc is not allowed.")
+                return
+            body_lines.append(line)
+        
+        self.procedures[proc_name] = {"params": params, "body": body_lines}
+        print(f"Procedure '{proc_name}' defined with params: {params}")
 
     async def execute_script(self, script_path: str) -> None:
         """
@@ -2100,11 +2194,53 @@ class ChatybotApp:
             self.script_context = True
             multi_line_buffer = []
             in_multi_line = False
+            in_defproc = False
+            cur_proc_name = ""
+            cur_proc_params = []
+            cur_proc_body = []
 
             idx = 0
             while idx < len(commands_list):
                 cmd = commands_list[idx]
                 if not cmd.strip():
+                    idx += 1
+                    continue
+
+                stripped_cmd = cmd.strip()
+                lstripped_cmd = cmd.lstrip()
+
+                if in_defproc:
+                    if stripped_cmd == "endproc":
+                        self.procedures[cur_proc_name] = {
+                            "params": cur_proc_params,
+                            "body": cur_proc_body
+                        }
+                        print(f"Defined procedure: {cur_proc_name} with {len(cur_proc_params)} parameters")
+                        in_defproc = False
+                        cur_proc_name = ""
+                        cur_proc_params = []
+                        cur_proc_body = []
+                    elif lstripped_cmd.startswith("defproc ") or stripped_cmd == "defproc":
+                        print("Error: Nested defproc is not allowed.")
+                        in_defproc = False
+                        cur_proc_name = ""
+                        cur_proc_params = []
+                        cur_proc_body = []
+                    else:
+                        cur_proc_body.append(cmd)
+                    idx += 1
+                    continue
+
+                if lstripped_cmd.startswith("defproc ") or stripped_cmd == "defproc":
+                    m = re.match(r"defproc\s+([a-zA-Z_]\w*)(?:\(([^)]*)\))?", lstripped_cmd)
+                    if m:
+                        cur_proc_name = m.group(1)
+                        params_str = m.group(2)
+                        cur_proc_params = [p.strip() for p in params_str.split(',')] if params_str else []
+                        cur_proc_body = []
+                        in_defproc = True
+                    else:
+                        print("Invalid defproc format. Usage: defproc name(p1, p2)")
                     idx += 1
                     continue
 
@@ -4900,7 +5036,7 @@ class ChatybotApp:
 
         elif cmd == "/script":
             if len(parts) < 2:
-                print('Usage: /script <file> [x="value"] [y="value"] [z="value"]')
+                print('Usage: /script <file> [key="value"]...')
                 return True
 
             # Extract script path and parameters
@@ -4908,7 +5044,7 @@ class ChatybotApp:
             
             # Parse parameters from the command
             import re
-            param_pattern = r'(^|\s+)([xyz])\s*=\s*("[^"]*"|\'[^\']*\'|\S+)'
+            param_pattern = r'(^|\s+)([a-zA-Z_]\w*)\s*=\s*("[^"]*"|\'[^\']*\'|\S+)'
             
             # Look for parameters in the original command string after the script path
             # We need to handle the case where script_path might be quoted
@@ -4946,6 +5082,108 @@ class ChatybotApp:
             print("command /script with ", actual_script_path)
             # Execute script asynchronously so it doesn't block the main loop
             await self.execute_script(actual_script_path)
+            return True
+
+        elif cmd == "/proc":
+            if len(parts) < 2:
+                print('Usage: /proc <name> [key="value"]...')
+                return True
+            
+            remaining_command = command[len(cmd):].strip()
+            name_match = re.match(r'("[^"]*"|\'[^\']*\'|\S+)', remaining_command)
+            if name_match:
+                proc_name = name_match.group(1).strip('"\'')
+                params_string = remaining_command[len(name_match.group(1)):].strip()
+            else:
+                proc_name = parts[1]
+                params_string = ""
+            
+            param_pattern = r'(^|\s+)([a-zA-Z_]\w*)\s*=\s*("[^"]*"|\'[^\']*\'|\S+)'
+            call_args = {}
+            for match in re.finditer(param_pattern, params_string):
+                var_name = match.group(2)
+                var_value = match.group(3).strip('"\'')
+                call_args[var_name] = var_value
+
+            max_depth = int(self.buffer_manager.script_vars.get("PROC_MAX_DEPTH", 20))
+            if self.proc_depth >= max_depth:
+                print(f"Error: Maximum procedure recursion depth of {max_depth} reached.")
+                return True
+
+            body_lines = None
+            if proc_name in self.procedures:
+                body_lines = self.procedures[proc_name]["body"]
+            else:
+                search_paths = [
+                    proc_name,
+                    f"{proc_name}.chatdsl",
+                    os.path.join("procs", f"{proc_name}.chatdsl"),
+                    os.path.expanduser(os.path.join("~/.chatybot/procs", f"{proc_name}.chatdsl"))
+                ]
+                found_path = None
+                for path in search_paths:
+                    if os.path.exists(path):
+                        found_path = path
+                        break
+                if found_path:
+                    try:
+                        with open(found_path, "r", encoding="utf-8") as f:
+                            content = f.read()
+                        body_lines = content.split("\n")
+                    except Exception as e:
+                        print(f"Error reading procedure file '{found_path}': {e}")
+                        return True
+                else:
+                    print(f"Error: Procedure '{proc_name}' not found in memory or disk.")
+                    return True
+
+            frame = {"saved_vars": {}, "local_vars": set()}
+            self.active_proc_stack.append(frame)
+            
+            old_user_write = getattr(self.buffer_manager.script_vars, '_is_user_write', False)
+            if hasattr(self.buffer_manager.script_vars, '_is_user_write'):
+                self.buffer_manager.script_vars._is_user_write = True
+            
+            try:
+                for k, v in call_args.items():
+                    if k not in frame["saved_vars"]:
+                        exists = k in self.buffer_manager.script_vars
+                        orig_val = self.buffer_manager.script_vars.get(k) if exists else None
+                        frame["saved_vars"][k] = (exists, orig_val)
+                    processed_v = self.buffer_manager.replace_placeholders_legacy(v)
+                    self.buffer_manager.set_script_var(k, processed_v)
+            finally:
+                if hasattr(self.buffer_manager.script_vars, '_is_user_write'):
+                    self.buffer_manager.script_vars._is_user_write = old_user_write
+
+            self.proc_depth += 1
+            old_script_context = self.script_context
+            self.script_context = True
+            try:
+                for line in body_lines:
+                    if not line.strip() or line.strip().startswith("#"):
+                        continue
+                    await self.execute_script_command(line, self.handle_escape_command)
+            except Exception as e:
+                print(f"Error executing procedure '{proc_name}': {e}")
+            finally:
+                self.script_context = old_script_context
+                self.proc_depth -= 1
+                popped_frame = self.active_proc_stack.pop()
+                old_user_write = getattr(self.buffer_manager.script_vars, '_is_user_write', False)
+                if hasattr(self.buffer_manager.script_vars, '_is_user_write'):
+                    self.buffer_manager.script_vars._is_user_write = True
+                try:
+                    for var_name, (exists, orig_val) in popped_frame["saved_vars"].items():
+                        if exists:
+                            self.buffer_manager.set_script_var(var_name, orig_val)
+                        else:
+                            if var_name in self.buffer_manager.script_vars:
+                                del self.buffer_manager.script_vars[var_name]
+                finally:
+                    if hasattr(self.buffer_manager.script_vars, '_is_user_write'):
+                        self.buffer_manager.script_vars._is_user_write = old_user_write
+
             return True
 
         elif cmd in ["/quit", "/exit"]:
