@@ -1,0 +1,1161 @@
+# src/chatybot/profile_tui.py
+"""
+Curses-based terminal UI (TUI) for managing chatybot profiles.
+Allows browsing, editing, cloning, deleting profiles with preset templates.
+
+This follows the same pattern as config_tui.py for consistent look and feel.
+"""
+
+import os
+import sys
+import argparse
+import curses
+import curses.textpad
+from datetime import datetime
+from typing import Optional, List, Tuple, Dict, Any
+
+from .profile_manager import ProfileManager, PROFILE_PRESETS
+from .profile_model import Profile, ProfileConfig, ProfileMeta, ToolSettings, TraceSettings, ReasoningSettings, PROFILE_VERSION
+
+
+class ProfileTUI:
+    """Curses-based TUI for profile management."""
+
+    def __init__(self, profile_dir: Optional[str] = None, config_manager: Any = None, initial_profile: Optional[str] = None):
+        self.pm = ProfileManager(profile_dir=profile_dir)
+        self.config_manager = config_manager
+        self.has_changes = False
+        self.initial_profile = initial_profile
+        self._initial_profile_handled = False
+
+        # Load models list from config manager
+        self.models_list: List[str] = []
+        if config_manager and hasattr(config_manager, 'config'):
+            self.models_list = list(config_manager.config.get("models", {}).keys())
+        if not self.models_list:
+            self.models_list = ["devstral_1", "mistral_1"]
+
+        # UI State
+        self.selected_idx = 0
+        self.scroll_offset = 0
+        self.filter_text = ""
+        self.status_message = ""
+        self.status_is_error = False
+
+    def load_profiles(self) -> bool:
+        """Load profile list."""
+        try:
+            self.profile_list = self.pm.list_profile_meta()
+            self.filtered_list = self.profile_list
+            self.set_status(f"Loaded {len(self.profile_list)} profiles from '{self.pm.profile_dir}'")
+            return True
+        except Exception as e:
+            self.set_status(f"Error loading profiles: {e}", is_error=True)
+            return False
+    
+    def _select_initial_profile(self):
+        """Select the initial profile if specified."""
+        if not self.initial_profile or self._initial_profile_handled:
+            return
+        self._initial_profile_handled = True
+        
+        # Try to find the profile in the list
+        initial_lower = self.initial_profile.lower()
+        for idx, (name, meta) in enumerate(self.profile_list):
+            if (name.lower() == initial_lower or 
+                meta.name.lower() == initial_lower or
+                name.lower().replace(".chatdsl", "") == initial_lower):
+                self.selected_idx = idx
+                # Ensure it's visible
+                max_rows = curses.LINES - 7
+                if self.selected_idx >= self.scroll_offset + max_rows:
+                    self.scroll_offset = self.selected_idx - max_rows + 1
+                elif self.selected_idx < self.scroll_offset:
+                    self.scroll_offset = self.selected_idx
+                break
+
+    def apply_filter(self):
+        """Filter profiles list based on filter_text."""
+        if not self.filter_text:
+            self.filtered_list = self.profile_list
+        else:
+            q = self.filter_text.lower()
+            self.filtered_list = [
+                (name, meta) for name, meta in self.profile_list
+                if q in name.lower() or q in meta.name.lower() or q in meta.description.lower()
+            ]
+
+        # Adjust selection if list shrank
+        if self.selected_idx >= len(self.filtered_list):
+            self.selected_idx = max(0, len(self.filtered_list) - 1)
+        if self.selected_idx < 0:
+            self.selected_idx = 0
+
+    def set_status(self, msg: str, is_error: bool = False):
+        self.status_message = msg
+        self.status_is_error = is_error
+
+    def run(self, stdscr):
+        # Configure curses
+        curses.curs_set(0)  # Hide cursor
+        stdscr.keypad(True)
+
+        # Color pairs (same as config_tui for consistency)
+        curses.start_color()
+        curses.use_default_colors()
+        curses.init_pair(1, curses.COLOR_CYAN, -1)     # Header / Values
+        curses.init_pair(2, curses.COLOR_BLACK, curses.COLOR_CYAN)  # Selected row
+        curses.init_pair(3, curses.COLOR_YELLOW, -1)   # Warning / Section header
+        curses.init_pair(4, curses.COLOR_RED, -1)      # Error / Alert
+        curses.init_pair(5, curses.COLOR_GREEN, -1)    # Success / OK
+
+        # Load profiles
+        if not self.load_profiles():
+            # Show error screen and wait for keypress to exit
+            stdscr.clear()
+            stdscr.addstr(2, 2, "Chatybot Profile TUI Error", curses.color_pair(4) | curses.A_BOLD)
+            stdscr.addstr(4, 2, self.status_message)
+            stdscr.addstr(6, 2, "Press any key to exit...")
+            stdscr.refresh()
+            stdscr.getch()
+            return
+        
+        # Select initial profile if specified
+        self._select_initial_profile()
+
+        while True:
+            self.draw_main_screen(stdscr)
+            ch = stdscr.getch()
+
+            if ch == ord('q') or ch == ord('Q'):
+                if self.has_changes:
+                    if self.prompt_save_changes(stdscr):
+                        break
+                else:
+                    break
+            elif ch == curses.KEY_UP or ch == ord('k'):
+                if self.selected_idx > 0:
+                    self.selected_idx -= 1
+                    if self.selected_idx < self.scroll_offset:
+                        self.scroll_offset = self.selected_idx
+            elif ch == curses.KEY_DOWN or ch == ord('j'):
+                if self.selected_idx < len(self.filtered_list) - 1:
+                    self.selected_idx += 1
+                    max_rows = curses.LINES - 7  # height of list area
+                    if self.selected_idx >= self.scroll_offset + max_rows:
+                        self.scroll_offset = self.selected_idx - max_rows + 1
+            elif ch == curses.KEY_PPAGE:  # Page Up
+                max_rows = curses.LINES - 7
+                self.selected_idx = max(0, self.selected_idx - max_rows)
+                self.scroll_offset = max(0, self.scroll_offset - max_rows)
+            elif ch == curses.KEY_NPAGE:  # Page Down
+                max_rows = curses.LINES - 7
+                self.selected_idx = min(len(self.filtered_list) - 1, self.selected_idx + max_rows)
+                self.scroll_offset = min(
+                    max(0, len(self.filtered_list) - max_rows),
+                    self.scroll_offset + max_rows
+                )
+            elif ch == curses.KEY_HOME:
+                self.selected_idx = 0
+                self.scroll_offset = 0
+            elif ch == curses.KEY_END:
+                self.selected_idx = max(0, len(self.filtered_list) - 1)
+                max_rows = curses.LINES - 7
+                self.scroll_offset = max(0, len(self.filtered_list) - max_rows)
+            elif ch == ord('/'):
+                self.handle_search(stdscr)
+            elif ch == 10:  # Enter (Edit)
+                if self.filtered_list:
+                    name, meta = self.filtered_list[self.selected_idx]
+                    try:
+                        profile = self.pm.load_profile(name)
+                        self.edit_profile_form(stdscr, name, profile.meta, profile.config, original_meta=profile.meta)
+                    except Exception as e:
+                        self.set_status(f"Error loading profile: {e}", is_error=True)
+            elif ch == ord('n') or ch == ord('N'):
+                self.create_new_profile(stdscr)
+            elif ch == ord('c') or ch == ord('C'):
+                if self.filtered_list:
+                    name, meta = self.filtered_list[self.selected_idx]
+                    self.clone_profile_dialog(stdscr, name, meta)
+            elif ch == ord('d') or ch == ord('D'):
+                if self.filtered_list:
+                    name, meta = self.filtered_list[self.selected_idx]
+                    self.delete_profile_dialog(stdscr, name, meta)
+            elif ch == ord('s') or ch == ord('S'):
+                # Save all changes (profiles are saved individually)
+                self.set_status("Profiles are saved individually when editing")
+            elif ch == curses.KEY_RESIZE:
+                stdscr.clear()
+
+    def draw_main_screen(self, stdscr):
+        stdscr.erase()
+        h, w = stdscr.getmaxyx()
+
+        # Header (2 lines) - same style as config_tui
+        stdscr.addstr(0, 0, " Chatybot Profile Manager", curses.color_pair(1) | curses.A_BOLD)
+
+        try:
+            from . import __version__
+            version_str = f"v{__version__}"
+        except Exception:
+            try:
+                import importlib.metadata
+                version_str = f"v{importlib.metadata.version('chatybot')}"
+            except Exception:
+                version_str = "unknown"
+
+        if w - len(version_str) - 2 > 30:
+            stdscr.addstr(0, w - len(version_str) - 2, version_str, curses.color_pair(3))
+
+        # Directory info
+        file_msg = f" Dir: {self.pm.profile_dir}"
+        loaded_msg = f"{len(self.profile_list)} profiles loaded"
+        if self.filter_text:
+            loaded_msg += f" ({len(self.filtered_list)} matching)"
+        if self.has_changes:
+            loaded_msg += " [Unsaved changes]"
+
+        stdscr.addstr(1, 0, file_msg[:w-30])
+        if w - len(loaded_msg) - 2 > len(file_msg):
+            stdscr.addstr(1, w - len(loaded_msg) - 2, loaded_msg, curses.A_DIM)
+
+        # Divider
+        stdscr.addstr(2, 0, "-" * (w - 1), curses.A_DIM)
+
+        # Table Headers
+        headers = f"  #   {'Name':<25} {'Model':<20} {'Description':<30}"
+        stdscr.addstr(3, 0, headers[:w-1], curses.A_BOLD)
+        stdscr.addstr(4, 0, "  " + "-" * (w - 5), curses.A_DIM)
+
+        # List Area
+        list_h = h - 7  # Height remaining for list
+        visible_items = self.filtered_list[self.scroll_offset : self.scroll_offset + list_h]
+
+        for idx, (name, meta) in enumerate(visible_items):
+            actual_idx = self.scroll_offset + idx
+            y = 5 + idx
+
+            # Formatting values
+            name_disp = meta.name if meta.name else name
+            model_disp = ""
+            desc_disp = meta.description[:28] if meta.description else ""
+
+            # Try to get model from profile
+            try:
+                profile = self.pm.load_profile(name)
+                model_disp = profile.config.model_alias
+            except Exception:
+                model_disp = "unknown"
+
+            # Truncation limits
+            name_disp = name_disp[:24]
+            model_disp = model_disp[:19]
+
+            indicator = ">" if actual_idx == self.selected_idx else " "
+            row_text = f"{indicator}{actual_idx+1:<3} {name_disp:<25} {model_disp:<20} {desc_disp:<30}"
+
+            # Fill the rest of the row with spaces
+            row_text = f"{row_text:<{w-1}}"[:w-1]
+
+            if actual_idx == self.selected_idx:
+                stdscr.addstr(y, 0, row_text, curses.color_pair(2))
+            else:
+                stdscr.addstr(y, 0, row_text)
+
+        # Fill empty space
+        for y in range(5 + len(visible_items), h - 2):
+            stdscr.addstr(y, 0, " " * (w - 1))
+
+        # Status Bar / Message
+        stdscr.addstr(h - 2, 0, "-" * (w - 1), curses.A_DIM)
+        if self.status_message:
+            color = curses.color_pair(4) if self.status_is_error else curses.color_pair(3)
+            stdscr.addstr(h - 2, 2, f" {self.status_message} "[:w-4], color | curses.A_BOLD)
+
+        # Key bindings bar - same style as config_tui
+        keys_bar = " ↑↓ Navigate │ ↵ Edit │ N New │ C Clone │ D Delete │ Q Quit │ / Filter"
+        stdscr.addstr(h - 1, 0, keys_bar[:w-1], curses.color_pair(2))
+        stdscr.refresh()
+
+    def handle_search(self, stdscr):
+        h, w = stdscr.getmaxyx()
+        stdscr.move(h - 1, 0)
+        stdscr.clrtoeol()
+        stdscr.addstr(h - 1, 0, "Filter: ", curses.color_pair(3))
+
+        curses.curs_set(1)  # Show cursor
+        current_filter = self.filter_text
+
+        while True:
+            stdscr.move(h - 1, 8)
+            stdscr.clrtoeol()
+            stdscr.addstr(h - 1, 8, current_filter[:w-12])
+            stdscr.refresh()
+
+            ch = stdscr.getch()
+            if ch in (10, 13):  # Enter
+                break
+            elif ch == 27:  # Escape
+                current_filter = ""
+                break
+            elif ch in (curses.KEY_BACKSPACE, 127, 8):
+                current_filter = current_filter[:-1]
+            elif 32 <= ch <= 126:
+                current_filter += chr(ch)
+
+            self.filter_text = current_filter
+            self.apply_filter()
+            self.draw_main_screen(stdscr)
+            stdscr.addstr(h - 1, 0, "Filter: ", curses.color_pair(3))
+
+        curses.curs_set(0)  # Hide cursor
+        self.filter_text = current_filter
+        self.apply_filter()
+        self.set_status("Filter updated")
+
+    def edit_text_input(self, parent_win, y: int, x: int, width: int, initial_value: str, label: str) -> str:
+        """Edit text field inline."""
+        parent_win.move(y, x)
+        curses.curs_set(1)
+        val = initial_value
+
+        while True:
+            parent_win.addstr(y, x, "[" + " " * (width - 2) + "]")
+            disp_val = val[-(width - 4):]  # Scroll text if too long
+            parent_win.addstr(y, x + 1, disp_val, curses.color_pair(1))
+
+            cursor_pos = x + 1 + len(disp_val)
+            parent_win.move(y, cursor_pos)
+            parent_win.refresh()
+
+            ch = parent_win.getch()
+            if ch in (10, 13):  # Enter
+                break
+            elif ch == 27:  # Escape
+                val = initial_value
+                break
+            elif ch in (curses.KEY_BACKSPACE, 127, 8):
+                val = val[:-1]
+            elif 32 <= ch <= 126:
+                val += chr(ch)
+
+        curses.curs_set(0)
+        return val
+
+    def draw_dialog_border(self, win, title: str):
+        win.erase()
+        win.box()
+        h, w = win.getmaxyx()
+        title_disp = f" {title} "
+        if len(title_disp) < w - 4:
+            win.addstr(0, (w - len(title_disp)) // 2, title_disp, curses.color_pair(1) | curses.A_BOLD)
+
+    def prompt_save_changes(self, stdscr) -> bool:
+        """Prompt to save changes before exiting."""
+        h, w = stdscr.getmaxyx()
+        win_h, win_w = 10, 48
+        win_y = (h - win_h) // 2
+        win_x = (w - win_w) // 2
+
+        win = curses.newwin(win_h, win_w, win_y, win_x)
+        win.keypad(True)
+        self.draw_dialog_border(win, "Save Changes?")
+
+        win.addstr(2, 4, "You have unsaved changes.")
+        win.addstr(4, 4, "Changes will be lost if not saved.")
+
+        options = ["[ Save ]", "[ Discard ]", "[ Cancel ]"]
+        sel = 0
+
+        while True:
+            for idx, opt in enumerate(options):
+                opt_x = 4 + (idx * 16)
+                if idx == sel:
+                    win.addstr(7, opt_x, opt, curses.color_pair(2))
+                else:
+                    win.addstr(7, opt_x, opt)
+            win.refresh()
+
+            ch = win.getch()
+            if ch == curses.KEY_LEFT:
+                sel = (sel - 1) % len(options)
+            elif ch == curses.KEY_RIGHT:
+                sel = (sel + 1) % len(options)
+            elif ch in (10, 13):  # Enter
+                if sel == 0:  # Save
+                    return True
+                elif sel == 1:  # Discard
+                    self.has_changes = False
+                    return True
+                else:  # Cancel
+                    return False
+            elif ch == 27:  # Escape
+                return False
+
+    def create_new_profile(self, stdscr):
+        """Show preset picker then open empty profile editor."""
+        h, w = stdscr.getmaxyx()
+        win_h, win_w = 20, 54
+        win_y = (h - win_h) // 2
+        win_x = (w - win_w) // 2
+
+        win = curses.newwin(win_h, win_w, win_y, win_x)
+        win.keypad(True)
+        self.draw_dialog_border(win, "Select Profile Preset")
+
+        preset_names = list(PROFILE_PRESETS.keys()) + ["(custom)"]
+        sel = 0
+        scroll = 0
+        max_show = 12
+
+        while True:
+            win.addstr(2, 4, "Select a preset for default values:")
+
+            for idx in range(min(max_show, len(preset_names) - scroll)):
+                actual_idx = scroll + idx
+                y = 4 + idx
+                name = preset_names[actual_idx]
+                preset_info = ""
+                if name in PROFILE_PRESETS:
+                    p = PROFILE_PRESETS[name]
+                    preset_info = f" ({p['description'][:25]}...)" if len(p['description']) > 25 else f" ({p['description']})"
+                else:
+                    preset_info = " (Blank custom template)"
+
+                display_str = f"  {name:<12}{preset_info}"[:win_w-8]
+
+                if actual_idx == sel:
+                    win.addstr(y, 4, f"> {display_str}", curses.color_pair(2))
+                else:
+                    win.addstr(y, 4, f"  {display_str}")
+
+            for idx in range(len(preset_names), max_show):
+                win.addstr(4 + idx, 4, " " * (win_w - 8))
+
+            win.addstr(win_h - 4, 4, "-- Help --", curses.color_pair(3))
+            win.addstr(win_h - 3, 4, "↑↓ Navigate │ ENTER Select │ ESC Cancel")
+            win.refresh()
+
+            ch = win.getch()
+            if ch == curses.KEY_UP:
+                if sel > 0:
+                    sel -= 1
+                    if sel < scroll:
+                        scroll = sel
+            elif ch == curses.KEY_DOWN:
+                if sel < len(preset_names) - 1:
+                    sel += 1
+                    if sel >= scroll + max_show:
+                        scroll = sel - max_show + 1
+            elif ch in (10, 13):  # Select
+                selected_preset = preset_names[sel]
+                self.initialize_new_profile_form(stdscr, selected_preset)
+                break
+            elif ch == 27:  # Cancel
+                break
+
+    def initialize_new_profile_form(self, stdscr, preset_name: str):
+        """Create new profile based on preset and open the editor."""
+        # Generate a unique name
+        base_name = "new_profile"
+        existing = self.pm.list_profiles()
+        counter = 1
+        while f"{base_name}_{counter}" in existing:
+            counter += 1
+        alias = f"{base_name}_{counter}"
+
+        # Create profile from preset
+        if preset_name in PROFILE_PRESETS:
+            preset = PROFILE_PRESETS[preset_name]
+            profile = self.pm.create_profile(
+                name=preset["name"],
+                model_alias=preset["model_alias"],
+                description=preset["description"],
+                preset=None,  # Already have preset data
+                tool_mode=preset["tool_mode"],
+                reasoning=preset["reasoning"],
+                show_thinking=preset["show_thinking"],
+                reasoning_effort=preset["reasoning_effort"],
+                temperature=preset["temperature"],
+                max_turns=preset["max_turns"],
+                disabled_tools=preset["disabled_tools"],
+            )
+        else:
+            # Custom blank template
+            profile = self.pm.create_profile(
+                name="Custom Profile",
+                model_alias=self.models_list[0],
+                description="",
+            )
+
+        # Open main editor form
+        self.edit_profile_form(stdscr, alias, profile.meta, profile.config, is_new=True, original_meta=profile.meta)
+
+    def edit_profile_form(
+        self,
+        stdscr,
+        profile_name: str,
+        meta: ProfileMeta,
+        config: ProfileConfig,
+        is_new: bool = False,
+        original_meta: Optional[ProfileMeta] = None
+    ):
+        """Run form editor overlay for a profile."""
+        h, w = stdscr.getmaxyx()
+        win_h, win_w = 32, 70
+        win_y = (h - win_h) // 2
+        win_x = (w - win_w) // 2
+
+        win = curses.newwin(win_h, win_w, win_y, win_x)
+        win.keypad(True)
+        
+        # Draw dialog border with title
+        title = f"Edit Profile: {profile_name}" if profile_name else "New Profile"
+        self.draw_dialog_border(win, title)
+
+        # Build form data from profile
+        form_data = {
+            "alias": profile_name,
+            "name": meta.name,
+            "description": meta.description,
+            "model": config.model_alias,
+            "temperature": f"{config.temperature}" if config.temperature is not None else "",
+            "top_p": f"{config.top_p}" if config.top_p is not None else "",
+            "top_k": f"{config.top_k}" if config.top_k is not None else "",
+            "max_tokens": f"{config.max_tokens}" if config.max_tokens is not None else "",
+            "system_message": config.system_message or "",
+            "tool_mode": config.tool_settings.mode,
+            "tool_auto_execute": str(config.tool_settings.auto_execute).lower(),
+            "tool_max_turns": f"{config.tool_settings.max_turns}" if config.tool_settings.max_turns is not None else "",
+            "tool_disabled": ", ".join(config.tool_settings.disabled_tools) if config.tool_settings.disabled_tools else "",
+            "trace_tps": str(config.trace_settings.tps).lower(),
+            "trace_agentic_loop": str(config.trace_settings.agentic_loop).lower(),
+            "trace_raw_payload": str(config.trace_settings.raw_payload).lower(),
+            "trace_rerank": str(config.trace_settings.rerank).lower(),
+            "trace_tps_perf": str(config.trace_settings.tps_perf).lower(),
+            "reasoning": str(config.reasoning_settings.enabled).lower(),
+            "show_thinking": str(config.reasoning_settings.show_thinking).lower(),
+            "reasoning_effort": config.reasoning_settings.effort,
+        }
+
+        # Form field definitions
+        # (key, label, y, value_x, field_width, f_type, options_list)
+        fields = [
+            ("alias",            "Alias:",           2,  18, 24, "text", None),
+            ("name",             "Display Name:",   3,  20, 30, "text", None),
+            ("description",      "Description:",    4,  20, 40, "text", None),
+
+            ("section_model",    "-- Model Settings --", 6, 4, 0, "header", None),
+            ("model",            "Model:",           7,  18, 24, "cycle", self.models_list),
+            ("temperature",      "Temperature:",     8,  20, 12, "text", None),
+            ("top_p",            "Top P:",           9,  20, 12, "text", None),
+            ("top_k",            "Top K:",           10, 20, 12, "text", None),
+            ("max_tokens",       "Max Tokens:",      11, 18, 12, "text", None),
+            ("system_message",   "System Msg:",      12, 18, 30, "text", None),
+
+            ("section_tools",   "-- Tool Settings --", 14, 4, 0, "header", None),
+            ("tool_mode",        "Tool Mode:",        15, 18, 16, "cycle", ["off", "auto", "on"]),
+            ("tool_auto_execute","Auto Execute:",    16, 18, 12, "cycle", ["true", "false"]),
+            ("tool_max_turns",   "Max Turns:",       17, 18, 12, "text", None),
+            ("tool_disabled",    "Disabled Tools:",   18, 18, 24, "text", None),
+
+            ("section_trace",    "-- Trace Settings --", 20, 4, 0, "header", None),
+            ("trace_tps",        "TPS:",              21, 18, 8, "cycle", ["true", "false"]),
+            ("trace_agentic_loop","Agentic Loop:",    22, 18, 12, "cycle", ["true", "false"]),
+            ("trace_raw_payload","Raw Payload:",     23, 18, 12, "cycle", ["true", "false"]),
+            ("trace_rerank",     "Rerank:",           24, 18, 8, "cycle", ["true", "false"]),
+            ("trace_tps_perf",   "TPS Perf:",         25, 18, 10, "cycle", ["true", "false"]),
+
+            ("section_reasoning", "-- Reasoning --", 26, 4, 0, "header", None),
+            ("reasoning",        "Enabled:",          27, 18, 8, "cycle", ["true", "false"]),
+            ("show_thinking",     "Show Thinking:",    28, 18, 12, "cycle", ["true", "false"]),
+            ("reasoning_effort", "Effort:",           29, 18, 12, "cycle", ["none", "low", "medium", "high"]),
+        ]
+
+        # Interactive elements only (filter out headers)
+        interactive_fields = [f for f in fields if f[5] != "header"]
+
+        buttons = ["[ OK ]", "[ Cancel ]"]
+        
+        # Initialize current field index
+        self.current_field_idx = 0
+
+        while True:
+            # Clear and redraw the window
+            win.erase()
+            self.draw_dialog_border(win, title)
+            
+            # Draw headers and labels
+            for f in fields:
+                key, label, y, x, width, f_type, _ = f
+                if f_type == "header":
+                    win.addstr(y, 4, label, curses.color_pair(3))
+                else:
+                    win.addstr(y, 4, label)
+
+            # Draw values
+            for idx, f in enumerate(interactive_fields):
+                key, label, y, x, width, f_type, opts = f
+                val = form_data[key]
+
+                # Skip hidden fields
+                if self.is_field_hidden(key, form_data):
+                    continue
+
+                if f_type == "text":
+                    win.addstr(y, x, "[" + " " * (width - 2) + "]")
+                    disp_val = val[:width-2]
+                    if self.current_field_idx == idx:
+                        win.addstr(y, x + 1, " " * (width - 2), curses.color_pair(2))
+                        win.addstr(y, x + 1, disp_val, curses.color_pair(2))
+                    else:
+                        win.addstr(y, x + 1, disp_val, curses.color_pair(1))
+                elif f_type == "cycle":
+                    win.addstr(y, x, "< " + " " * (width - 4) + " >")
+                    disp_val = val[:width-4]
+                    if self.current_field_idx == idx:
+                        win.addstr(y, x + 2, " " * (width - 4), curses.color_pair(2))
+                        win.addstr(y, x + 2, disp_val, curses.color_pair(2))
+                    else:
+                        win.addstr(y, x + 2, disp_val, curses.color_pair(1))
+
+            # Render buttons
+            for idx, btn in enumerate(buttons):
+                # Center buttons: [ OK ] at x=15, [ Cancel ] at x=30
+                btn_x = 15 + (idx * 15)
+                btn_y = win_h - 2
+                if self.current_field_idx == len(interactive_fields) + idx:
+                    win.addstr(btn_y, btn_x, btn, curses.color_pair(2))
+                else:
+                    win.addstr(btn_y, btn_x, btn)
+
+            win.refresh()
+
+            ch = win.getch()
+
+            if ch == curses.KEY_UP or ch == curses.KEY_PPAGE:
+                self.current_field_idx = (self.current_field_idx - 1) % (len(interactive_fields) + 2)
+                while self.current_field_idx < len(interactive_fields) and self.is_field_hidden(interactive_fields[self.current_field_idx][0], form_data):
+                    self.current_field_idx = (self.current_field_idx - 1) % (len(interactive_fields) + 2)
+            elif ch == curses.KEY_DOWN or ch == 9 or ch == curses.KEY_NPAGE:
+                self.current_field_idx = (self.current_field_idx + 1) % (len(interactive_fields) + 2)
+                while self.current_field_idx < len(interactive_fields) and self.is_field_hidden(interactive_fields[self.current_field_idx][0], form_data):
+                    self.current_field_idx = (self.current_field_idx + 1) % (len(interactive_fields) + 2)
+            elif ch == curses.KEY_LEFT:
+                if self.current_field_idx < len(interactive_fields):
+                    key, _, _, _, _, f_type, opts = interactive_fields[self.current_field_idx]
+                    if f_type == "cycle":
+                        curr_val = form_data[key]
+                        c_idx = opts.index(curr_val)
+                        form_data[key] = opts[(c_idx - 1) % len(opts)]
+                else:
+                    btn_focus = self.current_field_idx - len(interactive_fields)
+                    self.current_field_idx = len(interactive_fields) + (btn_focus - 1) % 2
+            elif ch == curses.KEY_RIGHT:
+                if self.current_field_idx < len(interactive_fields):
+                    key, _, _, _, _, f_type, opts = interactive_fields[self.current_field_idx]
+                    if f_type == "cycle":
+                        curr_val = form_data[key]
+                        c_idx = opts.index(curr_val)
+                        form_data[key] = opts[(c_idx + 1) % len(opts)]
+                else:
+                    btn_focus = self.current_field_idx - len(interactive_fields)
+                    self.current_field_idx = len(interactive_fields) + (btn_focus + 1) % 2
+            elif ch in (10, 13) or (32 <= ch <= 126) or ch in (8, 127, curses.KEY_BACKSPACE):
+                if self.current_field_idx < len(interactive_fields):
+                    key, label, y, x, width, f_type, opts = interactive_fields[self.current_field_idx]
+                    if f_type == "text":
+                        initial_val = form_data[key]
+                        if 32 <= ch <= 126:
+                            initial_val = form_data[key] + chr(ch)
+                        elif ch in (8, 127, curses.KEY_BACKSPACE):
+                            initial_val = form_data[key][:-1]
+                        new_val = self.edit_text_input(win, y, x, width, initial_val, key)
+                        form_data[key] = new_val
+                    elif f_type == "cycle" and ch in (10, 13):
+                        curr_val = form_data[key]
+                        c_idx = opts.index(curr_val)
+                        form_data[key] = opts[(c_idx + 1) % len(opts)]
+                elif ch in (10, 13):
+                    btn_idx = self.current_field_idx - len(interactive_fields)
+                    if btn_idx == 0:  # OK
+                        # Build profile from form data to show preview
+                        if self.show_save_preview(stdscr, profile_name, form_data, is_new, original_meta):
+                            break
+                    elif btn_idx == 1:  # Cancel
+                        break
+            elif ch == 27:  # Escape
+                break
+
+        stdscr.clear()
+
+    def show_save_preview(self, stdscr, profile_name: str, form_data: dict, is_new: bool, original_meta: Optional[ProfileMeta] = None) -> bool:
+        """
+        Show a preview dialog with the chatdsl content before saving.
+        
+        Args:
+            stdscr: The main curses window
+            profile_name: The profile name/alias
+            form_data: The form data dictionary
+            is_new: Whether this is a new profile
+            original_meta: Original profile metadata to preserve system fields
+            
+        Returns:
+            True if user confirmed save, False otherwise
+        """
+        h, w = stdscr.getmaxyx()
+        win_h, win_w = 24, 70
+        win_y = (h - win_h) // 2
+        win_x = (w - win_w) // 2
+        
+        win = curses.newwin(win_h, win_w, win_y, win_x)
+        win.keypad(True)
+        
+        # Build profile from form data (reusing apply_form_edits logic)
+        new_alias = form_data["alias"].strip()
+        
+        try:
+            # Validate first
+            if not new_alias:
+                self.set_status("Error: Alias cannot be empty!", is_error=True)
+                return False
+            
+            model = form_data["model"].strip()
+            if not model:
+                self.set_status("Error: Model cannot be empty!", is_error=True)
+                return False
+            
+            # Parse numerical fields
+            try:
+                temp = float(form_data["temperature"]) if form_data["temperature"].strip() else None
+                if temp is not None and not (0.0 <= temp <= 2.0):
+                    self.set_status("Error: Temperature must be 0.0-2.0", is_error=True)
+                    return False
+            except ValueError:
+                self.set_status("Error: Invalid temperature", is_error=True)
+                return False
+            
+            # Build profile from form data
+            tool_mode = form_data["tool_mode"]
+            tool_auto_execute = form_data["tool_auto_execute"].lower() == "true"
+            tool_max_turns = None
+            if form_data["tool_max_turns"].strip():
+                try:
+                    tool_max_turns = int(form_data["tool_max_turns"])
+                except ValueError:
+                    pass
+            
+            tool_disabled = []
+            if form_data["tool_disabled"].strip():
+                tool_disabled = [t.strip() for t in form_data["tool_disabled"].split(",") if t.strip()]
+            
+            tool_settings = ToolSettings(
+                mode=tool_mode,
+                auto_execute=tool_auto_execute,
+                max_turns=tool_max_turns,
+                disabled_tools=tool_disabled,
+            )
+            
+            trace_settings = TraceSettings(
+                tps=form_data["trace_tps"].lower() == "true",
+                agentic_loop=form_data["trace_agentic_loop"].lower() == "true",
+                raw_payload=form_data["trace_raw_payload"].lower() == "true",
+                rerank=form_data["trace_rerank"].lower() == "true",
+                tps_perf=form_data["trace_tps_perf"].lower() == "true",
+            )
+            
+            reasoning_settings = ReasoningSettings(
+                enabled=form_data["reasoning"].lower() == "true",
+                show_thinking=form_data["show_thinking"].lower() == "true",
+                effort=form_data["reasoning_effort"],
+            )
+            
+            temperature = temp
+            top_p = None
+            if form_data["top_p"].strip():
+                try:
+                    top_p = float(form_data["top_p"])
+                except ValueError:
+                    pass
+            
+            top_k = None
+            if form_data["top_k"].strip():
+                try:
+                    top_k = int(form_data["top_k"])
+                except ValueError:
+                    pass
+            
+            max_tokens = None
+            if form_data["max_tokens"].strip():
+                try:
+                    max_tokens = int(form_data["max_tokens"])
+                except ValueError:
+                    pass
+            
+            system_message = form_data["system_message"].strip() or None
+            
+            config = ProfileConfig(
+                model_alias=model,
+                temperature=temperature,
+                top_p=top_p,
+                top_k=top_k,
+                max_tokens=max_tokens,
+                system_message=system_message,
+                tool_settings=tool_settings,
+                trace_settings=trace_settings,
+                reasoning_settings=reasoning_settings,
+            )
+            
+            meta = ProfileMeta(
+                name=form_data["name"].strip(),
+                description=form_data["description"].strip(),
+                version=PROFILE_VERSION,
+            )
+            
+            profile = Profile(meta=meta, config=config)
+            chatdsl_content = profile.to_chatdsl()
+            
+        except Exception as e:
+            self.set_status(f"Error generating preview: {e}", is_error=True)
+            return False
+        
+        # Draw preview dialog
+        self.draw_dialog_border(win, f"Save Profile: {new_alias}")
+        
+        # Display chatdsl content in a scrollable area
+        win.addstr(2, 2, "Profile ChatDSL Content:", curses.color_pair(3) | curses.A_BOLD)
+        win.addstr(3, 2, "-" * (win_w - 4), curses.A_DIM)
+        
+        # Display the content (scroll if too long)
+        lines = chatdsl_content.split('\n')
+        max_lines = win_h - 6  # Leave room for header, separator, and buttons
+        for i, line in enumerate(lines[:max_lines]):
+            win.addstr(4 + i, 2, line[:win_w - 4])
+        
+        # Draw separator above buttons
+        win.addstr(win_h - 4, 2, "-" * (win_w - 4), curses.A_DIM)
+        
+        # Show truncation indicator if content was too long
+        if len(lines) > max_lines:
+            # Draw indicator above the separator
+            win.addstr(win_h - 5, 2, f"... (+{len(lines) - max_lines} more lines)", curses.color_pair(3))
+        
+        # Draw buttons
+        preview_buttons = ["[ Save ]", "[ Cancel ]"]
+        preview_sel = 0  # Save is selected by default
+        
+        # Helper function to draw buttons
+        def draw_preview_buttons():
+            for idx, btn in enumerate(preview_buttons):
+                btn_x = (win_w - len(btn) * 2 - 10) // 2 + (idx * 15)
+                if idx == preview_sel:
+                    win.addstr(win_h - 2, btn_x, btn, curses.color_pair(2))
+                else:
+                    win.addstr(win_h - 2, btn_x, btn)
+        
+        draw_preview_buttons()
+        win.refresh()
+        
+        # Wait for user input
+        while True:
+            ch = win.getch()
+            if ch == curses.KEY_LEFT:
+                preview_sel = 0
+                draw_preview_buttons()
+                win.refresh()
+            elif ch == curses.KEY_RIGHT:
+                preview_sel = 1
+                draw_preview_buttons()
+                win.refresh()
+            elif ch in (10, 13):  # Enter
+                if preview_sel == 0:  # Save
+                    # Actually save the profile
+                    result = self.apply_form_edits(profile_name, form_data, is_new, original_meta)
+                    if not result:
+                        # Show error in preview dialog before returning
+                        win.addstr(win_h - 2, 2, f"Error: {self.status_message}", curses.color_pair(4))
+                        win.refresh()
+                        curses.napms(1500)  # Show error for 1.5 seconds
+                    return result
+                else:  # Cancel
+                    return False
+            elif ch == 27:  # Escape
+                return False
+        
+        return False
+
+    def is_field_hidden(self, key: str, form_data: dict) -> bool:
+        """Check if a field should be hidden based on other field values."""
+        # Currently no hidden fields in profile editor
+        return False
+
+    def apply_form_edits(self, old_alias: str, form_data: dict, is_new: bool, original_meta: Optional[ProfileMeta] = None) -> bool:
+        """Validate form data and save the profile."""
+        # Validate alias
+        new_alias = form_data["alias"].strip()
+        if not new_alias:
+            self.set_status("Error: Alias cannot be empty!", is_error=True)
+            return False
+
+        # Validate model
+        model = form_data["model"].strip()
+        if not model:
+            self.set_status("Error: Model cannot be empty!", is_error=True)
+            return False
+
+        # Parse and validate numerical fields
+        try:
+            temp = float(form_data["temperature"]) if form_data["temperature"].strip() else None
+            if temp is not None and not (0.0 <= temp <= 2.0):
+                self.set_status("Error: Temperature must be 0.0-2.0", is_error=True)
+                return False
+        except ValueError:
+            self.set_status("Error: Invalid temperature", is_error=True)
+            return False
+
+        # Build profile from form data
+
+        # Parse tool settings
+        tool_mode = form_data["tool_mode"]
+        tool_auto_execute = form_data["tool_auto_execute"].lower() == "true"
+        tool_max_turns = None
+        if form_data["tool_max_turns"].strip():
+            try:
+                tool_max_turns = int(form_data["tool_max_turns"])
+            except ValueError:
+                self.set_status("Warning: Invalid max turns", is_error=False)
+
+        tool_disabled = []
+        if form_data["tool_disabled"].strip():
+            tool_disabled = [t.strip() for t in form_data["tool_disabled"].split(",") if t.strip()]
+
+        tool_settings = ToolSettings(
+            mode=tool_mode,
+            auto_execute=tool_auto_execute,
+            max_turns=tool_max_turns,
+            disabled_tools=tool_disabled,
+        )
+
+        # Parse trace settings
+        trace_settings = TraceSettings(
+            tps=form_data["trace_tps"].lower() == "true",
+            agentic_loop=form_data["trace_agentic_loop"].lower() == "true",
+            raw_payload=form_data["trace_raw_payload"].lower() == "true",
+            rerank=form_data["trace_rerank"].lower() == "true",
+            tps_perf=form_data["trace_tps_perf"].lower() == "true",
+        )
+
+        # Parse reasoning settings
+        reasoning_settings = ReasoningSettings(
+            enabled=form_data["reasoning"].lower() == "true",
+            show_thinking=form_data["show_thinking"].lower() == "true",
+            effort=form_data["reasoning_effort"],
+        )
+
+        # Parse other fields
+        temperature = temp
+        top_p = None
+        if form_data["top_p"].strip():
+            try:
+                top_p = float(form_data["top_p"])
+            except ValueError:
+                pass
+
+        top_k = None
+        if form_data["top_k"].strip():
+            try:
+                top_k = int(form_data["top_k"])
+            except ValueError:
+                pass
+
+        max_tokens = None
+        if form_data["max_tokens"].strip():
+            try:
+                max_tokens = int(form_data["max_tokens"])
+            except ValueError:
+                pass
+
+        system_message = form_data["system_message"].strip() or None
+
+        # Build config
+        config = ProfileConfig(
+            model_alias=model,
+            temperature=temperature,
+            top_p=top_p,
+            top_k=top_k,
+            max_tokens=max_tokens,
+            system_message=system_message,
+            tool_settings=tool_settings,
+            trace_settings=trace_settings,
+            reasoning_settings=reasoning_settings,
+        )
+
+        # Build meta - preserve original system fields when editing
+        now = datetime.now()
+        meta = ProfileMeta(
+            name=form_data["name"].strip(),
+            description=form_data["description"].strip(),
+            version=PROFILE_VERSION,
+            created_at=original_meta.created_at if original_meta else None,
+            updated_at=now,
+            author=original_meta.author if original_meta else None,
+        )
+
+        # Create profile
+        profile = Profile(meta=meta, config=config)
+
+        # Save profile
+        try:
+            if is_new:
+                path = self.pm.save_profile(profile, new_alias)
+            else:
+                # Delete old if alias changed
+                if old_alias != new_alias:
+                    try:
+                        self.pm.delete_profile(old_alias)
+                    except Exception:
+                        pass
+                path = self.pm.save_profile(profile, new_alias)
+
+            # Verify the file was written
+            if not os.path.exists(path):
+                raise FileNotFoundError(f"Profile file not created at {path}")
+
+            self.has_changes = False
+            self.set_status(f"Saved profile '{new_alias}'")
+            self.load_profiles()  # Reload
+            # Reset selection to ensure it's valid
+            if self.selected_idx >= len(self.filtered_list):
+                self.selected_idx = max(0, len(self.filtered_list) - 1)
+            return True
+        except Exception as e:
+            self.set_status(f"Error saving: {e}", is_error=True)
+            return False
+
+    def clone_profile_dialog(self, stdscr, src_name: str, src_meta: ProfileMeta):
+        """Dialog to clone a profile."""
+        h, w = stdscr.getmaxyx()
+        win_h, win_w = 12, 48
+        win_y = (h - win_h) // 2
+        win_x = (w - win_w) // 2
+
+        win = curses.newwin(win_h, win_w, win_y, win_x)
+        win.keypad(True)
+        self.draw_dialog_border(win, "Clone Profile")
+
+        win.addstr(2, 4, f"Clone: {src_meta.name or src_name}")
+        win.addstr(4, 4, "New Alias:")
+
+        new_alias = self.edit_text_input(win, 5, 16, 24, src_name + "_clone", "alias")
+
+        if new_alias and new_alias.strip():
+            try:
+                self.pm.clone_profile(src_name, new_alias.strip())
+                self.has_changes = True
+                self.set_status(f"Cloned '{src_name}' to '{new_alias}'")
+                self.load_profiles()
+            except Exception as e:
+                self.set_status(f"Error cloning: {e}", is_error=True)
+
+        stdscr.clear()
+
+    def delete_profile_dialog(self, stdscr, name: str, meta: ProfileMeta):
+        """Dialog to delete a profile."""
+        h, w = stdscr.getmaxyx()
+        win_h, win_w = 12, 48
+        win_y = (h - win_h) // 2
+        win_x = (w - win_w) // 2
+
+        win = curses.newwin(win_h, win_w, win_y, win_x)
+        win.keypad(True)
+        self.draw_dialog_border(win, "Delete Profile?")
+
+        win.addstr(2, 4, "Are you sure you want to delete:")
+        win.addstr(4, 6, f"Alias: {name}", curses.color_pair(1))
+        win.addstr(5, 6, f"Name: {meta.name or '(unnamed)'}", curses.color_pair(1))
+        win.addstr(6, 6, f"Description: {meta.description or '(no description)'}", curses.color_pair(1))
+
+        options = ["[ Delete ]", "[ Cancel ]"]
+        sel = 1
+
+        while True:
+            for idx, opt in enumerate(options):
+                opt_x = 10 + (idx * 16)
+                if idx == sel:
+                    win.addstr(9, opt_x, opt, curses.color_pair(4) if idx == 0 else curses.color_pair(2))
+                else:
+                    win.addstr(9, opt_x, opt)
+            win.refresh()
+
+            ch = win.getch()
+            if ch == curses.KEY_LEFT:
+                sel = 0
+            elif ch == curses.KEY_RIGHT:
+                sel = 1
+            elif ch in (10, 13):
+                if sel == 0:
+                    try:
+                        self.pm.delete_profile(name)
+                        self.has_changes = True
+                        self.set_status(f"Deleted profile '{name}'")
+                        self.load_profiles()
+                    except Exception as e:
+                        self.set_status(f"Error deleting: {e}", is_error=True)
+                    break
+                else:
+                    break
+            elif ch == 27:
+                break
+
+        stdscr.clear()
+
+    @property
+    def current_field_idx(self):
+        """Property for current field index (needed for compatibility)."""
+        return getattr(self, "_current_field_idx", 0)
+
+    @current_field_idx.setter
+    def current_field_idx(self, value):
+        self._current_field_idx = value
+
+
+def run_profile_tui(profile_dir: Optional[str] = None, config_manager: Any = None, initial_profile: Optional[str] = None) -> int:
+    """
+    Standalone entry point for TUI profile manager.
+    
+    Args:
+        profile_dir: Profile directory path.
+        config_manager: ConfigManager instance for model list.
+        initial_profile: Optional profile name to select initially.
+    
+    Returns:
+        Exit code (0 for success, 1 for error).
+    """
+    tui = ProfileTUI(profile_dir=profile_dir, config_manager=config_manager, initial_profile=initial_profile)
+
+    try:
+        curses.wrapper(tui.run)
+        return 0
+    except KeyboardInterrupt:
+        return 0
+    except Exception as e:
+        print(f"\nFatal error in Profile TUI: {str(e)}", file=sys.stderr)
+        return 1
+
+
+def main() -> int:
+    """Main entry point when run as script."""
+    parser = argparse.ArgumentParser(description="Chatybot Curses Profile Manager")
+    parser.add_argument(
+        "-d", "--profile-dir",
+        help="Path to profile directory",
+        default=None
+    )
+    args = parser.parse_args()
+
+    return run_profile_tui(profile_dir=args.profile_dir)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
