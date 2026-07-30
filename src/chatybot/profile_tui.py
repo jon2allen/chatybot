@@ -1032,6 +1032,15 @@ class ProfileTUI:
             )
             
             unmanaged = form_data.get("_unmanaged_content", "")
+            if not unmanaged and new_alias:
+                try:
+                    target_path = self.pm._resolve_path(new_alias)
+                    if os.path.exists(target_path):
+                        existing_p = Profile.from_file(target_path)
+                        unmanaged = existing_p.unmanaged_content
+                except Exception:
+                    pass
+
             profile = Profile(meta=meta, config=config, unmanaged_content=unmanaged)
             chatdsl_content = profile.to_chatdsl()
             

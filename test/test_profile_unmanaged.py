@@ -69,3 +69,36 @@ Custom prompt text here
             
         assert "# @name: Updated Disk Test" in reloaded_str
         assert "Custom prompt text here" in reloaded_str
+
+
+def test_unmanaged_content_preserved_on_overwrite():
+    """Verify save_profile detects existing unmanaged content on disk and re-appends it upon overwrite."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        pm = ProfileManager(tmpdir)
+        path = os.path.join(tmpdir, "overwrite_test.chatdsl")
+        
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("""# @name: Initial Profile
+/model devstral_1
+
+# ============================================================================
+# USER CUSTOM CONTENT / MESSAGES / VARIABLES BELOW THIS LINE
+# Note: Profile editor will not modify content below this line.
+# Direct file location: /tmp/overwrite_test.chatdsl
+# ============================================================================
+
+/set UNMANAGED_VAR="preserve me"
+""")
+
+        # Construct a new profile with empty unmanaged_content
+        meta = pm.read_meta("overwrite_test")
+        profile = pm.load_profile("overwrite_test")
+        profile.unmanaged_content = ""  # Simulate editing form which only edits structured fields
+
+        # Save profile
+        pm.save_profile(profile, "overwrite_test")
+
+        with open(path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        assert '/set UNMANAGED_VAR="preserve me"' in content
