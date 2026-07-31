@@ -182,7 +182,9 @@ class TParser:
         # Shell execution commands
         "run", "run_safe", "run_unsafe", "tool", "profile",
         # Procedures & Local Scoping
-        "proc", "defproc", "endproc", "local"
+        "proc", "defproc", "endproc", "local",
+        # Multiline Foreach Loop
+        "foreach", "endfor"
     }
 
     def __init__(self, tokens: List[Token], verbose: bool = False):
