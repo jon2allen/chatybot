@@ -1086,10 +1086,49 @@ imposta nome = "valore"
 ${nome}
 ```
 
+### Variabili Locali (Procedure)
+```dsl
+locale nome = "valore"
+```
+
 ### Condizioni
 ```dsl
 if ${x} == "yes" then /comando
 if not ${debug} then /eco "quiet"
+```
+
+### Cicli Foreach
+```dsl
+perogni file in ${lista_file}
+    /eco Elaborazione ${file}...
+    # Logica qui
+finper
+```
+
+### Uscita dal Ciclo con Break
+```dsl
+perogni num in range(1:10)
+    if ${num} == "5" then rompere
+    /eco ${num}
+finper
+```
+
+### Generatori
+```dsl
+# Intervallo di numeri (inclusivo)
+perogni i in range(1:5)
+    /eco ${i}
+finper
+
+# Intervallo con passo
+perogni i in range(1:10:2)
+    /eco ${i}
+finper
+
+# Righe di testo
+perogni riga in ${testo}
+    /eco ${riga}
+finper
 ```
 
 ### Attesa

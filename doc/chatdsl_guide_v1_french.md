@@ -1086,10 +1086,49 @@ definir nom = "valeur"
 ${nom}
 ```
 
+### Variables Locales (Procédures)
+```dsl
+local nom = "valeur"
+```
+
 ### Conditions
 ```dsl
 if ${x} == "yes" then /commande
 if not ${debug} then /echo "quiet"
+```
+
+### Boucles Foreach
+```dsl
+pourchaque fichier in ${liste_fichiers}
+    /echo Traitement de ${fichier}...
+    # Logique ici
+finpour
+```
+
+### Sortie de Boucle avec Break
+```dsl
+pourchaque num in range(1:10)
+    if ${num} == "5" then casser
+    /echo ${num}
+finpour
+```
+
+### Générateurs
+```dsl
+# Plage de nombres (inclusif)
+pourchaque i in range(1:5)
+    /echo ${i}
+finpour
+
+# Plage avec pas
+pourchaque i in range(1:10:2)
+    /echo ${i}
+finpour
+
+# Lignes de texte
+pourchaque ligne in ${texte}
+    /echo ${ligne}
+finpour
 ```
 
 ### Attente
