@@ -15,10 +15,18 @@
       "/imagine": "/imagine",
       "/run": "/run",
       "/echo": "/echo",
-      "/calc": "/calc"
+      "/calc": "/calc",
+      "/proc": "/proc"
     },
     "keywords": {
-      "set": "set"
+      "set": "set",
+      "defproc": "defproc",
+      "endproc": "endproc",
+      "local": "local",
+      "foreach": "foreach",
+      "endfor": "endfor",
+      "range": "range",
+      "lines": "lines"
     },
     "ui": {
       "language_changed": "Language set to: {lang}",
@@ -120,7 +128,9 @@
       "/reordenar": "/rerank",
       "/perfil": "/profile",
       "/calcular": "/calc",
-      "/calc": "/calc"
+      "/calc": "/calc",
+      "/proc": "/proc",
+      "/procedimiento": "/proc"
     },
     "keywords": {
       "informacion": "info",
@@ -143,7 +153,20 @@
       "medio": "medium",
       "alto": "high",
       "ninguno": "none",
-      "estandar": "standard"
+      "estandar": "standard",
+      "defproc": "defproc",
+      "definirproc": "defproc",
+      "endproc": "endproc",
+      "finproc": "endproc",
+      "local": "local",
+      "foreach": "foreach",
+      "paracada": "foreach",
+      "endfor": "endfor",
+      "finpara": "endfor",
+      "range": "range",
+      "rango": "range",
+      "lines": "lines",
+      "lineas": "lines"
     },
     "ui": {
       "language_changed": "Idioma establecido en: {lang}",
@@ -443,7 +466,9 @@
       "/documents": "/documents",
       "/reclasser": "/rerank",
       "/calculer": "/calc",
-      "/calc": "/calc"
+      "/calc": "/calc",
+      "/proc": "/proc",
+      "/procedure": "/proc"
     },
     "keywords": {
       "informations": "info",
@@ -466,7 +491,19 @@
       "moyen": "medium",
       "haut": "high",
       "aucun": "none",
-      "standard": "standard"
+      "standard": "standard",
+      "defproc": "defproc",
+      "endproc": "endproc",
+      "finproc": "endproc",
+      "local": "local",
+      "foreach": "foreach",
+      "pourchaque": "foreach",
+      "endfor": "endfor",
+      "finpour": "endfor",
+      "range": "range",
+      "plage": "range",
+      "lines": "lines",
+      "lignes": "lines"
     },
     "ui": {
       "language_changed": "Langue définie sur : {lang}",
@@ -768,7 +805,8 @@
       "/重排": "/rerank",
       "/配置": "/profile",
       "/计算": "/calc",
-      "/calc": "/calc"
+      "/calc": "/calc",
+      "/proc": "/proc"
     },
     "keywords": {
       "信息": "info",
@@ -791,7 +829,14 @@
       "中": "medium",
       "高": "high",
       "无": "none",
-      "标准": "standard"
+      "标准": "standard",
+      "defproc": "defproc",
+      "endproc": "endproc",
+      "local": "local",
+      "foreach": "foreach",
+      "endfor": "endfor",
+      "range": "range",
+      "lines": "lines"
     },
     "ui": {
       "language_changed": "语言设置为: {lang}",
@@ -1092,7 +1137,9 @@
       "/documenti": "/documents",
       "/riordina": "/rerank",
       "/calcola": "/calc",
-      "/calc": "/calc"
+      "/calc": "/calc",
+      "/proc": "/proc",
+      "/procedura": "/proc"
     },
     "keywords": {
       "informazioni": "info",
@@ -1115,7 +1162,19 @@
       "medio": "medium",
       "alto": "high",
       "nessuno": "none",
-      "standard": "standard"
+      "standard": "standard",
+      "defproc": "defproc",
+      "endproc": "endproc",
+      "finproc": "endproc",
+      "local": "local",
+      "foreach": "foreach",
+      "perogni": "foreach",
+      "endfor": "endfor",
+      "finper": "endfor",
+      "range": "range",
+      "intervallo": "range",
+      "lines": "lines",
+      "righe": "lines"
     },
     "ui": {
       "language_changed": "Lingua impostata su: {lang}",
@@ -1415,7 +1474,8 @@
       "/مستندات": "/documents",
       "/إعادة_ترتيب": "/rerank",
       "/احسب": "/calc",
-      "/calc": "/calc"
+      "/calc": "/calc",
+      "/proc": "/proc"
     },
     "keywords": {
       "معلومات": "info",
@@ -1438,7 +1498,14 @@
       "وسط": "medium",
       "عالي": "high",
       "بلاش": "none",
-      "عادي": "standard"
+      "عادي": "standard",
+      "defproc": "defproc",
+      "endproc": "endproc",
+      "local": "local",
+      "foreach": "foreach",
+      "endfor": "endfor",
+      "range": "range",
+      "lines": "lines"
     },
     "ui": {
       "language_changed": "تغيرت اللغة لـ: {lang}",

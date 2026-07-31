@@ -186,4 +186,16 @@ class TestCommandVerbValidation:
         translated_fr = app.i18n.translate_command_string("/modele informations")
         assert translated_fr == "/model info"
 
+    @pytest.mark.anyio
+    async def test_proc_and_foreach_command_translation(self, app):
+        """Test localization resolving for /proc and foreach commands/keywords."""
+        app.i18n.set_locale("es")
+        assert app.i18n.resolve_command("/procedimiento") == "/proc"
+        assert app.i18n.translate_script("definirproc myproc()") == "defproc myproc()"
+        assert app.i18n.translate_script("paracada i en rango(1:5)") == "foreach i en rango(1:5)"
+
+        app.i18n.set_locale("fr")
+        assert app.i18n.resolve_command("/procedure") == "/proc"
+        assert app.i18n.translate_script("pourchaque line en lignes(doc)") == "foreach line en lignes(doc)"
+
 
