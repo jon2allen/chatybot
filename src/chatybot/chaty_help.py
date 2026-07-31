@@ -605,6 +605,50 @@ class HelpSystem:
             examples=["/tool on", "/tool off", "/tool list", "/tool enable list_directory", "/tool disable write_file", "/tool disable all", "/tool prompt", "/tool loop", "/tool auto on", '/tool {"tool": "list_directory", "arguments": {"path": "."}}'],
             see_also=["/run"]
         ))
+
+        self.register_command(CommandHelp(
+            name="/proc",
+            category="scripting",
+            short_desc="Execute a procedure defined with defproc",
+            usage="/proc <name> [param1=\"val1\" param2=\"val2\"]",
+            long_desc="Executes a named procedure defined via 'defproc' or loaded from a procedure script file (.chatdsl). Creates an isolated stack frame with Save/Restore local scoping for arguments and local variables.",
+            examples=["/proc summarize_text text=\"${file_buffer}\"", "/proc generate_report topic=\"AI\""],
+            see_also=["defproc", "local", "endproc"]
+        ))
+
+        self.register_command(CommandHelp(
+            name="defproc",
+            category="scripting",
+            short_desc="Define a reusable procedure block",
+            usage="defproc <name>(<param1>, <param2>, ...)\n  <commands>\nendproc",
+            long_desc="Defines a procedure with parameter names. Can be invoked later with '/proc <name> param1=\"val\"'. Inside procedure definitions, 'local var = val' isolates local variables using virtual stack frame snapshotting.",
+            examples=["defproc greet(name)\n  /echo Hello ${name}\nendproc"],
+            see_also=["/proc", "endproc", "local"]
+        ))
+
+        self.register_command(CommandHelp(
+            name="local",
+            category="scripting",
+            short_desc="Declare a local variable within a procedure",
+            usage="local <name> = <value>",
+            long_desc="Declares a local variable inside a procedure block. The original variable value before the procedure invocation will be snapshotted and automatically restored when the procedure exits.",
+            examples=['local mode = "fast"', 'local temp_val = ${LAST_RESPONSE}'],
+            see_also=["defproc", "endproc", "/proc"]
+        ))
+
+        self.register_command(CommandHelp(
+            name="foreach",
+            category="scripting",
+            short_desc="Iterate over arrays, numeric ranges, or lines of text",
+            usage="foreach <item_var> in <array_var | range(...) | lines(...)>\n  <commands>\nendfor",
+            long_desc="Multiline loop construct. Iterates over elements of an array variable, a numeric generator 'range(start:end[:step])', or lines of text 'lines(text_var|filebank)'. Automatically snapshots and restores the loop variable state.",
+            examples=[
+                "foreach item in fruits\n  /echo Item: ${item}\nendfor",
+                "foreach page in range(1:154)\n  /echo Page: ${page}\nendfor",
+                "foreach line in lines({filebank1})\n  /echo Line: ${line}\nendfor"
+            ],
+            see_also=["endfor", "set"]
+        ))
     
     def register_command(self, cmd_help: CommandHelp) -> None:
         """Register a command with the help system."""
@@ -814,21 +858,23 @@ class HelpSystem:
         if query is None:
             return self.format_command_list(self.get_all_commands(), i18n=i18n)
         
+        if query in self.commands:
+            return self.format_command_detail(self.commands[query], i18n=i18n)
+
         if query.startswith('/'):
-            if query in self.commands:
-                return self.format_command_detail(self.commands[query], i18n=i18n)
+            query_without_slash = query.lstrip('/')
+            if f"/{query_without_slash}" in self.commands:
+                return self.format_command_detail(self.commands[f"/{query_without_slash}"], i18n=i18n)
+            elif query_without_slash in self.commands:
+                return self.format_command_detail(self.commands[query_without_slash], i18n=i18n)
             else:
-                query_without_slash = query.lstrip('/')
-                if f"/{query_without_slash}" in self.commands:
-                    return self.format_command_detail(self.commands[f"/{query_without_slash}"], i18n=i18n)
-                else:
-                    filtered = self.filter_commands(query)
-                    if not filtered:
-                        msg = "No commands found matching '{query}'. Try /help for all commands."
-                        if i18n:
-                            msg = i18n.get_help_string("headers", "no_commands", msg)
-                        return msg.format(query=query)
-                    return self.format_command_list(filtered, i18n=i18n)
+                filtered = self.filter_commands(query)
+                if not filtered:
+                    msg = "No commands found matching '{query}'. Try /help for all commands."
+                    if i18n:
+                        msg = i18n.get_help_string("headers", "no_commands", msg)
+                    return msg.format(query=query)
+                return self.format_command_list(filtered, i18n=i18n)
         
         filtered = self.filter_commands(query)
         if not filtered:
