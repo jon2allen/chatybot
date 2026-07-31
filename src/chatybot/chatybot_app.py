@@ -90,7 +90,7 @@ class ChatybotApp:
                 "reloadmacros", "calc", "stream", "script", "source", "profile", "quit", "exit",
                 "setdb", "dblist", "searchdb", "dblog", "dbprint", "documents", "rerank",
                 "loadvar", "savevar", "setvar", "notemode", "mem", "dump", "trace", "debug",
-                "run", "run_safe", "run_unsafe", "tool", "proc", "defproc", "endproc", "local"
+                "run", "run_safe", "run_unsafe", "tool", "proc", "defproc", "endproc", "local", "foreach", "endfor"
             ]
         )
 
@@ -492,6 +492,13 @@ class ChatybotApp:
     def parse_dsl_list(self, val_str: str) -> List[str]:
         """Splits a DSL list string by top-level commas, respecting quotes and braces/brackets."""
         val_str = val_str.strip()
+        if "```" in val_str:
+            m = re.search(r"```(?:json)?\s*(\[.*?\])\s*```", val_str, re.DOTALL)
+            if m:
+                val_str = m.group(1).strip()
+            else:
+                val_str = re.sub(r"```(?:json)?", "", val_str).replace("```", "").strip()
+
         if not (val_str.startswith('[') and val_str.endswith(']')):
             raise ValueError("Array literal must start with '[' and end with ']'")
         
@@ -553,6 +560,12 @@ class ChatybotApp:
         Supports element-level placeholder replacement, avoiding syntax errors
         when placeholders resolve to strings containing quotes, newlines, or leading zeros.
         """
+        val_str = val_str.strip()
+        if not val_str.startswith('[') and not val_str.startswith('```'):
+            resolved = self.buffer_manager.replace_placeholders_legacy(val_str)
+            if resolved:
+                val_str = resolved.strip()
+
         # Parse the top-level list structure
         raw_elements = self.parse_dsl_list(val_str)
         
@@ -1921,7 +1934,7 @@ class ChatybotApp:
 
         # Check if input looks like a command keyword but was not recognized
         stripped = command.strip()
-        script_keywords = ['set', 'if', 'wait', 'def', '%', '#', 'local', 'defproc', 'endproc']
+        script_keywords = ['set', 'if', 'wait', 'def', '%', '#', 'local', 'defproc', 'endproc', 'foreach', 'endfor']
         
         if stripped:
             first_word = stripped.split()[0] if stripped.split() else stripped
@@ -1940,6 +1953,10 @@ class ChatybotApp:
                     print("Invalid defproc command. Usage: defproc <name>(<params>)")
                 elif first_word.lower() == 'endproc':
                     print("Unexpected endproc keyword.")
+                elif first_word.lower() == 'foreach':
+                    print("Invalid foreach command format. Usage: foreach <item_var> in <array_var>")
+                elif first_word.lower() == 'endfor':
+                    print("Unexpected endfor keyword.")
                 elif first_word.lower() == '%':
                     print("Invalid macro call. Usage: %<macro_name>(<args>)")
                 elif first_word.lower() == '#':
@@ -2031,6 +2048,11 @@ class ChatybotApp:
                 await self.get_proc_definition_input(line)
                 return
 
+            # Handle foreach loops for interactive input
+            if line.lstrip().startswith("foreach ") or line.strip() == "foreach":
+                await self.get_foreach_input(line)
+                return
+
             # Handle macro definitions for regular prompts
             if line.lstrip().startswith("def "):
                 try:
@@ -2092,6 +2114,289 @@ class ChatybotApp:
         
         self.procedures[proc_name] = {"params": params, "body": body_lines}
         print(f"Procedure '{proc_name}' defined with params: {params}")
+
+    async def get_foreach_input(self, header_line: str) -> None:
+        """Get foreach loop input interactively from the user."""
+        m = re.match(r"^\s*foreach\s+([a-zA-Z_]\w*)\s+in\s+([a-zA-Z_]\w*)\s*$", header_line.strip())
+        if not m:
+            print("Invalid foreach format. Usage: foreach <item_var> in <array_var>")
+            return
+        
+        item_var = m.group(1)
+        array_var = m.group(2)
+        
+        print(f"Entering foreach loop for '{item_var}' in '{array_var}'. Enter commands (type 'endfor' on a line by itself to finish):")
+        buffer = []
+        depth = 1
+        
+        while True:
+            if getattr(self, 'interrupt_requested', False):
+                print("\nInterrupted. Cancelling foreach loop...")
+                self.control_c_count = 0
+                self.interrupt_requested = False
+                return
+            
+            try:
+                line = input("(for)> ")
+            except EOFError:
+                break
+            
+            stripped = line.strip()
+            if stripped == "endfor":
+                depth -= 1
+                if depth == 0:
+                    break
+                buffer.append(line)
+            elif re.match(r"^\s*foreach\s+([a-zA-Z_]\w*)\s+in\s+([a-zA-Z_]\w*)\s*$", stripped):
+                depth += 1
+                buffer.append(line)
+            else:
+                buffer.append(line)
+        
+        await self.execute_foreach_block(item_var, array_var, buffer)
+
+    async def execute_foreach_block(self, item_var: str, array_var: str, buffer: List[str]) -> None:
+        """Executes a captured foreach loop block over an array variable in ScriptVars."""
+        array_data = self.buffer_manager.script_vars.get(array_var)
+        
+        if isinstance(array_data, str):
+            try:
+                array_data = self.parse_array_value(array_data)
+            except Exception:
+                pass
+
+        if not isinstance(array_data, list):
+            print(f"Warning: '${array_var}' is not a valid array for foreach loop. Skipping.")
+            return
+
+        exists = item_var in self.buffer_manager.script_vars
+        orig_val = self.buffer_manager.script_vars.get(item_var) if exists else None
+        
+        old_user_write = getattr(self.buffer_manager.script_vars, '_is_user_write', False)
+        if hasattr(self.buffer_manager.script_vars, '_is_user_write'):
+            self.buffer_manager.script_vars._is_user_write = True
+
+        try:
+            for elem in array_data:
+                val_str = str(elem) if not isinstance(elem, (str, int, float, bool)) else elem
+                self.buffer_manager.set_script_var(item_var, val_str)
+                await self.execute_command_list(buffer)
+        finally:
+            old_user_write_inner = getattr(self.buffer_manager.script_vars, '_is_user_write', False)
+            if hasattr(self.buffer_manager.script_vars, '_is_user_write'):
+                self.buffer_manager.script_vars._is_user_write = True
+            try:
+                if exists:
+                    self.buffer_manager.set_script_var(item_var, orig_val)
+                else:
+                    if item_var in self.buffer_manager.script_vars:
+                        del self.buffer_manager.script_vars[item_var]
+            finally:
+                if hasattr(self.buffer_manager.script_vars, '_is_user_write'):
+                    self.buffer_manager.script_vars._is_user_write = old_user_write_inner
+
+    async def execute_command_list(self, commands_list: List[str]) -> None:
+        """Execute a list of command lines with support for multiline blocks (foreach, defproc, multiline)."""
+        old_script_context = self.script_context
+        self.script_context = True
+
+        in_multi_line = False
+        multi_line_buffer = []
+
+        in_defproc = False
+        cur_proc_name = ""
+        cur_proc_params = []
+        cur_proc_body = []
+
+        foreach_depth = 0
+        foreach_buffer = []
+        foreach_item_var = ""
+        foreach_array_var = ""
+
+        idx = 0
+        try:
+            while idx < len(commands_list):
+                cmd = commands_list[idx]
+                if not cmd.strip():
+                    idx += 1
+                    continue
+
+                stripped_cmd = cmd.strip()
+                lstripped_cmd = cmd.lstrip()
+
+                # 1. Handle active foreach buffer capture
+                if foreach_depth > 0:
+                    m_for = re.match(r"^\s*foreach\s+([a-zA-Z_]\w*)\s+in\s+([a-zA-Z_]\w*)\s*$", stripped_cmd)
+                    if m_for:
+                        foreach_depth += 1
+                        foreach_buffer.append(cmd)
+                    elif stripped_cmd == "endfor":
+                        foreach_depth -= 1
+                        if foreach_depth == 0:
+                            await self.execute_foreach_block(foreach_item_var, foreach_array_var, foreach_buffer)
+                            foreach_buffer = []
+                            foreach_item_var = ""
+                            foreach_array_var = ""
+                        else:
+                            foreach_buffer.append(cmd)
+                    else:
+                        foreach_buffer.append(cmd)
+                    idx += 1
+                    continue
+
+                # 2. Handle active defproc buffer capture
+                if in_defproc:
+                    if stripped_cmd == "endproc":
+                        self.procedures[cur_proc_name] = {
+                            "params": cur_proc_params,
+                            "body": cur_proc_body
+                        }
+                        print(f"Defined procedure: {cur_proc_name} with {len(cur_proc_params)} parameters")
+                        in_defproc = False
+                        cur_proc_name = ""
+                        cur_proc_params = []
+                        cur_proc_body = []
+                    elif lstripped_cmd.startswith("defproc ") or stripped_cmd == "defproc":
+                        print("Error: Nested defproc is not allowed.")
+                        in_defproc = False
+                        cur_proc_name = ""
+                        cur_proc_params = []
+                        cur_proc_body = []
+                    else:
+                        cur_proc_body.append(cmd)
+                    idx += 1
+                    continue
+
+                # 3. Check for foreach start
+                m_for = re.match(r"^\s*foreach\s+([a-zA-Z_]\w*)\s+in\s+([a-zA-Z_]\w*)\s*$", stripped_cmd)
+                if m_for:
+                    foreach_item_var = m_for.group(1)
+                    foreach_array_var = m_for.group(2)
+                    foreach_buffer = []
+                    foreach_depth = 1
+                    idx += 1
+                    continue
+
+                # 4. Check for defproc start
+                if lstripped_cmd.startswith("defproc ") or stripped_cmd == "defproc":
+                    m = re.match(r"defproc\s+([a-zA-Z_]\w*)(?:\(([^)]*)\))?", lstripped_cmd)
+                    if m:
+                        cur_proc_name = m.group(1)
+                        params_str = m.group(2)
+                        cur_proc_params = [p.strip() for p in params_str.split(',')] if params_str else []
+                        cur_proc_body = []
+                        in_defproc = True
+                    else:
+                        print("Invalid defproc format. Usage: defproc name(p1, p2)")
+                    idx += 1
+                    continue
+
+                # 5. Check if we're in multi-line mode
+                if (
+                    self.multi_line_mode
+                    and not cmd.startswith("/")
+                    and not in_multi_line
+                ):
+                    in_multi_line = True
+                    multi_line_buffer = [cmd]
+                    idx += 1
+                    continue
+
+                if in_multi_line:
+                    if stripped_cmd == ";;":
+                        self.multi_line_mode = False
+                        expanded_lines = []
+                        for line in multi_line_buffer:
+                            if line.lstrip().startswith("%"):
+                                expanded = self.process_macro_line(line)
+                                expanded_lines.append(line if expanded.startswith("ERROR:") else expanded)
+                            else:
+                                expanded_lines.append(line)
+                        full_prompt = "\n".join(expanded_lines)
+                        print(f"Executing multi-line prompt: {full_prompt[:50]}...")
+                        handled = await self.execute_script_command(full_prompt, self.handle_escape_command)
+                        if not handled:
+                            print(f"Sending prompt to LLM: {full_prompt[:50]}...")
+                            print("Prompt sent to LLM successfully")
+                        in_multi_line = False
+                        multi_line_buffer = []
+
+                        # Peek ahead to burn legacy /multiline if needed
+                        next_meaningful = []
+                        peek_idx = idx + 1
+                        while peek_idx < len(commands_list) and len(next_meaningful) < 2:
+                            peek_cmd = commands_list[peek_idx]
+                            if peek_cmd.strip():
+                                next_meaningful.append((peek_idx, peek_cmd))
+                            peek_idx += 1
+
+                        if len(next_meaningful) >= 2:
+                            idx1, cmd1 = next_meaningful[0]
+                            idx2, cmd2 = next_meaningful[1]
+                            if cmd1 == "/multiline" and cmd2.startswith("/"):
+                                print(f"depreciated line removed: {cmd1}")
+                                commands_list[idx1] = ""
+                        elif len(next_meaningful) == 1:
+                            idx1, cmd1 = next_meaningful[0]
+                            if cmd1 == "/multiline":
+                                print(f"depreciated line removed: {cmd1}")
+                                commands_list[idx1] = ""
+
+                    elif cmd.startswith("/"):
+                        expanded_lines = []
+                        for line in multi_line_buffer:
+                            if line.lstrip().startswith("%"):
+                                expanded = self.process_macro_line(line)
+                                expanded_lines.append(line if expanded.startswith("ERROR:") else expanded)
+                            else:
+                                expanded_lines.append(line)
+                        full_prompt = "\n".join(expanded_lines)
+                        print(f"Executing multi-line prompt: {full_prompt[:50]}...")
+                        handled = await self.execute_script_command(full_prompt, self.handle_escape_command)
+                        if not handled:
+                            print(f"Sending prompt to LLM: {full_prompt[:50]}...")
+                            print("Prompt sent to LLM successfully")
+                        print(f"Executing: {cmd}")
+                        handled = await self.execute_script_command(cmd, self.handle_escape_command)
+                        if not handled:
+                            print(f"Unknown command in script: {cmd}")
+                        in_multi_line = False
+                        multi_line_buffer = []
+                    else:
+                        if cmd.lstrip().startswith("%"):
+                            expanded_line = self.process_macro_line(cmd)
+                            multi_line_buffer.append(cmd if expanded_line.startswith("ERROR:") else expanded_line)
+                        else:
+                            multi_line_buffer.append(cmd)
+                else:
+                    print(f"Executing: {cmd}")
+                    handled = await self.execute_script_command(cmd, self.handle_escape_command)
+                    if not handled:
+                        print(f"Unknown command in script: {cmd}")
+
+                idx += 1
+
+            if in_defproc:
+                print("Error: Unclosed defproc at end of script.")
+            if foreach_depth > 0:
+                print("Error: Unclosed foreach loop at end of script.")
+
+            if in_multi_line and multi_line_buffer:
+                expanded_lines = []
+                for line in multi_line_buffer:
+                    if line.lstrip().startswith("%"):
+                        expanded = self.process_macro_line(line)
+                        expanded_lines.append(line if expanded.startswith("ERROR:") else expanded)
+                    else:
+                        expanded_lines.append(line)
+                full_prompt = "\n".join(expanded_lines)
+                print(f"Executing multi-line prompt: {full_prompt[:50]}...")
+                handled = await self.execute_script_command(full_prompt, self.handle_escape_command)
+                if not handled:
+                    print(f"Sending prompt to LLM: {full_prompt[:50]}...")
+                    print("Prompt sent to LLM successfully")
+        finally:
+            self.script_context = old_script_context
 
     async def execute_script(self, script_path: str) -> None:
         """
@@ -2190,222 +2495,9 @@ class ChatybotApp:
             if cmd:
                 commands_list.append(cmd)
 
-            # Execute each command
-            self.script_context = True
-            multi_line_buffer = []
-            in_multi_line = False
-            in_defproc = False
-            cur_proc_name = ""
-            cur_proc_params = []
-            cur_proc_body = []
-
-            idx = 0
-            while idx < len(commands_list):
-                cmd = commands_list[idx]
-                if not cmd.strip():
-                    idx += 1
-                    continue
-
-                stripped_cmd = cmd.strip()
-                lstripped_cmd = cmd.lstrip()
-
-                if in_defproc:
-                    if stripped_cmd == "endproc":
-                        self.procedures[cur_proc_name] = {
-                            "params": cur_proc_params,
-                            "body": cur_proc_body
-                        }
-                        print(f"Defined procedure: {cur_proc_name} with {len(cur_proc_params)} parameters")
-                        in_defproc = False
-                        cur_proc_name = ""
-                        cur_proc_params = []
-                        cur_proc_body = []
-                    elif lstripped_cmd.startswith("defproc ") or stripped_cmd == "defproc":
-                        print("Error: Nested defproc is not allowed.")
-                        in_defproc = False
-                        cur_proc_name = ""
-                        cur_proc_params = []
-                        cur_proc_body = []
-                    else:
-                        cur_proc_body.append(cmd)
-                    idx += 1
-                    continue
-
-                if lstripped_cmd.startswith("defproc ") or stripped_cmd == "defproc":
-                    m = re.match(r"defproc\s+([a-zA-Z_]\w*)(?:\(([^)]*)\))?", lstripped_cmd)
-                    if m:
-                        cur_proc_name = m.group(1)
-                        params_str = m.group(2)
-                        cur_proc_params = [p.strip() for p in params_str.split(',')] if params_str else []
-                        cur_proc_body = []
-                        in_defproc = True
-                    else:
-                        print("Invalid defproc format. Usage: defproc name(p1, p2)")
-                    idx += 1
-                    continue
-
-                # Check if we're in multi-line mode and not processing an escaped command
-                if (
-                    self.multi_line_mode
-                    and not cmd.startswith("/")
-                    and not in_multi_line
-                ):
-                    in_multi_line = True
-                    multi_line_buffer = [cmd]
-                    idx += 1
-                    continue
-
-                if in_multi_line:
-                    if cmd.strip() == ";;":
-                        # End of multi-line input, process it
-                        self.multi_line_mode = False  # The absolute rule for the new behavior
-                        # First, expand any macros in the buffer
-                        expanded_lines = []
-                        for line in multi_line_buffer:
-                            if line.lstrip().startswith("%"):
-                                # Expand macro calls immediately
-                                expanded = self.process_macro_line(line)
-                                if expanded.startswith("ERROR:"):
-                                    print(expanded)
-                                    expanded_lines.append(line)  # Keep original if error
-                                else:
-                                    expanded_lines.append(expanded)
-                            else:
-                                # Keep regular lines as-is
-                                expanded_lines.append(line)
-                        
-                        # Join the processed lines and send to LLM
-                        full_prompt = "\n".join(expanded_lines)
-                        print(f"Executing multi-line prompt: {full_prompt[:50]}...")
-                        handled = await self.execute_script_command(
-                            full_prompt, self.handle_escape_command
-                        )
-                        if not handled:
-                            # This is not a command, it's a regular prompt for the LLM
-                            # The execute_script_command returns False for regular text
-                            print(f"Sending prompt to LLM: {full_prompt[:50]}...")
-                            # Here we would normally send to LLM
-                            # For now, just indicate success
-                            print("Prompt sent to LLM successfully")
-                        in_multi_line = False
-                        multi_line_buffer = []
-
-                        # Peek ahead to burn legacy /multiline if needed
-                        next_meaningful = []
-                        peek_idx = idx + 1
-                        while peek_idx < len(commands_list) and len(next_meaningful) < 2:
-                            peek_cmd = commands_list[peek_idx]
-                            if peek_cmd.strip():
-                                next_meaningful.append((peek_idx, peek_cmd))
-                            peek_idx += 1
-
-                        if len(next_meaningful) >= 2:
-                            idx1, cmd1 = next_meaningful[0]
-                            idx2, cmd2 = next_meaningful[1]
-                            if cmd1 == "/multiline" and cmd2.startswith("/"):
-                                print(f"depreciated line removed: {cmd1}")
-                                commands_list[idx1] = ""
-                        elif len(next_meaningful) == 1:
-                            idx1, cmd1 = next_meaningful[0]
-                            if cmd1 == "/multiline":
-                                print(f"depreciated line removed: {cmd1}")
-                                commands_list[idx1] = ""
-
-                    elif cmd.startswith("/"):
-                        # Escaped command in the middle of multi-line - process the buffer first
-                        # First, expand any macros in the buffer
-                        expanded_lines = []
-                        for line in multi_line_buffer:
-                            if line.lstrip().startswith("%"):
-                                # Expand macro calls immediately
-                                expanded = self.process_macro_line(line)
-                                if expanded.startswith("ERROR:"):
-                                    print(expanded)
-                                    expanded_lines.append(line)  # Keep original if error
-                                else:
-                                    expanded_lines.append(expanded)
-                            else:
-                                # Keep regular lines as-is
-                                expanded_lines.append(line)
-                        
-                        # Join the processed lines and send to LLM
-                        full_prompt = "\n".join(expanded_lines)
-                        print(f"Executing multi-line prompt: {full_prompt[:50]}...")
-                        handled = await self.execute_script_command(
-                            full_prompt, self.handle_escape_command
-                        )
-                        if not handled:
-                            # This is not a command, it's a regular prompt for the LLM
-                            # The execute_script_command returns False for regular text
-                            print(f"Sending prompt to LLM: {full_prompt[:50]}...")
-                            # Here we would normally send to LLM
-                            # For now, just indicate success
-                            print("Prompt sent to LLM successfully")
-
-                        # Then process the escaped command
-                        print(f"Executing: {cmd}")
-                        handled = await self.execute_script_command(
-                            cmd, self.handle_escape_command
-                        )
-                        if not handled:
-                            print(f"Unknown command in script: {cmd}")
-                        in_multi_line = False
-                        multi_line_buffer = []
-                    else:
-                        # Continue building multi-line input
-                        # Expand macros in individual lines before adding to buffer
-                        if cmd.lstrip().startswith("%"):
-                            expanded_line = self.process_macro_line(cmd)
-                            if expanded_line.startswith("ERROR:"):
-                                print(expanded_line)
-                                multi_line_buffer.append(cmd)  # Keep original if error
-                            else:
-                                multi_line_buffer.append(expanded_line)
-                        else:
-                            multi_line_buffer.append(cmd)
-                else:
-                    print(f"Executing: {cmd}")
-                    handled = await self.execute_script_command(
-                        cmd, self.handle_escape_command
-                    )
-                    if not handled:
-                        print(f"Unknown command in script: {cmd}")
-
-                idx += 1
-
+            # Execute command list using execute_command_list
+            await self.execute_command_list(commands_list)
             print("Script execution finished")
-
-            # If we ended while in multi-line mode, process what we have
-            if in_multi_line and multi_line_buffer:
-                # First, expand any macros in the buffer
-                expanded_lines = []
-                for line in multi_line_buffer:
-                    if line.lstrip().startswith("%"):
-                        # Expand macro calls immediately
-                        expanded = self.process_macro_line(line)
-                        if expanded.startswith("ERROR:"):
-                            print(expanded)
-                            expanded_lines.append(line)  # Keep original if error
-                        else:
-                            expanded_lines.append(expanded)
-                    else:
-                        # Keep regular lines as-is
-                        expanded_lines.append(line)
-                
-                # Join the processed lines and send to LLM
-                full_prompt = "\n".join(expanded_lines)
-                print(f"Executing multi-line prompt: {full_prompt[:50]}...")
-                handled = await self.execute_script_command(
-                    full_prompt, self.handle_escape_command
-                )
-                if not handled:
-                    # This is not a command, it's a regular prompt for the LLM
-                    # The execute_script_command returns False for regular text
-                    print(f"Sending prompt to LLM: {full_prompt[:50]}...")
-                    # Here we would normally send to LLM
-                    # For now, just indicate success
-                    print("Prompt sent to LLM successfully")
-
         except Exception as e:
             print(f"Error executing script: {str(e)}")
         finally:
@@ -5160,10 +5252,7 @@ class ChatybotApp:
             old_script_context = self.script_context
             self.script_context = True
             try:
-                for line in body_lines:
-                    if not line.strip() or line.strip().startswith("#"):
-                        continue
-                    await self.execute_script_command(line, self.handle_escape_command)
+                await self.execute_command_list(body_lines)
             except Exception as e:
                 print(f"Error executing procedure '{proc_name}': {e}")
             finally:
@@ -5855,7 +5944,8 @@ class ChatybotApp:
             return True
 
         elif cmd == "/setvar":
-            if len(parts) < 3:
+            setvar_parts = command.split(maxsplit=2)
+            if len(setvar_parts) < 3:
                 print("Usage: /setvar <varname> <value>")
                 return True
             
@@ -5863,9 +5953,9 @@ class ChatybotApp:
             if hasattr(self.buffer_manager.script_vars, '_is_user_write'):
                 self.buffer_manager.script_vars._is_user_write = True
             try:
-                var_name = parts[1].strip('"')
+                var_name = setvar_parts[1].strip('"')
                 # Use full placeholder replacement to support image banks
-                value_with_images = parts[2]
+                value_with_images = setvar_parts[2]
                 
                 is_array = var_name.endswith("[]")
                 clean_var_name = var_name[:-2] if is_array else var_name
@@ -5894,7 +5984,8 @@ class ChatybotApp:
                             return True
 
                 if is_array:
-                    val_str = value_with_images.lstrip().lstrip('=').strip()
+                    raw_val_str = value_with_images.lstrip().lstrip('=').strip()
+                    val_str = raw_val_str
                     try:
                         string_list = self.parse_array_value(val_str)
                     except Exception as e:
