@@ -25,6 +25,11 @@ import struct
 from .pattern import PatternMatcher
 
 
+class LoopBreak(Exception):
+    """Raised to exit a foreach loop early via the 'break' keyword."""
+    pass
+
+
 try:
     import openai
     from openai import AsyncOpenAI
@@ -90,7 +95,7 @@ class ChatybotApp:
                 "reloadmacros", "calc", "stream", "script", "source", "profile", "quit", "exit",
                 "setdb", "dblist", "searchdb", "dblog", "dbprint", "documents", "rerank",
                 "loadvar", "savevar", "setvar", "notemode", "mem", "dump", "trace", "debug",
-                "run", "run_safe", "run_unsafe", "tool", "proc", "defproc", "endproc", "local", "foreach", "endfor"
+                "run", "run_safe", "run_unsafe", "tool", "proc", "defproc", "endproc", "local", "foreach", "endfor", "break"
             ]
         )
 
@@ -1825,6 +1830,10 @@ class ChatybotApp:
                 print("Invalid wait command. Usage: wait <seconds>")
                 return True
 
+        # Handle break command (exits foreach loop early)
+        if stripped_command == "break":
+            raise LoopBreak()
+
         # Handle if-then commands
         if stripped_command.startswith("if "):
             try:
@@ -1890,6 +1899,8 @@ class ChatybotApp:
                         )
                     else:
                         return True  # Handled but skipped
+            except LoopBreak:
+                raise
             except Exception as e:
                 print(f"Error evaluating if condition: {e}")
                 return True
@@ -2250,7 +2261,10 @@ class ChatybotApp:
             for elem in iterable:
                 val_str = str(elem) if not isinstance(elem, (str, int, float, bool)) else elem
                 self.buffer_manager.set_script_var(item_var, val_str)
-                await self.execute_command_list(buffer)
+                try:
+                    await self.execute_command_list(buffer)
+                except LoopBreak:
+                    break
         finally:
             old_user_write_inner = getattr(self.buffer_manager.script_vars, '_is_user_write', False)
             if hasattr(self.buffer_manager.script_vars, '_is_user_write'):
