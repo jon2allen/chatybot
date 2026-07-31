@@ -135,8 +135,7 @@ endfor
     try:
         await app.execute_script(temp_path)
         captured = capsys.readouterr()
-        assert "Warning: '$non_existent' is not a valid array for foreach loop. Skipping." in captured.out
-        assert "Warning: '$not_an_array' is not a valid array for foreach loop. Skipping." in captured.out
+        assert "is not a valid array or iterable for foreach loop. Skipping." in captured.out
         assert "ran" not in app.buffer_manager.script_vars
     finally:
         os.unlink(temp_path)
@@ -211,5 +210,76 @@ endfor
         await app.execute_script(temp_path)
         assert app.buffer_manager.script_vars.get("dishes") == ["Nanjing Duck", "Xiaolongbao"]
         assert app.buffer_manager.script_vars.get("result") == "Nanjing Duck;Xiaolongbao;"
+    finally:
+        os.unlink(temp_path)
+
+
+@pytest.mark.anyio
+async def test_foreach_range_generator_basic(app):
+    """Test foreach using range generator with inclusive bounds range(1:5)."""
+    app.buffer_manager.script_vars["sum"] = "0"
+    app.buffer_manager.script_vars["nums"] = ""
+
+    script = """
+foreach i in range(1:5)
+set nums = "${nums}${i},"
+endfor
+"""
+    with tempfile.NamedTemporaryFile("w+", suffix=".chatdsl", delete=False) as f:
+        f.write(script)
+        f.flush()
+        temp_path = f.name
+
+    try:
+        await app.execute_script(temp_path)
+        assert app.buffer_manager.script_vars.get("nums") == "1,2,3,4,5,"
+    finally:
+        os.unlink(temp_path)
+
+
+@pytest.mark.anyio
+async def test_foreach_range_generator_step_and_vars(app):
+    """Test range generator with step and variable expansion range(${start}:${end}:${step})."""
+    app.buffer_manager.script_vars["start"] = "1"
+    app.buffer_manager.script_vars["end"] = "10"
+    app.buffer_manager.script_vars["step"] = "2"
+    app.buffer_manager.script_vars["seq"] = ""
+
+    script = """
+foreach i in range(${start}:${end}:${step})
+set seq = "${seq}${i}-"
+endfor
+"""
+    with tempfile.NamedTemporaryFile("w+", suffix=".chatdsl", delete=False) as f:
+        f.write(script)
+        f.flush()
+        temp_path = f.name
+
+    try:
+        await app.execute_script(temp_path)
+        assert app.buffer_manager.script_vars.get("seq") == "1-3-5-7-9-"
+    finally:
+        os.unlink(temp_path)
+
+
+@pytest.mark.anyio
+async def test_foreach_lines_generator(app):
+    """Test lines generator iterating line-by-line over multiline text."""
+    app.buffer_manager.script_vars["doc"] = "First line\nSecond line\nThird line"
+    app.buffer_manager.script_vars["out"] = ""
+
+    script = """
+foreach l in lines(doc)
+set out = "${out}[${l}]"
+endfor
+"""
+    with tempfile.NamedTemporaryFile("w+", suffix=".chatdsl", delete=False) as f:
+        f.write(script)
+        f.flush()
+        temp_path = f.name
+
+    try:
+        await app.execute_script(temp_path)
+        assert app.buffer_manager.script_vars.get("out") == "[First line][Second line][Third line]"
     finally:
         os.unlink(temp_path)
