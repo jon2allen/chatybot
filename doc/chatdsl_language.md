@@ -153,9 +153,23 @@ ChatDSL currently supports the following languages:
 
 ## Scripting Keywords
 
-| English (EN) | Spanish (ES) | French (FR) | Chinese (ZH) | Italian (IT) |
-| :--- | :--- | :--- | :--- | :--- |
-| `set` | `establecer` | `definir` | `设置` | `imposta` |
+| English (EN) | Spanish (ES) | French (FR) | Chinese (ZH) | Italian (IT) | Arabic (AR) | Description |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| `set` | `establecer` | `definir` | `设置` | `imposta` | `تعيين` | Variable assignment |
+| `local` | `local` | `local` | `局部` | `locale` | `محلي` | Procedure-scoped variable |
+| `if` | `if` | `if` | `如果` | `if` | `إذا` | Conditional execution |
+| `then` | `then` | `then` | `那么` | `then` | `عندها` | Conditional body |
+| `wait` | `wait` | `wait` | `等待` | `wait` | `انتظر` | Pause N seconds |
+| `defproc` | `defproc` | `defproc` | `定义过程` | `defproc` | `تعريف_إجراء` | Define procedure |
+| `endproc` | `endproc` | `endproc` | `结束过程` | `endproc` | `نهاية_إجراء` | End procedure |
+| `foreach` | `paracada` | `pourchaque` | `循环` | `perogni` | `لكل` | Begin foreach loop |
+| `endfor` | `finpara` | `finpour` | `结束循环` | `finper` | `نهاية_الحلقة` | End foreach loop |
+| `break` | `romper` | `casser` | `跳出` | `rompere` | `كسر` | Exit foreach loop early |
+| `range` | `rango` | `plage` | `范围` | `intervallo` | `مدى` | Generate number sequence |
+| `lines` | `lineas` | `lignes` | `行` | `righe` | `أسطر` | Split text into lines |
+| `#` | `#` | `#` | `#` | `#` | `#` | Comment |
+| `def` | `def` | `def` | `定义` | `def` | `تعريف` | Define macro |
+| `%` | `%` | `%` | `%` | `%` | `%` | Invoke macro |
 
 ---
 
