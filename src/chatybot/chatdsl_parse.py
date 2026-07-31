@@ -184,7 +184,7 @@ class TParser:
         # Procedures & Local Scoping
         "proc", "defproc", "endproc", "local",
         # Multiline Foreach Loop
-        "foreach", "endfor"
+        "foreach", "endfor", "break"
     }
 
     def __init__(self, tokens: List[Token], verbose: bool = False):
