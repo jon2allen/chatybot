@@ -2115,17 +2115,93 @@ class ChatybotApp:
         self.procedures[proc_name] = {"params": params, "body": body_lines}
         print(f"Procedure '{proc_name}' defined with params: {params}")
 
+    def evaluate_foreach_iterable(self, expr_str: str) -> Tuple[Optional[Any], Optional[str]]:
+        """
+        Evaluates a foreach iterable target expression (variable name, range generator, or lines generator).
+        Returns a tuple of (iterable_object_or_list, error_message).
+        """
+        raw_expr = expr_str.strip()
+
+        # 1. Range Generator: range(start:end[:step]) or range(start..end) or range(count)
+        m_range = re.match(r"^\s*range\s*\(\s*(.+)\s*\)\s*$", raw_expr, re.IGNORECASE)
+        if m_range:
+            inner_str = m_range.group(1).strip()
+            resolved_inner = self.buffer_manager.replace_placeholders_legacy(inner_str)
+            
+            if ":" in resolved_inner or ".." in resolved_inner:
+                sep = ":" if ":" in resolved_inner else ".."
+                parts = [p.strip() for p in resolved_inner.split(sep)]
+                try:
+                    if len(parts) == 2:
+                        start = int(parts[0])
+                        end = int(parts[1])
+                        step = 1 if start <= end else -1
+                    elif len(parts) == 3 and sep == ":":
+                        start = int(parts[0])
+                        end = int(parts[1])
+                        step = int(parts[2])
+                    else:
+                        return None, f"Invalid range format: '{expr_str}'"
+                    
+                    end_inclusive = (end + 1) if step > 0 else (end - 1)
+                    return range(start, end_inclusive, step), None
+                except ValueError:
+                    return None, f"Invalid numeric bounds in range expression: '{expr_str}'"
+            else:
+                try:
+                    count = int(resolved_inner)
+                    if count < 1:
+                        return range(0), None
+                    return range(1, count + 1), None
+                except ValueError:
+                    return None, f"Invalid numeric count in range expression: '{expr_str}'"
+
+        # 2. Lines Generator: lines(text_var) or lines({filebank1})
+        m_lines = re.match(r"^\s*lines\s*\(\s*(.+)\s*\)\s*$", raw_expr, re.IGNORECASE)
+        if m_lines:
+            inner_str = m_lines.group(1).strip()
+            content = None
+            if inner_str in self.buffer_manager.script_vars:
+                content = self.buffer_manager.script_vars[inner_str]
+            elif inner_str in self.buffer_manager.file_banks:
+                content = self.buffer_manager.file_banks[inner_str]
+            elif inner_str == "FILE_BUFFER":
+                content = self.buffer_manager.file_buffer
+            else:
+                content = self.buffer_manager.replace_placeholders_legacy(inner_str)
+
+            if isinstance(content, list):
+                lines_list = [line for item in content for line in str(item).splitlines()]
+                return lines_list, None
+            elif isinstance(content, str):
+                return content.splitlines(), None
+            else:
+                return [], None
+
+        # 3. Standard Array / Variable lookup: my_array
+        array_data = self.buffer_manager.script_vars.get(raw_expr)
+        if isinstance(array_data, str):
+            try:
+                array_data = self.parse_array_value(array_data)
+            except Exception:
+                pass
+
+        if isinstance(array_data, list):
+            return array_data, None
+
+        return None, f"Warning: '${raw_expr}' is not a valid array or iterable for foreach loop. Skipping."
+
     async def get_foreach_input(self, header_line: str) -> None:
         """Get foreach loop input interactively from the user."""
-        m = re.match(r"^\s*foreach\s+([a-zA-Z_]\w*)\s+in\s+([a-zA-Z_]\w*)\s*$", header_line.strip())
+        m = re.match(r"^\s*foreach\s+([a-zA-Z_]\w*)\s+in\s+(.+)$", header_line.strip())
         if not m:
-            print("Invalid foreach format. Usage: foreach <item_var> in <array_var>")
+            print("Invalid foreach format. Usage: foreach <item_var> in <array_var|range(...)|lines(...)>")
             return
         
         item_var = m.group(1)
-        array_var = m.group(2)
+        target_expr = m.group(2).strip()
         
-        print(f"Entering foreach loop for '{item_var}' in '{array_var}'. Enter commands (type 'endfor' on a line by itself to finish):")
+        print(f"Entering foreach loop for '{item_var}' in '{target_expr}'. Enter commands (type 'endfor' on a line by itself to finish):")
         buffer = []
         depth = 1
         
@@ -2147,26 +2223,20 @@ class ChatybotApp:
                 if depth == 0:
                     break
                 buffer.append(line)
-            elif re.match(r"^\s*foreach\s+([a-zA-Z_]\w*)\s+in\s+([a-zA-Z_]\w*)\s*$", stripped):
+            elif re.match(r"^\s*foreach\s+([a-zA-Z_]\w*)\s+in\s+(.+)$", stripped):
                 depth += 1
                 buffer.append(line)
             else:
                 buffer.append(line)
         
-        await self.execute_foreach_block(item_var, array_var, buffer)
+        await self.execute_foreach_block(item_var, target_expr, buffer)
 
-    async def execute_foreach_block(self, item_var: str, array_var: str, buffer: List[str]) -> None:
-        """Executes a captured foreach loop block over an array variable in ScriptVars."""
-        array_data = self.buffer_manager.script_vars.get(array_var)
-        
-        if isinstance(array_data, str):
-            try:
-                array_data = self.parse_array_value(array_data)
-            except Exception:
-                pass
-
-        if not isinstance(array_data, list):
-            print(f"Warning: '${array_var}' is not a valid array for foreach loop. Skipping.")
+    async def execute_foreach_block(self, item_var: str, target_expr: str, buffer: List[str]) -> None:
+        """Executes a captured foreach loop block over an array variable or generator expression."""
+        iterable, err = self.evaluate_foreach_iterable(target_expr)
+        if iterable is None:
+            if err:
+                print(err)
             return
 
         exists = item_var in self.buffer_manager.script_vars
@@ -2177,7 +2247,7 @@ class ChatybotApp:
             self.buffer_manager.script_vars._is_user_write = True
 
         try:
-            for elem in array_data:
+            for elem in iterable:
                 val_str = str(elem) if not isinstance(elem, (str, int, float, bool)) else elem
                 self.buffer_manager.set_script_var(item_var, val_str)
                 await self.execute_command_list(buffer)
@@ -2226,7 +2296,7 @@ class ChatybotApp:
 
                 # 1. Handle active foreach buffer capture
                 if foreach_depth > 0:
-                    m_for = re.match(r"^\s*foreach\s+([a-zA-Z_]\w*)\s+in\s+([a-zA-Z_]\w*)\s*$", stripped_cmd)
+                    m_for = re.match(r"^\s*foreach\s+([a-zA-Z_]\w*)\s+in\s+(.+)$", stripped_cmd)
                     if m_for:
                         foreach_depth += 1
                         foreach_buffer.append(cmd)
@@ -2268,10 +2338,10 @@ class ChatybotApp:
                     continue
 
                 # 3. Check for foreach start
-                m_for = re.match(r"^\s*foreach\s+([a-zA-Z_]\w*)\s+in\s+([a-zA-Z_]\w*)\s*$", stripped_cmd)
+                m_for = re.match(r"^\s*foreach\s+([a-zA-Z_]\w*)\s+in\s+(.+)$", stripped_cmd)
                 if m_for:
                     foreach_item_var = m_for.group(1)
-                    foreach_array_var = m_for.group(2)
+                    foreach_array_var = m_for.group(2).strip()
                     foreach_buffer = []
                     foreach_depth = 1
                     idx += 1
