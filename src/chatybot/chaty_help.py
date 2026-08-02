@@ -526,6 +526,23 @@ class HelpSystem:
                 "/calc \"fifty times two\""
             ]
         ))
+
+        self.register_command(CommandHelp(
+            name="/str_search",
+            category="variable",
+            short_desc="Search for substring patterns in a text variable",
+            usage="/str_search \"<pattern>\" <text_var> [flags] [var_name]",
+            long_desc="Searches for a substring pattern within a text variable. Supports case-sensitive and case-insensitive matching. "
+                      "Flags: c=count (default), m=match positions, i=case-insensitive. "
+                      "Results are saved to a protected script variable 'STR_SEARCH' by default, or to a custom variable if specified.",
+            examples=[
+                '/str_search "error" ${LOG}',
+                '/str_search "error" ${LOG} i',
+                '/str_search "error" ${LOG} ic my_count',
+                '/str_search "error" ${LOG} m',
+                '/str_search "TODO" ${CODE} i matches',
+            ]
+        ))
         
         self.register_command(CommandHelp(
             name="/mem",

@@ -186,3 +186,34 @@ type = "string"
 description = "Optional script variable name to save the evaluation result into"
 optional = true
 
+[tools.str_search]
+enabled = true
+description = "Search for a substring pattern in text with optional case-insensitive matching. Returns match count or positions, and optionally stores the result in a script variable."
+module = "chatybot.tools.str_utils"
+function = "str_search"
+
+[tools.str_search.parameters.pattern]
+type = "string"
+description = "The substring pattern to search for"
+optional = false
+
+[tools.str_search.parameters.text]
+type = "string"
+description = "The text to search within"
+optional = false
+
+[tools.str_search.parameters.mode]
+type = "string"
+description = "Search mode: 'c' for count (default), 'm' for match positions list"
+optional = true
+
+[tools.str_search.parameters.case_sensitive]
+type = "boolean"
+description = "Whether the search is case-sensitive (default: true). Set false for case-insensitive."
+optional = true
+
+[tools.str_search.parameters.target_variable]
+type = "string"
+description = "Optional script variable name to save the search result into"
+optional = true
+

@@ -1812,7 +1812,7 @@ class ChatybotApp:
 
         # Replace variables in the command (supporting subscripts and unbraced names)
         # We do not replace variables on the command line for /setvar and /calc as they handle substitution internally
-        if command.lstrip().startswith("/setvar") or command.lstrip().startswith("/calc"):
+        if command.lstrip().startswith("/setvar") or command.lstrip().startswith("/calc") or command.lstrip().startswith("/str_search"):
             processed_command = command
         else:
             processed_command = self.buffer_manager.replace_placeholders_legacy(command)
@@ -2041,7 +2041,7 @@ class ChatybotApp:
                     continue
                 if cmd.startswith("/"):
                     cmd = self.i18n.translate_command_string(cmd)
-                    if not (cmd.lstrip().startswith("/setvar") or cmd.lstrip().startswith("/calc")):
+                    if not (cmd.lstrip().startswith("/setvar") or cmd.lstrip().startswith("/calc") or cmd.lstrip().startswith("/str_search")):
                         cmd = self.buffer_manager.replace_placeholders_legacy(cmd)
                     result = await self.handle_escape_command(cmd)
                     if result == "EXECUTE_PROMPT":
@@ -6027,6 +6027,85 @@ class ChatybotApp:
                 print(f"Error evaluating math expression '{expr_str}': {e}")
             return True
 
+        elif cmd == "/str_search":
+            import shlex
+            rem_str = command[len(parts[0]):].strip()
+            if not rem_str:
+                print('Usage: /str_search "<pattern>" <text_var> [flags] [var_name]')
+                print('  flags: c=count (default), m=match positions, i=case-insensitive')
+                print('  examples:')
+                print('    /str_search "error" ${LOG}')
+                print('    /str_search "error" ${LOG} i')
+                print('    /str_search "error" ${LOG} ic my_count')
+                print('    /str_search "error" ${LOG} m')
+                return True
+
+            # Parse arguments: pattern, text_var, flags, var_name
+            pattern_str = ""
+            text_var = ""
+            flags_str = "c"
+            var_target = "STR_SEARCH"
+
+            try:
+                tokens = shlex.split(rem_str)
+            except Exception:
+                tokens = rem_str.split()
+
+            if len(tokens) < 2:
+                print('Usage: /str_search "<pattern>" <text_var> [flags] [var_name]')
+                return True
+
+            pattern_str = tokens[0]
+            text_var = tokens[1]
+
+            if len(tokens) >= 3:
+                candidate = tokens[2].strip()
+                # If the candidate looks like flags (only contains c, m, i, g, I, C, M, G)
+                valid_flags = set("cmigCMIG")
+                if candidate and all(ch in valid_flags for ch in candidate):
+                    flags_str = candidate
+                    if len(tokens) >= 4:
+                        var_target = tokens[3].strip()
+                else:
+                    # It's a variable name, no flags
+                    var_target = candidate
+
+            # Resolve variable substitution on pattern (supports ${var} in the pattern itself)
+            pattern_str = self.buffer_manager.replace_placeholders_legacy(pattern_str, clear_unresolved=False)
+
+            # Parse flags
+            case_sensitive = "i" not in flags_str.lower()
+            mode = "m" if "m" in flags_str.lower() else "c"
+
+            # Resolve the text variable to get its value
+            # text_var is a variable name like LOG or ${LOG} — look up the variable, don't resolve its value
+            var_name = text_var
+            if var_name.startswith("${") and var_name.endswith("}"):
+                var_name = var_name[2:-1]
+            text_value = self.buffer_manager.get_script_var(var_name)
+            if text_value is None:
+                print(f"Error: Variable '{var_name}' is not set.")
+                return True
+            text_value = str(text_value)
+
+            try:
+                from .tools.str_utils import str_search
+                result = str_search(
+                    pattern=pattern_str,
+                    text=text_value,
+                    mode=mode,
+                    case_sensitive=case_sensitive,
+                    target_variable=var_target,
+                    app=self,
+                )
+                if result.get("status") == "error":
+                    print(f"Error: {result.get('message')}")
+                else:
+                    print(result.get("message", ""))
+            except Exception as e:
+                print(f"Error in str_search: {e}")
+            return True
+
         elif cmd == "/setvar":
             setvar_parts = command.split(maxsplit=2)
             if len(setvar_parts) < 3:
@@ -6450,6 +6529,7 @@ class ChatybotApp:
         print("  /savevar <varname> <filename> - Save a variable's contents to a file.")
         print("  /setvar <varname> <value> - Set a script variable. Supports {CHAT_HISTORY} and {LAST_RESPONSE} placeholders.")
         print('  /calc "<expr>" [varname] - Evaluate a math expression using mathparse and store in a variable (default CALC).')
+        print('  /str_search "<pattern>" <var> [flags] [varname] - Search for substring in a text variable (flags: c=count, m=positions, i=case-insensitive).')
         print("  /documents <src>=<id> - Set the active rerank source: db=<name>, var=<name> (or CHAT_HISTORY or file), filebank=<1-5>, or dir=\"<path>\"")
         print("  /rerank \"<query>\" [, top_n=<n>] [, items=<n>] [, split=<sentence|line|paragraph>] - Semantically rerank source sentences/chunks.")
         print("  /mem [detail|debug] - Show size of buffers and script variables. Use 'detail' for element breakdowns, or 'debug' for metadata.")

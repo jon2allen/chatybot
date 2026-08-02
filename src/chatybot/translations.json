@@ -16,6 +16,7 @@
       "/run": "/run",
       "/echo": "/echo",
       "/calc": "/calc",
+      "/str_search": "/str_search",
       "/proc": "/proc"
     },
     "keywords": {
@@ -130,6 +131,7 @@
       "/perfil": "/profile",
       "/calcular": "/calc",
       "/calc": "/calc",
+      "/str_search": "/str_search",
       "/proc": "/proc",
       "/procedimiento": "/proc"
     },
@@ -470,6 +472,7 @@
       "/reclasser": "/rerank",
       "/calculer": "/calc",
       "/calc": "/calc",
+      "/str_search": "/str_search",
       "/proc": "/proc",
       "/procedure": "/proc"
     },
@@ -811,6 +814,7 @@
       "/配置": "/profile",
       "/计算": "/calc",
       "/calc": "/calc",
+      "/str_search": "/str_search",
       "/proc": "/proc"
     },
     "keywords": {
@@ -1145,6 +1149,7 @@
       "/riordina": "/rerank",
       "/calcola": "/calc",
       "/calc": "/calc",
+      "/str_search": "/str_search",
       "/proc": "/proc",
       "/procedura": "/proc"
     },
@@ -1484,6 +1489,7 @@
       "/إعادة_ترتيب": "/rerank",
       "/احسب": "/calc",
       "/calc": "/calc",
+      "/str_search": "/str_search",
       "/proc": "/proc"
     },
     "keywords": {

@@ -35,6 +35,7 @@ class ScriptVars(UserDict):
             'LAST_COMPLETION',
             'latest_rerank',
             'CALC',
+            'STR_SEARCH',
         }
         super().__init__(*args, **kwargs)
 
