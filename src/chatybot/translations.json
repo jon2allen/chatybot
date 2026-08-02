@@ -132,6 +132,8 @@
       "/calcular": "/calc",
       "/calc": "/calc",
       "/str_search": "/str_search",
+      "/buscar_cadena": "/str_search",
+      "/buscar_texto": "/str_search",
       "/proc": "/proc",
       "/procedimiento": "/proc"
     },
@@ -171,7 +173,9 @@
       "range": "range",
       "rango": "range",
       "lines": "lines",
-      "lineas": "lines"
+      "lineas": "lines",
+      "si": "if",
+      "entonces": "then"
     },
     "ui": {
       "language_changed": "Idioma establecido en: {lang}",
@@ -473,6 +477,8 @@
       "/calculer": "/calc",
       "/calc": "/calc",
       "/str_search": "/str_search",
+      "/recherche_texte": "/str_search",
+      "/chercher_texte": "/str_search",
       "/proc": "/proc",
       "/procedure": "/proc"
     },
@@ -482,11 +488,11 @@
       "definir": "set",
       "demarrer": "start",
       "fin": "end",
-      "on": "on",
-      "off": "off",
+      "activer": "on",
+      "desactiver": "off",
       "lister": "list",
-      "activer": "enable",
-      "desactiver": "disable",
+      "activer_outil": "enable",
+      "desactiver_outil": "disable",
       "auto": "auto",
       "boucle": "loop",
       "arreter": "stop",
@@ -511,7 +517,9 @@
       "range": "range",
       "plage": "range",
       "lines": "lines",
-      "lignes": "lines"
+      "lignes": "lines",
+      "si": "if",
+      "alors": "then"
     },
     "ui": {
       "language_changed": "Langue définie sur : {lang}",
@@ -815,6 +823,8 @@
       "/计算": "/calc",
       "/calc": "/calc",
       "/str_search": "/str_search",
+      "/查找文本": "/str_search",
+      "/搜索字符串": "/str_search",
       "/proc": "/proc"
     },
     "keywords": {
@@ -847,7 +857,9 @@
       "break": "break",
       "中断": "break",
       "range": "range",
-      "lines": "lines"
+      "lines": "lines",
+      "如果": "if",
+      "则": "then"
     },
     "ui": {
       "language_changed": "语言设置为: {lang}",
@@ -1490,6 +1502,8 @@
       "/احسب": "/calc",
       "/calc": "/calc",
       "/str_search": "/str_search",
+      "/بحث_نص": "/str_search",
+      "/بحث_سلسلة": "/str_search",
       "/proc": "/proc"
     },
     "keywords": {
@@ -1522,7 +1536,10 @@
       "break": "break",
       "كسر": "break",
       "range": "range",
-      "lines": "lines"
+      "lines": "lines",
+      "اذا": "if",
+      "اذا_كان": "if",
+      "اذن": "then"
     },
     "ui": {
       "language_changed": "تغيرت اللغة لـ: {lang}",

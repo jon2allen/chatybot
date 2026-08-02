@@ -148,6 +148,8 @@ ChatDSL currently supports the following languages:
 | `/dbprint` | `/imprimir_db` | `/imprimer_bd` | `/打印数据库` | `/stampa_db` | Dump vector storage content |
 | `/documents` | `/documentos` | `/documents` | `/文档源` | `/documenti` | Set source (db, var, filebank, dir) |
 | `/rerank` | `/reordenar` | `/reclasser` | `/重排` | `/riordina` | Execute Jina RAG rerank query on source |
+| `/calc` | `/calcular` | `/calculer` | `/计算` | `/calcola` | Evaluate math expression using mathparse |
+| `/str_search` | `/buscar_cadena` / `/buscar_texto` | `/recherche_texte` / `/chercher_texte` | `/查找文本` / `/搜索字符串` | `/cerca_testo` / `/cerca_str` | Substring search pattern in script variables |
 
 ---
 
@@ -155,18 +157,18 @@ ChatDSL currently supports the following languages:
 
 | English (EN) | Spanish (ES) | French (FR) | Chinese (ZH) | Italian (IT) | Arabic (AR) | Description |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `set` | `establecer` | `definir` | `设置` | `imposta` | `تعيين` | Variable assignment |
+| `set` | `establecer` | `definir` | `设置` | `imposta` | `حط` | Variable assignment |
 | `local` | `local` | `local` | `局部` | `locale` | `محلي` | Procedure-scoped variable |
-| `if` | `if` | `if` | `如果` | `if` | `إذا` | Conditional execution |
-| `then` | `then` | `then` | `那么` | `then` | `عندها` | Conditional body |
+| `if` | `si` | `si` | `如果` | `se` | `اذا` / `اذا_كان` | Conditional execution (supports `==`, `!=`, `<`, `>`, `<=`, `>=`) |
+| `then` | `entonces` | `alors` | `则` | `allora` | `اذن` | Conditional body execution |
 | `wait` | `wait` | `wait` | `等待` | `wait` | `انتظر` | Pause N seconds |
 | `defproc` | `defproc` | `defproc` | `定义过程` | `defproc` | `تعريف_إجراء` | Define procedure |
 | `endproc` | `endproc` | `endproc` | `结束过程` | `endproc` | `نهاية_إجراء` | End procedure |
 | `foreach` | `paracada` | `pourchaque` | `循环` | `perogni` | `لكل` | Begin foreach loop |
 | `endfor` | `finpara` | `finpour` | `结束循环` | `finper` | `نهاية_الحلقة` | End foreach loop |
-| `break` | `romper` | `casser` | `跳出` | `rompere` | `كسر` | Exit foreach loop early |
+| `break` | `romper` | `casser` | `中断` | `rompere` | `كسر` | Exit foreach loop early |
 | `range` | `rango` | `plage` | `范围` | `intervallo` | `مدى` | Generate number sequence |
-| `lines` | `lineas` | `lignes` | `行` | `righe` | `أسطر` | Split text into lines |
+| `lines` | `lineas` | `lignes` | `行` | `linee` | `أسطر` | Split text into lines |
 | `#` | `#` | `#` | `#` | `#` | `#` | Comment |
 | `def` | `def` | `def` | `定义` | `def` | `تعريف` | Define macro |
 | `%` | `%` | `%` | `%` | `%` | `%` | Invoke macro |
