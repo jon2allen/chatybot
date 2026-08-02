@@ -167,7 +167,8 @@ endproc
     try:
         await app.execute_script(temp_path)
         captured = capsys.readouterr()
-        combined_output = captured.out + captured.err
+        log_buf = "".join(getattr(app.logging_manager, "buffer", []))
+        combined_output = captured.out + captured.err + log_buf
         assert "Maximum procedure recursion depth of 3 reached" in combined_output
     finally:
         os.unlink(temp_path)
