@@ -845,9 +845,17 @@ src/chatybot/profiles/          # Perfiles preestablecidos
 | Inglés | Español | Sintaxis | Descripción |
 |--------|---------|----------|-------------|
 | `set` | `establecer` | `establecer nombre = valor` | Asignación de variable |
-| `if` | `if` | `if condición then comando` | Ejecución condicional |
-| `then` | `then` | (part de if) | Cuerpo condicional |
+| `local` | `local` | `local nombre = valor` | Variable de ámbito de procedimiento |
+| `if` | `si` | `si condición entonces comando` | Ejecución condicional |
+| `then` | `entonces` | (parte de si) | Cuerpo condicional |
 | `wait` | `wait` | `wait N` | Pausar N segundos |
+| `defproc` | `defproc` | `defproc nombre(params)` | Definir procedimiento |
+| `endproc` | `endproc` | `endproc` | Finalizar procedimiento |
+| `foreach` | `paracada` | `paracada elem in array` | Bucle multilínea |
+| `endfor` | `finpara` | `finpara` | Finalizar bucle |
+| `break` | `romper` | `romper` | Salir del bucle |
+| `range` | `rango` | `rango(1:10)` | Generador numérico |
+| `lines` | `lineas` | `lineas(texto)` | Generador de líneas |
 | `#` | `#` | `# comentario` | Comentario |
 | `def` | `def` | `def nombre(parámetros) = "plantilla"` | Definir macro |
 | `%` | `%` | `%nombre(args)` | Invocar macro |
@@ -869,6 +877,10 @@ src/chatybot/profiles/          # Perfiles preestablecidos
 |----------|-------------|---------|
 | `==` | Igual a | `if ${x} == "yes" then` |
 | `!=` | No igual a | `if ${x} != "" then` |
+| `>` | Mayor que | `si "${EDAD}" > 18 entonces` |
+| `<` | Menor que | `si "${VAL}" < 10 entonces` |
+| `>=` | Mayor o igual que | `si "${EDAD}" >= 18 entonces` |
+| `<=` | Menor o igual que | `si "${VAL}" <= 5 entonces` |
 | `not` | Negación | `if not ${debug} then` |
 
 ## Flujo de Control

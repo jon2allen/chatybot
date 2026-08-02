@@ -845,9 +845,17 @@ src/chatybot/profiles/          # Profili predefiniti
 | Inglese | Italiano | Sintassi | Descrizione |
 |---------|----------|----------|-------------|
 | `set` | `imposta` | `imposta nome = valore` | Assegnazione di una variabile |
-| `if` | `if` | `if condizione then comando` | Esecuzione condizionale |
-| `then` | `then` | (parte di if) | Corpo condizionale |
+| `local` | `local` | `local nome = valore` | Variabile di ambito procedura |
+| `if` | `se` | `se condizione allora comando` | Esecuzione condizionale |
+| `then` | `allora` | (parte di se) | Corpo condizionale |
 | `wait` | `wait` | `wait N` | Sospende per N secondi |
+| `defproc` | `defproc` | `defproc nome(params)` | Definisce una procedura |
+| `endproc` | `endproc` | `endproc` | Termina una procedura |
+| `foreach` | `perogni` | `perogni elem in array` | Ciclo multilinea |
+| `endfor` | `finper` | `finper` | Termina un ciclo |
+| `break` | `rompere` | `rompere` | Esci dal ciclo |
+| `range` | `intervallo` | `intervallo(1:10)` | Generatore numerico |
+| `lines` | `linee` | `linee(testo)` | Generatore di linee |
 | `#` | `#` | `# commento` | Commento |
 | `def` | `def` | `def nome(params) = "modello"` | Definisce una macro |
 | `%` | `%` | `%nome(args)` | Invoca una macro |
@@ -869,6 +877,10 @@ src/chatybot/profiles/          # Profili predefiniti
 |-----------|-------------|---------|
 | `==` | Uguale a | `if ${x} == "yes" then` |
 | `!=` | Diverso da | `if ${x} != "" then` |
+| `>` | Maggiore di | `se "${ETA}" > 18 allora` |
+| `<` | Minore di | `se "${VAL}" < 10 allora` |
+| `>=` | Maggiore o uguale a | `se "${ETA}" >= 18 allora` |
+| `<=` | Minore o uguale a | `se "${VAL}" <= 5 allora` |
 | `not` | Negazione | `if not ${debug} then` |
 
 ## Flusso di Controllo
