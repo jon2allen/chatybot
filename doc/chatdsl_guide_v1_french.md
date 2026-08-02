@@ -845,9 +845,17 @@ src/chatybot/profiles/          # Profils prédéfinis
 | Anglais | Français | Syntaxe | Description |
 |---------|----------|---------|-------------|
 | `set` | `definir` | `definir nom = valeur` | Affectation de variable |
-| `if` | `if` | `if condition then commande` | Exécution conditionnelle |
-| `then` | `then` | (fait partie de if) | Corps du conditionnel |
+| `local` | `local` | `local nom = valeur` | Variable de portée procédure |
+| `if` | `si` | `si condition alors commande` | Exécution conditionnelle |
+| `then` | `alors` | (fait partie de si) | Corps du conditionnel |
 | `wait` | `wait` | `wait N` | Pause de N secondes |
+| `defproc` | `defproc` | `defproc nom(params)` | Définir une procédure |
+| `endproc` | `endproc` | `endproc` | Terminer une procédure |
+| `foreach` | `pourchaque` | `pourchaque elem in tableau` | Boucle multiligne |
+| `endfor` | `finpour` | `finpour` | Terminer une boucle |
+| `break` | `casser` | `casser` | Quitter la boucle |
+| `range` | `plage` | `plage(1:10)` | Générateur numérique |
+| `lines` | `lignes` | `lignes(texte)` | Générateur de lignes |
 | `#` | `#` | `# commentaire` | Commentaire |
 | `def` | `def` | `def nom(params) = "modele"` | Définir une macro |
 | `%` | `%` | `%nom(args)` | Appeler une macro |
@@ -869,6 +877,10 @@ src/chatybot/profiles/          # Profils prédéfinis
 |-----------|-------------|---------|
 | `==` | Égal à | `if ${x} == "yes" then` |
 | `!=` | Différent de | `if ${x} != "" then` |
+| `>` | Supérieur à | `si "${AGE}" > 18 alors` |
+| `<` | Inférieur à | `si "${VAL}" < 10 alors` |
+| `>=` | Supérieur ou égal à | `si "${AGE}" >= 18 alors` |
+| `<=` | Inférieur ou égal à | `si "${VAL}" <= 5 alors` |
 | `not` | Négation | `if not ${debug} then` |
 
 ## Flux de Contrôle
