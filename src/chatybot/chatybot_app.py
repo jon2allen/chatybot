@@ -1862,8 +1862,55 @@ class ChatybotApp:
                     
                     condition_met = False
                     
-                    # Check for comparison operators
-                    if " == " in condition_str:
+                    # Check for comparison operators (order matters: >= and <= before > and <)
+                    def _parse_numeric(val_str):
+                        """Try to parse a string as a float. Returns (float, True) or (None, False)."""
+                        try:
+                            return float(val_str), True
+                        except (ValueError, TypeError):
+                            return None, False
+
+                    if " >= " in condition_str:
+                        left, right = condition_str.split(" >= ", 1)
+                        left = left.strip().strip("\"'")
+                        right = right.strip().strip("\"'")
+                        left_num, left_ok = _parse_numeric(left)
+                        right_num, right_ok = _parse_numeric(right)
+                        if not left_ok or not right_ok:
+                            print(f"Error: Cannot compare non-numeric values with >= ('{left}' and/or '{right}' are not numbers)")
+                            return True
+                        condition_met = (left_num >= right_num)
+                    elif " <= " in condition_str:
+                        left, right = condition_str.split(" <= ", 1)
+                        left = left.strip().strip("\"'")
+                        right = right.strip().strip("\"'")
+                        left_num, left_ok = _parse_numeric(left)
+                        right_num, right_ok = _parse_numeric(right)
+                        if not left_ok or not right_ok:
+                            print(f"Error: Cannot compare non-numeric values with <= ('{left}' and/or '{right}' are not numbers)")
+                            return True
+                        condition_met = (left_num <= right_num)
+                    elif " > " in condition_str:
+                        left, right = condition_str.split(" > ", 1)
+                        left = left.strip().strip("\"'")
+                        right = right.strip().strip("\"'")
+                        left_num, left_ok = _parse_numeric(left)
+                        right_num, right_ok = _parse_numeric(right)
+                        if not left_ok or not right_ok:
+                            print(f"Error: Cannot compare non-numeric values with > ('{left}' and/or '{right}' are not numbers)")
+                            return True
+                        condition_met = (left_num > right_num)
+                    elif " < " in condition_str:
+                        left, right = condition_str.split(" < ", 1)
+                        left = left.strip().strip("\"'")
+                        right = right.strip().strip("\"'")
+                        left_num, left_ok = _parse_numeric(left)
+                        right_num, right_ok = _parse_numeric(right)
+                        if not left_ok or not right_ok:
+                            print(f"Error: Cannot compare non-numeric values with < ('{left}' and/or '{right}' are not numbers)")
+                            return True
+                        condition_met = (left_num < right_num)
+                    elif " == " in condition_str:
                         left, right = condition_str.split(" == ", 1)
                         # Strip operand quotes
                         left = left.strip().strip("\"'")
@@ -6545,6 +6592,8 @@ class ChatybotApp:
         print("  if <condition> then <command> - Conditional execution")
         print("    Supports: if ${var} then command, if not ${var} then command")
         print('             if "${var} == value" then command, if "true" then command')
+        print("             Numeric: >, <, >=, <= (both operands must be numbers)")
+        print('             Example: if "${AGE}" >= 18 then /setvar status adult')
         print("  defproc <name>(<params>) ... endproc - Define a reusable procedure block")
         print("  local <name> = <value> - Declare a local procedure variable (snapshotted & restored)")
         print("  foreach <item> in <array|range(...)|lines(...)> ... endfor - Multiline loop construct")

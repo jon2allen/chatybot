@@ -1,0 +1,150 @@
+# Demo: Numeric Comparisons in /if and /str_search
+# Description: Demonstrates >, <, >=, <= operators in if conditions
+#              and the /str_search command for substring searching.
+
+# ============================================================
+# Part 1: Numeric Comparison Operators
+# ============================================================
+
+/echo === Numeric Comparisons ===
+
+# 1. Basic greater-than
+set A = "10"
+set B = "5"
+if "${A}" > "${B}" then /setvar gt_result "10 > 5 is true"
+/dump gt_result
+
+# 2. Less-than
+if "${A}" < "${B}" then /setvar lt_result "should not appear"
+if "${B}" < "${A}" then /setvar lt_result "5 < 10 is true"
+/dump lt_result
+
+# 3. Greater-than-or-equal (equal case)
+set X = "50"
+set Y = "50"
+if "${X}" >= "${Y}" then /setvar ge_result "50 >= 50 is true"
+/dump ge_result
+
+# 4. Less-than-or-equal (less case)
+set LOW = "3"
+set HIGH = "99"
+if "${LOW}" <= "${HIGH}" then /setvar le_result "3 <= 99 is true"
+/dump le_result
+
+# 5. Literal number comparison
+set AGE = "25"
+if "${AGE}" >= 18 then /setvar status "adult"
+/dump status
+
+# 6. Float comparisons
+set PI = "3.14"
+set THREE = "3.0"
+if "${PI}" > "${THREE}" then /setvar pi_bigger "pi > 3 is true"
+/dump pi_bigger
+
+# 7. Negative numbers
+set NEG = "-10"
+set POS = "5"
+if "${NEG}" < "${POS}" then /setvar neg_result "-10 < 5 is true"
+/dump neg_result
+
+# 8. Negation with numeric operators
+set SCORE = "45"
+if not "${SCORE}" >= 60 then /setvar pass "failed"
+/dump pass
+
+# ============================================================
+# Part 2: Numeric Comparisons with /proc
+# ============================================================
+
+/echo === Conditional Logic with /proc ===
+
+defproc handle_high_score()
+  /calc "${SCORE} * 2" bonus
+  set verdict = "excellent"
+  /echo Bonus awarded: ${bonus}
+endproc
+
+defproc handle_medium_score()
+  set bonus = "0"
+  set verdict = "good"
+endproc
+
+defproc handle_low_score()
+  set bonus = "0"
+  set verdict = "needs improvement"
+endproc
+
+set SCORE = "95"
+if "${SCORE}" >= 90 then /proc handle_high_score
+if "${SCORE}" >= 50 then /proc handle_medium_score
+if "${SCORE}" < 50 then /proc handle_low_score
+
+/dump SCORE
+/dump bonus
+/dump verdict
+
+# ============================================================
+# Part 3: /str_search — Substring Searching
+# ============================================================
+
+/echo === /str_search Substring Search ===
+
+# 9. Basic count (case-sensitive)
+set LOG = "error info error warn error timeout error"
+/str_search "error" ${LOG}
+/echo Found ${STR_SEARCH} errors in log
+
+# 10. Case-insensitive search
+set MIXED = "Error ERROR error eRRoR"
+/str_search "error" ${MIXED} i
+/echo Case-insensitive count: ${STR_SEARCH}
+
+# 11. Match positions mode
+set TEXT = "the cat sat on the mat"
+/str_search "the" ${TEXT} m
+/echo Match positions: ${STR_SEARCH}
+
+# 12. Combined flags: case-insensitive + positions
+set CODE = "TODO: fix this. Todo: add tests. todo: refactor"
+/str_search "todo" ${CODE} im
+/echo Case-insensitive positions: ${STR_SEARCH}
+
+# 13. Custom target variable
+set DATA = "apple banana apple cherry apple"
+/str_search "apple" ${DATA} c apple_count
+/echo Apple count: ${apple_count}
+
+# 14. No matches found
+set DATA2 = "hello world"
+/str_search "xyz" ${DATA2}
+/echo Search for xyz: ${STR_SEARCH} matches
+
+# ============================================================
+# Part 4: Combining /str_search with /if
+# ============================================================
+
+/echo === Combining str_search with if ===
+
+defproc alert_too_many_errors()
+  set alert = "CRITICAL: error threshold exceeded"
+  /echo ${alert}
+endproc
+
+defproc log_ok()
+  set alert = "OK: error count within limits"
+endproc
+
+# Count errors and act on the result
+set LOG2 = "error success error error success error error success error"
+/str_search "error" ${LOG2}
+set error_count = "${STR_SEARCH}"
+/echo Error count: ${error_count}
+
+if "${error_count}" >= 5 then /proc alert_too_many_errors
+if "${error_count}" < 5 then /proc log_ok
+
+/dump alert
+
+# 15. Full dump of all variables
+/dump all
