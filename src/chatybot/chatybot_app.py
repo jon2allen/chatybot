@@ -5330,7 +5330,7 @@ class ChatybotApp:
 
             max_depth = int(self.buffer_manager.script_vars.get("PROC_MAX_DEPTH", 20))
             if self.proc_depth >= max_depth:
-                print(f"Error: Maximum procedure recursion depth of {max_depth} reached.")
+                print(f"Error: Maximum procedure recursion depth of {max_depth} reached.", flush=True)
                 return True
 
             body_lines = None
