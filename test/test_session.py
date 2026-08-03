@@ -54,6 +54,43 @@ async def test_session_use_and_load(app):
     assert app.chat_history[0] == ("First prompt", "First response")
 
 @pytest.mark.anyio
+async def test_chat_history_payload_injection(app, monkeypatch):
+    """Verify past chat_history exchanges are injected into payload messages."""
+    app.chat_history.append(("Who won the world cup in 2022?", "Argentina won the world cup."))
+    
+    captured_messages = []
+
+    async def mock_create(**kwargs):
+        nonlocal captured_messages
+        captured_messages = kwargs.get("messages", [])
+        class MockChoice:
+            message = type("Message", (), {"content": "Understood.", "tool_calls": None})()
+        class MockResponse:
+            choices = [MockChoice()]
+            usage = type("Usage", (), {"prompt_tokens": 10, "completion_tokens": 5})()
+        return MockResponse()
+
+    # Mock client completion
+    class MockClient:
+        class chat:
+            class completions:
+                create = staticmethod(mock_create)
+
+    monkeypatch.setattr(app, "get_openai_client", lambda *args, **kwargs: MockClient())
+    monkeypatch.setattr(app.config_manager, "get_model_config", lambda *args: {"name": "test-model"})
+
+    await app.chat_completion("What language do they speak there?")
+    
+    # Assert prior exchanges were prepended
+    assert len(captured_messages) >= 3
+    assert captured_messages[-3]["role"] == "user"
+    assert captured_messages[-3]["content"] == "Who won the world cup in 2022?"
+    assert captured_messages[-2]["role"] == "assistant"
+    assert captured_messages[-2]["content"] == "Argentina won the world cup."
+    assert captured_messages[-1]["role"] == "user"
+    assert captured_messages[-1]["content"] == "What language do they speak there?"
+
+@pytest.mark.anyio
 async def test_session_export_markdown(app, capsys):
     await app.handle_escape_command("/session start export_test")
     app.append_session_turn("Explain async", "<think>Thinking about async...</think>Async is non-blocking.")

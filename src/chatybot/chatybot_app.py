@@ -956,14 +956,22 @@ class ChatybotApp:
                     + full_prompt
                 )
 
-            # Prepare messages for chat completion
+            # Prepare messages for chat completion including past chat history
+            messages = []
+            if self.chat_history:
+                for past_p, past_r in self.chat_history:
+                    messages.append({"role": "user", "content": past_p})
+                    # Strip thinking tags from past assistant responses for token efficiency
+                    clean_r = re.sub(r"<think>.*?</think>\s*|<thought>.*?</thought>\s*", "", past_r, flags=re.DOTALL).strip()
+                    messages.append({"role": "assistant", "content": clean_r})
+
             # For multimodal (vision) models, use content array with text + images
             if image_list:
                 content_parts = [{"type": "text", "text": full_prompt}]
                 content_parts.extend(image_list)
-                messages = [{"role": "user", "content": content_parts}]
+                messages.append({"role": "user", "content": content_parts})
             else:
-                messages = [{"role": "user", "content": full_prompt}]
+                messages.append({"role": "user", "content": full_prompt})
 
         is_nvidia = (
             "nvidia" in model_config.get("base_url", "").lower()
