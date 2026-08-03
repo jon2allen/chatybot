@@ -17,7 +17,8 @@
       "/echo": "/echo",
       "/calc": "/calc",
       "/str_search": "/str_search",
-      "/proc": "/proc"
+      "/proc": "/proc",
+      "/session": "/session"
     },
     "keywords": {
       "set": "set",
@@ -135,7 +136,9 @@
       "/buscar_cadena": "/str_search",
       "/buscar_texto": "/str_search",
       "/proc": "/proc",
-      "/procedimiento": "/proc"
+      "/procedimiento": "/proc",
+      "/sesion": "/session",
+      "/session": "/session"
     },
     "keywords": {
       "informacion": "info",
@@ -480,7 +483,8 @@
       "/recherche_texte": "/str_search",
       "/chercher_texte": "/str_search",
       "/proc": "/proc",
-      "/procedure": "/proc"
+      "/procedure": "/proc",
+      "/session": "/session"
     },
     "keywords": {
       "informations": "info",
@@ -825,7 +829,9 @@
       "/str_search": "/str_search",
       "/查找文本": "/str_search",
       "/搜索字符串": "/str_search",
-      "/proc": "/proc"
+      "/proc": "/proc",
+      "/会话": "/session",
+      "/session": "/session"
     },
     "keywords": {
       "信息": "info",
@@ -1163,7 +1169,9 @@
       "/calc": "/calc",
       "/str_search": "/str_search",
       "/proc": "/proc",
-      "/procedura": "/proc"
+      "/procedura": "/proc",
+      "/sessione": "/session",
+      "/session": "/session"
     },
     "keywords": {
       "informazioni": "info",
@@ -1504,7 +1512,9 @@
       "/str_search": "/str_search",
       "/بحث_نص": "/str_search",
       "/بحث_سلسلة": "/str_search",
-      "/proc": "/proc"
+      "/proc": "/proc",
+      "/جلسة": "/session",
+      "/session": "/session"
     },
     "keywords": {
       "معلومات": "info",

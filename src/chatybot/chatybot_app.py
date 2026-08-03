@@ -158,6 +158,17 @@ class ChatybotApp:
             "and are ready to present the final result."
         )
 
+        # Session persistence settings
+        self.session_mode: str = "auto"          # "off", "on", "auto"
+        self.session_type: str = "clean"         # "clean", "telemetry", "hybrid"
+        self.session_dir: str = os.path.expanduser("~/.local/share/chatybot/sessions")
+        self.session_strip_thinking: str = "separate" # "separate", "true", "false"
+        self.active_session_id: Optional[str] = None
+        self.active_session_name: Optional[str] = None
+        self.session_turns: List[Dict[str, Any]] = []
+        self.session_created_at: Optional[str] = None
+        self.session_first_prompt_slug: Optional[str] = None
+
         # Trace settings
         self.trace_raw_payload: bool = False
         self.trace_tps: bool = False
@@ -638,6 +649,90 @@ class ChatybotApp:
             elem = new_elem
         
         return elem
+
+    def get_sessions_dir(self) -> str:
+        """Get directory path for storing session files."""
+        import sys
+        if "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST"):
+            path = os.path.expanduser("~/.local/share/chatybot/test/sessions")
+        else:
+            path = self.session_dir
+        os.makedirs(path, exist_ok=True)
+        return path
+
+    def _slugify_text(self, text: str, max_words: int = 6) -> str:
+        """Convert text prompt into a clean filename slug."""
+        clean = re.sub(r"[^\w\s-]", "", text.strip())
+        words = clean.split()[:max_words]
+        slug = "_".join(words).lower()
+        return slug if slug else "untitled_session"
+
+    def _extract_thinking_tokens(self, response_text: str) -> Tuple[Optional[str], str]:
+        """Extract reasoning traces (<think>...</think>) from response text."""
+        match = re.search(r"<think>(.*?)</think>|<thought>(.*?)</thought>", response_text, flags=re.DOTALL)
+        if match:
+            thinking_content = (match.group(1) or match.group(2) or "").strip()
+            clean_text = re.sub(r"<think>.*?</think>\s*|<thought>.*?</thought>\s*", "", response_text, flags=re.DOTALL).strip()
+            return thinking_content, clean_text
+        return None, response_text
+
+    def _ensure_active_session(self, initial_prompt: str = ""):
+        """Initialize active session state if not already started."""
+        if self.session_mode == "off":
+            return
+        if not self.active_session_id:
+            now = datetime.now()
+            model_alias = getattr(self.config_manager, "active_model_alias", None) or "default"
+            timestamp = now.strftime("%Y%m%d_%H%M%S")
+            self.active_session_id = f"{model_alias}_{timestamp}"
+            self.session_created_at = now.isoformat()
+            if initial_prompt:
+                self.session_first_prompt_slug = self._slugify_text(initial_prompt)
+
+    def save_active_session(self):
+        """Save current active session state to disk."""
+        if self.session_mode == "off" or not self.active_session_id:
+            return
+
+        sessions_dir = self.get_sessions_dir()
+        file_path = os.path.join(sessions_dir, f"{self.active_session_id}.json")
+
+        model_alias = getattr(self.config_manager, "active_model_alias", None) or "default"
+        payload = {
+            "session_id": self.active_session_id,
+            "model_alias": model_alias,
+            "created_at": self.session_created_at or datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat(),
+            "first_prompt_slug": self.session_first_prompt_slug or "untitled_session",
+            "custom_name": self.active_session_name,
+            "turns": self.session_turns
+        }
+
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2, ensure_ascii=False)
+
+    def append_session_turn(self, prompt: str, response: str, agentic_loop_data: Optional[List[Dict[str, Any]]] = None):
+        """Append a completed exchange turn to active session and save to disk."""
+        if self.session_mode == "off":
+            return
+
+        self._ensure_active_session(prompt)
+        
+        thinking_text, clean_resp = self._extract_thinking_tokens(response)
+        
+        turn_data: Dict[str, Any] = {
+            "turn_id": len(self.session_turns) + 1,
+            "prompt": prompt,
+            "response": clean_resp if self.session_strip_thinking != "false" else response
+        }
+        if thinking_text and self.session_strip_thinking == "separate":
+            turn_data["thinking"] = thinking_text
+        if agentic_loop_data:
+            turn_data["agentic_loop"] = agentic_loop_data
+
+        self.session_turns.append(turn_data)
+        self.save_active_session()
+        self.buffer_manager.set_script_var('SESSION_NAME', self.active_session_name or self.active_session_id, allow_protected=True)
 
     def get_history_path(self) -> str:
         """
@@ -1610,6 +1705,8 @@ class ChatybotApp:
 
             if not self.in_tool_loop:
                 self.chat_history.append((prompt, full_response))
+                if self.session_mode != "off":
+                    self.append_session_turn(prompt, full_response)
                 if self.tool_auto and self.extract_tool_calls(full_response):
                     print("Tool call detected in response. Auto-launching agentic tool loop...")
                     await self.execute_tool_loop(max_turns=self.max_turns)
@@ -3524,6 +3621,14 @@ class ChatybotApp:
         # Commit ONLY the final, natural-language outcome to the main chat_history (Option B)
         self.chat_history[-1] = (initial_prompt, final_natural_language_response)
         
+        # Update active session turn record with agentic loop outcome
+        if self.session_mode != "off" and self.session_turns:
+            agentic_trace = self.buffer_manager.script_vars.get('AGENTIC_LOOP', [])
+            self.session_turns[-1]["response"] = final_natural_language_response
+            if agentic_trace:
+                self.session_turns[-1]["agentic_loop"] = agentic_trace
+            self.save_active_session()
+        
         # Log final response from inside the tool loop if logging is active
         if self.logging_manager.logging_active:
             self.logging_manager.log_message(f"Assistant (Agentic Loop Final): {final_natural_language_response}\n")
@@ -3644,6 +3749,15 @@ class ChatybotApp:
                 self.strip_thinking_from_filebanks = True
             elif str(val).lower() in ('false', '0', 'no', 'off'):
                 self.strip_thinking_from_filebanks = False
+
+        if 'session_mode' in config_section:
+            self.session_mode = str(config_section.get('session_mode')).lower()
+        if 'session_type' in config_section:
+            self.session_type = str(config_section.get('session_type')).lower()
+        if 'session_dir' in config_section:
+            self.session_dir = os.path.expanduser(str(config_section.get('session_dir')))
+        if 'session_strip_thinking' in config_section:
+            self.session_strip_thinking = str(config_section.get('session_strip_thinking')).lower()
 
         tools = config.get('tools', {})
         
@@ -4406,6 +4520,246 @@ class ChatybotApp:
                 print("  /save file.txt all - Save all chat history")
                 print("  /save file.txt nothink - Force exclude thinking blocks")
                 print("  /save file.txt withthink - Force include thinking blocks")
+                return True
+
+        elif cmd == "/session":
+            if len(parts) < 2:
+                print(f"Active Session ID: {self.active_session_id or 'None'}")
+                print(f"Custom Name: {self.active_session_name or 'None'}")
+                print(f"Session Mode: {self.session_mode}")
+                print(f"Turn Count: {len(self.session_turns)}")
+                print(f"Session Directory: {self.get_sessions_dir()}")
+                return True
+
+            subcmd = parts[1].lower()
+
+            if subcmd == "start":
+                if len(parts) < 3:
+                    print("Usage: /session start <name>")
+                    return True
+                session_name = " ".join(parts[2:]).strip(" \"'")
+                self.chat_history.clear()
+                self.session_turns.clear()
+                now = datetime.now()
+                model_alias = getattr(self.config_manager, "active_model_alias", None) or "default"
+                timestamp = now.strftime("%Y%m%d_%H%M%S")
+                self.active_session_id = f"{model_alias}_{timestamp}"
+                self.active_session_name = session_name
+                self.session_created_at = now.isoformat()
+                self.session_first_prompt_slug = None
+                self.session_mode = "on" if self.session_mode == "off" else self.session_mode
+                self.save_active_session()
+                self.buffer_manager.set_script_var('SESSION_NAME', session_name, allow_protected=True)
+                print(f"Started new session '{session_name}' (ID: {self.active_session_id})")
+                return True
+
+            elif subcmd == "auto":
+                if len(parts) < 3:
+                    print(f"Auto Session Mode is currently: {'ON' if self.session_mode in ('on', 'auto') else 'OFF'}")
+                    return True
+                action = parts[2].lower()
+                if action in ("on", "1", "true"):
+                    self.session_mode = "auto"
+                    print("Auto session mode enabled.")
+                elif action in ("off", "0", "false"):
+                    self.session_mode = "off"
+                    print("Auto session mode disabled.")
+                else:
+                    print("Invalid action. Use 'on' or 'off'.")
+                return True
+
+            elif subcmd in ("stop", "off"):
+                self.session_mode = "off"
+                print("Session recording paused.")
+                return True
+
+            elif subcmd == "status":
+                print(f"Active Session ID: {self.active_session_id or 'None'}")
+                print(f"Custom Name: {self.active_session_name or 'None'}")
+                print(f"Session Mode: {self.session_mode}")
+                print(f"Turn Count: {len(self.session_turns)}")
+                print(f"Session Directory: {self.get_sessions_dir()}")
+                return True
+
+            elif subcmd == "save":
+                if len(parts) >= 3:
+                    custom_name = " ".join(parts[2:]).strip(" \"'")
+                    self.active_session_name = custom_name
+                self._ensure_active_session()
+                self.save_active_session()
+                print(f"Session '{self.active_session_name or self.active_session_id}' saved to disk.")
+                return True
+
+            elif subcmd == "list":
+                sessions_dir = self.get_sessions_dir()
+                if not os.path.exists(sessions_dir):
+                    print("No saved sessions found.")
+                    return True
+                files = [f for f in os.listdir(sessions_dir) if f.endswith(".json")]
+                if not files:
+                    print("No saved sessions found.")
+                    return True
+                files.sort(reverse=True)
+                print("\nAvailable Sessions:")
+                for idx, fname in enumerate(files, 1):
+                    fpath = os.path.join(sessions_dir, fname)
+                    try:
+                        with open(fpath, "r", encoding="utf-8") as sf:
+                            sdata = json.load(sf)
+                            sid = sdata.get("session_id", fname[:-5])
+                            cname = sdata.get("custom_name")
+                            slug = sdata.get("first_prompt_slug", "")
+                            turns_cnt = len(sdata.get("turns", []))
+                            upd = sdata.get("updated_at", "")[:16].replace("T", " ")
+                            name_str = f" (Name: '{cname}')" if cname else ""
+                            print(f"  {idx}. {sid}{name_str}")
+                            print(f"     ├─ Prompt: \"{slug}\"")
+                            print(f"     └─ Turns: {turns_cnt} exchanges (Updated: {upd})")
+                    except Exception:
+                        print(f"  {idx}. {fname}")
+                print("")
+                return True
+
+            elif subcmd == "use":
+                if len(parts) < 3:
+                    print("Usage: /session use <session_id|custom_name>")
+                    return True
+                target = " ".join(parts[2:]).strip(" \"'")
+                sessions_dir = self.get_sessions_dir()
+                matched_file = None
+
+                # Search by exact filename / session_id
+                target_fname = target if target.endswith(".json") else f"{target}.json"
+                if os.path.exists(os.path.join(sessions_dir, target_fname)):
+                    matched_file = os.path.join(sessions_dir, target_fname)
+                else:
+                    # Search by custom_name or session_id prefix
+                    for f in os.listdir(sessions_dir):
+                        if f.endswith(".json"):
+                            fp = os.path.join(sessions_dir, f)
+                            try:
+                                with open(fp, "r", encoding="utf-8") as sf:
+                                    sdata = json.load(sf)
+                                    if sdata.get("custom_name") == target or sdata.get("session_id") == target:
+                                        matched_file = fp
+                                        break
+                            except Exception:
+                                pass
+
+                if not matched_file:
+                    print(f"Error: Session '{target}' not found.")
+                    return True
+
+                with open(matched_file, "r", encoding="utf-8") as sf:
+                    sdata = json.load(sf)
+                    self.active_session_id = sdata.get("session_id")
+                    self.active_session_name = sdata.get("custom_name")
+                    self.session_created_at = sdata.get("created_at")
+                    self.session_first_prompt_slug = sdata.get("first_prompt_slug")
+                    self.session_turns = sdata.get("turns", [])
+                    
+                    # Hydrate chat_history for LLM completion context
+                    self.chat_history.clear()
+                    for turn in self.session_turns:
+                        self.chat_history.append((turn["prompt"], turn["response"]))
+                
+                self.session_mode = "on" if self.session_mode == "off" else self.session_mode
+                self.buffer_manager.set_script_var('SESSION_NAME', self.active_session_name or self.active_session_id, allow_protected=True)
+                print(f"Loaded session '{self.active_session_name or self.active_session_id}' ({len(self.session_turns)} exchanges).")
+                return True
+
+            elif subcmd == "show":
+                show_thinking = False
+                if len(parts) >= 3 and parts[2].lower() in ("--thinking", "-t"):
+                    show_thinking = True
+
+                if not self.session_turns:
+                    print("No exchanges in active session.")
+                    return True
+
+                print("\n" + "=" * 80)
+                name_str = f" (Name: {self.active_session_name})" if self.active_session_name else ""
+                model_alias = getattr(self.config_manager, "active_model_alias", None) or "default"
+                print(f"SESSION: {self.active_session_id or 'Unsaved'}{name_str}")
+                print(f"Model: {model_alias} | Created: {self.session_created_at or 'N/A'} | Total Turns: {len(self.session_turns)}")
+                print("=" * 80 + "\n")
+
+                for turn in self.session_turns:
+                    t_id = turn.get("turn_id", 1)
+                    print(f"[Turn {t_id}]")
+                    print(f"User: {turn.get('prompt')}")
+                    if show_thinking and "thinking" in turn:
+                        print("Thinking:")
+                        for t_line in turn["thinking"].splitlines():
+                            print(f"  {t_line}")
+                    print(f"Assistant: {turn.get('response')}")
+                    if "agentic_loop" in turn:
+                        t_count = len(turn["agentic_loop"])
+                        print(f"(Tools executed: {t_count})")
+                    print("\n" + "-" * 80 + "\n")
+                print("=" * 80 + "\n")
+                return True
+
+            elif subcmd == "export":
+                if len(parts) < 3:
+                    print("Usage: /session export <filepath.md> [--thinking|-t]")
+                    return True
+                
+                show_thinking = False
+                raw_args = command.split(maxsplit=2)[2] if len(command.split(maxsplit=2)) > 2 else ""
+                words = raw_args.split()
+                if words and words[-1].lower() in ("--thinking", "-t"):
+                    show_thinking = True
+                    words.pop()
+                
+                export_path = " ".join(words).strip(" \"'")
+                if not self.session_turns:
+                    print("No exchanges in active session to export.")
+                    return True
+
+                md_lines = []
+                name_title = self.active_session_name or self.active_session_id or "Session Transcript"
+                model_alias = getattr(self.config_manager, "active_model_alias", None) or "default"
+                md_lines.append(f"# Session Transcript: {name_title}\n")
+                md_lines.append(f"- **Session ID**: `{self.active_session_id or 'N/A'}`")
+                md_lines.append(f"- **Model**: `{model_alias}`")
+                md_lines.append(f"- **Created**: {self.session_created_at or 'N/A'}")
+                md_lines.append(f"- **Total Exchanges**: {len(self.session_turns)}\n")
+                md_lines.append("---\n")
+
+                for turn in self.session_turns:
+                    t_id = turn.get("turn_id", 1)
+                    md_lines.append(f"## Turn {t_id}\n")
+                    md_lines.append("### User")
+                    md_lines.append(f"{turn.get('prompt')}\n")
+                    if show_thinking and "thinking" in turn:
+                        md_lines.append("### Reasoning Trace")
+                        for t_line in turn["thinking"].splitlines():
+                            md_lines.append(f"> {t_line}")
+                        md_lines.append("")
+                    md_lines.append("### Assistant")
+                    md_lines.append(f"{turn.get('response')}\n")
+                    if "agentic_loop" in turn:
+                        md_lines.append("#### Tools Executed")
+                        for step in turn["agentic_loop"]:
+                            if isinstance(step, dict):
+                                tname = step.get("tool", "unknown_tool")
+                                md_lines.append(f"- `{tname}`")
+                            else:
+                                md_lines.append(f"- `{step}`")
+                        md_lines.append("")
+                    md_lines.append("---\n")
+
+                try:
+                    with open(export_path, "w", encoding="utf-8") as f:
+                        f.write("\n".join(md_lines))
+                    print(f"Exported session transcript to '{export_path}'.")
+                except Exception as e:
+                    print(f"Error exporting session: {e}")
+                return True
+
+            else:
+                print(f"Unknown session subcommand: {subcmd}. Use start, auto, stop, status, save, list, use, show, export.")
                 return True
 
             # Parse parameters from the command

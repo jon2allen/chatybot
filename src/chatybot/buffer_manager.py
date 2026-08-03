@@ -36,6 +36,8 @@ class ScriptVars(UserDict):
             'latest_rerank',
             'CALC',
             'STR_SEARCH',
+            'SESSION_NAME',
+            'SESSION_ENABLE',
         }
         super().__init__(*args, **kwargs)
 
