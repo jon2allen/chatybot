@@ -624,6 +624,16 @@ class HelpSystem:
         ))
 
         self.register_command(CommandHelp(
+            name="/session",
+            category="scripting",
+            short_desc="Manage session history persistence and markdown exports",
+            usage="/session [start <name>|auto [on|off]|stop|off|status|save [name]|list|use <name>|show [-t]|export <file.md> [-t]]",
+            long_desc="Manage session-based conversation persistence. Saves and loads exchange turns to JSON disk sessions (<model>_<timestamp>.json).\n\nSubcommands:\n  /session start <name> - Clear active history and start a new named session\n  /session auto [on|off] - Toggle automatic session creation & turn saving\n  /session stop / off - Pause session recording\n  /session status - Show active session details and file path\n  /session save [name] - Save or update active session custom name\n  /session list - List saved sessions with prompt slugs and turn counts\n  /session use <name|id> - Load an existing session from disk\n  /session show [--thinking|-t] - Display formatted view of active session\n  /session export <file.md> [--thinking|-t] - Export session transcript to Markdown",
+            examples=["/session start refactor_parser", "/session auto on", "/session list", "/session use gemini_flash_20260802_223045", "/session show -t", "/session export summary.md -t"],
+            see_also=["/save", "/logging"]
+        ))
+
+        self.register_command(CommandHelp(
             name="/proc",
             category="scripting",
             short_desc="Execute a procedure defined with defproc",
