@@ -168,6 +168,7 @@ class ChatybotApp:
         self.session_turns: List[Dict[str, Any]] = []
         self.session_created_at: Optional[str] = None
         self.session_first_prompt_slug: Optional[str] = None
+        self.session_notes: Optional[str] = None
 
         # Trace settings
         self.trace_raw_payload: bool = False
@@ -739,6 +740,7 @@ class ChatybotApp:
             "updated_at": datetime.now().isoformat(),
             "first_prompt_slug": self.session_first_prompt_slug or "untitled_session",
             "custom_name": self.active_session_name,
+            "notes": self.session_notes[:1024] if self.session_notes else None,
             "turns": self.session_turns
         }
 
@@ -4589,6 +4591,7 @@ class ChatybotApp:
                 self.active_session_name = session_name
                 self.session_created_at = now.isoformat()
                 self.session_first_prompt_slug = None
+                self.session_notes = None
                 self.session_mode = "on" if self.session_mode == "off" else self.session_mode
                 self.save_active_session()
                 self.buffer_manager.set_script_var('SESSION_NAME', session_name, allow_protected=True)
@@ -4621,6 +4624,26 @@ class ChatybotApp:
                 print(f"Session Mode: {self.session_mode}")
                 print(f"Turn Count: {len(self.session_turns)}")
                 print(f"Session Directory: {self.get_sessions_dir()}")
+                if self.session_notes:
+                    print(f"Notes: {self.session_notes}")
+                return True
+
+            elif subcmd == "note":
+                if len(parts) < 3:
+                    if self.session_notes:
+                        print(f"Active Session Notes:\n{self.session_notes}")
+                    else:
+                        print("No notes set for active session. Usage: /session note <text>")
+                    return True
+                raw_note = command.split(maxsplit=2)[2] if len(command.split(maxsplit=2)) > 2 else ""
+                note_text = raw_note.strip(" \"'")
+                if len(note_text) > 1024:
+                    print(f"Warning: Note exceeds 1024 characters ({len(note_text)} chars). Truncating...")
+                    note_text = note_text[:1024]
+                self._ensure_active_session()
+                self.session_notes = note_text
+                self.save_active_session()
+                print(f"Session notes updated ({len(note_text)} chars).")
                 return True
 
             elif subcmd == "save":
@@ -4655,10 +4678,14 @@ class ChatybotApp:
                             slug = sdata.get("first_prompt_slug", "")
                             turns_cnt = len(sdata.get("turns", []))
                             upd = sdata.get("updated_at", "")[:16].replace("T", " ")
+                            snote = sdata.get("notes")
                             name_str = f" (Name: '{cname}')" if cname else ""
                             gz_str = " [compressed]" if fname.endswith(".gz") else ""
                             print(f"  {idx}. {sid}{name_str}{gz_str}")
                             print(f"     ├─ Prompt: \"{slug}\"")
+                            if snote:
+                                short_note = snote[:60] + "..." if len(snote) > 60 else snote
+                                print(f"     ├─ Notes: \"{short_note}\"")
                             print(f"     └─ Turns: {turns_cnt} exchanges (Updated: {upd})")
                     except Exception:
                         print(f"  {idx}. {fname}")
@@ -4684,6 +4711,7 @@ class ChatybotApp:
                     self.active_session_name = sdata.get("custom_name")
                     self.session_created_at = sdata.get("created_at")
                     self.session_first_prompt_slug = sdata.get("first_prompt_slug")
+                    self.session_notes = sdata.get("notes")
                     self.session_turns = sdata.get("turns", [])
                     
                     # Hydrate chat_history for LLM completion context
@@ -4710,6 +4738,8 @@ class ChatybotApp:
                 model_alias = getattr(self.config_manager, "active_model_alias", None) or "default"
                 print(f"SESSION: {self.active_session_id or 'Unsaved'}{name_str}")
                 print(f"Model: {model_alias} | Created: {self.session_created_at or 'N/A'} | Total Turns: {len(self.session_turns)}")
+                if self.session_notes:
+                    print(f"Notes: {self.session_notes}")
                 print("=" * 80 + "\n")
 
                 for turn in self.session_turns:
@@ -4752,8 +4782,10 @@ class ChatybotApp:
                 md_lines.append(f"- **Session ID**: `{self.active_session_id or 'N/A'}`")
                 md_lines.append(f"- **Model**: `{model_alias}`")
                 md_lines.append(f"- **Created**: {self.session_created_at or 'N/A'}")
-                md_lines.append(f"- **Total Exchanges**: {len(self.session_turns)}\n")
-                md_lines.append("---\n")
+                md_lines.append(f"- **Total Exchanges**: {len(self.session_turns)}")
+                if self.session_notes:
+                    md_lines.append(f"- **Notes**: {self.session_notes}")
+                md_lines.append("\n---\n")
 
                 for turn in self.session_turns:
                     t_id = turn.get("turn_id", 1)
