@@ -120,3 +120,51 @@ async def test_session_list_and_status(app, capsys):
     captured_status = capsys.readouterr()
     assert "Active Session ID:" in captured_status.out
     assert "Turn Count: 1" in captured_status.out
+
+@pytest.mark.anyio
+async def test_session_info_and_delete(app, capsys):
+    await app.handle_escape_command("/session start del_test1")
+    app.append_session_turn("P1", "R1")
+    
+    await app.handle_escape_command("/session start del_test2")
+    app.append_session_turn("P2", "R2")
+
+    await app.handle_escape_command("/session info")
+    captured = capsys.readouterr()
+    assert "Total Sessions:" in captured.out
+    assert "Space Consumed:" in captured.out
+
+    # Delete single session explicitly
+    await app.handle_escape_command("!echo y | /session delete del_test1")
+    await app.handle_escape_command("/session delete del_test1")
+    await app.handle_escape_command("/session list")
+    captured_list = capsys.readouterr()
+    assert "del_test1" not in captured_list.out.split("Available Sessions:")[-1]
+
+@pytest.mark.anyio
+async def test_session_merge_compress_prune(app, capsys):
+    # Setup session 1
+    await app.handle_escape_command("/session start s1")
+    app.append_session_turn("Prompt 1", "Resp 1")
+    s1_id = app.active_session_id
+
+    # Setup session 2
+    await app.handle_escape_command("/session start s2")
+    app.append_session_turn("Prompt 2", "Resp 2")
+    s2_id = app.active_session_id
+
+    # Test merge
+    capsys.readouterr()
+    await app.handle_escape_command(f"/session merge merged_target {s1_id} {s2_id}")
+    captured = capsys.readouterr()
+    assert "Merged 2 sessions" in captured.out
+
+    # Test compress
+    await app.handle_escape_command("/session compress all")
+    captured_comp = capsys.readouterr()
+    assert "Compressed" in captured_comp.out
+
+    # Test prune
+    await app.handle_escape_command("/session prune keep=1")
+    captured_prune = capsys.readouterr()
+    assert "Pruned" in captured_prune.out
