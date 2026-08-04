@@ -168,3 +168,19 @@ async def test_session_merge_compress_prune(app, capsys):
     await app.handle_escape_command("/session prune keep=1")
     captured_prune = capsys.readouterr()
     assert "Pruned" in captured_prune.out
+
+@pytest.mark.anyio
+async def test_session_note(app, capsys):
+    await app.handle_escape_command("/session start note_test")
+    app.append_session_turn("P1", "R1")
+
+    await app.handle_escape_command("/session note Benchmark test run for version 2.0")
+    assert app.session_notes == "Benchmark test run for version 2.0"
+
+    await app.handle_escape_command("/session status")
+    captured_status = capsys.readouterr()
+    assert "Notes: Benchmark test run for version 2.0" in captured_status.out
+
+    await app.handle_escape_command("/session list")
+    captured_list = capsys.readouterr()
+    assert "Notes: \"Benchmark test run for version 2.0\"" in captured_list.out
