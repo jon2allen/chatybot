@@ -4566,6 +4566,73 @@ class ChatybotApp:
                 print("  /save file.txt withthink - Force include thinking blocks")
                 return True
 
+            # Parse parameters from the command
+            # Syntax: /save <file_path> [all] [nothink] (in any order at the end)
+            save_all = False
+            strip_thinking = not self.show_thinking # Respect /thinking state by default
+            
+            words = command.split()
+            # words[0] is "/save"
+            # Extract any known flags at the end
+            while len(words) > 2:
+                last_word = words[-1].lower().strip(" \"'")
+                if last_word == "all":
+                    save_all = True
+                    words.pop()
+                elif last_word in ("nothink", "no-think", "nothinking", "no-thinking"):
+                    strip_thinking = True
+                    words.pop()
+                elif last_word in ("withthink", "with-think", "withthinking", "with-thinking"):
+                    strip_thinking = False
+                    words.pop()
+                else:
+                    break
+            
+            # Reconstruct the file path
+            file_path = " ".join(words[1:]).strip(" \"'")
+            
+            if not self.chat_history:
+                print("No chat history to save.")
+                return True
+            
+            def clean_thinking(text: str) -> str:
+                import re
+                return re.sub(
+                    r"<think>.*?</think>\s*|<thought>.*?</thought>\s*", "", text, flags=re.DOTALL
+                )
+            
+            try:
+                directory = os.path.dirname(file_path)
+                if directory and not os.path.exists(directory):
+                    os.makedirs(directory, exist_ok=True)
+                    print(f"Created directory path: '{directory}'")
+                
+                if save_all:
+                    # Save all chat history
+                    with open(file_path, "w") as f:
+                        for i, (prompt, response) in enumerate(self.chat_history, 1):
+                            res_to_save = clean_thinking(response) if strip_thinking else response
+                            f.write(f"=== Conversation {i} ===\n")
+                            f.write(f"PROMPT: {prompt}\n\n")
+                            f.write(f"RESPONSE: {res_to_save}\n\n")
+                            f.write("---\n\n")
+                    print(f"All chat history ({len(self.chat_history)} conversations) saved to '{file_path}'.")
+                else:
+                    # Save last response only (default behavior)
+                    last_response = self.chat_history[-1][1]
+                    res_to_save = clean_thinking(last_response) if strip_thinking else last_response
+                    with open(file_path, "w") as f:
+                        f.write(res_to_save)
+                    print(f"Last chat completion saved to '{file_path}'.")
+
+                    # If note mode is on, process the file to extract code blocks
+                    if self.note_mode:
+                        print(f"Note mode is ON. Processing file '{file_path}'...")
+                        process_file(file_path)
+            except Exception as e:
+                print(f"Error saving file: {str(e)}")
+            return True
+
         elif cmd == "/session":
             if len(parts) < 2:
                 print(f"Active Session ID: {self.active_session_id or 'None'}")
@@ -5095,73 +5162,6 @@ class ChatybotApp:
             else:
                 print(f"Unknown session subcommand: {subcmd}. Use start, auto, stop, status, save, list, use, show, export, info, delete, merge, compress, prune.")
                 return True
-
-            # Parse parameters from the command
-            # Syntax: /save <file_path> [all] [nothink] (in any order at the end)
-            save_all = False
-            strip_thinking = not self.show_thinking # Respect /thinking state by default
-            
-            words = command.split()
-            # words[0] is "/save"
-            # Extract any known flags at the end
-            while len(words) > 2:
-                last_word = words[-1].lower().strip(" \"'")
-                if last_word == "all":
-                    save_all = True
-                    words.pop()
-                elif last_word in ("nothink", "no-think", "nothinking", "no-thinking"):
-                    strip_thinking = True
-                    words.pop()
-                elif last_word in ("withthink", "with-think", "withthinking", "with-thinking"):
-                    strip_thinking = False
-                    words.pop()
-                else:
-                    break
-            
-            # Reconstruct the file path
-            file_path = " ".join(words[1:]).strip(" \"'")
-            
-            if not self.chat_history:
-                print("No chat history to save.")
-                return True
-            
-            def clean_thinking(text: str) -> str:
-                import re
-                return re.sub(
-                    r"<think>.*?</think>\s*|<thought>.*?</thought>\s*", "", text, flags=re.DOTALL
-                )
-            
-            try:
-                directory = os.path.dirname(file_path)
-                if directory and not os.path.exists(directory):
-                    os.makedirs(directory, exist_ok=True)
-                    print(f"Created directory path: '{directory}'")
-                
-                if save_all:
-                    # Save all chat history
-                    with open(file_path, "w") as f:
-                        for i, (prompt, response) in enumerate(self.chat_history, 1):
-                            res_to_save = clean_thinking(response) if strip_thinking else response
-                            f.write(f"=== Conversation {i} ===\n")
-                            f.write(f"PROMPT: {prompt}\n\n")
-                            f.write(f"RESPONSE: {res_to_save}\n\n")
-                            f.write("---\n\n")
-                    print(f"All chat history ({len(self.chat_history)} conversations) saved to '{file_path}'.")
-                else:
-                    # Save last response only (default behavior)
-                    last_response = self.chat_history[-1][1]
-                    res_to_save = clean_thinking(last_response) if strip_thinking else last_response
-                    with open(file_path, "w") as f:
-                        f.write(res_to_save)
-                    print(f"Last chat completion saved to '{file_path}'.")
-
-                    # If note mode is on, process the file to extract code blocks
-                    if self.note_mode:
-                        print(f"Note mode is ON. Processing file '{file_path}'...")
-                        process_file(file_path)
-            except Exception as e:
-                print(f"Error saving file: {str(e)}")
-            return True
 
         elif cmd == "/notemode":
             if len(parts) < 2:
