@@ -660,6 +660,34 @@ class ChatybotApp:
         os.makedirs(path, exist_ok=True)
         return path
 
+    def _resolve_session_file(self, target: str) -> Optional[str]:
+        """Find a session JSON or JSON.GZ file path by exact path, ID, or custom name."""
+        sessions_dir = self.get_sessions_dir()
+        if not os.path.exists(sessions_dir):
+            return None
+
+        # 1. Exact path / filename check
+        for ext in ("", ".json", ".json.gz"):
+            cand = target + ext if not target.endswith(ext) or ext == "" else target
+            p = os.path.join(sessions_dir, cand) if not os.path.isabs(cand) else cand
+            if os.path.isfile(p):
+                return p
+
+        # 2. Match custom_name or session_id metadata
+        import gzip
+        for fname in os.listdir(sessions_dir):
+            if fname.endswith(".json") or fname.endswith(".json.gz"):
+                fp = os.path.join(sessions_dir, fname)
+                try:
+                    open_fn = gzip.open if fname.endswith(".gz") else open
+                    with open_fn(fp, "rt", encoding="utf-8") as sf:
+                        sdata = json.load(sf)
+                        if sdata.get("custom_name") == target or sdata.get("session_id") == target:
+                            return fp
+                except Exception:
+                    pass
+        return None
+
     def _slugify_text(self, text: str, max_words: int = 6) -> str:
         """Convert text prompt into a clean filename slug."""
         clean = re.sub(r"[^\w\s-]", "", text.strip())
@@ -4603,24 +4631,27 @@ class ChatybotApp:
                 if not os.path.exists(sessions_dir):
                     print("No saved sessions found.")
                     return True
-                files = [f for f in os.listdir(sessions_dir) if f.endswith(".json")]
+                files = [f for f in os.listdir(sessions_dir) if f.endswith(".json") or f.endswith(".json.gz")]
                 if not files:
                     print("No saved sessions found.")
                     return True
                 files.sort(reverse=True)
+                import gzip
                 print("\nAvailable Sessions:")
                 for idx, fname in enumerate(files, 1):
                     fpath = os.path.join(sessions_dir, fname)
                     try:
-                        with open(fpath, "r", encoding="utf-8") as sf:
+                        open_fn = gzip.open if fname.endswith(".gz") else open
+                        with open_fn(fpath, "rt", encoding="utf-8") as sf:
                             sdata = json.load(sf)
-                            sid = sdata.get("session_id", fname[:-5])
+                            sid = sdata.get("session_id", fname)
                             cname = sdata.get("custom_name")
                             slug = sdata.get("first_prompt_slug", "")
                             turns_cnt = len(sdata.get("turns", []))
                             upd = sdata.get("updated_at", "")[:16].replace("T", " ")
                             name_str = f" (Name: '{cname}')" if cname else ""
-                            print(f"  {idx}. {sid}{name_str}")
+                            gz_str = " [compressed]" if fname.endswith(".gz") else ""
+                            print(f"  {idx}. {sid}{name_str}{gz_str}")
                             print(f"     ├─ Prompt: \"{slug}\"")
                             print(f"     └─ Turns: {turns_cnt} exchanges (Updated: {upd})")
                     except Exception:
@@ -4633,32 +4664,15 @@ class ChatybotApp:
                     print("Usage: /session use <session_id|custom_name>")
                     return True
                 target = " ".join(parts[2:]).strip(" \"'")
-                sessions_dir = self.get_sessions_dir()
-                matched_file = None
-
-                # Search by exact filename / session_id
-                target_fname = target if target.endswith(".json") else f"{target}.json"
-                if os.path.exists(os.path.join(sessions_dir, target_fname)):
-                    matched_file = os.path.join(sessions_dir, target_fname)
-                else:
-                    # Search by custom_name or session_id prefix
-                    for f in os.listdir(sessions_dir):
-                        if f.endswith(".json"):
-                            fp = os.path.join(sessions_dir, f)
-                            try:
-                                with open(fp, "r", encoding="utf-8") as sf:
-                                    sdata = json.load(sf)
-                                    if sdata.get("custom_name") == target or sdata.get("session_id") == target:
-                                        matched_file = fp
-                                        break
-                            except Exception:
-                                pass
+                matched_file = self._resolve_session_file(target)
 
                 if not matched_file:
                     print(f"Error: Session '{target}' not found.")
                     return True
 
-                with open(matched_file, "r", encoding="utf-8") as sf:
+                import gzip
+                open_fn = gzip.open if matched_file.endswith(".gz") else open
+                with open_fn(matched_file, "rt", encoding="utf-8") as sf:
                     sdata = json.load(sf)
                     self.active_session_id = sdata.get("session_id")
                     self.active_session_name = sdata.get("custom_name")
@@ -4766,8 +4780,282 @@ class ChatybotApp:
                     print(f"Error exporting session: {e}")
                 return True
 
+            elif subcmd in ("info", "stats"):
+                sessions_dir = self.get_sessions_dir()
+                if not os.path.exists(sessions_dir):
+                    print("No session directory found.")
+                    return True
+
+                files = [f for f in os.listdir(sessions_dir) if f.endswith(".json") or f.endswith(".json.gz")]
+                if not files:
+                    print("No saved sessions.")
+                    return True
+
+                import gzip
+                total_bytes = 0
+                oldest_file = None
+                newest_file = None
+                oldest_mtime = float("inf")
+                newest_mtime = 0
+                largest_file = None
+                largest_bytes = 0
+
+                for fname in files:
+                    fp = os.path.join(sessions_dir, fname)
+                    sz = os.path.getsize(fp)
+                    mtime = os.path.getmtime(fp)
+                    total_bytes += sz
+                    if mtime < oldest_mtime:
+                        oldest_mtime = mtime
+                        oldest_file = fname
+                    if mtime > newest_mtime:
+                        newest_mtime = mtime
+                        newest_file = fname
+                    if sz > largest_bytes:
+                        largest_bytes = sz
+                        largest_file = fname
+
+                kb = total_bytes / 1024.0
+                mb = kb / 1024.0
+                size_str = f"{mb:.2f} MB ({kb:.1f} KB)" if mb >= 1.0 else f"{kb:.2f} KB"
+                largest_kb = largest_bytes / 1024.0
+                largest_mb = largest_kb / 1024.0
+                largest_str = f"{largest_mb:.2f} MB" if largest_mb >= 1.0 else f"{largest_kb:.2f} KB"
+
+                oldest_dt = datetime.fromtimestamp(oldest_mtime).strftime("%Y-%m-%d %H:%M:%S") if oldest_file else "N/A"
+                newest_dt = datetime.fromtimestamp(newest_mtime).strftime("%Y-%m-%d %H:%M:%S") if newest_file else "N/A"
+
+                print("\n" + "=" * 60)
+                print("SESSION WORKSPACE METRICS")
+                print("=" * 60)
+                print(f"Total Sessions:   {len(files)}")
+                print(f"Space Consumed:   {size_str}")
+                print(f"Oldest Session:   {oldest_file or 'N/A'} ({oldest_dt})")
+                print(f"Newest Session:   {newest_file or 'N/A'} ({newest_dt})")
+                print(f"Largest Session:  {largest_file or 'N/A'} ({largest_str})")
+                print("=" * 60 + "\n")
+                return True
+
+            elif subcmd == "delete":
+                if len(parts) < 3:
+                    print("Usage: /session delete <name|id|all>")
+                    return True
+                target = parts[2].lower()
+
+                if target == "all":
+                    confirm = input("Are you sure you want to delete ALL saved sessions? (y/N): ").strip().lower()
+                    if confirm in ("y", "yes"):
+                        sessions_dir = self.get_sessions_dir()
+                        count = 0
+                        for f in os.listdir(sessions_dir):
+                            if f.endswith(".json") or f.endswith(".json.gz"):
+                                os.remove(os.path.join(sessions_dir, f))
+                                count += 1
+                        self.active_session_id = None
+                        self.active_session_name = None
+                        self.session_turns.clear()
+                        self.chat_history.clear()
+                        print(f"Deleted all {count} saved sessions.")
+                    else:
+                        print("Delete all cancelled.")
+                    return True
+
+                matched_file = self._resolve_session_file(parts[2])
+                if not matched_file:
+                    print(f"Error: Session '{parts[2]}' not found.")
+                    return True
+
+                os.remove(matched_file)
+                base_name = os.path.basename(matched_file)
+                if self.active_session_id and (self.active_session_id in base_name or self.active_session_name == parts[2]):
+                    self.active_session_id = None
+                    self.active_session_name = None
+                    self.session_turns.clear()
+                    self.chat_history.clear()
+                print(f"Deleted session file '{base_name}'.")
+                return True
+
+            elif subcmd == "merge":
+                raw_merge_args = command.split(maxsplit=2)[2] if len(command.split(maxsplit=2)) > 2 else ""
+                merge_words = raw_merge_args.split()
+                if len(merge_words) < 3:
+                    print("Usage: /session merge <target_name> <session_a> <session_b> [session_c ...]")
+                    return True
+
+                target_name = merge_words[0].strip(" \"'")
+                source_targets = merge_words[1:]
+                import gzip
+
+                merged_turns = []
+                merged_models = []
+                first_slug = None
+
+                for st in source_targets:
+                    sf_path = self._resolve_session_file(st)
+                    if not sf_path:
+                        print(f"Error: Source session '{st}' not found. Merge aborted.")
+                        return True
+                    open_fn = gzip.open if sf_path.endswith(".gz") else open
+                    with open_fn(sf_path, "rt", encoding="utf-8") as sf:
+                        sdata = json.load(sf)
+                        if not first_slug:
+                            first_slug = sdata.get("first_prompt_slug")
+                        m_alias = sdata.get("model_alias", "default")
+                        if m_alias not in merged_models:
+                            merged_models.append(m_alias)
+                        for turn in sdata.get("turns", []):
+                            new_turn = dict(turn)
+                            new_turn["turn_id"] = len(merged_turns) + 1
+                            merged_turns.append(new_turn)
+
+                now = datetime.now()
+                model_alias = "_".join(merged_models)
+                timestamp = now.strftime("%Y%m%d_%H%M%S")
+                new_session_id = f"merged_{timestamp}"
+
+                payload = {
+                    "session_id": new_session_id,
+                    "model_alias": model_alias,
+                    "created_at": now.isoformat(),
+                    "updated_at": now.isoformat(),
+                    "first_prompt_slug": first_slug or "merged_session",
+                    "custom_name": target_name,
+                    "turns": merged_turns
+                }
+
+                out_path = os.path.join(self.get_sessions_dir(), f"{new_session_id}.json")
+                with open(out_path, "w", encoding="utf-8") as out_f:
+                    json.dump(payload, out_f, indent=2, ensure_ascii=False)
+
+                print(f"Merged {len(source_targets)} sessions into '{target_name}' (ID: {new_session_id}) with {len(merged_turns)} exchanges.")
+                return True
+
+            elif subcmd == "compress":
+                older_than_days = None
+                if len(parts) >= 3 and parts[2].lower() != "all":
+                    try:
+                        older_than_days = float(parts[2])
+                    except ValueError:
+                        print("Usage: /session compress [older_than_days|all]")
+                        return True
+
+                sessions_dir = self.get_sessions_dir()
+                if not os.path.exists(sessions_dir):
+                    print("No sessions directory found.")
+                    return True
+
+                import gzip
+                now_ts = time.time()
+                count = 0
+                saved_bytes = 0
+
+                for fname in os.listdir(sessions_dir):
+                    if fname.endswith(".json") and not fname.endswith(".json.gz"):
+                        fp = os.path.join(sessions_dir, fname)
+                        mtime = os.path.getmtime(fp)
+                        age_days = (now_ts - mtime) / 86400.0
+
+                        if older_than_days is None or age_days >= older_than_days:
+                            gz_path = fp + ".gz"
+                            orig_sz = os.path.getsize(fp)
+                            with open(fp, "rb") as f_in:
+                                with gzip.open(gz_path, "wb") as f_out:
+                                    f_out.writelines(f_in)
+                            new_sz = os.path.getsize(gz_path)
+                            saved_bytes += (orig_sz - new_sz)
+                            os.remove(fp)
+                            count += 1
+
+                saved_kb = saved_bytes / 1024.0
+                print(f"Compressed {count} session file(s). Saved {saved_kb:.1f} KB of disk space.")
+                return True
+
+            elif subcmd == "prune":
+                keep_n = None
+                max_days = None
+                max_size_mb = None
+
+                for arg in parts[2:]:
+                    arg_l = arg.lower()
+                    if arg_l.startswith("keep="):
+                        try:
+                            keep_n = int(arg_l.split("=", 1)[1])
+                        except ValueError:
+                            pass
+                    elif arg_l.startswith("days="):
+                        try:
+                            max_days = float(arg_l.split("=", 1)[1])
+                        except ValueError:
+                            pass
+                    elif arg_l.startswith("size="):
+                        try:
+                            max_size_mb = float(arg_l.split("=", 1)[1])
+                        except ValueError:
+                            pass
+
+                if keep_n is None and max_days is None and max_size_mb is None:
+                    print("Usage: /session prune [keep=N] [days=D] [size=M]")
+                    print("Example: /session prune keep=10 days=30 size=50")
+                    return True
+
+                sessions_dir = self.get_sessions_dir()
+                if not os.path.exists(sessions_dir):
+                    print("No session directory found.")
+                    return True
+
+                file_entries = []
+                for fname in os.listdir(sessions_dir):
+                    if fname.endswith(".json") or fname.endswith(".json.gz"):
+                        fp = os.path.join(sessions_dir, fname)
+                        file_entries.append({
+                            "path": fp,
+                            "name": fname,
+                            "mtime": os.path.getmtime(fp),
+                            "size": os.path.getsize(fp)
+                        })
+
+                # Sort oldest to newest
+                file_entries.sort(key=lambda x: x["mtime"])
+                now_ts = time.time()
+                to_delete = set()
+
+                # Filter 1: days=D
+                if max_days is not None:
+                    for entry in file_entries:
+                        age_days = (now_ts - entry["mtime"]) / 86400.0
+                        if age_days > max_days:
+                            to_delete.add(entry["path"])
+
+                # Filter 2: keep=N
+                if keep_n is not None and len(file_entries) > keep_n:
+                    excess = len(file_entries) - keep_n
+                    for entry in file_entries[:excess]:
+                        to_delete.add(entry["path"])
+
+                # Filter 3: size=M (total workspace size cap)
+                if max_size_mb is not None:
+                    target_bytes = max_size_mb * 1024.0 * 1024.0
+                    current_total = sum(e["size"] for e in file_entries if e["path"] not in to_delete)
+                    for entry in file_entries:
+                        if current_total <= target_bytes:
+                            break
+                        if entry["path"] not in to_delete:
+                            to_delete.add(entry["path"])
+                            current_total -= entry["size"]
+
+                deleted_count = 0
+                for path in to_delete:
+                    try:
+                        os.remove(path)
+                        deleted_count += 1
+                    except Exception as e:
+                        print(f"Error removing {path}: {e}")
+
+                print(f"Pruned {deleted_count} session file(s).")
+                return True
+
             else:
-                print(f"Unknown session subcommand: {subcmd}. Use start, auto, stop, status, save, list, use, show, export.")
+                print(f"Unknown session subcommand: {subcmd}. Use start, auto, stop, status, save, list, use, show, export, info, delete, merge, compress, prune.")
                 return True
 
             # Parse parameters from the command
