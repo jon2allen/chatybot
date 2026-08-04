@@ -114,7 +114,7 @@ async def test_session_list_and_status(app, capsys):
     await app.handle_escape_command("/session list")
     captured = capsys.readouterr()
     assert "list_test" in captured.out
-    assert "Prompt:" in captured.out
+    assert "Prompt: \"test_prompt_for_slug_generation\"" in captured.out
 
     await app.handle_escape_command("/session status")
     captured_status = capsys.readouterr()

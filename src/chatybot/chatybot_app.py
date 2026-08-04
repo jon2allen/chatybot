@@ -722,6 +722,12 @@ class ChatybotApp:
         if self.session_mode == "off" or not self.active_session_id:
             return
 
+        # If slug is missing or "untitled_session", try to compute from Turn 1 prompt
+        if (not self.session_first_prompt_slug or self.session_first_prompt_slug == "untitled_session") and self.session_turns:
+            turn1_prompt = self.session_turns[0].get("prompt", "")
+            if turn1_prompt:
+                self.session_first_prompt_slug = self._slugify_text(turn1_prompt)
+
         sessions_dir = self.get_sessions_dir()
         file_path = os.path.join(sessions_dir, f"{self.active_session_id}.json")
 
