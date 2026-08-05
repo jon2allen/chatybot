@@ -2855,20 +2855,20 @@ class ChatybotApp:
         if danger:
             if self.safe_mode:
                 self.buffer_manager.set_script_var('RUN_COMPLETION', 
-                    f"Blocked (safe mode): {danger}")
-                self.buffer_manager.set_script_var('RUN_ERROR', '')
-                self.buffer_manager.set_script_var('RUN_EXIT_CODE', '-1')
+                    f"Blocked (safe mode): {danger}", allow_protected=True)
+                self.buffer_manager.set_script_var('RUN_ERROR', '', allow_protected=True)
+                self.buffer_manager.set_script_var('RUN_EXIT_CODE', '-1', allow_protected=True)
                 self.buffer_manager.set_script_var('LAST_COMPLETION', 
-                    f"Blocked (safe mode): {danger}")
+                    f"Blocked (safe mode): {danger}", allow_protected=True)
                 print(f"Blocked: {danger}")
                 return
             else:
                 confirm = input(f"Warning: {danger} Execute anyway? (y/N): ")
                 if confirm.lower() != 'y':
-                    self.buffer_manager.set_script_var('RUN_COMPLETION', "Command aborted by user")
-                    self.buffer_manager.set_script_var('RUN_ERROR', '')
-                    self.buffer_manager.set_script_var('RUN_EXIT_CODE', '-1')
-                    self.buffer_manager.set_script_var('LAST_COMPLETION', "Command aborted by user")
+                    self.buffer_manager.set_script_var('RUN_COMPLETION', "Command aborted by user", allow_protected=True)
+                    self.buffer_manager.set_script_var('RUN_ERROR', '', allow_protected=True)
+                    self.buffer_manager.set_script_var('RUN_EXIT_CODE', '-1', allow_protected=True)
+                    self.buffer_manager.set_script_var('LAST_COMPLETION', "Command aborted by user", allow_protected=True)
                     print("Command aborted")
                     return
         
@@ -2885,12 +2885,12 @@ class ChatybotApp:
             )
             
             # Store in buffer_manager using RUN_* variables to avoid conflicts
-            self.buffer_manager.set_script_var('RUN_COMPLETION', result.stdout)
-            self.buffer_manager.set_script_var('RUN_ERROR', result.stderr)
-            self.buffer_manager.set_script_var('RUN_EXIT_CODE', str(result.returncode))
+            self.buffer_manager.set_script_var('RUN_COMPLETION', result.stdout, allow_protected=True)
+            self.buffer_manager.set_script_var('RUN_ERROR', result.stderr, allow_protected=True)
+            self.buffer_manager.set_script_var('RUN_EXIT_CODE', str(result.returncode), allow_protected=True)
             
             # Also store in LAST_COMPLETION for backward compatibility
-            self.buffer_manager.set_script_var('LAST_COMPLETION', result.stdout)
+            self.buffer_manager.set_script_var('LAST_COMPLETION', result.stdout, allow_protected=True)
             
             if result.returncode != 0:
                 err_text = result.stderr or result.stdout or ""
@@ -2905,26 +2905,26 @@ class ChatybotApp:
                 
         except subprocess.TimeoutExpired:
             error_msg = f"Error: Command timed out after {timeout}s"
-            self.buffer_manager.set_script_var('RUN_COMPLETION', error_msg)
-            self.buffer_manager.set_script_var('RUN_ERROR', '')
-            self.buffer_manager.set_script_var('RUN_EXIT_CODE', '-2')
-            self.buffer_manager.set_script_var('LAST_COMPLETION', error_msg)
+            self.buffer_manager.set_script_var('RUN_COMPLETION', error_msg, allow_protected=True)
+            self.buffer_manager.set_script_var('RUN_ERROR', '', allow_protected=True)
+            self.buffer_manager.set_script_var('RUN_EXIT_CODE', '-2', allow_protected=True)
+            self.buffer_manager.set_script_var('LAST_COMPLETION', error_msg, allow_protected=True)
             print(error_msg)
             print("Command exited with code -2")
         except FileNotFoundError as e:
             error_msg = f"Error: Command not found: {e.filename}"
-            self.buffer_manager.set_script_var('RUN_COMPLETION', '')
-            self.buffer_manager.set_script_var('RUN_ERROR', error_msg)
-            self.buffer_manager.set_script_var('RUN_EXIT_CODE', '-1')
-            self.buffer_manager.set_script_var('LAST_COMPLETION', '')
+            self.buffer_manager.set_script_var('RUN_COMPLETION', '', allow_protected=True)
+            self.buffer_manager.set_script_var('RUN_ERROR', error_msg, allow_protected=True)
+            self.buffer_manager.set_script_var('RUN_EXIT_CODE', '-1', allow_protected=True)
+            self.buffer_manager.set_script_var('LAST_COMPLETION', '', allow_protected=True)
             print(error_msg)
             print("Command exited with code -1")
         except Exception as e:
             error_msg = f"Error: {e}"
-            self.buffer_manager.set_script_var('RUN_COMPLETION', '')
-            self.buffer_manager.set_script_var('RUN_ERROR', error_msg)
-            self.buffer_manager.set_script_var('RUN_EXIT_CODE', '-1')
-            self.buffer_manager.set_script_var('LAST_COMPLETION', '')
+            self.buffer_manager.set_script_var('RUN_COMPLETION', '', allow_protected=True)
+            self.buffer_manager.set_script_var('RUN_ERROR', error_msg, allow_protected=True)
+            self.buffer_manager.set_script_var('RUN_EXIT_CODE', '-1', allow_protected=True)
+            self.buffer_manager.set_script_var('LAST_COMPLETION', '', allow_protected=True)
             print(error_msg)
             print("Command exited with code -1")
 
