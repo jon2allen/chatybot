@@ -91,7 +91,7 @@ class ChatybotApp:
                 "model", "listmodels", "logging", "save", "codeonly", "codeoff", "multiline",
                 "system", "temp", "maxtokens", "top_p", "top_k", "freq_penalty", "pres_penalty",
                 "reasoning", "effort", "thinking", "thoughtstyle", "seed", "echo", "def",
-                "reloadmacros", "calc", "stream", "script", "source", "profile", "quit", "exit",
+                "reloadmacros", "listmacros", "calc", "stream", "script", "source", "profile", "quit", "exit",
                 "setdb", "dblist", "searchdb", "dblog", "dbprint", "documents", "rerank",
                 "loadvar", "savevar", "setvar", "notemode", "mem", "dump", "trace", "debug",
                 "run", "run_safe", "run_unsafe", "tool", "proc", "defproc", "endproc", "local", "foreach", "endfor", "break"
@@ -425,6 +425,39 @@ class ChatybotApp:
                         print(f"Error: {e}")
         except Exception as e:
             print(f"Error loading macros: {e}")
+
+    def list_macros(self, filter_term: Optional[str] = None) -> None:
+        """List all loaded macros with parameter signatures and template previews."""
+        if not self.macros:
+            print("No macros loaded. Use '/reloadmacros' to load macro definitions.")
+            return
+
+        items = self.macros.items()
+        if filter_term:
+            filter_lower = filter_term.lower()
+            items = [
+                (k, v) for k, v in items
+                if filter_lower in k.lower() or filter_lower in v.get('template', '').lower()
+            ]
+            if not items:
+                print(f"No macros matching '{filter_term}' found.")
+                return
+
+        print(f"\nAvailable Macros ({len(items)} loaded):")
+        print("─" * 80)
+        print(f"  {'Macro Signature':<35} {'Template / Summary':<42}")
+        print("─" * 80)
+
+        for name, meta in sorted(items, key=lambda x: x[0]):
+            params = meta.get('params', [])
+            params_str = ", ".join(params) if params else ""
+            sig = f"%{name}({params_str})"
+
+            template = meta.get('template', '').replace('\n', ' ').strip()
+            summary = template if len(template) <= 40 else template[:37] + "..."
+
+            print(f"  {sig:<35} {summary:<42}")
+        print()
 
     def expand_macro(self, macro_call: str) -> str:
         """Expand a single macro call using Parsley."""
@@ -6969,6 +7002,12 @@ class ChatybotApp:
             else:
                 self.load_macros()
                 print(f"Reloaded macros from default file. {len(self.macros)} macros available.")
+            return True
+
+        elif cmd.startswith("/listmacros"):
+            parts = cmd.split(maxsplit=1)
+            filter_term = parts[1].strip() if len(parts) > 1 else None
+            self.list_macros(filter_term=filter_term)
             return True
 
         else:

@@ -407,13 +407,36 @@ class HelpSystem:
         
         # Macro commands
         self.register_command(CommandHelp(
+            name="/listmacros",
+            category="script",
+            short_desc="List loaded macros and signatures",
+            usage="/listmacros [filter]",
+            long_desc=(
+                "List all currently loaded macros with parameter signatures and prompt previews.\n"
+                "Pass an optional filter string to search macro names or prompt templates.\n\n"
+                "TUTORIAL - HOW TO DEFINE AND EXECUTE MACROS:\n"
+                "1. Defining Macros (in macro.chatdsl or script):\n"
+                "   • No-param macro:  def build() = \"Build project with release settings\"\n"
+                "   • Param macro:     def expert(type) = \"You are an expert in {type}.\"\n"
+                "2. Executing Macros (in interactive prompt or script):\n"
+                "   • Syntax:          %macro_name(arg1, arg2)\n"
+                "   • Examples:        %regen()\n"
+                "                      %expert(python)\n"
+                "                      %debug_help(python, sorting arrays, IndexError)"
+            ),
+            examples=["/listmacros", "/listmacros debug", "/listmacros language"],
+            aliases=["/macro", "macro"],
+            see_also=["/reloadmacros"]
+        ))
+
+        self.register_command(CommandHelp(
             name="/reloadmacros",
             category="script",
             short_desc="Reload macro definitions",
             usage="/reloadmacros [file]",
-            long_desc="Reload macro definitions from macro.chatdsl or the specified file. Macros are shortcuts for frequently used text.",
+            long_desc="Reload macro definitions from macro.chatdsl or the specified file. Macros are shortcuts for frequently used prompt text.",
             examples=["/reloadmacros", "/reloadmacros custom_macros.chatdsl"],
-            see_also=["/macro"]
+            see_also=["/listmacros"]
         ))
         
         # Script command
