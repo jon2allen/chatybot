@@ -51,7 +51,6 @@ from .buffer_manager import BufferManager
 from .image_generator import ImageGenerator
 from .image_manager import ImageManager
 from .extract_code import process_file
-from EasyRerank import EasyRanker, TextParser
 from .chaty_help import get_help_system
 from .chatydb import (
     set_db,
@@ -204,6 +203,11 @@ class ChatybotApp:
         self.rerank_documents_source = None
         self.latest_rerank_results = []
 
+        # Macro processing state
+        self.macros: Dict[str, Dict[str, Any]] = {}
+        self._definition_grammar = None
+        self._invocation_grammar = None
+
     def initialize(self) -> None:
         """Initialize the application by loading configuration and setting up history."""
         # Load environment variables from .env file if it exists
@@ -296,7 +300,6 @@ class ChatybotApp:
         
         # Initialize macro processing system
         self.macros = {}
-        self.setup_macro_grammars()
         
         # Load default macros for interactive use
         self.load_macros()
@@ -351,10 +354,11 @@ class ChatybotApp:
             self.interrupt_requested = False  # Reset flag since we're handling it
             raise KeyboardInterrupt()
 
-    def setup_macro_grammars(self):
-        """Set up Parsley grammars for macro processing."""
-        # Grammar for macro definitions using Parsley
-        self.definition_grammar = makeGrammar("""
+    @property
+    def definition_grammar(self):
+        """Lazy-compile definition grammar on first access."""
+        if getattr(self, "_definition_grammar", None) is None:
+            self._definition_grammar = makeGrammar("""
         macro_def = macro_def_with_params | macro_def_no_params
         macro_def_with_params = 'def' ws ident:name ws '(' ws param_list?:params ws ')' ws '=' ws string:template -> (name, params or [], template)
         macro_def_no_params = 'def' ws ident:name ws '(' ws ')' ws '=' ws string:template -> (name, [], template)
@@ -367,9 +371,13 @@ class ChatybotApp:
         string = '"' <(~'"' anything)*>:s '"' -> s
         ws = ' '*
         """, {})
-        
-        # Grammar for macro invocations using Parsley
-        self.invocation_grammar = makeGrammar("""
+        return self._definition_grammar
+
+    @property
+    def invocation_grammar(self):
+        """Lazy-compile invocation grammar on first access."""
+        if getattr(self, "_invocation_grammar", None) is None:
+            self._invocation_grammar = makeGrammar("""
         macro_call = macro_call_with_args | macro_call_no_args
         macro_call_with_args = '%' ws ident:name ws '(' ws arg_list?:args ws ')' -> (name, args or [])
         macro_call_no_args = '%' ws ident:name ws '(' ws ')' -> (name, [])
@@ -384,6 +392,11 @@ class ChatybotApp:
         digit = '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'
         ws = ' '*
         """, {})
+        return self._invocation_grammar
+
+    def setup_macro_grammars(self):
+        """No-op kept for backwards compatibility."""
+        pass
 
     def load_macros(self, macro_file: str = "macro.chatdsl") -> None:
         """Load macro definitions from file using Parsley."""
@@ -6291,6 +6304,8 @@ class ChatybotApp:
                 
             source_type = self.rerank_documents_source["type"]
             source_id = self.rerank_documents_source["identifier"]
+
+            from EasyRerank import EasyRanker, TextParser
             
             chunked_docs = []
             chunk_mappings = []

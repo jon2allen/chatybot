@@ -93,7 +93,7 @@ class TestSemanticReranking:
         app.config_manager.get_model_config.return_value = openrouter_config
         
         with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test_openrouter_key"}):
-            with patch('src.chatybot.chatybot_app.EasyRanker') as mock_easyranker:
+            with patch('EasyRerank.EasyRanker') as mock_easyranker:
                 mock_instance = MagicMock()
                 mock_instance.backend_instance = MagicMock()
                 mock_easyranker.return_value = mock_instance
