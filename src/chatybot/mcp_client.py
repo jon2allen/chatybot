@@ -3,19 +3,21 @@ import logging
 from typing import Dict, Any, List, Optional
 from urllib.parse import urlparse
 import httpx
-from mcp import ClientSession, StdioServerParameters, stdio_client
-from mcp.server.fastmcp import FastMCP
 
 class MCPClientManager:
     def __init__(self, config_data: Dict[str, Any]):
         self.server_configs = config_data.get("mcp", {}).get("servers", {})
-        self.active_sessions: Dict[str, ClientSession] = {}
+        self.active_sessions: Dict[str, Any] = {}
         self.active_transports: Dict[str, Any] = {}
         self.cached_schemas: Dict[str, List[Any]] = {}
         self.http_clients: Dict[str, httpx.AsyncClient] = {}
 
     async def startup(self):
         """Runs at Chatybot boot to launch persistent servers and discover tools."""
+        if not self.server_configs:
+            return
+
+        from mcp import ClientSession, StdioServerParameters, stdio_client
         for server_name, cfg in self.server_configs.items():
             is_persistent = cfg.get("persistent", False)
             
@@ -54,8 +56,9 @@ class MCPClientManager:
                     print(f"[MCP] Warning: Failed to initialize server '{server_name}': {e}")
                     self.cached_schemas[server_name] = []
 
-    async def _discover_tools_once(self, params: StdioServerParameters) -> List[Any]:
+    async def _discover_tools_once(self, params: Any) -> List[Any]:
         """Performs a single connection handshake to list tools on a stateless server."""
+        from mcp import ClientSession, stdio_client
         async with stdio_client(params) as (read, write):
             async with ClientSession(read, write) as session:
                 await session.initialize()
@@ -185,6 +188,7 @@ class MCPClientManager:
             return self._format_result(result)
         else:
             # On-demand execution
+            from mcp import ClientSession, StdioServerParameters, stdio_client
             params = StdioServerParameters(
                 command=cfg.get("command"),
                 args=cfg.get("args", []),
@@ -220,32 +224,6 @@ class MCPClientManager:
         
         return "\n".join(text_parts)
 
-    async def execute_tool(self, server_name: str, tool_name: str, arguments: Dict[str, Any]) -> str:
-        """Invokes the tool depending on the server's configured persistence strategy."""
-        cfg = self.server_configs.get(server_name)
-        if not cfg:
-            raise ValueError(f"MCP server '{server_name}' is not configured.")
-
-        is_persistent = cfg.get("persistent", False)
-
-        if is_persistent:
-            session = self.active_sessions.get(server_name)
-            if not session:
-                raise RuntimeError(f"Persistent server '{server_name}' is not running.")
-            result = await session.call_tool(tool_name, arguments)
-            return self._format_result(result)
-        else:
-            # On-demand execution
-            params = StdioServerParameters(
-                command=cfg.get("command"),
-                args=cfg.get("args", []),
-                env=cfg.get("env")
-            )
-            async with stdio_client(params) as (read, write):
-                async with ClientSession(read, write) as session:
-                    await session.initialize()
-                    result = await session.call_tool(tool_name, arguments)
-                    return self._format_result(result)
 
     def _format_result(self, result: Any) -> str:
         """Helper to format the CallToolResult content to a string."""

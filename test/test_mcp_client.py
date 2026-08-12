@@ -39,8 +39,8 @@ async def test_mcp_manager_initialization_and_startup(mcp_config):
     mock_transport = AsyncMock()
     mock_transport.__aenter__.return_value = ("read_stream", "write_stream")
     
-    with patch("chatybot.mcp_client.stdio_client", return_value=mock_transport), \
-         patch("chatybot.mcp_client.ClientSession", return_value=mock_session):
+    with patch("mcp.stdio_client", return_value=mock_transport), \
+         patch("mcp.ClientSession", return_value=mock_session):
          
         manager = MCPClientManager(mcp_config)
         await manager.startup()
@@ -88,8 +88,8 @@ async def test_mcp_manager_execute_ondemand_tool(mcp_config):
     mock_transport = AsyncMock()
     mock_transport.__aenter__.return_value = ("read_stream", "write_stream")
     
-    with patch("chatybot.mcp_client.stdio_client", return_value=mock_transport), \
-         patch("chatybot.mcp_client.ClientSession", return_value=mock_session):
+    with patch("mcp.stdio_client", return_value=mock_transport), \
+         patch("mcp.ClientSession", return_value=mock_session):
          
         manager = MCPClientManager(mcp_config)
         res = await manager.execute_tool("test_ondemand", "tool2", {"arg": "val"})
