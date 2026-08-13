@@ -66,6 +66,13 @@ chatybot is an interactive command-line tool that enables seamless communication
 - **Model Context Protocol (MCP)** - Dynamic host connecting to stdio-based MCP servers with robust session/lifecycle management
 - **Multilingual Support (i18n)** - Out-of-the-box support for Spanish, French, Chinese, Italian, and Levantine Arabic, featuring localized CLI strings and cross-locale command alias resolution
 - **Math Evaluation Engine** - Inline `/calc` calculation command and a patch-supported mathematical expression evaluation tool
+- **Session Persistence & Workspace Management** - Multi-turn session history persistence, notes annotation, workspace metrics, gzip compression, pruning, and Markdown transcript exports (`/session`)
+- **Procedure Definition Engine** - Reusable script procedures with stack-frame isolation and local variable scoping (`defproc`, `/proc`, `local`)
+- **Multiline Iteration & Generators** - `foreach` loops supporting collections, `range()`, `lines()` file iteration, and early `break` statements
+- **Pattern Search** - Substring and regex pattern matching across text variables into `${STR_SEARCH}` (`/str_search`)
+- **Macro Management & Tutorial** - Macro inspection table (`/listmacros`) with signatures, templates, search filter, and interactive tutorial
+- **Profile TUI Manager** - Full curses-based profile editor (`--profile-edit` / `/profile edit`)
+- **Optimized Startup Performance** - Deferred macro PEG grammar compilation and on-demand SDK imports for ultra-fast boot times
 
 
 ---
@@ -240,7 +247,14 @@ chat --> Hello!      # Start a conversation
 | `/trace rerank <state>`| Enable/disable debugging output for the reranking processor | `/trace rerank on` |
 | `/imagebank{1-5} <file>` | Load image into bank for vision analysis | `/imagebank1 cat.jpg` |
 | `/imagebank{1-5} clear` | Clear an image bank | `/imagebank1 clear` |
-| `/imagebank{1-5} show` | Show image bank info | `/imagebank1 show` |
+| `/session [subcommand]` | Manage multi-turn session persistence, note annotations, exports, merging, compression, and pruning | `/session start my_project` |
+| `/listmacros [filter]` | List loaded macros with signatures, templates, and search filter | `/listmacros debug` |
+| `/reloadmacros [file]` | Reload macro definitions from `macro.chatdsl` or a custom file | `/reloadmacros` |
+| `/str_search "<pat>" <var> [flags] [dest]` | Search substring patterns in a text variable into `${STR_SEARCH}` (flags: `c`=count, `m`=positions, `i`=ignore case) | `/str_search "error" ${LOG} ic count_var` |
+| `/proc <name> [p1="v1"]` | Execute a named procedure block defined with `defproc` | `/proc summarize_text text="${file_buffer}"` |
+| `defproc <name>(<args>)` | Define a reusable procedure block with isolated local variable scoping (`local var = val`) | `defproc greet(name)` |
+| `foreach <var> in <iter>` | Multiline loop iterating over arrays, `range(start, end[, step])`, or `lines("file.txt")` | `foreach x in range(1, 5)` |
+| `/break` \| `break` | Terminate the enclosing `foreach` loop immediately | `break` |
 | `/mem` | Show memory size of buffers/variables | `/mem` |
 | `/dump [v\|v[idx]\|all]` | Dump variables or specific array elements | `/dump all` or `/dump arr[0]` |
 | `/quit` \| `/exit` | Exit the program | `/quit` |
@@ -248,10 +262,11 @@ chat --> Hello!      # Start a conversation
 | **CLI Flag** | Description | Example |
 |-------------|-------------|---------|
 | `--config-edit` | Launch the TUI configuration manager to edit models | `chatybot --config-edit` |
+| `--profile-edit` | Launch the interactive TUI profile manager | `chatybot --profile-edit` |
 | `-c <path>` \| `--config <path>` | Path to alternate TOML configuration file | `chatybot -c ~/my_config.toml` |
 | `--script <path>` | Execute a script file and exit | `chatybot --script test.chatdsl` |
 | `--run <query>` | Execute a single query (prompts or chained escape commands) and exit | `chatybot --run "/model gpt4; list 5 cities"` |
-| `--profile <path>` | Load a startup script prior to entering the interactive REPL | `chatybot --profile ~/.chatybot_profile` |
+| `--profile <name\|path>` | Load a startup profile or script prior to entering interactive REPL | `chatybot --profile coding` |
 
 ---
 
@@ -723,6 +738,52 @@ chat --> Create a blog post outline about ${topic}
 ```
 
 ### Change log
+
+August 11th, 2026
+-------------------------
+- **Startup & Boot Performance Optimizations**:
+  - Deferred Parsley macro PEG grammar compilation into lazy accessors, deferring parser overhead until macros are expanded.
+  - Lazy-loaded `EasyRerank` and `mcp` SDK imports inside respective command and execution handlers, cutting cold boot time by **~45% to 60%** (~900ms saved).
+- **Macro Discovery & Management (`/listmacros`)**:
+  - Added `/listmacros [filter]` command rendering a clean formatted table of available macros, parameter signatures, and template summaries with keyword search filtering.
+  - Added an interactive macro coding and execution tutorial to `/help macro` and `/help /listmacros`.
+- **Package Version Synchronization**:
+  - Aligned internal version strings across `__init__.py` and startup banners with PyPI version 0.7.0.
+
+August 7th, 2026
+------------------------
+- **Multilingual Session Localization**:
+  - Localized `/session` subcommands, arguments, notes, and keywords across all supported target languages (Spanish, French, Chinese, Italian, Arabic).
+
+August 3rd - 4th, 2026
+------------------------
+- **Session Workspace Management Suite**:
+  - Added comprehensive workspace commands: `/session info` (workspace size, turn counts, file stats), `/session delete <name|id|all>`, `/session merge <target> <s1> <s2>`, `/session compress [days|all]` (gzip compression), and `/session prune [keep=N] [days=D] [size=M]`.
+  - Added session annotation notes (`/session note <text>`) capped at 1024 characters, displayed in session metadata without consuming LLM context tokens.
+  - Auto-generated prompt slugs derived from Turn 1 for session auto-naming.
+  - Fixed variable permissions by passing `allow_protected=True` when updating `RUN_*` and `LAST_COMPLETION` system variables.
+
+August 2nd, 2026
+------------------------
+- **Session Persistence Engine (`/session`)**:
+  - Introduced conversation session persistence (`/session start`, `/session auto [on|off]`, `/session stop`, `/session save`, `/session list`, `/session use`, `/session show`).
+  - Added Markdown transcript exporting (`/session export <file.md> [-t]`) with optional `<thought>` block inclusion.
+  - Multi-turn conversation context continuity: automatically injects prior session turns into chat completion payloads.
+- **Pattern Search Command (`/str_search`)**:
+  - Added `/str_search "<pattern>" <text_var> [flags] [dest_var]` for fast substring pattern matching in text variables with count (`c`), match position indices (`m`), and case-insensitivity (`i`) flags, exporting to protected `${STR_SEARCH}`.
+- **Enhanced Conditional Expressions**:
+  - Added greater-than (`>`), less-than (`<`), `>=` and `<=` relational operator support for `if ... then` blocks.
+
+July 30th - 31st, 2026
+------------------------
+- **Procedure Definition Engine (`defproc` / `/proc` / `local`)**:
+  - Added reusable procedure blocks with argument passing and execution via `/proc <name> param1="val"`.
+  - Implemented stack-frame snapshotting for isolated `local var = value` scoping and recursion depth guards.
+- **Multiline Iteration & Generators (`foreach`)**:
+  - Added multiline `foreach <var> in <iter>` loop construct supporting arrays, `range(start, end[, step])`, and `lines("file.txt")` generators.
+  - Added `break` statement support to exit loops early while maintaining variable scope restoration.
+- **Profile TUI Editor**:
+  - Built interactive curses-based Profile Manager (`chatybot --profile-edit` / `/profile edit`) with validation, preset creation, and field length protection.
 
 July 26th, 2026 (v0.7.0)
 ------------------------
