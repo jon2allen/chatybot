@@ -3044,6 +3044,33 @@ class ChatybotApp:
                         self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', err_msg)
                         self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
                         return f"Error: {err_msg}"
+            elif tool_name == "get_context_metrics":
+                is_enabled = self.tool_overrides.get(tool_name, True)
+                if not is_enabled:
+                    err_msg = f"Error: Tool '{tool_name}' is currently disabled."
+                    self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
+                    self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', err_msg)
+                    self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '-1')
+                    print(err_msg)
+                    return err_msg
+                try:
+                    from .tools.context_utils import get_context_metrics
+                    args = tool_call.get("arguments", {})
+                    scope = args.get("scope", "all")
+                    target_var = args.get("target_variable")
+                    res = get_context_metrics(scope=scope, target_variable=target_var, app=self)
+                    result_str = json.dumps({"status": "success", "tool": tool_name, "result": res}, indent=2)
+                    self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', result_str)
+                    self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', '')
+                    self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '0')
+                    print("Tool dispatched successfully (in-process context_metrics)")
+                    return result_str
+                except Exception as e:
+                    err_msg = f"Error: Context metrics tool execution failed: {e}"
+                    self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
+                    self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', str(e))
+                    self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
+                    return err_msg
         
         # Create a temporary file for the invocation
         with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', suffix='.json', delete=False) as tmp_file:

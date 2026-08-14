@@ -221,3 +221,19 @@ type = "string"
 description = "Optional script variable name to save the search result into"
 optional = true
 
+[tools.get_context_metrics]
+enabled = true
+description = "Get the current size of the context in characters, KB, and estimated average tokens for the session history, agentic tool loop, and total prompt context."
+module = "chatybot.tools.context_utils"
+function = "get_context_metrics"
+
+[tools.get_context_metrics.parameters.scope]
+type = "string"
+description = "Scope to inspect: 'all' (default), 'session' (session history only), or 'agentic_loop' (agentic tool loop history only)"
+optional = true
+
+[tools.get_context_metrics.parameters.target_variable]
+type = "string"
+description = "Optional script variable name to save the metrics dictionary into"
+optional = true
+
