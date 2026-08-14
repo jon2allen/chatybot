@@ -52,9 +52,11 @@ async def test_get_context_metrics_with_app_data():
     assert res_all["status"] == "success"
     assert res_all["session"]["turns"] == 2
     assert res_all["session"]["characters"] > 0
+    assert res_all["agentic_loop"]["turns"] == 2
     assert res_all["agentic_loop"]["records"] == 2
     assert res_all["agentic_loop"]["characters"] > 0
     assert res_all["buffers"]["characters"] > 0
+    assert res_all["total"]["total_turns"] == 4
     assert res_all["total"]["characters"] > res_all["session"]["characters"]
     assert res_all["total"]["estimated_tokens"] > 0
 
@@ -70,6 +72,7 @@ async def test_get_context_metrics_with_app_data():
     assert res_loop["status"] == "success"
     assert "agentic_loop" in res_loop
     assert "session" not in res_loop
+    assert res_loop["agentic_loop"]["turns"] == 2
     assert res_loop["agentic_loop"]["records"] == 2
 
     # 4. Test target_variable assignment
@@ -78,6 +81,7 @@ async def test_get_context_metrics_with_app_data():
     saved = app.buffer_manager.get_script_var("MY_METRICS")
     assert saved is not None
     assert saved["scope"] == "all"
+    assert saved["total"]["total_turns"] == 4
     assert saved["total"]["characters"] == res_all["total"]["characters"]
 
 

@@ -93,9 +93,14 @@ def get_context_metrics(
     session_metrics["turns"] = session_turns
 
     loop_metrics = calculate_metrics(loop_full_text)
+    loop_metrics["turns"] = loop_turns
     loop_metrics["records"] = loop_turns
 
+    total_turns = session_turns + loop_turns
     total_metrics = calculate_metrics(total_full_text)
+    total_metrics["total_turns"] = total_turns
+    total_metrics["session_turns"] = session_turns
+    total_metrics["agentic_loop_turns"] = loop_turns
 
     response: Dict[str, Any] = {
         "status": "success",
@@ -112,7 +117,7 @@ def get_context_metrics(
         response["agentic_loop"] = loop_metrics
         response["summary"] = (
             f"Agentic Loop: {loop_metrics['characters']} chars, "
-            f"{loop_metrics['kb']} KB, ~{loop_metrics['estimated_tokens']} tokens ({loop_turns} records)"
+            f"{loop_metrics['kb']} KB, ~{loop_metrics['estimated_tokens']} tokens ({loop_turns} turns)"
         )
     else:  # 'all'
         response["session"] = session_metrics
@@ -121,9 +126,9 @@ def get_context_metrics(
         response["total"] = total_metrics
         response["summary"] = (
             f"Total Context: {total_metrics['characters']} chars, "
-            f"{total_metrics['kb']} KB, ~{total_metrics['estimated_tokens']} estimated tokens "
+            f"{total_metrics['kb']} KB, ~{total_metrics['estimated_tokens']} estimated tokens across {total_turns} total turns "
             f"(Session: {session_metrics['kb']} KB / ~{session_metrics['estimated_tokens']} tokens [{session_turns} turns], "
-            f"Agentic Loop: {loop_metrics['kb']} KB / ~{loop_metrics['estimated_tokens']} tokens [{loop_turns} records])"
+            f"Agentic Loop: {loop_metrics['kb']} KB / ~{loop_metrics['estimated_tokens']} tokens [{loop_turns} turns])"
         )
 
     # Save to target variable if requested
