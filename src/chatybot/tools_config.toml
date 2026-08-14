@@ -223,7 +223,7 @@ optional = true
 
 [tools.get_context_metrics]
 enabled = true
-description = "Get the current size of the context in characters, KB, and estimated average tokens for the session history, agentic tool loop, and total prompt context."
+description = "Get the current size of the context in characters, KB, estimated average tokens, and turn counts for session history, agentic tool loop, and total prompt context."
 module = "chatybot.tools.context_utils"
 function = "get_context_metrics"
 
