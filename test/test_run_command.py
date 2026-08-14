@@ -1132,6 +1132,44 @@ true
         assert '"pattern": "*.chatdsl"' in output
         assert '"details": true' in output
 
+    def test_payload_limits_string_enforcement(self):
+        """Verifies soft warning and hard truncation on run_command string outputs."""
+        from src.chatybot.tools.file_utils import enforce_string_payload_limits, SOFT_WARNING_BYTES, HARD_TRUNCATE_BYTES
+        
+        # 1. Normal size (< 30 KB)
+        normal_str = "line\n" * 100
+        res_normal = enforce_string_payload_limits(normal_str, "run_command")
+        assert res_normal == normal_str
+
+        # 2. Soft warning (30 KB - 50 KB)
+        soft_str = "a" * (35 * 1024)
+        res_soft = enforce_string_payload_limits(soft_str, "run_command")
+        assert "[NOTE: Tool 'run_command' output is large" in res_soft
+
+        # 3. Hard truncation (> 50 KB)
+        hard_str = "".join([f"Line {i}: output details here\n" for i in range(1000)])  # ~30 KB - let's make it 60 KB
+        hard_str_large = "".join([f"Line {i:04d}: large payload data text block content here\n" for i in range(1500)]) # ~75 KB
+        res_hard = enforce_string_payload_limits(hard_str_large, "run_command")
+        assert "[WARNING: Tool 'run_command' output exceeded hard limit" in res_hard
+        assert "Line 0000:" in res_hard  # Head preserved
+        assert "Line 1499:" in res_hard  # Tail preserved
+
+    def test_payload_limits_list_enforcement(self):
+        """Verifies list truncation and warnings on find_files and grep_search."""
+        from src.chatybot.tools.file_utils import enforce_list_payload_limits
+        
+        # 1. Normal list
+        small_list = [{"file": f"test_{i}.py"} for i in range(10)]
+        res_small = enforce_list_payload_limits(small_list, "find_files", max_items=100)
+        assert len(res_small) == 10
+
+        # 2. Hard truncation (> 100 items)
+        large_list = [{"file": f"test_{i}.py", "size": 1024} for i in range(150)]
+        res_large = enforce_list_payload_limits(large_list, "find_files", max_items=100)
+        assert len(res_large) == 101  # 100 items + 1 truncation warning note
+        assert "warning" in res_large[-1]
+        assert "50 additional results omitted" in res_large[-1]["warning"]
+
 
 
 

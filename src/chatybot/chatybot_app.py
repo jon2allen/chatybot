@@ -3629,6 +3629,16 @@ class ChatybotApp:
                 print(f"Tool Result: {result_str}")
                 results.append(f"Tool: {tool_name}\nArguments: {json.dumps(tool_args)}\nResult: {result_str}")
 
+                # Monitor tool output size and issue warnings in the loop
+                result_bytes = len(result_str.encode('utf-8'))
+                if result_bytes > 30 * 1024:
+                    result_kb = result_bytes / 1024
+                    est_toks = max(1, int(result_bytes / 4))
+                    if result_bytes > 50 * 1024:
+                        print(f"   [WARNING] Large tool output ({result_kb:.1f} KB, ~{est_toks} tokens). Hard truncation safeguard active.")
+                    else:
+                        print(f"   [NOTE] Large tool output ({result_kb:.1f} KB, ~{est_toks} tokens). Monitor context budget.")
+
                 # Extract exit code and determine status
                 try:
                     exit_code_val = int(self.buffer_manager.get_script_var('TOOL_DISPATCH_EXIT_CODE') or 0)
