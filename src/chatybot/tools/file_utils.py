@@ -3,6 +3,8 @@ import fnmatch
 from typing import List, Dict, Any
 import re
 import datetime
+import math
+import json
 
 def list_directory(path: str = ".", details: bool = False) -> List[Any]:
     """List contents of a directory."""
@@ -65,6 +67,101 @@ def read_file(path: str) -> str:
             return ''.join(numbered_lines)
     except Exception as e:
         return f"Error reading file: {e}"
+
+SOFT_WARNING_BYTES = 30 * 1024  # 30 KB (~7,500 tokens)
+HARD_TRUNCATE_BYTES = 50 * 1024  # 50 KB (~12,500 tokens)
+
+
+def enforce_string_payload_limits(text: str, tool_name: str) -> str:
+    """
+    Enforces soft warning and hard truncation on string tool outputs.
+    Preserves head and tail on hard truncation so critical error/tail info is preserved.
+    """
+    if not isinstance(text, str):
+        return text
+
+    encoded = text.encode("utf-8")
+    byte_count = len(encoded)
+
+    if byte_count <= SOFT_WARNING_BYTES:
+        return text
+
+    size_kb = byte_count / 1024
+    est_tokens = max(1, math.ceil(byte_count / 4))
+
+    # Hard Truncation (> 50 KB)
+    if byte_count > HARD_TRUNCATE_BYTES:
+        lines = text.splitlines(keepends=True)
+        # Keep first 200 lines and last 60 lines
+        if len(lines) > 260:
+            head = "".join(lines[:200])
+            tail = "".join(lines[-60:])
+            omitted_count = len(lines) - 260
+            warning_banner = (
+                f"\n\n[WARNING: Tool '{tool_name}' output exceeded hard limit "
+                f"({size_kb:.1f} KB, ~{est_tokens} tokens). "
+                f"{omitted_count} middle lines truncated to conserve context budget.]\n\n"
+            )
+            return head + warning_banner + tail
+        else:
+            # Fallback byte slice if line count is small but lines are very wide
+            head_bytes = encoded[: 35 * 1024].decode("utf-8", errors="ignore")
+            tail_bytes = encoded[-15 * 1024 :].decode("utf-8", errors="ignore")
+            warning_banner = (
+                f"\n\n[WARNING: Tool '{tool_name}' output exceeded hard limit "
+                f"({size_kb:.1f} KB, ~{est_tokens} tokens). "
+                f"Middle content truncated to conserve context budget.]\n\n"
+            )
+            return head_bytes + warning_banner + tail_bytes
+
+    # Soft Warning (30 KB - 50 KB)
+    warning_notice = (
+        f"\n[NOTE: Tool '{tool_name}' output is large: {size_kb:.1f} KB, "
+        f"~{est_tokens} estimated tokens. Consider narrowing search/command scope.]"
+    )
+    return text + warning_notice
+
+
+def enforce_list_payload_limits(results: List[Any], tool_name: str, max_items: int = 100) -> List[Any]:
+    """
+    Enforces soft warning and hard truncation on list/structured tool outputs.
+    """
+    if not isinstance(results, list):
+        return results
+
+    raw_json = json.dumps(results, default=str)
+    byte_count = len(raw_json.encode("utf-8"))
+
+    if byte_count <= SOFT_WARNING_BYTES and len(results) <= max_items:
+        return results
+
+    size_kb = byte_count / 1024
+    est_tokens = max(1, math.ceil(byte_count / 4))
+
+    # Hard Truncation (> 50 KB or > max_items)
+    if byte_count > HARD_TRUNCATE_BYTES or len(results) > max_items:
+        truncated_list = results[:max_items]
+        omitted = len(results) - max_items
+        truncation_note = {
+            "warning": (
+                f"Tool '{tool_name}' output exceeded limit ({size_kb:.1f} KB, ~{est_tokens} tokens). "
+                f"Showing first {max_items} matches; {max(0, omitted)} additional results omitted. "
+                "Please refine path or pattern to narrow results."
+            ),
+            "omitted_count": max(0, omitted),
+        }
+        truncated_list.append(truncation_note)
+        return truncated_list
+
+    # Soft Warning (30 KB - 50 KB)
+    soft_warning_note = {
+        "note": (
+            f"Tool '{tool_name}' output is large: {size_kb:.1f} KB, ~{est_tokens} estimated tokens across {len(results)} items."
+        )
+    }
+    results.append(soft_warning_note)
+    return results
+
 
 def find_files(path: str = ".", pattern: str = "*", search_term: str = None, details: bool = False) -> List[Any]:
     """Find files and directories matching pattern, optionally containing search_term and metadata."""
@@ -133,7 +230,7 @@ def find_files(path: str = ".", pattern: str = "*", search_term: str = None, det
                             })
     except Exception as e:
         return [f"Error finding files: {e}"]
-    return results
+    return enforce_list_payload_limits(results, "find_files", max_items=100)
 
 def run_command(command: str, shell: bool = True) -> str:
     """Execute a safe shell command and return its output."""
@@ -175,8 +272,9 @@ def run_command(command: str, shell: bool = True) -> str:
                 timeout=30
             )
         if result.returncode != 0:
-            return f"Command exited with code {result.returncode}\nStderr: {result.stderr}\nStdout: {result.stdout}"
-        return result.stdout
+            out = f"Command exited with code {result.returncode}\nStderr: {result.stderr}\nStdout: {result.stdout}"
+            return enforce_string_payload_limits(out, "run_command")
+        return enforce_string_payload_limits(result.stdout, "run_command")
     except Exception as e:
         return f"Error executing command: {e}"
 
@@ -254,7 +352,7 @@ def grep_search(
 
     if os.path.isfile(path):
         search_file(path)
-        return results
+        return enforce_list_payload_limits(results, "grep_search", max_items=max_matches)
 
     try:
         for root, dirs, files in os.walk(path):
@@ -267,11 +365,11 @@ def grep_search(
                 
                 full_path = os.path.join(root, file)
                 if search_file(full_path):
-                    return results
+                    return enforce_list_payload_limits(results, "grep_search", max_items=max_matches)
     except Exception as e:
         return [{"error": f"Error during search: {e}"}]
 
-    return results
+    return enforce_list_payload_limits(results, "grep_search", max_items=max_matches)
 
 def replace_file_content(path: str, target: str, replacement: str) -> str:
     """Replace target content with replacement content in the file at path."""
