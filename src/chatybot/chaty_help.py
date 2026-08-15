@@ -571,9 +571,9 @@ class HelpSystem:
             name="/mem",
             category="debug",
             short_desc="Show size of buffers and variables",
-            usage="/mem",
-            long_desc="Display memory usage information including buffer sizes, LAST_RESPONSE, and script variable counts.",
-            examples=["/mem"]
+            usage="/mem [detail|debug]",
+            long_desc="Display memory usage information including buffer sizes, LAST_RESPONSE, and script variable counts.\n\nModes:\n  /mem - Show summary of buffer and variable sizes\n  /mem detail - Show detailed breakdown of all memory elements including file banks, image banks, tool context, session info, and chat history\n  /mem debug - Show memory summary with additional technical metadata and debugging information",
+            examples=["/mem", "/mem detail", "/mem debug"]
         ))
         
         self.register_command(CommandHelp(
