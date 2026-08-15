@@ -45,8 +45,8 @@ def list_directory(path: str = ".", details: bool = False) -> List[Any]:
     except Exception as e:
         return [f"Error listing directory: {e}"]
 
-def read_file(path: str) -> str:
-    """Read contents of a file with line numbers."""
+def read_file(path: str, start_line: int = None, end_line: int = None) -> str:
+    """Read contents of a file with optional line range filtering."""
     if os.name != 'nt':
         if path and not os.path.isabs(path) and '/' not in path and '\\' not in path:
             path = f"./{path}"
@@ -58,6 +58,13 @@ def read_file(path: str) -> str:
                     return "Error reading file: Binary file format is not supported."
         with open(path, 'r', encoding='utf-8', errors='ignore') as f:
             lines = f.readlines()
+            
+            # Apply line range filtering if specified
+            if start_line is not None or end_line is not None:
+                start = 1 if start_line is None else max(1, int(start_line))
+                end = len(lines) if end_line is None else min(len(lines), int(end_line))
+                lines = lines[start-1:end]
+            
             numbered_lines = []
             for i, line in enumerate(lines, 1):
                 stripped_line = line.rstrip('\r\n')
