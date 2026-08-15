@@ -38,7 +38,7 @@ optional = true
 
 [tools.read_file]
 enabled = true
-description = "Read the contents of a file"
+description = "Read the contents of a file with optional line range filtering"
 module = "chatybot.tools.file_utils"
 function = "read_file"
 
@@ -46,6 +46,16 @@ function = "read_file"
 type = "string"
 description = "File path to read"
 optional = false
+
+[tools.read_file.parameters.start_line]
+type = "integer"
+description = "Starting line number (1-indexed)"
+optional = true
+
+[tools.read_file.parameters.end_line]
+type = "integer"
+description = "Ending line number (inclusive)"
+optional = true
 
 [tools.find_files]
 enabled = true
