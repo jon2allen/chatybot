@@ -128,6 +128,10 @@ class ChatybotApp:
         self.thoughtstyle: str = "none"
         self.default_profile: Optional[str] = None
         
+        # Context limit settings
+        from .context_limit import ContextLimiter
+        self.context_limiter = ContextLimiter()
+        
         # Run command settings
         self.safe_mode: bool = True
         self.run_timeout: int = 30
@@ -247,6 +251,17 @@ class ChatybotApp:
 
         # Load configuration
         self.config_manager.load_config()
+
+        # Initialize context limit from active model if configured
+        if hasattr(self, "context_limiter") and not self.context_limiter._user_set_limit:
+            active_model = self.config_manager.active_model_alias
+            if active_model:
+                try:
+                    m_cfg = self.config_manager.get_model_config(active_model)
+                    if m_cfg and m_cfg.get("context_limit"):
+                        self.context_limiter.set_limit(m_cfg.get("context_limit"), from_user=False)
+                except Exception:
+                    pass
 
         # Initialize MCP Client Manager
         from .mcp_client import MCPClientManager
@@ -1145,6 +1160,23 @@ class ChatybotApp:
             # Standard behavior: Use the system role (works for gemma-4 and all non-gemma models)
             if current_system_message:
                 messages.insert(0, {"role": "system", "content": current_system_message})
+
+        # Apply context limits, auto-truncation, and warnings
+        if hasattr(self, "context_limiter"):
+            effective_limit = self.context_limiter.context_limit or model_config.get("context_limit")
+            if effective_limit:
+                total_tokens = self.context_limiter.count_tokens_messages(messages)
+                if self.context_limiter.auto_truncate:
+                    target_limit = int(effective_limit * (self.context_limiter.truncate_pct / 100.0))
+                    if total_tokens > target_limit:
+                        messages, did_truncate = self.context_limiter.truncate_messages(messages, effective_limit)
+                        if did_truncate:
+                            print("[Note: Earlier messages were truncated to fit the context limit.]")
+                            total_tokens = self.context_limiter.count_tokens_messages(messages)
+                
+                warning_msg = self.context_limiter.check_warnings(total_tokens, effective_limit)
+                if warning_msg:
+                    print(warning_msg)
 
         # Prepare completion parameters
         temp = (
@@ -3694,6 +3726,8 @@ class ChatybotApp:
                     est_toks = max(1, int(result_bytes / 4))
                     if result_bytes > 50 * 1024:
                         print(f"   [WARNING] Large tool output ({result_kb:.1f} KB, ~{est_toks} tokens). Hard truncation safeguard active.")
+                        from .tools.file_utils import enforce_string_payload_limits
+                        result_str = enforce_string_payload_limits(result_str, tool_name)
                     else:
                         print(f"   [NOTE] Large tool output ({result_kb:.1f} KB, ~{est_toks} tokens). Monitor context budget.")
 
@@ -4579,23 +4613,27 @@ class ChatybotApp:
                 context_window = None
                 source = "Local Preset"
                 
-                try:
-                    client = self.get_openai_client(model_alias)
-                    model_info = await client.models.retrieve(model_name)
-                    if hasattr(model_info, "context_window"):
-                        context_window = getattr(model_info, "context_window")
-                        source = "API (Live)"
-                    elif hasattr(model_info, "max_context_length"):
-                        context_window = getattr(model_info, "max_context_length")
-                        source = "API (Live)"
-                    elif isinstance(model_info, dict):
-                        context_window = model_info.get("context_window") or model_info.get("max_context_length")
-                        source = "API (Live)"
-                    elif hasattr(model_info, "extra_data") and isinstance(model_info.extra_data, dict):
-                        context_window = model_info.extra_data.get("context_window") or model_info.extra_data.get("max_context_length")
-                        source = "API (Live)"
-                except Exception:
-                    pass
+                if model_config.get("context_limit"):
+                    context_window = model_config.get("context_limit")
+                    source = "Config (Override)"
+                else:
+                    try:
+                        client = self.get_openai_client(model_alias)
+                        model_info = await client.models.retrieve(model_name)
+                        if hasattr(model_info, "context_window"):
+                            context_window = getattr(model_info, "context_window")
+                            source = "API (Live)"
+                        elif hasattr(model_info, "max_context_length"):
+                            context_window = getattr(model_info, "max_context_length")
+                            source = "API (Live)"
+                        elif isinstance(model_info, dict):
+                            context_window = model_info.get("context_window") or model_info.get("max_context_length")
+                            source = "API (Live)"
+                        elif hasattr(model_info, "extra_data") and isinstance(model_info.extra_data, dict):
+                            context_window = model_info.extra_data.get("context_window") or model_info.extra_data.get("max_context_length")
+                            source = "API (Live)"
+                    except Exception:
+                        pass
                 
                 if context_window is not None and not isinstance(context_window, (int, float)):
                     try:
@@ -4684,6 +4722,8 @@ class ChatybotApp:
             model_alias = parts[1]
             self.config_manager.set_active_model(model_alias)
             model_config = self.config_manager.get_model_config(model_alias)
+            if hasattr(self, "context_limiter") and not self.context_limiter._user_set_limit:
+                self.context_limiter.set_limit(model_config.get("context_limit"), from_user=False)
             print(f"Switched to model: {model_config['name']} (alias: {model_alias})")
             return True
 
@@ -5449,6 +5489,65 @@ class ChatybotApp:
                 print(f"Max tokens set to {max_tokens}")
             except ValueError:
                 print("Invalid max tokens value. Please provide a positive integer.")
+            return True
+
+        elif cmd == "/context_limit":
+            if len(parts) < 2:
+                curr = self.context_limiter.context_limit
+                if curr:
+                    print(f"Current context limit: {curr} tokens")
+                else:
+                    print("Context limit is disabled (no limit set)")
+                return True
+
+            val_str = parts[1].strip().lower()
+            if val_str in ("off", "0", "none", "disable", "disabled"):
+                self.context_limiter.set_limit(None, from_user=True)
+                print("Context limit disabled.")
+            else:
+                try:
+                    limit_val = int(val_str)
+                    if limit_val <= 0:
+                        self.context_limiter.set_limit(None, from_user=True)
+                        print("Context limit disabled.")
+                    else:
+                        self.context_limiter.set_limit(limit_val, from_user=True)
+                        print(f"Context limit set to {limit_val} tokens.")
+                except ValueError:
+                    print("Invalid context limit. Usage: /context_limit <tokens>|off")
+            return True
+
+        elif cmd == "/auto_truncate":
+            if len(parts) < 2:
+                if self.context_limiter.auto_truncate:
+                    pct_str = f" ({int(self.context_limiter.truncate_pct)}%)" if self.context_limiter.truncate_pct != 100.0 else ""
+                    print(f"Auto-truncation is currently enabled{pct_str}.")
+                else:
+                    print("Auto-truncation is currently disabled.")
+                return True
+
+            opt = parts[1].strip().lower()
+            if opt in ("on", "true", "enable", "yes"):
+                self.context_limiter.set_auto_truncate(True, pct=100.0)
+                print("Auto-truncation enabled at 100% of context limit.")
+            elif opt in ("off", "false", "disable", "no"):
+                self.context_limiter.set_auto_truncate(False)
+                print("Auto-truncation disabled.")
+            else:
+                num_str = opt.rstrip("%")
+                try:
+                    pct_val = float(num_str)
+                    if pct_val > 100.0:
+                        print("Error: Auto-truncate percentage cannot exceed 100%. Usage: /auto_truncate [on|off|10-100]")
+                    elif pct_val < 10.0:
+                        self.context_limiter.set_auto_truncate(False)
+                        print("Auto-truncation disabled (percentage below 10%).")
+                    else:
+                        display_pct = int(pct_val) if pct_val.is_integer() else pct_val
+                        self.context_limiter.set_auto_truncate(True, pct=pct_val)
+                        print(f"Auto-truncation enabled at {display_pct}% of context limit.")
+                except ValueError:
+                    print("Invalid option. Usage: /auto_truncate [on|off|10-100]")
             return True
 
         elif cmd == "/top_p":
@@ -7449,6 +7548,8 @@ class ChatybotApp:
         print("  /system <message> - Set a custom system message.")
         print("  /temp <value> - Set temperature for the current model (0.0-2.0).")
         print("  /maxtokens <value> - Set max tokens for the current model.")
+        print("  /context_limit [tokens|off] - Set or show hard input context token limit.")
+        print("  /auto_truncate [on|off|10-100] - Toggle automatic truncation of oldest messages when exceeding context limit percentage.")
         print("  /top_p <value> - Set top_p for the current model (0.0-1.0).")
         print("  /top_k <value> - Set top_k for the current model.")
         print("  /freq_penalty <value> - Set frequency penalty (-2.0-2.0).")

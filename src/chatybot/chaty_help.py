@@ -212,6 +212,26 @@ class HelpSystem:
                 examples=[f"/{cmd} 0.7", f"/{cmd}"],
                 parameters={"value": value_range}
             ))
+
+        self.register_command(CommandHelp(
+            name="/context_limit",
+            category="model",
+            short_desc="Set or show input context token limit",
+            usage="/context_limit [<tokens>|off]",
+            long_desc="Set a hard token limit for the input context. When set, warns when approaching the limit and triggers auto-truncation if enabled. Use 'off' or '0' to disable.",
+            examples=["/context_limit", "/context_limit 4096", "/context_limit off"],
+            see_also=["/auto_truncate", "/maxtokens"]
+        ))
+
+        self.register_command(CommandHelp(
+            name="/auto_truncate",
+            category="model",
+            short_desc="Toggle automatic context truncation with optional percentage",
+            usage="/auto_truncate [on|off|10-100]",
+            long_desc="Enable or disable automatic truncation of oldest conversation history messages when input tokens exceed the configured context limit or a specific percentage (10% - 100%). Default 'on' is 100%. If percentage is below 10%, auto-truncation is disabled.",
+            examples=["/auto_truncate", "/auto_truncate on", "/auto_truncate 80", "/auto_truncate off"],
+            see_also=["/context_limit"]
+        ))
         
         # Reasoning commands
         self.register_command(CommandHelp(
