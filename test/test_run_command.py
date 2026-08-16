@@ -1170,6 +1170,94 @@ true
         assert "warning" in res_large[-1]
         assert "50 additional results omitted" in res_large[-1]["warning"]
 
+    @pytest.mark.anyio
+    async def test_tool_rate_limit(self, app):
+        """Verifies /tool rate_limit command, error handling, and persistence across agentic loop initializations."""
+        import sys
+        from io import StringIO
+        
+        # 1. Test set rate limit with integer
+        captured = StringIO()
+        sys.stdout = captured
+        try:
+            res = await app.handle_escape_command("/tool rate_limit 3")
+            assert res is True
+        finally:
+            sys.stdout = sys.__stdout__
+        assert "rate_limit is now 3 seconds" in captured.getvalue()
+        assert app.rate_limit_delay == 3.0
+        assert app._cached_rate_limit_delay == 3.0
+
+        # 2. Test show current rate limit
+        captured = StringIO()
+        sys.stdout = captured
+        try:
+            res = await app.handle_escape_command("/tool rate_limit")
+            assert res is True
+        finally:
+            sys.stdout = sys.__stdout__
+        assert "rate_limit is currently 3 seconds" in captured.getvalue()
+
+        # 3. Test set rate limit with float
+        captured = StringIO()
+        sys.stdout = captured
+        try:
+            res = await app.handle_escape_command("/tool rate_limit 1.5")
+            assert res is True
+        finally:
+            sys.stdout = sys.__stdout__
+        assert "rate_limit is now 1.5 seconds" in captured.getvalue()
+        assert app.rate_limit_delay == 1.5
+        assert app._cached_rate_limit_delay == 1.5
+
+        # 4. Test error handling for invalid input and negative numbers
+        captured = StringIO()
+        sys.stdout = captured
+        try:
+            res = await app.handle_escape_command("/tool rate_limit -2")
+            assert res is True
+        finally:
+            sys.stdout = sys.__stdout__
+        assert "Error: Rate limit delay cannot be negative" in captured.getvalue()
+        assert app.rate_limit_delay == 1.5
+
+        captured = StringIO()
+        sys.stdout = captured
+        try:
+            res = await app.handle_escape_command("/tool rate_limit invalid")
+            assert res is True
+        finally:
+            sys.stdout = sys.__stdout__
+        assert "Invalid rate limit value" in captured.getvalue()
+        assert app.rate_limit_delay == 1.5
+
+        # 5. Test persistence across generate_tool_context and loop initializations
+        mock_config = {
+            "config": {
+                "rate_limit_delay": 2.0
+            },
+            "tools": {}
+        }
+        app._load_tools_config = MagicMock(return_value=mock_config)
+        app.generate_tool_context()
+        assert app.rate_limit_delay == 1.5
+        assert app._cached_rate_limit_delay == 1.5
+
+        # 6. Test _apply_rate_limit_delay with timestamps and elapsed time
+        app.rate_limit_delay = 0.05
+        captured = StringIO()
+        sys.stdout = captured
+        try:
+            await app._apply_rate_limit_delay()
+        finally:
+            sys.stdout = sys.__stdout__
+        out = captured.getvalue()
+        assert "Pausing for 0.05s rate limit delay..." in out
+        assert "Rate limit delay completed (elapsed:" in out
+        assert "s)." in out
+
+
+
 
 
 

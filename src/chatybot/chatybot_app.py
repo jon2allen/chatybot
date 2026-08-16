@@ -144,6 +144,7 @@ class ChatybotApp:
         self.live_agentic_instructions: str = ""
         self.tool_timeout: int = 30
         self.rate_limit_delay: float = 0.0
+        self._cached_rate_limit_delay: Optional[float] = None
         self.strip_thinking_from_filebanks: bool = True
         self.tool_overrides: Dict[str, bool] = {}
         self.default_agentic_instructions: str = (
@@ -340,19 +341,32 @@ class ChatybotApp:
 
     async def interruptible_sleep(self, delay: float) -> None:
         """
-        Sleep for specified delay but can be interrupted by Control-C.
-        Checks interrupt_requested flag periodically.
+        Sleep for specified delay, checking interrupt_requested at head and end.
         """
-        start_time = time.time()
-        remaining = delay
-        
-        while remaining > 0.1 and not self.interrupt_requested:  # Check every 100ms
-            await asyncio.sleep(min(0.1, remaining))
-            remaining = delay - (time.time() - start_time)
-        
         if self.interrupt_requested:
-            self.interrupt_requested = False  # Reset flag since we're handling it
+            self.interrupt_requested = False
             raise KeyboardInterrupt()
+
+        if delay > 0:
+            await asyncio.sleep(delay)
+
+        if self.interrupt_requested:
+            self.interrupt_requested = False
+            raise KeyboardInterrupt()
+
+    async def _apply_rate_limit_delay(self) -> None:
+        """
+        Applies rate limit sleep delay with timestamps and elapsed pause time calculation.
+        """
+        delay = getattr(self, 'rate_limit_delay', 0.0)
+        if delay > 0.0:
+            start_ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            start_time = time.perf_counter()
+            print(f"[{start_ts}] Pausing for {delay}s rate limit delay...")
+            await self.interruptible_sleep(delay)
+            end_ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            elapsed = time.perf_counter() - start_time
+            print(f"[{end_ts}] Rate limit delay completed (elapsed: {elapsed:.2f}s).")
 
     @property
     def definition_grammar(self):
@@ -3555,8 +3569,15 @@ class ChatybotApp:
         # Enable tool loop state
         self.in_tool_loop = True
 
+        # Preserve user-set rate limits across loop initializations
+        if self._cached_rate_limit_delay is not None:
+            self.rate_limit_delay = self._cached_rate_limit_delay
+
         # Always reload and refresh the tool context when starting the loop
         context = self.generate_tool_context()
+        if self._cached_rate_limit_delay is not None:
+            self.rate_limit_delay = self._cached_rate_limit_delay
+
         if context:
             self.tool_mode = True
             self.buffer_manager.set_script_var('TOOL_CONTEXT', context)
@@ -3577,9 +3598,7 @@ class ChatybotApp:
         # If the last completion was natural language (not a tool call), request an initial tool call from the LLM
         if not self.extract_tool_call(current_response):
             print("Last completion was not a tool call. Requesting initial tool call from LLM...")
-            if getattr(self, 'rate_limit_delay', 0.0) > 0.0:
-                print(f"Pausing for {self.rate_limit_delay}s rate limit delay...")
-                await self.interruptible_sleep(self.rate_limit_delay)
+            await self._apply_rate_limit_delay()
             current_response = await self.chat_completion(temp_history, stream=self.streaming_enabled)
         
         print(f"Starting agentic tool loop (max turns: {max_turns})...")
@@ -3705,9 +3724,7 @@ class ChatybotApp:
             temp_history.append({"role": "user", "content": f"Tool execution results:\n{combined_results}"})
             
             turn_count += 1
-            if getattr(self, 'rate_limit_delay', 0.0) > 0.0:
-                print(f"Pausing for {self.rate_limit_delay}s rate limit delay...")
-                await self.interruptible_sleep(self.rate_limit_delay)
+            await self._apply_rate_limit_delay()
 
             if turn_count >= max_turns:
                 print(f"Reached maximum tool loop turns ({max_turns}).")
@@ -3855,7 +3872,12 @@ class ChatybotApp:
                 pass
         if 'rate_limit_delay' in config_section:
             try:
-                self.rate_limit_delay = float(config_section.get('rate_limit_delay'))
+                toml_delay = float(config_section.get('rate_limit_delay'))
+                if self._cached_rate_limit_delay is not None:
+                    self.rate_limit_delay = self._cached_rate_limit_delay
+                else:
+                    self.rate_limit_delay = toml_delay
+                    self._cached_rate_limit_delay = toml_delay
             except (ValueError, TypeError):
                 pass
         if 'max_turns' in config_section:
@@ -5870,6 +5892,25 @@ class ChatybotApp:
                 else:
                     print(f"Current max tool turns: {self.max_turns}")
                 return True
+
+            elif subcmd in ("rate_limit", "ratelimit"):
+                if len(parts) > 2:
+                    raw_val = parts[2].strip()
+                    try:
+                        val = float(raw_val)
+                        if val < 0:
+                            print("Error: Rate limit delay cannot be negative. Usage: /tool rate_limit <seconds>")
+                        else:
+                            self.rate_limit_delay = val
+                            self._cached_rate_limit_delay = val
+                            display_val = int(val) if val.is_integer() else val
+                            print(f"rate_limit is now {display_val} seconds")
+                    except ValueError:
+                        print("Invalid rate limit value. Usage: /tool rate_limit <seconds>")
+                else:
+                    display_val = int(self.rate_limit_delay) if isinstance(self.rate_limit_delay, (int, float)) and float(self.rate_limit_delay).is_integer() else self.rate_limit_delay
+                    print(f"rate_limit is currently {display_val} seconds")
+                return True
             
             elif subcmd == "prompt":
                 # Check if there is an argument in parts[2]
@@ -7363,7 +7404,7 @@ class ChatybotApp:
         print("  /run <command> - Execute a shell command and store output in RUN_COMPLETION (and LAST_COMPLETION).")
         print("  /run_safe - Enable safe mode (block dangerous commands).")
         print("  /run_unsafe - Disable safe mode (allow dangerous commands).")
-        print("  /tool [on|off|list|enable <tool>|disable <tool>|prompt|loop|auto] - Manage tool mode and dispatch tool loops/invocations.")
+        print("  /tool [on|off|list|enable <tool>|disable <tool>|rate_limit <seconds>|prompt|loop|auto] - Manage tool mode and dispatch tool loops/invocations.")
         print("  /proc <name> [key=\"value\"]... - Execute a named procedure block.")
         print("\nScript-specific features:")
         print("  set <name> = <value> - Define a variable")
