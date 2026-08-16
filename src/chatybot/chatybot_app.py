@@ -4828,6 +4828,33 @@ class ChatybotApp:
                 return True
 
             elif subcmd == "list":
+                # Parse pagination parameters
+                limit = 10  # Default limit
+                offset = 0
+                model_filter = None
+
+                if len(parts) >= 3:
+                    param = parts[2].lower()
+                    if param == "all":
+                        limit = None
+                    elif param.startswith("limit="):
+                        try:
+                            limit = int(param[6:])
+                        except ValueError:
+                            print("Invalid limit value. Using default limit of 10.")
+                    elif param.startswith("range="):
+                        try:
+                            range_parts = param[6:].split(":")
+                            if len(range_parts) == 2:
+                                offset, limit = map(int, range_parts)
+                                limit = offset + limit
+                            else:
+                                offset = int(range_parts[0])
+                        except ValueError:
+                            print("Invalid range format. Use range=start:end. Using default limit of 10.")
+                    elif param.startswith("model="):
+                        model_filter = param[6:].lower()
+
                 sessions_dir = self.get_sessions_dir()
                 if not os.path.exists(sessions_dir):
                     print("No saved sessions found.")
@@ -4836,8 +4863,32 @@ class ChatybotApp:
                 if not files:
                     print("No saved sessions found.")
                     return True
-                files.sort(reverse=True)
+                
+                # Filter by model if specified
+                if model_filter:
+                    files = [f for f in files if model_filter in f.lower()]
+                
+                # Sort files by updated_at timestamp from session metadata
+                files_with_dates = []
                 import gzip
+                for fname in files:
+                    fpath = os.path.join(sessions_dir, fname)
+                    try:
+                        open_fn = gzip.open if fname.endswith(".gz") else open
+                        with open_fn(fpath, "rt", encoding="utf-8") as sf:
+                            sdata = json.load(sf)
+                            updated_at = sdata.get("updated_at", "1970-01-01T00:00:00")
+                            files_with_dates.append((fname, updated_at))
+                    except Exception:
+                        files_with_dates.append((fname, "1970-01-01T00:00:00"))
+
+                # Sort by updated_at in descending order (newest first)
+                files_with_dates.sort(key=lambda x: x[1], reverse=True)
+                files = [fname for fname, _ in files_with_dates]
+                
+                # Apply pagination
+                if limit is not None:
+                    files = files[offset:offset+limit]
                 print("\nAvailable Sessions:")
                 for idx, fname in enumerate(files, 1):
                     fpath = os.path.join(sessions_dir, fname)
