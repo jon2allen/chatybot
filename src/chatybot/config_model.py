@@ -79,6 +79,9 @@ class BaseModelConfig(BaseModel):
     top_k: Optional[int] = None
     """Top-K sampling parameter. None means 'use provider default'."""
 
+    context_limit: Optional[int] = None
+    """Hard token limit for input context."""
+
     def resolve_api_key(self) -> Optional[str]:
         """Return the actual API key by reading the named environment variable."""
         if not self.api_key:

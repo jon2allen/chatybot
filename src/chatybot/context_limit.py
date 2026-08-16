@@ -1,0 +1,177 @@
+#! /usr/bin/env python3
+"""
+Context Limit Module
+Manages user-configurable context limits, token counting, warning triggers,
+and automatic conversation history truncation.
+"""
+
+import math
+from typing import Dict, Any, List, Optional, Tuple, Union
+
+
+class ContextLimiter:
+    """
+    Manages user-configurable context limits, token counting using heuristic,
+    warning triggers, and automatic conversation history truncation.
+    """
+
+    def __init__(self, default_limit: Optional[int] = None, auto_truncate: bool = False, truncate_pct: float = 100.0):
+        self.context_limit: Optional[int] = default_limit
+        self.auto_truncate: bool = auto_truncate
+        self.truncate_pct: float = truncate_pct
+        self._user_set_limit: bool = False
+
+    def count_tokens_text(self, text: str) -> int:
+        """
+        Count tokens in a string using byte/character estimation heuristic (~4 bytes per token).
+        """
+        if not text:
+            return 0
+        byte_count = len(text.encode("utf-8"))
+        return max(1, math.ceil(byte_count / 4)) if byte_count > 0 else 0
+
+    def count_tokens_message(self, message: Dict[str, Any]) -> int:
+        """
+        Count tokens in a single message dictionary ({role, content}).
+        Includes standard message format overhead (3 tokens).
+        """
+        tokens = 3  # Standard message framing overhead
+        role = message.get("role", "")
+        if role:
+            tokens += self.count_tokens_text(role)
+
+        content = message.get("content", "")
+        if isinstance(content, str):
+            tokens += self.count_tokens_text(content)
+        elif isinstance(content, list):
+            for part in content:
+                if isinstance(part, dict):
+                    if part.get("type") == "text":
+                        tokens += self.count_tokens_text(part.get("text", ""))
+                    elif part.get("type") == "image_url":
+                        tokens += 85  # Standard token estimate for image reference
+                elif isinstance(part, str):
+                    tokens += self.count_tokens_text(part)
+        return tokens
+
+    def count_tokens_messages(self, messages: List[Dict[str, Any]]) -> int:
+        """
+        Count total tokens across a list of message dictionaries.
+        Includes 3 assistant reply priming tokens.
+        """
+        total = 3  # Reply priming tokens
+        for msg in messages:
+            total += self.count_tokens_message(msg)
+        return total
+
+    def set_limit(self, limit: Optional[int], from_user: bool = True) -> None:
+        """
+        Set or update the context limit.
+        """
+        if limit is not None and limit <= 0:
+            self.context_limit = None
+        else:
+            self.context_limit = limit
+        if from_user:
+            self._user_set_limit = (self.context_limit is not None)
+
+    def set_auto_truncate(self, enabled: bool, pct: Optional[float] = None) -> None:
+        """
+        Enable or disable auto-truncation and set the trigger percentage (10.0 - 100.0).
+        """
+        self.auto_truncate = enabled
+        if pct is not None:
+            self.truncate_pct = float(pct)
+
+    def check_warnings(self, total_tokens: int, limit: Optional[int] = None) -> Optional[str]:
+        """
+        Check if total token usage approaches or exceeds warning thresholds (70%, 90%).
+        Returns warning message string if threshold reached, else None.
+        """
+        effective_limit = limit or self.context_limit
+        if not effective_limit or effective_limit <= 0:
+            return None
+
+        pct = (total_tokens / effective_limit) * 100.0
+        if pct >= 90.0:
+            return f"[Warning: Context usage at {pct:.1f}% of limit ({total_tokens:,}/{effective_limit:,} tokens). Approaching context window limit.]"
+        elif pct >= 70.0:
+            return f"[Warning: Context usage at {pct:.1f}% of limit ({total_tokens:,}/{effective_limit:,} tokens).]"
+        return None
+
+    def truncate_messages(
+        self,
+        messages: List[Dict[str, Any]],
+        limit: Optional[int] = None,
+        target_pct: Optional[float] = None
+    ) -> Tuple[List[Dict[str, Any]], bool]:
+        """
+        Truncate oldest non-system messages and/or oversized message content until total tokens fit within target limit.
+        Preserves the system message (if index 0) and the latest user message.
+        Returns: (truncated_messages, did_truncate)
+        """
+        effective_limit = limit or self.context_limit
+        if not effective_limit or effective_limit <= 0:
+            return messages, False
+
+        pct = target_pct if target_pct is not None else self.truncate_pct
+        target_limit = int(effective_limit * (pct / 100.0))
+
+        current_tokens = self.count_tokens_messages(messages)
+        if current_tokens <= target_limit:
+            return messages, False
+
+        # Make copy of messages list
+        result = [dict(m) for m in messages]
+        has_system = len(result) > 0 and result[0].get("role") == "system"
+        sys_msg = [result[0]] if has_system else []
+        non_sys = result[1:] if has_system else result
+
+        did_truncate = False
+
+        # Step 1: Drop older message turns if multiple turns exist
+        while len(non_sys) > 1 and self.count_tokens_messages(sys_msg + non_sys) > target_limit:
+            non_sys.pop(0)
+            did_truncate = True
+
+        # Step 2: If total tokens still exceed target_limit (single large message or remaining large turns),
+        # truncate individual message content down to fit the available token budget
+        while non_sys and self.count_tokens_messages(sys_msg + non_sys) > target_limit:
+            did_truncate = True
+            # Find the largest non-system message
+            largest_idx = 0
+            largest_size = 0
+            for idx, msg in enumerate(non_sys):
+                content = msg.get("content", "")
+                size = len(content) if isinstance(content, str) else 0
+                if size > largest_size:
+                    largest_size = size
+                    largest_idx = idx
+
+            target_msg = non_sys[largest_idx]
+            content = target_msg.get("content", "")
+            if isinstance(content, str) and len(content) > 100:
+                current_total = self.count_tokens_messages(sys_msg + non_sys)
+                excess_tokens = current_total - target_limit
+                excess_chars = int(excess_tokens * 4) + 120  # Include safety buffer for notices
+                new_length = max(100, len(content) - excess_chars)
+                if new_length < len(content):
+                    head_len = int(new_length * 0.7)
+                    tail_len = new_length - head_len
+                    head = content[:head_len]
+                    tail = content[-tail_len:] if tail_len > 0 else ""
+                    target_msg["content"] = f"{head}\n\n[... content truncated to fit context limit ...]\n\n{tail}"
+                else:
+                    break
+            else:
+                break
+
+        if did_truncate:
+            trunc_notice = "[Note: Earlier messages were truncated to fit the context limit.]"
+            if non_sys and isinstance(non_sys[0].get("content"), str):
+                if not non_sys[0]["content"].startswith(trunc_notice) and not non_sys[0]["content"].startswith("[Note:"):
+                    non_sys[0] = dict(non_sys[0])
+                    non_sys[0]["content"] = f"{trunc_notice}\n\n{non_sys[0]['content']}"
+            result = sys_msg + non_sys
+
+        return result, did_truncate
