@@ -4814,8 +4814,23 @@ class ChatybotApp:
                 if not files:
                     print("No saved sessions found.")
                     return True
-                files.sort(reverse=True)
+                # Sort files by updated_at timestamp from session metadata
+                files_with_dates = []
                 import gzip
+                for fname in files:
+                    fpath = os.path.join(sessions_dir, fname)
+                    try:
+                        open_fn = gzip.open if fname.endswith(".gz") else open
+                        with open_fn(fpath, "rt", encoding="utf-8") as sf:
+                            sdata = json.load(sf)
+                            updated_at = sdata.get("updated_at", "1970-01-01T00:00:00")
+                            files_with_dates.append((fname, updated_at))
+                    except Exception:
+                        files_with_dates.append((fname, "1970-01-01T00:00:00"))
+
+                # Sort by updated_at in descending order (newest first)
+                files_with_dates.sort(key=lambda x: x[1], reverse=True)
+                files = [fname for fname, _ in files_with_dates]
                 print("\nAvailable Sessions:")
                 for idx, fname in enumerate(files, 1):
                     fpath = os.path.join(sessions_dir, fname)
