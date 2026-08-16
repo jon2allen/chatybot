@@ -4806,6 +4806,30 @@ class ChatybotApp:
                 return True
 
             elif subcmd == "list":
+                # Parse pagination parameters
+                limit = 10  # Default limit
+                offset = 0
+
+                if len(parts) >= 3:
+                    param = parts[2].lower()
+                    if param == "all":
+                        limit = None
+                    elif param.startswith("limit="):
+                        try:
+                            limit = int(param[6:])
+                        except ValueError:
+                            print("Invalid limit value. Using default limit of 10.")
+                    elif param.startswith("range="):
+                        try:
+                            range_parts = param[6:].split(":")
+                            if len(range_parts) == 2:
+                                offset, limit = map(int, range_parts)
+                                limit = offset + limit
+                            else:
+                                offset = int(range_parts[0])
+                        except ValueError:
+                            print("Invalid range format. Use range=start:end. Using default limit of 10.")
+
                 sessions_dir = self.get_sessions_dir()
                 if not os.path.exists(sessions_dir):
                     print("No saved sessions found.")
@@ -4831,6 +4855,10 @@ class ChatybotApp:
                 # Sort by updated_at in descending order (newest first)
                 files_with_dates.sort(key=lambda x: x[1], reverse=True)
                 files = [fname for fname, _ in files_with_dates]
+                
+                # Apply pagination
+                if limit is not None:
+                    files = files[offset:offset+limit]
                 print("\nAvailable Sessions:")
                 for idx, fname in enumerate(files, 1):
                     fpath = os.path.join(sessions_dir, fname)
