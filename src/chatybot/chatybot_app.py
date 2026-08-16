@@ -4809,6 +4809,7 @@ class ChatybotApp:
                 # Parse pagination parameters
                 limit = 10  # Default limit
                 offset = 0
+                model_filter = None
 
                 if len(parts) >= 3:
                     param = parts[2].lower()
@@ -4829,6 +4830,8 @@ class ChatybotApp:
                                 offset = int(range_parts[0])
                         except ValueError:
                             print("Invalid range format. Use range=start:end. Using default limit of 10.")
+                    elif param.startswith("model="):
+                        model_filter = param[6:].lower()
 
                 sessions_dir = self.get_sessions_dir()
                 if not os.path.exists(sessions_dir):
@@ -4838,6 +4841,11 @@ class ChatybotApp:
                 if not files:
                     print("No saved sessions found.")
                     return True
+                
+                # Filter by model if specified
+                if model_filter:
+                    files = [f for f in files if model_filter in f.lower()]
+                
                 # Sort files by updated_at timestamp from session metadata
                 files_with_dates = []
                 import gzip
