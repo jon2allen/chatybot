@@ -18,7 +18,9 @@
       "/calc": "/calc",
       "/str_search": "/str_search",
       "/proc": "/proc",
-      "/session": "/session"
+      "/session": "/session",
+      "/context_limit": "/context_limit",
+      "/auto_truncate": "/auto_truncate"
     },
     "keywords": {
       "set": "set",
@@ -46,7 +48,13 @@
       "endfor": "endfor",
       "break": "break",
       "range": "range",
-      "lines": "lines"
+      "lines": "lines",
+      "get_context_metrics": "get_context_metrics",
+      "start_line": "start_line",
+      "end_line": "end_line",
+      "rate_limit": "rate_limit",
+      "ratelimit": "rate_limit",
+      "detail": "detail"
     },
     "ui": {
       "language_changed": "Language set to: {lang}",
@@ -155,7 +163,12 @@
       "/proc": "/proc",
       "/procedimiento": "/proc",
       "/sesion": "/session",
-      "/session": "/session"
+      "/session": "/session",
+      "/limite_contexto": "/context_limit",
+      "/context_limit": "/context_limit",
+      "/auto_truncar": "/auto_truncate",
+      "/autotruncar": "/auto_truncate",
+      "/auto_truncate": "/auto_truncate"
     },
     "keywords": {
       "informacion": "info",
@@ -208,7 +221,23 @@
       "lines": "lines",
       "lineas": "lines",
       "si": "if",
-      "entonces": "then"
+      "entonces": "then",
+      "get_context_metrics": "get_context_metrics",
+      "metricas_contexto": "get_context_metrics",
+      "obtener_metricas_contexto": "get_context_metrics",
+      "start_line": "start_line",
+      "linea_inicio": "start_line",
+      "linea_inicial": "start_line",
+      "end_line": "end_line",
+      "linea_fin": "end_line",
+      "linea_final": "end_line",
+      "rate_limit": "rate_limit",
+      "ratelimit": "rate_limit",
+      "limite_tasa": "rate_limit",
+      "limite_velocidad": "rate_limit",
+      "detail": "detail",
+      "detalle": "detail",
+      "detalles": "detail"
     },
     "ui": {
       "language_changed": "Idioma establecido en: {lang}",
@@ -514,7 +543,12 @@
       "/chercher_texte": "/str_search",
       "/proc": "/proc",
       "/procedure": "/proc",
-      "/session": "/session"
+      "/session": "/session",
+      "/limite_contexte": "/context_limit",
+      "/context_limit": "/context_limit",
+      "/auto_tronquer": "/auto_truncate",
+      "/autotronquer": "/auto_truncate",
+      "/auto_truncate": "/auto_truncate"
     },
     "keywords": {
       "informations": "info",
@@ -538,7 +572,6 @@
       "note": "note",
       "remarque": "note",
       "definir": "set",
-      "demarrer": "start",
       "fin": "end",
       "activer": "on",
       "desactiver": "off",
@@ -571,7 +604,22 @@
       "lines": "lines",
       "lignes": "lines",
       "si": "if",
-      "alors": "then"
+      "alors": "then",
+      "get_context_metrics": "get_context_metrics",
+      "metriques_contexte": "get_context_metrics",
+      "obtenir_metriques_contexte": "get_context_metrics",
+      "start_line": "start_line",
+      "ligne_debut": "start_line",
+      "ligne_initiale": "start_line",
+      "end_line": "end_line",
+      "ligne_fin": "end_line",
+      "ligne_finale": "end_line",
+      "rate_limit": "rate_limit",
+      "ratelimit": "rate_limit",
+      "limite_taux": "rate_limit",
+      "limite_debit": "rate_limit",
+      "detail": "detail",
+      "details": "detail"
     },
     "ui": {
       "language_changed": "Langue définie sur : {lang}",
@@ -879,7 +927,11 @@
       "/搜索字符串": "/str_search",
       "/proc": "/proc",
       "/会话": "/session",
-      "/session": "/session"
+      "/session": "/session",
+      "/上下文限制": "/context_limit",
+      "/context_limit": "/context_limit",
+      "/自动截断": "/auto_truncate",
+      "/auto_truncate": "/auto_truncate"
     },
     "keywords": {
       "信息": "info",
@@ -927,7 +979,23 @@
       "range": "range",
       "lines": "lines",
       "如果": "if",
-      "则": "then"
+      "则": "then",
+      "get_context_metrics": "get_context_metrics",
+      "获取上下文指标": "get_context_metrics",
+      "上下文指标": "get_context_metrics",
+      "start_line": "start_line",
+      "起始行": "start_line",
+      "开始行": "start_line",
+      "end_line": "end_line",
+      "结束行": "end_line",
+      "终止行": "end_line",
+      "rate_limit": "rate_limit",
+      "ratelimit": "rate_limit",
+      "速率限制": "rate_limit",
+      "频率限制": "rate_limit",
+      "detail": "detail",
+      "详细": "detail",
+      "详情": "detail"
     },
     "ui": {
       "language_changed": "语言设置为: {lang}",
@@ -1233,7 +1301,12 @@
       "/proc": "/proc",
       "/procedura": "/proc",
       "/sessione": "/session",
-      "/session": "/session"
+      "/session": "/session",
+      "/limite_contesto": "/context_limit",
+      "/context_limit": "/context_limit",
+      "/auto_tronca": "/auto_truncate",
+      "/autotronca": "/auto_truncate",
+      "/auto_truncate": "/auto_truncate"
     },
     "keywords": {
       "informazioni": "info",
@@ -1283,7 +1356,23 @@
       "range": "range",
       "intervallo": "range",
       "lines": "lines",
-      "righe": "lines"
+      "righe": "lines",
+      "get_context_metrics": "get_context_metrics",
+      "ottieni_metriche_contesto": "get_context_metrics",
+      "metriche_contesto": "get_context_metrics",
+      "start_line": "start_line",
+      "riga_inizio": "start_line",
+      "riga_iniziale": "start_line",
+      "end_line": "end_line",
+      "riga_fine": "end_line",
+      "riga_finale": "end_line",
+      "rate_limit": "rate_limit",
+      "ratelimit": "rate_limit",
+      "limite_frequenza": "rate_limit",
+      "limite_tasso": "rate_limit",
+      "detail": "detail",
+      "dettaglio": "detail",
+      "dettagli": "detail"
     },
     "ui": {
       "language_changed": "Lingua impostata su: {lang}",
@@ -1589,7 +1678,11 @@
       "/بحث_سلسلة": "/str_search",
       "/proc": "/proc",
       "/جلسة": "/session",
-      "/session": "/session"
+      "/session": "/session",
+      "/حد_السياق": "/context_limit",
+      "/context_limit": "/context_limit",
+      "/اقتطاع_تلقائي": "/auto_truncate",
+      "/auto_truncate": "/auto_truncate"
     },
     "keywords": {
       "معلومات": "info",
@@ -1637,7 +1730,23 @@
       "lines": "lines",
       "اذا": "if",
       "اذا_كان": "if",
-      "اذن": "then"
+      "اذن": "then",
+      "get_context_metrics": "get_context_metrics",
+      "مقاييس_السياق": "get_context_metrics",
+      "جلب_مقاييس_السياق": "get_context_metrics",
+      "start_line": "start_line",
+      "سطر_البداية": "start_line",
+      "بداية_السطر": "start_line",
+      "end_line": "end_line",
+      "سطر_النهاية": "end_line",
+      "نهاية_السطر": "end_line",
+      "rate_limit": "rate_limit",
+      "ratelimit": "rate_limit",
+      "حد_المعدل": "rate_limit",
+      "معدل_الطلبات": "rate_limit",
+      "detail": "detail",
+      "تفصيل": "detail",
+      "تفاصيل": "detail"
     },
     "ui": {
       "language_changed": "تغيرت اللغة لـ: {lang}",

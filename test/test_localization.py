@@ -187,3 +187,72 @@ def test_cross_locale_fallback():
     script = "设置 model = \"mistral_1\"\n/模型 mistral_1\n/保存 file.txt"
     expected = "set model = \"mistral_1\"\n/model mistral_1\n/save file.txt"
     assert mgr_en.translate_script(script) == expected
+
+
+def test_v070_new_features_localization():
+    """Verify v0.7.0+ commands, tool, parameters, and subcommands across en, es, fr, zh, it, ar."""
+    # 1. English
+    mgr_en = LocalizationManager("en")
+    assert mgr_en.resolve_command("/context_limit") == "/context_limit"
+    assert mgr_en.resolve_command("/auto_truncate") == "/auto_truncate"
+    reverse_en = mgr_en.get_reverse_aliases()
+    assert reverse_en.get("get_context_metrics") == "get_context_metrics"
+    assert reverse_en.get("start_line") == "start_line"
+    assert reverse_en.get("end_line") == "end_line"
+    assert reverse_en.get("rate_limit") == "rate_limit"
+    assert reverse_en.get("detail") == "detail"
+
+    # 2. Spanish
+    mgr_es = LocalizationManager("es")
+    assert mgr_es.resolve_command("/limite_contexto") == "/context_limit"
+    assert mgr_es.resolve_command("/auto_truncar") == "/auto_truncate"
+    reverse_es = mgr_es.get_reverse_aliases()
+    assert reverse_es.get("obtener_metricas_contexto") == "get_context_metrics"
+    assert reverse_es.get("linea_inicio") == "start_line"
+    assert reverse_es.get("linea_fin") == "end_line"
+    assert reverse_es.get("limite_tasa") == "rate_limit"
+    assert reverse_es.get("detalle") == "detail"
+
+    # 3. French
+    mgr_fr = LocalizationManager("fr")
+    assert mgr_fr.resolve_command("/limite_contexte") == "/context_limit"
+    assert mgr_fr.resolve_command("/auto_tronquer") == "/auto_truncate"
+    reverse_fr = mgr_fr.get_reverse_aliases()
+    assert reverse_fr.get("obtenir_metriques_contexte") == "get_context_metrics"
+    assert reverse_fr.get("ligne_debut") == "start_line"
+    assert reverse_fr.get("ligne_fin") == "end_line"
+    assert reverse_fr.get("limite_taux") == "rate_limit"
+    assert reverse_fr.get("details") == "detail"
+
+    # 4. Chinese
+    mgr_zh = LocalizationManager("zh")
+    assert mgr_zh.resolve_command("/上下文限制") == "/context_limit"
+    assert mgr_zh.resolve_command("/自动截断") == "/auto_truncate"
+    reverse_zh = mgr_zh.get_reverse_aliases()
+    assert reverse_zh.get("获取上下文指标") == "get_context_metrics"
+    assert reverse_zh.get("起始行") == "start_line"
+    assert reverse_zh.get("结束行") == "end_line"
+    assert reverse_zh.get("速率限制") == "rate_limit"
+    assert reverse_zh.get("详情") == "detail"
+
+    # 5. Italian
+    mgr_it = LocalizationManager("it")
+    assert mgr_it.resolve_command("/limite_contesto") == "/context_limit"
+    assert mgr_it.resolve_command("/auto_tronca") == "/auto_truncate"
+    reverse_it = mgr_it.get_reverse_aliases()
+    assert reverse_it.get("ottieni_metriche_contesto") == "get_context_metrics"
+    assert reverse_it.get("riga_inizio") == "start_line"
+    assert reverse_it.get("riga_fine") == "end_line"
+    assert reverse_it.get("limite_frequenza") == "rate_limit"
+    assert reverse_it.get("dettaglio") == "detail"
+
+    # 6. Arabic
+    mgr_ar = LocalizationManager("ar")
+    assert mgr_ar.resolve_command("/حد_السياق") == "/context_limit"
+    assert mgr_ar.resolve_command("/اقتطاع_تلقائي") == "/auto_truncate"
+    reverse_ar = mgr_ar.get_reverse_aliases()
+    assert reverse_ar.get("مقاييس_السياق") == "get_context_metrics"
+    assert reverse_ar.get("سطر_البداية") == "start_line"
+    assert reverse_ar.get("سطر_النهاية") == "end_line"
+    assert reverse_ar.get("حد_المعدل") == "rate_limit"
+    assert reverse_ar.get("تفاصيل") == "detail"
