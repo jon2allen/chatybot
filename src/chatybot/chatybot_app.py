@@ -5518,6 +5518,11 @@ class ChatybotApp:
                         print(f"Context limit set to {limit_val} tokens.")
                 except ValueError:
                     print("Invalid context limit. Usage: /context_limit <tokens>|off")
+
+            if self.tool_mode:
+                context = self.generate_tool_context()
+                if hasattr(self, "buffer_manager"):
+                    self.buffer_manager.set_script_var('TOOL_CONTEXT', context)
             return True
 
         elif cmd == "/auto_truncate":
