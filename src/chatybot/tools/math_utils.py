@@ -107,10 +107,11 @@ def calculate(expression: str, target_variable: Optional[str] = None, app: Any =
         except Exception:
             result = mathparse.parse(expr_str)
 
+        hint_msg = "\n\n[TOOL USAGE HINT]: Supported scalar operations: +, -, *, /, ^, sqrt, log, abs. For array/list statistics (mean, median, stddev, sum, min, max), use 'run_command' with Python."
         if result is None:
             return {
                 "status": "error",
-                "message": f"Could not parse math expression '{expression}'",
+                "message": f"Could not parse math expression '{expression}'.{hint_msg}",
                 "result": None
             }
 
@@ -141,8 +142,9 @@ def calculate(expression: str, target_variable: Optional[str] = None, app: Any =
         return response
 
     except Exception as e:
+        hint_msg = "\n\n[TOOL USAGE HINT]: Supported scalar operations: +, -, *, /, ^, sqrt, log, abs. For array/list statistics (mean, median, stddev, sum, min, max), use 'run_command' with Python."
         return {
             "status": "error",
-            "message": f"Error evaluating math expression '{expression}': {str(e)}",
+            "message": f"Error evaluating math expression '{expression}': {str(e)}.{hint_msg}",
             "result": None
         }

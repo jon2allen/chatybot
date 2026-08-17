@@ -2988,6 +2988,32 @@ class ChatybotApp:
             print(error_msg)
             print("Command exited with code -1")
 
+    def _is_permanent_capability_error(self, text: str) -> bool:
+        """Check if text indicates a non-recoverable client/protocol capability failure."""
+        if not text:
+            return False
+        text_lower = text.lower()
+        capability_keywords = [
+            "elicitation not supported",
+            "method not found",
+            "capability not supported",
+            "capabilities not supported",
+            "protocol error: unsupported"
+        ]
+        return any(keyword in text_lower for keyword in capability_keywords)
+
+    def _format_capability_error(self, tool_name: str, raw_error: str) -> str:
+        """Format permanent capability error with explicit LLM guidance."""
+        guidance = (
+            f"[PERMANENT CAPABILITY ERROR]: Feature not supported by client environment. "
+            "DO NOT retry this tool. Select an alternative tool or complete response directly."
+        )
+        if raw_error:
+            if "[PERMANENT CAPABILITY ERROR]" in raw_error:
+                return raw_error
+            return f"{raw_error.strip()}\n\n{guidance}"
+        return guidance
+
     async def dispatch_tool(self, invocation_json: str = None) -> str:
         """
         Dispatch a tool invocation to the dispatcher.
@@ -3046,15 +3072,25 @@ class ChatybotApp:
                         
                         result_str = await self.mcp_manager.execute_tool(server_name, mcp_tool_name, arguments)
                         
-                        self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', result_str)
-                        self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', '')
-                        self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '0')
+                        if self._is_permanent_capability_error(result_str):
+                            result_str = self._format_capability_error(tool_name, result_str)
+                            self.tool_overrides[tool_name] = False
+                            self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', result_str)
+                            self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', result_str)
+                            self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
+                        else:
+                            self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', result_str)
+                            self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', '')
+                            self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '0')
                         print("MCP tool executed successfully")
                         return result_str
                     except Exception as e:
                         err_msg = f"MCP tool execution failed: {e}"
+                        if self._is_permanent_capability_error(err_msg):
+                            err_msg = self._format_capability_error(tool_name, err_msg)
+                            self.tool_overrides[tool_name] = False
                         print(err_msg)
-                        self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
+                        self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', err_msg)
                         self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', err_msg)
                         self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
                         return f"Error: {err_msg}"
@@ -3644,6 +3680,9 @@ class ChatybotApp:
                     result_str = json.dumps({"status": "error", "message": f"Dispatch execution error: {str(e)}"})
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', result_str)
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
+
+                if self._is_permanent_capability_error(result_str) and "[PERMANENT CAPABILITY ERROR]" not in result_str:
+                    result_str = self._format_capability_error(tool_name, result_str)
                     
                 print(f"Tool Result: {result_str}")
                 results.append(f"Tool: {tool_name}\nArguments: {json.dumps(tool_args)}\nResult: {result_str}")

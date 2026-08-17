@@ -80,6 +80,7 @@ def test_calculate_tool_invalid_expression():
     res = calculate("100 * cat")
     assert res["status"] == "error"
     assert "Unsupported mathematical term" in res["message"]
+    assert "[TOOL USAGE HINT]" in res["message"]
     assert res["result"] is None
 
 def test_calculate_tool_mixed_decimal_float():
