@@ -4054,6 +4054,9 @@ class ChatybotApp:
                             lines.append(f"  - {param_name}: {param_type}{required_str} - {param_desc}")
         
         lines.append("\n=== END TOOLS ===\n")
+        if hasattr(self, "context_limiter") and self.context_limiter.context_limit:
+            lim = self.context_limiter.context_limit
+            lines.append(f"[CONTEXT LIMIT: You are operating under a hard input context limit of {lim:,} tokens. Keep tool calls, file reads, and responses concise to conserve context quota.]\n")
         
         context = '\n'.join(lines)
         self.tool_context = context

@@ -107,17 +107,63 @@ def get_context_metrics(
         "scope": norm_scope,
     }
 
+    # Extract context limit settings if configured on app
+    context_limit_info: Optional[Dict[str, Any]] = None
+    if app:
+        effective_limit = None
+        auto_truncate = False
+        truncate_pct = 100.0
+        if hasattr(app, "context_limiter") and app.context_limiter:
+            effective_limit = app.context_limiter.context_limit
+            auto_truncate = app.context_limiter.auto_truncate
+            truncate_pct = app.context_limiter.truncate_pct
+
+        if not effective_limit and hasattr(app, "config_manager") and app.config_manager:
+            try:
+                active_alias = app.config_manager.active_model_alias
+                m_cfg = app.config_manager.get_model_config(active_alias)
+                if m_cfg and m_cfg.get("context_limit"):
+                    effective_limit = m_cfg.get("context_limit")
+            except Exception:
+                pass
+
+        if effective_limit and effective_limit > 0:
+            used_tokens = total_metrics["estimated_tokens"]
+            rem_tokens = max(0, effective_limit - used_tokens)
+            usage_pct = round((used_tokens / effective_limit) * 100.0, 1)
+            context_limit_info = {
+                "limit_tokens": effective_limit,
+                "used_tokens": used_tokens,
+                "remaining_tokens": rem_tokens,
+                "usage_percent": usage_pct,
+                "auto_truncate": auto_truncate,
+                "truncate_percent": truncate_pct if auto_truncate else None,
+            }
+
+    if context_limit_info:
+        response["context_limit"] = context_limit_info
+
+    limit_suffix = ""
+    if context_limit_info:
+        eff_lim = context_limit_info["limit_tokens"]
+        u_pct = context_limit_info["usage_percent"]
+        r_tok = context_limit_info["remaining_tokens"]
+        a_trunc = context_limit_info["auto_truncate"]
+        t_pct = context_limit_info["truncate_percent"]
+        trunc_str = f"ON ({int(t_pct)}%)" if a_trunc and t_pct else ("ON" if a_trunc else "OFF")
+        limit_suffix = f" | Context Limit: {eff_lim:,} tokens ({u_pct}% used, {r_tok:,} tokens remaining, auto-truncate: {trunc_str})"
+
     if norm_scope == "session":
         response["session"] = session_metrics
         response["summary"] = (
             f"Session History: {session_metrics['characters']} chars, "
-            f"{session_metrics['kb']} KB, ~{session_metrics['estimated_tokens']} tokens ({session_turns} turns)"
+            f"{session_metrics['kb']} KB, ~{session_metrics['estimated_tokens']} tokens ({session_turns} turns){limit_suffix}"
         )
     elif norm_scope == "agentic_loop":
         response["agentic_loop"] = loop_metrics
         response["summary"] = (
             f"Agentic Loop: {loop_metrics['characters']} chars, "
-            f"{loop_metrics['kb']} KB, ~{loop_metrics['estimated_tokens']} tokens ({loop_turns} turns)"
+            f"{loop_metrics['kb']} KB, ~{loop_metrics['estimated_tokens']} tokens ({loop_turns} turns){limit_suffix}"
         )
     else:  # 'all'
         response["session"] = session_metrics
@@ -128,7 +174,7 @@ def get_context_metrics(
             f"Total Context: {total_metrics['characters']} chars, "
             f"{total_metrics['kb']} KB, ~{total_metrics['estimated_tokens']} estimated tokens across {total_turns} total turns "
             f"(Session: {session_metrics['kb']} KB / ~{session_metrics['estimated_tokens']} tokens [{session_turns} turns], "
-            f"Agentic Loop: {loop_metrics['kb']} KB / ~{loop_metrics['estimated_tokens']} tokens [{loop_turns} turns])"
+            f"Agentic Loop: {loop_metrics['kb']} KB / ~{loop_metrics['estimated_tokens']} tokens [{loop_turns} turns]){limit_suffix}"
         )
 
     # Save to target variable if requested
