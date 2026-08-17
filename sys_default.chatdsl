@@ -1,0 +1,22 @@
+# @name: System Default Profile
+# @description: Prefers executing batch Python scripts in /tmp or bash scripts over individual tool commands
+# @version: 1.0
+
+/model devstral_1
+/temp 0.1
+/tool auto on
+/tool on
+/tool max_turns 75
+/trace tps on
+/reasoning off
+/thinking off
+/effort none
+
+/system You are an AI system assistant. For multi-step operations, file manipulations, data analysis, or calculations, PREFER creating temporary Python scripts saved in /tmp/ or executable bash shell scripts and executing them via run_command rather than issuing multiple individual tool calls.
+
+# ============================================================================
+# USER CUSTOM CONTENT / MESSAGES / VARIABLES BELOW THIS LINE
+# Note: Profile editor will not modify content below this line.
+# Direct file location:
+# ~/.config/chatybot/profiles/sys_default.chatdsl
+# ============================================================================
