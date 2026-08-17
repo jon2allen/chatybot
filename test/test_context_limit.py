@@ -261,3 +261,26 @@ async def test_model_specific_context_limit_override(app):
 
     await app.handle_escape_command("/model ollama_llama")
     assert app.context_limiter.context_limit == 4096
+
+
+def test_get_context_metrics_with_context_limit(app):
+    """Test that get_context_metrics tool reports context limit, usage, and remaining budget."""
+    from chatybot.tools.context_utils import get_context_metrics
+
+    app.context_limiter.set_limit(10000, from_user=True)
+    app.context_limiter.set_auto_truncate(True, pct=85.0)
+    app.chat_history = [
+        ("What is Python?", "Python is a programming language." * 50)
+    ]
+
+    metrics = get_context_metrics(scope="all", app=app)
+    assert metrics["status"] == "success"
+    assert "context_limit" in metrics
+    assert metrics["context_limit"]["limit_tokens"] == 10000
+    assert metrics["context_limit"]["auto_truncate"] is True
+    assert metrics["context_limit"]["truncate_percent"] == 85.0
+    assert metrics["context_limit"]["used_tokens"] > 0
+    assert metrics["context_limit"]["remaining_tokens"] < 10000
+    assert "Context Limit: 10,000 tokens" in metrics["summary"]
+    assert "auto-truncate: ON (85%)" in metrics["summary"]
+
