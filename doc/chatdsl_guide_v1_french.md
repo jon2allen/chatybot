@@ -17,12 +17,13 @@ ChatDSL (Chat Domain-Specific Language) est un langage de script puissant conçu
 ## Capacités Principales
 
 ### 1. Support Multilingue
-ChatDSL prend en charge 5 langues avec un aliasing complet des commandes :
+ChatDSL prend en charge 6 langues avec un aliasing complet des commandes :
 - **Anglais (EN)** - Langue principale
 - **Espagnol (ES)** - Traductions espagnoles de toutes les commandes
 - **Français (FR)** - Traductions françaises de toutes les commandes
 - **Chinois (ZH)** - Traductions chinoises de toutes les commandes
 - **Italien (IT)** - Traductions italiennes de toutes les commandes
+- **Arabe (AR)** - Traductions arabes de toutes les commandes
 
 ### 2. Fonctionnalités de Script
 - **Système de Variables** : Variables à portée de script avec la syntaxe `${nom}`
@@ -710,6 +711,10 @@ src/chatybot/profiles/          # Profils prédéfinis
 | `/echo` | Général | `/echo texte` | Afficher le texte avec évaluation des variables |
 | `/source` | Général | `/source fichier.dsl` | Charger et exécuter un fichier de script |
 | `/script` | Général | `/script fichier.dsl [x=v y=v z=v]` | Exécuter le script avec paramètres |
+| `/calculer` | Général | `/calculer <expr>` | Évaluer une expression mathématique |
+| `/chercher_texte` | Général | `/chercher_texte <recherche> [source]` | Chercher une sous-chaîne dans le texte |
+| `/procedure` | Général | `/procedure <nom> [args]` | Exécuter une procédure définie |
+| `/session` | Général | `/session <subcmd> [args]` | Gérer les sessions de chat (sauvegarder, lister, purger, etc.) |
 | `/reloadmacros` | Général | `/reloadmacros [fichier]` | Recharger les définitions de macros |
 
 ### Commandes de Modèle et LLM
@@ -721,6 +726,8 @@ src/chatybot/profiles/          # Profils prédéfinis
 | `/systeme` | Modèle | `/systeme [message]` | Obtenir/définir le message système |
 | `/temp` | Modèle | `/temp [valeur]` | Température (0.0-2.0) |
 | `/max_jetons` | Modèle | `/max_jetons [valeur]` | Maximum de jetons de complétion |
+| `/limite_contexte` | Modèle | `/limite_contexte [jetons\|off]` | Définir la limite dure de jetons de contexte |
+| `/auto_tronquer` | Modèle | `/auto_tronquer [on\|off\|10-100]` | Auto-tronquer le contexte au-delà de % de la limite |
 | `/top_p` | Modèle | `/top_p [valeur]` | Échantillonnage de noyau (0.0-1.0) |
 | `/top_k` | Modèle | `/top_k [valeur]` | Échantillonnage Top-K |
 | `/penalite_freq` | Modèle | `/penalite_freq [valeur]` | Pénalité de fréquence (-2.0 à 2.0) |
@@ -782,6 +789,7 @@ src/chatybot/profiles/          # Profils prédéfinis
 | `/outil auto` | Outils | `/outil auto` | Activer la boucle automatique sur les sorties d'outils |
 | `/outil boucle` | Outils | `/outil boucle [tours] [force]` | Exécuter la boucle d'outils avec limite |
 | `/outil tours_max` | Outils | `/outil tours_max [N]` | Définir/obtenir la limite de tours maximale |
+| `/outil limite_taux` | Outils | `/outil limite_taux [secondes]` | Définir la pause de délai entre les tours (secondes) |
 | `/outil prompt` | Outils | `/outil prompt` | Afficher l'invite active |
 
 ### Commandes de Diagnostic

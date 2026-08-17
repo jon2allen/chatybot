@@ -32,6 +32,10 @@ This table lists all available slash commands in ChatyBot, providing localized c
 | `/echo` | `/repetir` | `/echo` | `/回显` | `/eco` | Print text with variable evaluation |
 | `/source` | `/origen` | `/source` | `/加载脚本` | `/sorgente` | Load and execute a script file |
 | `/script` | `/script` | `/script` | `/脚本` | `/script` | Run script with variables (e.g. `x="val"`) |
+| `/calc` | `/calcular` | `/calculer` | `/计算` | `/calcola` | Evaluate mathematical expression |
+| `/str_search` | `/buscar_cadena` | `/recherche_texte` | `/查找文本` | `/str_search` | Search for substring within text or buffer |
+| `/proc` | `/procedimiento` | `/procedure` | `/proc` | `/procedura` | Execute or inspect defined procedure |
+| `/session` | `/sesion` | `/session` | `/会话` | `/sessione` | Manage conversational sessions (save, list, prune) |
 | `/quit` / `/exit` | `/salir` | `/quitter` | `/退出` (or `/exit`) | `/esci` | Close session and save history |
 
 ### B. LLM Parameters & Model Selection
@@ -42,6 +46,8 @@ This table lists all available slash commands in ChatyBot, providing localized c
 | `/system` | `/sistema` | `/systeme` | `/系统提示` | `/sistema` | Set the core system message |
 | `/temp` | `/temp` | `/temp` | `/温度` | `/temp` | Set generation temperature (0.0 - 2.0) |
 | `/maxtokens` | `/max_tokens` | `/max_jetons` | `/最大Token` | `/max_token` | Set completion token length |
+| `/context_limit` | `/limite_contexto` | `/limite_contexte` | `/上下文限制` | `/limite_contesto` | Set hard token context limit (`<tokens>\|off`) |
+| `/auto_truncate` | `/auto_truncar` | `/auto_tronquer` | `/自动截断` | `/auto_tronca` | Auto-truncate context (`on\|off\|10-100%`) |
 | `/top_p` | `/top_p` | `/top_p` | `/top_p` | `/top_p` | Nucleus sampling probability |
 | `/top_k` | `/top_k` | `/top_k` | `/top_k` | `/top_k` | Top-K sampling token count |
 | `/freq_penalty` | `/penalidad_frec` | `/penalite_freq` | `/频率惩罚` | `/penalita_freq` | Apply frequency repetition penalty |
@@ -99,6 +105,7 @@ This table lists all available slash commands in ChatyBot, providing localized c
 | `/tool auto` | `/herramienta auto` | `/outil auto` | `/自动工具` | `/strumento auto` | Enable automated loop on tool outputs |
 | `/tool loop` | `/herramienta bucle`| `/outil boucle` | `/工具循环` | `/strumento ciclo` | Run loop with limit (e.g. `max=50` `force`)|
 | `/tool max_turns`| `/herramienta max_turnos`| `/outil tours_max`| `/最大工具轮次`| `/strumento max_turni`| Set/Get default maximum turn safety cap |
+| `/tool rate_limit`| `/herramienta limite_tasa`| `/outil limite_taux`| `/工具 速率限制`| `/strumento limite_frequenza`| Set pause delay (seconds) between turns |
 | `/tool prompt` | `/herramienta prompt`| `/outil prompt` | `/工具提示语` | `/strumento prompt` | View active prompt; use `live_edit` for TUI |
 
 ### H. Diagnostics & Logging
@@ -133,11 +140,11 @@ Lists files in directory.
 * **Italian:** `elenco_cartella` (Parametro: `path` -> `percorso` / "Percorso della cartella da elencare")
 
 ### B. `read_file`
-Reads contents of a file.
-* **Spanish:** `leer_archivo` (Parámetro: `path` -> `ruta` / "Ruta del archivo a leer")
-* **French:** `lire_fichier` (Paramètre: `path` -> `chemin` / "Chemin du fichier à lire")
-* **Chinese:** `read_file` / `读取文件` (参数: `path` -> `路径` / "要读取的文件路径")
-* **Italian:** `leggi_file` (Parametro: `path` -> `percorso` / "Percorso del file da leggere")
+Reads contents of a file (with optional line range window).
+* **Spanish:** `leer_archivo` (Parámetros: `path` -> `ruta`, `start_line` -> `linea_inicio` / "Primera línea a leer", `end_line` -> `linea_fin` / "Última línea a leer")
+* **French:** `lire_fichier` (Paramètres: `path` -> `chemin`, `start_line` -> `ligne_debut`, `end_line` -> `ligne_fin`)
+* **Chinese:** `read_file` / `读取文件` (参数: `path` -> `路径`, `start_line` -> `起始行`, `end_line` -> `结束行`)
+* **Italian:** `leggi_file` (Parametri: `path` -> `percorso`, `start_line` -> `riga_inizio`, `end_line` -> `riga_fine`)
 
 ### C. `find_files`
 Finds files matching pattern, optionally checking inside them.
@@ -173,6 +180,13 @@ Retrieves stock prices.
 * **French:** `obtenir_action` (Paramètre: `symbol` -> `symbole`)
 * **Chinese:** `get_stock` / `获取股票` (参数: `symbol` -> `代码` / "股票交易代码")
 * **Italian:** `ottieni_azione` (Parametro: `symbol` -> `simbolo`)
+
+### H. `get_context_metrics`
+Inspects active context size, turn counts, byte budgets, and active context limits across session and agentic loop.
+* **Spanish:** `obtener_metricas_contexto` / `metricas_contexto` (Parámetro: `scope` -> `alcance` / "all, session, agentic_loop, buffers")
+* **French:** `obtenir_metriques_contexte` / `metriques_contexte` (Paramètre: `scope` -> `portee`)
+* **Chinese:** `get_context_metrics` / `获取上下文指标` (参数: `scope` -> `范围` / "all, session, agentic_loop, buffers")
+* **Italian:** `ottieni_metriche_contesto` / `metriche_contesto` (Parametro: `scope` -> `ambito`)
 
 ---
 

@@ -17,12 +17,13 @@ ChatDSL (Lenguaje de Dominio Específico para Chat) es un potente lenguaje de sc
 ## Capacidades Principales
 
 ### 1. Soporte Multilingüe
-ChatDSL soporta 5 idiomas con alias de comandos completos:
+ChatDSL soporta 6 idiomas con alias de comandos completos:
 - **Inglés (EN)** - Idioma principal
 - **Español (ES)** - Traducciones al español de todos los comandos
 - **Francés (FR)** - Traducciones al francés de todos los comandos
 - **Chino (ZH)** - Traducciones al chino de todos los comandos
 - **Italiano (IT)** - Traducciones al italiano de todos los comandos
+- **Árabe (AR)** - Traducciones al árabe de todos los comandos
 
 ### 2. Características de Scripting
 - **Sistema de Variables**: Variables de ámbito de script con sintaxis `${nombre}`
@@ -710,6 +711,10 @@ src/chatybot/profiles/          # Perfiles preestablecidos
 | `/repetir` | General | `/repetir texto` | Imprimir texto con evaluación de variables |
 | `/origen` | General | `/origen archivo.dsl` | Cargar y ejecutar un archivo de script |
 | `/script` | General | `/script archivo.dsl [x=v y=v z=v]` | Ejecutar script con parámetros |
+| `/calcular` | General | `/calcular <expr>` | Evaluar expresión matemática |
+| `/buscar_cadena` | General | `/buscar_cadena <texto> [fuente]` | Buscar subcadena en texto o búfer |
+| `/procedimiento` | General | `/procedimiento <nombre> [args]` | Ejecutar procedimiento definido |
+| `/sesion` | General | `/sesion <subcmd> [args]` | Gestionar sesiones de chat (guardar, listar, purgar, etc.) |
 | `/reloadmacros` | General | `/reloadmacros [archivo]` | Recargar definiciones de macros |
 
 ### Comandos de Modelos y LLM
@@ -721,6 +726,8 @@ src/chatybot/profiles/          # Perfiles preestablecidos
 | `/sistema` | Modelo | `/sistema [mensaje]` | Obtener/establecer mensaje de sistema |
 | `/temp` | Modelo | `/temp [valor]` | Temperatura (0.0-2.0) |
 | `/max_tokens` | Modelo | `/max_tokens [valor]` | Máximo de tokens de completado |
+| `/limite_contexto` | Modelo | `/limite_contexto [tokens\|off]` | Establecer límite de tokens de contexto |
+| `/auto_truncar` | Modelo | `/auto_truncar [on\|off\|10-100]` | Auto-truncar contexto sobre % de límite |
 | `/top_p` | Modelo | `/top_p [valor]` | Muestreo de núcleo (0.0-1.0) |
 | `/top_k` | Modelo | `/top_k [valor]` | Muestreo Top-K |
 | `/penalidad_frec` | Modelo | `/penalidad_frec [valor]` | Penalidad de frecuencia (-2.0 a 2.0) |
@@ -782,6 +789,7 @@ src/chatybot/profiles/          # Perfiles preestablecidos
 | `/herramienta auto` | Herramientas | `/herramienta auto` | Alternar bucle automático sobre salidas de herramientas |
 | `/herramienta bucle` | Herramientas | `/herramienta bucle [turnos] [force]` | Ejecutar bucle con límite de turnos |
 | `/herramienta max_turnos` | Herramientas | `/herramienta max_turnos [N]` | Obtener/establecer límite máximo de seguridad de turnos |
+| `/herramienta limite_tasa` | Herramientas | `/herramienta limite_tasa [segundos]` | Establecer pausa de retraso entre turnos (segundos) |
 | `/herramienta prompt` | Herramientas | `/herramienta prompt` | Ver prompt activo |
 
 ### Comandos de Diagnóstico
