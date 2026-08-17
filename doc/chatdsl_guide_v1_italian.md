@@ -17,12 +17,13 @@ ChatDSL (Chat Domain-Specific Language) è un potente linguaggio di scripting pr
 ## Capacità Principali
 
 ### 1. Supporto Multilingua
-ChatDSL supporta 5 lingue con aliasing completo dei comandi:
+ChatDSL supporta 6 lingue con aliasing completo dei comandi:
 - **Inglese (EN)** - Lingua principale
 - **Spagnolo (ES)** - Traduzione spagnola di tutti i comandi
 - **Francese (FR)** - Traduzione francese di tutti i comandi
 - **Cinese (ZH)** - Traduzione cinese di tutti i comandi
 - **Italiano (IT)** - Traduzione italiana di tutti i comandi
+- **Arabo (AR)** - Traduzione araba di tutti i comandi
 
 ### 2. Funzionalità di Scrittura Script
 - **Sistema di Variabili**: Variabili con ambito dello script con sintassi `${nome}`
@@ -710,6 +711,10 @@ src/chatybot/profiles/          # Profili predefiniti
 | `/eco` | Generale | `/eco testo` | Stampa il testo con la valutazione delle variabili |
 | `/sorgente` | Generale | `/sorgente file.dsl` | Carica ed esegue un file di script |
 | `/script` | Generale | `/script file.dsl [x=v y=v z=v]` | Esegue lo script con parametri |
+| `/calcola` | Generale | `/calcola <expr>` | Valuta un'espressione matematica |
+| `/str_search` | Generale | `/str_search <termine> [fonte]` | Cerca una sottostringa nel testo o buffer |
+| `/procedura` | Generale | `/procedura <nome> [args]` | Esegue una procedura definita |
+| `/sessione` | Generale | `/sessione <subcmd> [args]` | Gestisci le sessioni di chat (salva, elenca, pulisci, ecc.) |
 | `/reloadmacros` | Generale | `/reloadmacros [file]` | Ricarica le definizioni delle macro |
 
 ### Comandi dei Modelli e LLM
@@ -721,6 +726,8 @@ src/chatybot/profiles/          # Profili predefiniti
 | `/sistema` | Modello | `/sistema [messaggio]` | Ottiene/imposta il messaggio di sistema |
 | `/temp` | Modello | `/temp [valore]` | Temperatura (0.0-2.0) |
 | `/max_token` | Modello | `/max_token [valore]` | Token di completamento massimi |
+| `/limite_contesto` | Modello | `/limite_contesto [token\|off]` | Imposta il limite rigido di token di contesto |
+| `/auto_tronca` | Modello | `/auto_tronca [on\|off\|10-100]` | Tronca automaticamente il contesto oltre % limite |
 | `/top_p` | Modello | `/top_p [valore]` | Campionamento nucleo (0.0-1.0) |
 | `/top_k` | Modello | `/top_k [valore]` | Campionamento Top-K |
 | `/penalita_freq` | Modello | `/penalita_freq [valore]` | Penalità di frequenza (da -2.0 a 2.0) |
@@ -756,7 +763,7 @@ src/chatybot/profiles/          # Profili predefiniti
 | `/immagina` | Immagine | `/immagina prompt` | Genera immagine dal testo |
 | `/dimensione_imm` | Immagine | `/dimensione_imm [WxH]` | Imposta/ottiene la risoluzione dell'immagine |
 | `/qualita_imm` | Immagine | `/qualita_imm [standard\|hd]` | Imposta/ottiene la qualità dell'immagine |
-| `/saveimage` | Immagine | `/saveimage [percorso]` | Salva l'ultima immagine generata |
+| `/saveimage` | Image | `/saveimage [percorso]` | Salva l'ultima immagine generata |
 | `/cartella_imm` | Immagine | `/cartella_imm [percorso]` | Imposta/ottiene la cartella di output delle immagini |
 | `/elenco_imm` | Immagine | `/elenco_imm` | Elenca tutte le immagini salvate |
 | `/mostra_imm` | Immagine | `/mostra_imm [data\|filename]` | Mostra i metadati dell'immagine |
@@ -782,6 +789,7 @@ src/chatybot/profiles/          # Profili predefiniti
 | `/strumento auto` | Strumenti | `/strumento auto` | Attiva il ciclo automatico sulle risposte |
 | `/strumento ciclo` | Strumenti | `/strumento ciclo [turni] [force]` | Esegue il ciclo con un limite di turni |
 | `/strumento max_turni`| Strumenti | `/strumento max_turni [N]` | Ottiene/imposta il limite massimo di turni |
+| `/strumento limite_frequenza`| Strumenti | `/strumento limite_frequenza [secondi]` | Imposta pausa ritardo tra i turni (secondi) |
 | `/strumento prompt` | Strumenti | `/strumento prompt` | Mostra il prompt attivo |
 
 ### Comandi di Diagnostica
