@@ -134,6 +134,7 @@ class ChatybotApp:
         
         # Run command settings
         self.safe_mode: bool = True
+        self.safe_mode_askfirst: bool = False
         self.run_timeout: int = 30
         
         # Tool mode settings
@@ -2954,7 +2955,7 @@ class ChatybotApp:
                     f"Blocked (safe mode): {danger}", allow_protected=True)
                 print(f"Blocked: {danger}")
                 return
-            else:
+            elif getattr(self, 'safe_mode_askfirst', False):
                 confirm = input(f"Warning: {danger} Execute anyway? (y/N): ")
                 if confirm.lower() != 'y':
                     self.buffer_manager.set_script_var('RUN_COMPLETION', "Command aborted by user", allow_protected=True)
@@ -5754,6 +5755,24 @@ class ChatybotApp:
                 print("Usage: /run <command>")
                 return True
             
+            # Check for /run safe and /run unsafe [askfirst]
+            if len(parts) >= 2 and parts[1].lower() in ("safe", "unsafe"):
+                sub = parts[1].lower()
+                if sub == "safe" and len(parts) == 2:
+                    self.safe_mode = True
+                    self.safe_mode_askfirst = False
+                    print("Safe mode enabled - dangerous patterns will be blocked")
+                    return True
+                elif sub == "unsafe" and (len(parts) == 2 or (len(parts) == 3 and parts[2].lower().replace("_", "") == "askfirst")):
+                    self.safe_mode = False
+                    if len(parts) == 3 and parts[2].lower().replace("_", "") == "askfirst":
+                        self.safe_mode_askfirst = True
+                        print("Safe mode disabled with confirmation - dangerous commands will require confirmation (y/N)")
+                    else:
+                        self.safe_mode_askfirst = False
+                        print("Safe mode disabled - dangerous commands allowed without confirmation")
+                    return True
+
             # Extract the command portion (everything after "/run")
             command_str = command.split(maxsplit=1)[1]
             
@@ -5787,12 +5806,18 @@ class ChatybotApp:
 
         elif cmd == "/run_safe":
             self.safe_mode = True
-            print("Safe mode enabled - dangerous patterns require confirmation")
+            self.safe_mode_askfirst = False
+            print("Safe mode enabled - dangerous patterns will be blocked")
             return True
 
         elif cmd == "/run_unsafe":
             self.safe_mode = False
-            print("Safe mode disabled - dangerous commands allowed without confirmation")
+            if len(parts) >= 2 and parts[1].lower().replace("_", "") == "askfirst":
+                self.safe_mode_askfirst = True
+                print("Safe mode disabled with confirmation - dangerous commands will require confirmation (y/N)")
+            else:
+                self.safe_mode_askfirst = False
+                print("Safe mode disabled - dangerous commands allowed without confirmation")
             return True
 
         elif cmd == "/tool":

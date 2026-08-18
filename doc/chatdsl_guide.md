@@ -539,9 +539,9 @@ What are the key developments in ML in 2024?
 
 | Keyword | Category | Syntax | Description |
 |---------|----------|--------|-------------|
-| `/run` | Shell | `/run command [args]` | Execute shell command |
-| `/run_safe` | Shell | `/run_safe command` | Enable safety prompts |
-| `/run_unsafe` | Shell | `/run_unsafe command` | Disable confirmations |
+| `/run` | Shell | `/run <command>` | Execute shell command and capture output into `${RUN_COMPLETION}` |
+| `/run_safe` | Shell | `/run_safe` or `/run safe` | Enable safe mode (blocks dangerous commands) |
+| `/run_unsafe` | Shell | `/run_unsafe [askfirst]` or `/run unsafe [askfirst]` | Disable safe mode (runs directly; `askfirst` enables confirmation) |
 | `/makedir` | Shell | `/makedir path` | Create directory |
 | `/rmdir` | Shell | `/rmdir path` | Remove directory |
 

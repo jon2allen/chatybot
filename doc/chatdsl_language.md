@@ -111,8 +111,8 @@ ChatDSL currently supports the following languages:
 | English (EN) | Spanish (ES) | French (FR) | Chinese (ZH) | Italian (IT) | Description |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | `/run` | `/ejecutar` | `/lancer` | `/运行` | `/esegui` | Execute shell command with parameters |
-| `/run_safe` | `/ejecutar_seguro` | `/lancer_securise` | `/安全运行` | `/esegui_sicuro` | Enable safety confirmation prompts |
-| `/run_unsafe` | `/ejecutar_libre` | `/lancer_libre` | `/危险运行` | `/esegui_insicuro` | Disable shell execution confirmations |
+| `/run_safe` | `/ejecutar_seguro` | `/lancer_securise` | `/安全运行` | `/esegui_sicuro` | Enable safe mode (block dangerous commands) |
+| `/run_unsafe` | `/ejecutar_libre` | `/lancer_libre` | `/危险运行` | `/esegui_insicuro` | Disable safe mode (runs directly; `askfirst` enables Y/N prompt) |
 
 ### Autonomous Tool Loop
 

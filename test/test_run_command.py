@@ -68,9 +68,28 @@ class TestRunCommandBehavior:
         assert app.buffer_manager.get_script_var('RUN_EXIT_CODE') == '-1'
         assert "Blocked (safe mode)" in app.buffer_manager.get_script_var('RUN_COMPLETION')
 
-    def test_unsafe_mode_prompt_confirmation(self, app):
-        """Verifies prompt and execution flow for dangerous commands under /run_unsafe"""
+    def test_unsafe_mode_executes_without_prompt(self, app):
+        """Verifies that under default /run_unsafe, dangerous commands execute directly without prompting"""
         app.safe_mode = False
+        app.safe_mode_askfirst = False
+        
+        with patch('builtins.input') as mock_input:
+            with patch('subprocess.run') as mock_run:
+                mock_run.return_value.returncode = 0
+                mock_run.return_value.stdout = "executed_without_prompt"
+                mock_run.return_value.stderr = ""
+                
+                app.execute_shell_command("rm -rf /some/path")
+                
+                # Should NOT call input prompt
+                mock_input.assert_not_called()
+                assert app.buffer_manager.get_script_var('RUN_EXIT_CODE') == '0'
+                assert app.buffer_manager.get_script_var('RUN_COMPLETION') == "executed_without_prompt"
+
+    def test_unsafe_mode_askfirst_prompt_confirmation(self, app):
+        """Verifies prompt and execution flow for dangerous commands under /run_unsafe askfirst"""
+        app.safe_mode = False
+        app.safe_mode_askfirst = True
         
         # Mock input to abort (return 'n')
         with patch('builtins.input', return_value='n'):
@@ -86,6 +105,33 @@ class TestRunCommandBehavior:
                 mock_run.return_value.stderr = ""
                 app.execute_shell_command("rm -rf /some/path")
                 assert app.buffer_manager.get_script_var('RUN_EXIT_CODE') == '0'
+
+    @pytest.mark.anyio
+    async def test_run_mode_switch_commands(self, app):
+        """Verifies toggling safe, unsafe, and askfirst modes via escape commands"""
+        await app.handle_escape_command("/run_safe")
+        assert app.safe_mode is True
+        assert app.safe_mode_askfirst is False
+
+        await app.handle_escape_command("/run_unsafe")
+        assert app.safe_mode is False
+        assert app.safe_mode_askfirst is False
+
+        await app.handle_escape_command("/run_unsafe askfirst")
+        assert app.safe_mode is False
+        assert app.safe_mode_askfirst is True
+
+        await app.handle_escape_command("/run safe")
+        assert app.safe_mode is True
+        assert app.safe_mode_askfirst is False
+
+        await app.handle_escape_command("/run unsafe")
+        assert app.safe_mode is False
+        assert app.safe_mode_askfirst is False
+
+        await app.handle_escape_command("/run unsafe askfirst")
+        assert app.safe_mode is False
+        assert app.safe_mode_askfirst is True
 
     @pytest.mark.anyio
     async def test_quotes_stripping_and_balance(self, app):

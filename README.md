@@ -232,7 +232,7 @@ chat --> Hello!      # Start a conversation
 | `/profile [subcommand]` | Manage session profiles dynamically (list, use, clone, delete, export, import, show, edit) | `/profile use coding` |
 | `/run <command>` | Execute a shell command and capture stdout/stderr/exit code | `/run ls -la` |
 | `/run_safe` | Enable safe mode for shell execution (blocks dangerous commands) | `/run_safe` |
-| `/run_unsafe` | Disable safe mode (requires confirmation for dangerous commands) | `/run_unsafe` |
+| `/run_unsafe [askfirst]` | Disable safe mode (runs directly; optional `askfirst` prompts Y/N) | `/run_unsafe` |
 | `/tool <subcommand>` | Manage native tool loop mode, inspect prompt context, or dispatch invocations | `/tool loop max=5` |
 | `/setdb <name>` | Select TinyDB database. Use `Null` to deactivate. | `/setdb knowledge` |
 | `/dblist` | List all TinyDB databases | `/dblist` |
@@ -470,13 +470,20 @@ The `/run` command executes shell commands on the host machine and integrates ou
     *   `${LAST_COMPLETION}`: Captures stdout for backwards compatibility.
 *   **Security Modes**:
     *   `/run_safe` (Default): Restricts dangerous or destructive command patterns (like `rm -rf`, `sudo`, etc.) to prevent accidental damage.
-    *   `/run_unsafe`: Disables safe mode. Dangerous commands will still prompt for explicit user confirmation before running.
+    *   `/run_unsafe`: Disables safe mode. Commands execute directly without confirmation prompts (ideal for automated background scripts).
+    *   `/run_unsafe askfirst`: Disables safe mode with confirmation. Prompts with `(y/N)` when dangerous command patterns are encountered.
 
-*Example*:
+*Examples*:
 ```dsl
-/run echo "Current Directory:" && pwd
+# 1. Basic command execution & output inspection
+/run ls -la
 /echo Command exit status: ${RUN_EXIT_CODE}
 /echo Command output: ${RUN_COMPLETION}
+
+# 2. Capturing current date / timestamp into a custom variable
+/run date +%Y%m%d_%H%M%S
+set run_id = "${RUN_COMPLETION}"
+/echo "Generated run ID: ${run_id}"
 ```
 
 #### **2. Autonomous Tool Loop (`/tool`)**
