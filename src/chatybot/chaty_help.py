@@ -641,8 +641,8 @@ class HelpSystem:
             category="scripting",
             short_desc="Enable safe mode for /run commands",
             usage="/run_safe",
-            long_desc="Enable safe mode (default). In safe mode, dangerous shell commands (like rm -rf, sudo, etc.) are blocked or require explicit user confirmation.",
-            examples=["/run_safe"],
+            long_desc="Enable safe mode (default). In safe mode, dangerous shell commands (like rm -rf, sudo, etc.) are blocked.",
+            examples=["/run_safe", "/run safe"],
             see_also=["/run_unsafe", "/run"]
         ))
         
@@ -650,9 +650,9 @@ class HelpSystem:
             name="/run_unsafe",
             category="scripting",
             short_desc="Disable safe mode for /run commands",
-            usage="/run_unsafe",
-            long_desc="Disable safe mode. Dangerous shell commands will be allowed without confirmation. Use with caution!",
-            examples=["/run_unsafe"],
+            usage="/run_unsafe [askfirst]",
+            long_desc="Disable safe mode. Dangerous shell commands will be executed without confirmation. If 'askfirst' is specified (/run_unsafe askfirst or /run unsafe askfirst), dangerous commands will prompt for user confirmation (y/N) before executing.",
+            examples=["/run_unsafe", "/run_unsafe askfirst", "/run unsafe", "/run unsafe askfirst"],
             see_also=["/run_safe", "/run"]
         ))
         

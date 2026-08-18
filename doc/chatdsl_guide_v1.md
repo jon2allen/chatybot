@@ -525,6 +525,41 @@ MCP tools are namespaced as `mcp__<server>__<tool>`:
 
 ---
 
+## HowTo: Shell Execution & Capturing Output (/run)
+
+The `/run` command executes a shell command and automatically captures its outputs into script variables:
+* `${RUN_COMPLETION}`: Captures standard output (stdout).
+* `${RUN_ERROR}`: Captures standard error (stderr).
+* `${RUN_EXIT_CODE}`: Captures the return code (`0` for success).
+* `${LAST_COMPLETION}`: Alias for stdout.
+
+### Generating Dates, Timestamps, and Run IDs
+To generate a date/timestamp or unique run ID and store it in a variable:
+
+```dsl
+# 1. Using the standard 'date' command (Recommended)
+/run date +%Y%m%d_%H%M%S
+set run_id = "${RUN_COMPLETION}"
+/echo "Run ID: ${run_id}"
+
+# 2. Getting standard ISO-8601 date
+/run date -u +"%Y-%m-%d %H:%M:%S"
+set current_time = "${RUN_COMPLETION}"
+
+# 3. Using Python (Use single-expression without semicolons)
+/run python3 -c 'print(__import__("datetime").datetime.now().strftime("%Y%m%d_%H%M%S"))'
+set run_id = "${RUN_COMPLETION}"
+```
+
+> **Note**: `/run` takes only the shell command string (e.g. `/run date +%Y%m%d`). Do not append target variable names to the `/run` command itself (e.g. `/run "date" run_id` will treat `run_id` as an argument). Always capture with `set var = "${RUN_COMPLETION}"`.
+
+### Security Modes
+* **`/run_safe`** (or `/run safe`): Safe mode enabled (default). Dangerous commands (like `rm -rf`, `sudo`) and command chaining patterns are blocked.
+* **`/run_unsafe`** (or `/run unsafe`): Safe mode disabled. Commands execute immediately without confirmation prompts (fully automated for scripts).
+* **`/run_unsafe askfirst`** (or `/run unsafe askfirst`): Safe mode disabled with confirmation. Flags dangerous commands and prompts with `(y/N)` before execution.
+
+---
+
 ## HowTo: Image Generation Workflow
 
 ### Basic Image Generation
@@ -771,9 +806,9 @@ src/chatybot/profiles/          # Preset profiles
 
 | Keyword | Category | Syntax | Description |
 |---------|----------|--------|-------------|
-| `/run` | Shell | `/run command [args]` | Execute shell command |
-| `/run_safe` | Shell | `/run_safe` | Enable safety confirmation prompts |
-| `/run_unsafe` | Shell | `/run_unsafe` | Disable shell execution confirmations |
+| `/run` | Shell | `/run <command>` | Execute shell command and capture stdout into `${RUN_COMPLETION}` |
+| `/run_safe` | Shell | `/run_safe` or `/run safe` | Enable safe mode (blocks dangerous commands) |
+| `/run_unsafe` | Shell | `/run_unsafe [askfirst]` or `/run unsafe [askfirst]` | Disable safe mode (runs directly without prompt; `askfirst` enables Y/N confirmation) |
 
 ### Tool Loop Commands
 
