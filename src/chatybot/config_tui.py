@@ -12,7 +12,7 @@ import curses.textpad
 from typing import Optional, List, Tuple, Dict, Any
 
 from .config_model import ChatConfig, ChatModelConfig, RerankerModelConfig
-from .vendors import VENDOR_PRESETS, vendor_names
+from .vendors import VENDOR_PRESETS, vendor_names, get_env_status
 
 
 class ConfigTUI:
@@ -179,6 +179,8 @@ class ConfigTUI:
                     self.delete_model_dialog(stdscr, alias, model)
             elif ch == ord('s') or ch == ord('S'):
                 self.save_menu_dialog(stdscr)
+            elif ch == ord('e') or ch == ord('E'):
+                self.show_env_vars_dialog(stdscr)
             elif ch == curses.KEY_RESIZE:
                 # Curses handles resizing; just clear and let next loop redraw
                 stdscr.clear()
@@ -282,7 +284,7 @@ class ConfigTUI:
             stdscr.addstr(h - 2, 2, f" {self.status_message} "[:w-4], color | curses.A_BOLD)
             
         # Key bindings bar
-        keys_bar = " ↑↓ Navigate │ ↵ Edit │ N New │ C Clone │ D Delete │ S Save │ Q Quit │ / Filter"
+        keys_bar = " ↑↓ Navigate │ ↵ Edit │ N New │ C Clone │ D Delete │ S Save │ E Env │ Q Quit │ / Filter"
         stdscr.addstr(h - 1, 0, keys_bar[:w-1], curses.color_pair(2))
         stdscr.refresh()
 
@@ -694,6 +696,100 @@ class ConfigTUI:
         except Exception as e:
             self.set_status(f"Error cloning model: {str(e)}", is_error=True)
             return False
+
+    def show_env_vars_dialog(self, stdscr):
+        """Display environment variables & API keys in a scrollable dialog overlay."""
+        h, w = stdscr.getmaxyx()
+        win_h = min(26, max(12, h - 4))
+        win_w = min(92, max(60, w - 4))
+        if win_h < 10 or win_w < 50:
+            return
+            
+        win_y = (h - win_h) // 2
+        win_x = (w - win_w) // 2
+        
+        win = curses.newwin(win_h, win_w, win_y, win_x)
+        win.keypad(True)
+        
+        models_dict = self.config.models if self.config else None
+        env_data = get_env_status(models_dict)
+        sel = 0
+        scroll = 0
+        max_rows = win_h - 7  # lines available for items
+        
+        while True:
+            self.draw_dialog_border(win, "Environment Variables & API Keys (set | grep -i api)")
+            
+            # Header
+            header_str = f"  {'Status':<10} {'Variable Name':<24} {'Value / Masked':<18} {'Len':<5} {'Source':<20}"
+            win.addstr(2, 2, header_str[:win_w-4], curses.color_pair(1) | curses.A_BOLD)
+            win.addstr(3, 2, "─" * (win_w - 4), curses.A_DIM)
+            
+            # Rows
+            for idx in range(min(max_rows, len(env_data) - scroll)):
+                actual_idx = scroll + idx
+                item = env_data[actual_idx]
+                y = 4 + idx
+                
+                status_str = "[SET]" if item["is_set"] else "[NOT SET]"
+                name_str = item["name"][:23]
+                masked_str = item["masked"][:16]
+                len_str = str(item["length"]) if item["is_set"] else "-"
+                source_str = item["source"][:19]
+                
+                row_text = f"  {status_str:<10} {name_str:<24} {masked_str:<18} {len_str:<5} {source_str:<20}"[:win_w-4]
+                
+                if actual_idx == sel:
+                    win.addstr(y, 2, row_text, curses.color_pair(2))
+                else:
+                    if item["is_set"]:
+                        # Draw status in green, remainder normal
+                        win.addstr(y, 2, f"  {status_str:<10} ", curses.color_pair(5) | curses.A_BOLD)
+                        win.addstr(y, 14, f"{name_str:<24} {masked_str:<18} {len_str:<5} {source_str:<20}"[:win_w-16])
+                    else:
+                        # Draw status in dim red, remainder dim
+                        win.addstr(y, 2, f"  {status_str:<10} ", curses.color_pair(4))
+                        win.addstr(y, 14, f"{name_str:<24} {masked_str:<18} {len_str:<5} {source_str:<20}"[:win_w-16], curses.A_DIM)
+                        
+            # Fill empty list rows
+            for idx in range(len(env_data), max_rows):
+                win.addstr(4 + idx, 2, " " * (win_w - 4))
+                
+            # Summary & help
+            num_set = sum(1 for e in env_data if e["is_set"])
+            num_total = len(env_data)
+            summary_str = f" Total: {num_total} variables ({num_set} set, {num_total - num_set} not set)"
+            win.addstr(win_h - 3, 2, summary_str[:win_w-4], curses.color_pair(3))
+            
+            help_str = " ↑↓/PgUp/PgDn Navigate │ ESC/ENTER/Q Close"
+            win.addstr(win_h - 2, 2, help_str[:win_w-4], curses.A_DIM)
+            win.refresh()
+            
+            ch = win.getch()
+            if ch in (curses.KEY_UP, ord('k'), ord('K')):
+                if sel > 0:
+                    sel -= 1
+                    if sel < scroll:
+                        scroll = sel
+            elif ch in (curses.KEY_DOWN, ord('j'), ord('J')):
+                if sel < len(env_data) - 1:
+                    sel += 1
+                    if sel >= scroll + max_rows:
+                        scroll = sel - max_rows + 1
+            elif ch == curses.KEY_PPAGE:
+                sel = max(0, sel - max_rows)
+                scroll = max(0, scroll - max_rows)
+            elif ch == curses.KEY_NPAGE:
+                sel = min(len(env_data) - 1, sel + max_rows)
+                scroll = min(max(0, len(env_data) - max_rows), scroll + max_rows)
+            elif ch == curses.KEY_HOME:
+                sel = 0
+                scroll = 0
+            elif ch == curses.KEY_END:
+                sel = max(0, len(env_data) - 1)
+                scroll = max(0, len(env_data) - max_rows)
+            elif ch in (27, 10, 13, ord('q'), ord('Q'), ord('e'), ord('E')):
+                break
 
     def create_new_model(self, stdscr):
         """Show Vendor Picker then open empty model editor form."""

@@ -58,6 +58,20 @@ class TestRunCommandBehavior:
         assert app.buffer_manager.get_script_var('RUN_EXIT_CODE') == '0'
         assert app.buffer_manager.get_script_var('RUN_COMPLETION').strip() == 'hello_world'
 
+    @pytest.mark.anyio
+    async def test_env_escape_command(self, app):
+        """Confirms /env command displays environment variables and supports filtering"""
+        with patch('builtins.print') as mock_print:
+            with patch.dict(os.environ, {"HF_API_KEY": "hf_testkey1234567890"}, clear=False):
+                await app.handle_escape_command("/env")
+                # Ensure header and HF_API_KEY are printed
+                mock_print.assert_any_call(" ENVIRONMENT VARIABLES & API KEYS (set | grep -i api)")
+                
+                # Test filtering
+                await app.handle_escape_command("/env hf")
+                hf_calls = [call for call in mock_print.call_args_list if any("HF_API_KEY" in str(arg) for arg in call[0])]
+                assert len(hf_calls) > 0
+
     def test_safe_mode_blocks_dangerous_patterns(self, app):
         """Asserts that unsafe shell actions are blocked under /run_safe"""
         app.safe_mode = True

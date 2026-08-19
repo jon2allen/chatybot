@@ -62,6 +62,7 @@ ChatDSL currently supports the following languages:
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | `/model` | `/modelo` | `/modele` | `/模型` | `/modello` | Set active model alias |
 | `/listmodels` | `/listar_modelos` | `/lister_modeles` | `/列出模型` | `/elenco_modelli` | List configured chat models |
+| `/env` | `/variables_entorno` | `/variables_env` | `/环境变量` | `/variabili_ambiente` | Display defined API keys & env vars |
 | `/system` | `/sistema` | `/systeme` | `/系统提示` | `/sistema` | Set the core system message |
 | `/temp` | `/temp` | `/temp` | `/温度` | `/temp` | Set generation temperature (0.0 - 2.0) |
 | `/maxtokens` | `/max_tokens` | `/max_jetons` | `/最大Token` | `/max_token` | Set completion token length |

@@ -745,6 +745,7 @@ process this...
 |---------|-----------|-------------|
 | `/model` | alias | Switch active model |
 | `/listmodels` | - | List available models |
+| `/env` | [filter] | Display API keys and env vars |
 | `/system` | "prompt" | Set system message |
 | `/temp` | 0.0-2.0 | Temperature |
 | `/maxtokens` | N | Max tokens |

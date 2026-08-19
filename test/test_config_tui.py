@@ -358,6 +358,72 @@ def test_tui_draw_main_screen_version():
     assert version_drawn
 
 
+def test_huggingface_vendor_preset():
+    from chatybot.vendors import VENDOR_PRESETS, vendor_names
+    assert "huggingface" in VENDOR_PRESETS
+    assert "huggingface" in vendor_names()
+    preset = VENDOR_PRESETS["huggingface"]
+    assert preset.name == "huggingface"
+    assert preset.base_url == "https://router.huggingface.co/v1"
+    assert preset.api_key_env == "HF_API_KEY"
+
+
+def test_huggingface_model_initialization():
+    tui = ConfigTUI(config_path="test_config.toml")
+    tui.config = ChatConfig(models={})
+    tui.edit_model_form = MagicMock()
+    
+    mock_stdscr = MagicMock()
+    tui.initialize_new_model_form(mock_stdscr, "huggingface")
+    
+    tui.edit_model_form.assert_called_once()
+    args, kwargs = tui.edit_model_form.call_args
+    alias, model = args[1], args[2]
+    assert model.vendor == "huggingface"
+    assert model.base_url == "https://router.huggingface.co/v1"
+    assert model.api_key == "HF_API_KEY"
+
+
+def test_get_env_status_functionality():
+    from chatybot.vendors import get_env_status
+    import os
+    
+    with patch.dict(os.environ, {"HF_API_KEY": "hf_1234567890abcdef", "CUSTOM_SERVICE_API_KEY": "secret_abc"}, clear=False):
+        env_status = get_env_status()
+        
+        # Must include HF_API_KEY and other templates
+        names = [e["name"] for e in env_status]
+        assert "HF_API_KEY" in names
+        assert "MISTRAL_API_KEY" in names
+        assert "OPENAI_API_KEY" in names
+        assert "CUSTOM_SERVICE_API_KEY" in names
+        
+        hf_item = next(e for e in env_status if e["name"] == "HF_API_KEY")
+        assert hf_item["is_set"] is True
+        assert hf_item["length"] == len("hf_1234567890abcdef")
+        assert hf_item["masked"].startswith("hf_")
+        assert "huggingface" in hf_item["source"]
+
+
+def test_show_env_vars_dialog():
+    tui = ConfigTUI(config_path="test_config.toml")
+    tui.config = ChatConfig(models={})
+    
+    mock_stdscr = MagicMock()
+    mock_stdscr.getmaxyx.return_value = (40, 80)
+    
+    mock_win = MagicMock()
+    mock_win.getmaxyx.return_value = (24, 70)
+    # Press 'q' to close
+    mock_win.getch.side_effect = [ord('q')]
+    
+    with patch("curses.newwin", return_value=mock_win), \
+         patch("curses.color_pair", return_value=0):
+        tui.show_env_vars_dialog(mock_stdscr)
+        
+    mock_win.refresh.assert_called()
+
+
 
 
 

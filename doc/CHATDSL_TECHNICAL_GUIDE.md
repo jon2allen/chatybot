@@ -192,6 +192,7 @@ What is the recommended transition plan for RSA-2048?
 |---------|-------|
 | `/model` | Switch active model alias. |
 | `/listmodels` | Show all available models. |
+| `/env` | Display defined API keys and environment variables (`set \| grep -i api`). |
 | `/system` | Update the system prompt. |
 | `/temp` | Set temperature (0.0 - 2.0). |
 | `/maxtokens`| Set completion token limit. |

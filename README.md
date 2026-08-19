@@ -142,6 +142,7 @@ Active escape commands:
   /filebank{1..5} show [all] - Show the first 100 characters of the filebank or all if 'all' is specified.
   /model [alias] - Switch to a different model or show current model.
   /listmodels - List available models from toml.
+  /env [filter] - Display defined API keys and environment variables (set | grep -i api).
   /logging <start|end> - Start or stop logging.
   /save <file> [all] [nothink|withthink] - Save last completion or all history to a file (respects /thinking state by default).
   /notemode <on|off> - Toggle note mode for /save command.
@@ -201,6 +202,7 @@ chat --> Hello!      # Start a conversation
 | `/help` | Show help message | `/help` |
 | `/model <alias>` | Switch models | `/model gpt4` |
 | `/listmodels` | List available models | `/listmodels` |
+| `/env [filter]` | Display defined API keys & env vars (`set \| grep -i api`) | `/env` |
 | `/file <path>` | Load file into buffer | `/file notes.txt` |
 | `/filebank1 <path>` | Load file into file bank 1 | `/filebank1 data.txt` |
 | `/showfile [all]` | Show file content | `/showfile all` |

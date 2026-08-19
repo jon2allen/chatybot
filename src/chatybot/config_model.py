@@ -119,6 +119,8 @@ class BaseModelConfig(BaseModel):
             return "publicai"
         if "bytez" in base_url_lower or "bytez" in api_key_lower:
             return "bytez"
+        if "huggingface" in base_url_lower or "hf_api_key" in api_key_lower or "hf_token" in api_key_lower or "hf.co" in base_url_lower:
+            return "huggingface"
         return ""
 
 

@@ -6279,6 +6279,51 @@ class ChatybotApp:
             self.config_manager.list_models()
             return True
 
+        elif cmd == "/env":
+            filter_term = parts[1].lower() if len(parts) > 1 else None
+            from .vendors import get_env_status
+            
+            models_dict = {}
+            if self.config_manager and hasattr(self.config_manager, "config") and isinstance(self.config_manager.config, dict) and "models" in self.config_manager.config:
+                models_dict = self.config_manager.config["models"]
+                
+            env_data = get_env_status(models_dict)
+            
+            if filter_term:
+                if filter_term == "set":
+                    env_data = [e for e in env_data if e["is_set"]]
+                elif filter_term in ("unset", "missing"):
+                    env_data = [e for e in env_data if not e["is_set"]]
+                else:
+                    env_data = [
+                        e for e in env_data
+                        if filter_term in e["name"].lower() or filter_term in e["source"].lower()
+                    ]
+            
+            print("=" * 88)
+            print(" ENVIRONMENT VARIABLES & API KEYS (set | grep -i api)")
+            print("=" * 88)
+            print(f" {'Status':<9} | {'Variable Name':<24} | {'Masked Value':<18} | {'Len':<4} | {'Source':<20}")
+            print("-" * 10 + "+" + "-" * 26 + "+" + "-" * 20 + "+" + "-" * 6 + "+" + "-" * 22)
+            
+            if not env_data:
+                print(" No matching environment variables found.")
+            else:
+                for item in env_data:
+                    status = "[SET]" if item["is_set"] else "[NOT SET]"
+                    name = item["name"]
+                    masked = item["masked"]
+                    len_str = str(item["length"]) if item["is_set"] else "-"
+                    source = item["source"]
+                    print(f" {status:<9} | {name:<24} | {masked:<18} | {len_str:>4} | {source:<20}")
+                    
+            print("=" * 88)
+            num_set = sum(1 for e in env_data if e["is_set"])
+            num_total = len(env_data)
+            print(f" Total: {num_total} variables ({num_set} set, {num_total - num_set} not set)")
+            print("=" * 88)
+            return True
+
         elif cmd == "/source":
             if len(parts) < 2:
                 print("Usage: /source <file>")
@@ -7572,6 +7617,7 @@ class ChatybotApp:
         print("  /imagedir [path] - Set/get default image save directory")
         print("  /model [alias] - Switch to a different model or show current model.")
         print("  /listmodels - List available models from toml.")
+        print("  /env [filter] - Display defined API keys and environment variables (set | grep -i api).")
         print("  /logging <start|end> - Start or stop logging.")
         print("  /save <file> [all] [nothink|withthink] - Save last completion or all history to a file (respects /thinking state by default).")
         print("  /notemode <on|off> - Toggle note mode for /save command.")
