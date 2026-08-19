@@ -501,6 +501,7 @@ What are the key developments in ML in 2024?
 |---------|----------|--------|-------------|
 | `/model` | Model | `/model alias` | Switch active model |
 | `/listmodels` | Model | `/listmodels` | List available models |
+| `/env` | Model | `/env [filter]` | Display API keys and env vars |
 | `/system` | Model | `/system "prompt"` | Set system message |
 | `/temp` | Model | `/temp N` | Temperature (0.0-2.0) |
 | `/maxtokens` | Model | `/maxtokens N` | Max completion tokens |

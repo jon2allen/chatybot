@@ -192,6 +192,16 @@ class HelpSystem:
             see_also=["/model"]
         ))
         
+        self.register_command(CommandHelp(
+            name="/env",
+            category="model",
+            short_desc="Display defined API keys and environment variables",
+            usage="/env [filter]",
+            long_desc="Display defined API keys and environment variables (checks all vendor templates plus active environment variables like 'set | grep -i api'). Pass an optional filter (e.g. '/env hf', '/env set', '/env missing') to filter results.",
+            examples=["/env", "/env hf", "/env set", "/env api"],
+            see_also=["/listmodels", "/model"]
+        ))
+        
         # Model parameter commands
         model_params = [
             ("temp", "temperature", "0.0-2.0", "Controls randomness in model output"),

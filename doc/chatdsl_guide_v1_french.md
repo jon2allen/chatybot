@@ -723,6 +723,7 @@ src/chatybot/profiles/          # Profils prédéfinis
 |---------|-----------|---------|-------------|
 | `/modele` | Modèle | `/modele [alias]` | Changer de modèle ou afficher le modèle actuel |
 | `/lister_modeles` | Modèle | `/lister_modeles` | Lister les modèles disponibles |
+| `/variables_env` | Modèle | `/variables_env [filtre]` | Afficher les variables d'environnement et clés d'API (`set \| grep -i api`) |
 | `/systeme` | Modèle | `/systeme [message]` | Obtenir/définir le message système |
 | `/temp` | Modèle | `/temp [valeur]` | Température (0.0-2.0) |
 | `/max_jetons` | Modèle | `/max_jetons [valeur]` | Maximum de jetons de complétion |

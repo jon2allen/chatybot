@@ -757,6 +757,7 @@ src/chatybot/profiles/          # Preset profiles
 |---------|----------|--------|-------------|
 | `/model` | Model | `/model [alias]` | Switch model or show current |
 | `/listmodels` | Model | `/listmodels` | List available models |
+| `/env` | Model | `/env [filter]` | Display defined API keys & env vars (`set \| grep -i api`) |
 | `/system` | Model | `/system [message]` | Get/set system message |
 | `/temp` | Model | `/temp [value]` | Temperature (0.0-2.0) |
 | `/maxtokens` | Model | `/maxtokens [value]` | Max completion tokens |

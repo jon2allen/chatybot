@@ -20,7 +20,8 @@
       "/proc": "/proc",
       "/session": "/session",
       "/context_limit": "/context_limit",
-      "/auto_truncate": "/auto_truncate"
+      "/auto_truncate": "/auto_truncate",
+      "/env": "/env"
     },
     "keywords": {
       "set": "set",
@@ -94,7 +95,11 @@
         "utility": "utility",
         "variable": "variable"
       },
-      "commands": {}
+      "commands": {
+        "/env": {
+          "short_desc": "Display defined API keys and environment variables"
+        }
+      }
     }
   },
   "es": {
@@ -114,6 +119,9 @@
       "/repetir": "/echo",
       "/origen": "/source",
       "/listar_modelos": "/listmodels",
+      "/variables_entorno": "/env",
+      "/entorno": "/env",
+      "/env": "/env",
       "/sistema": "/system",
       "/max_tokens": "/maxtokens",
       "/penalidad_frec": "/freq_penalty",
@@ -368,6 +376,9 @@
         "/listmodels": {
           "short_desc": "Muestra una lista de los modelos disponibles"
         },
+        "/env": {
+          "short_desc": "Muestra las variables de entorno y claves API definidas"
+        },
         "/temp": {
           "short_desc": "Establece la temperatura del modelo (creatividad)"
         },
@@ -496,6 +507,9 @@
       "/echo": "/echo",
       "/source": "/source",
       "/lister_modeles": "/listmodels",
+      "/variables_env": "/env",
+      "/environnement": "/env",
+      "/env": "/env",
       "/systeme": "/system",
       "/max_jetons": "/maxtokens",
       "/penalite_freq": "/freq_penalty",
@@ -750,6 +764,9 @@
         "/listmodels": {
           "short_desc": "Liste tous les modèles disponibles dans la configuration"
         },
+        "/env": {
+          "short_desc": "Affiche les variables d'environnement et clés d'API définies"
+        },
         "/temp": {
           "short_desc": "Ajuste la température du modèle (créativité)"
         },
@@ -879,6 +896,9 @@
       "/加载脚本": "/source",
       "/脚本": "/script",
       "/列出模型": "/listmodels",
+      "/环境变量": "/env",
+      "/环境": "/env",
+      "/env": "/env",
       "/系统提示": "/system",
       "/最大Token": "/maxtokens",
       "/频率惩罚": "/freq_penalty",
@@ -1126,6 +1146,9 @@
         "/listmodels": {
           "short_desc": "列出配置文件中可用的模型"
         },
+        "/env": {
+          "short_desc": "显示已定义的环境变量和 API 密钥"
+        },
         "/temp": {
           "short_desc": "调整模型输出的随机性（温度值）"
         },
@@ -1255,6 +1278,9 @@
       "/sorgente": "/source",
       "/script": "/script",
       "/elenco_modelli": "/listmodels",
+      "/variabili_ambiente": "/env",
+      "/ambiente": "/env",
+      "/env": "/env",
       "/sistema": "/system",
       "/max_token": "/maxtokens",
       "/penalita_freq": "/freq_penalty",
@@ -1503,6 +1529,9 @@
         "/listmodels": {
           "short_desc": "Elenca i modelli configurati nel file TOML"
         },
+        "/env": {
+          "short_desc": "Mostra le variabili di ambiente e le chiavi API definite"
+        },
         "/temp": {
           "short_desc": "Imposta il valore di temperatura del modello"
         },
@@ -1632,6 +1661,9 @@
       "/مصدر": "/source",
       "/سيناريو": "/script",
       "/عرض_النماذج": "/listmodels",
+      "/متغيرات_البيئة": "/env",
+      "/البيئة": "/env",
+      "/env": "/env",
       "/نظام": "/system",
       "/أقصى_توكن": "/maxtokens",
       "/عقوبة_التكرار": "/freq_penalty",
@@ -1876,6 +1908,9 @@
         },
         "/listmodels": {
           "short_desc": "بيعرض كل النماذج المتاحة بالإعدادات"
+        },
+        "/env": {
+          "short_desc": "عرض متغيرات البيئة ومفاتيح API المعرفة"
         },
         "/temp": {
           "short_desc": "بيحدد درجة حرارة النموذج (الإبداع)"

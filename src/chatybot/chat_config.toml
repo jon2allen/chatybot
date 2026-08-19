@@ -236,3 +236,15 @@ temperature = 0.7
 top_k = 1
 base_url = "http://localhost:11434/v1"
 api_key = "OLLAMA"
+
+# ============================================================================
+# HUGGING FACE MODELS
+# ============================================================================
+
+[models.hf_qwen]
+name = "Qwen/Qwen2.5-72B-Instruct"
+temperature = 0.7
+top_k = 1
+base_url = "https://router.huggingface.co/v1"
+api_key = "HF_API_KEY"
+vendor = "huggingface"
