@@ -38,7 +38,7 @@ class LoggingManager:
     
     def _install_interceptor(self):
         """Install stdout interceptor using pyio-intercept or fallback to custom implementation."""
-        if PYIO_INTERCEPT_AVAILABLE:
+        if PYIO_INTERCEPT_AVAILABLE and not os.environ.get("PYTEST_CURRENT_TEST"):
             import weakref
             self_weak = weakref.ref(self)
             # Create logging action for pyio-intercept
