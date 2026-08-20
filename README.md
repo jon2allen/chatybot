@@ -73,6 +73,10 @@ chatybot is an interactive command-line tool that enables seamless communication
 - **Macro Management & Tutorial** - Macro inspection table (`/listmacros`) with signatures, templates, search filter, and interactive tutorial
 - **Profile TUI Manager** - Full curses-based profile editor (`--profile-edit` / `/profile edit`)
 - **Optimized Startup Performance** - Deferred macro PEG grammar compilation and on-demand SDK imports for ultra-fast boot times
+- **Context Budgeting & Metrics** - Dynamic token budget tracking, soft warnings (30KB), hard truncation safeguards (50KB), and `get_context_metrics` inspection tool
+- **Permanent Capability Error Guard** - Automatic protocol/capability error detection and immediate tool auto-disabling to eliminate infinite agentic retry loops
+- **Hugging Face Preset & `/env` Inspection** - Vendor preset for Hugging Face inference endpoints and dedicated `/env` environment inspection command
+- **Enhanced Session Filtering & Sorting** - `/session list` sorting by latest activity, model filtering (`model=...`), and range pagination (`limit=...`, `range=start:end`)
 
 
 ---
@@ -127,7 +131,7 @@ sudo chown -R $(whoami) ~/.config
 python3 chatybot.py
 
 
-Created by Jon Allen - 2025
+Created by Jon Allen - 2026
 ===========================
 Active model: mistral-large-2512 (alias: mistral_1)
 chat --> /help
@@ -747,6 +751,66 @@ chat --> Create a blog post outline about ${topic}
 ```
 
 ### Change log
+
+August 19th, 2026 (v0.7.3)
+-------------------------
+- **Release Version Synchronization**:
+  - Synchronized package version strings across `pyproject.toml`, `src/chatybot/__init__.py`, and runtime REPL startup banners to **0.7.3**.
+  - Synchronized compatibility notices and timestamps across all multi-language documentation guides in `doc/`.
+
+August 18th, 2026
+-------------------------
+- **Shell Execution Mode Enhancements (`/run_unsafe`)**:
+  - Configured default `/run_unsafe` to execute dangerous command patterns directly without interactive confirmation prompts for non-interactive scripting.
+  - Added `/run_unsafe askfirst` (and `/run unsafe askfirst`) mode to prompt for user confirmation (`[y/N]`) before executing dangerous commands.
+- **Environment & Key Inspector (`/env`)**:
+  - Added dedicated `/env [filter]` command for inspecting active API keys and environment variables with optional case-insensitive substring filtering.
+- **Hugging Face Model Preset**:
+  - Integrated native Hugging Face vendor presets and endpoint configuration in `vendors.py`, `chat_config.toml`, and the Config TUI editor for models like DeepSeek-R1, Qwen 2.5, Llama 3.3, and SmolLM2.
+
+August 16th, 2026
+-------------------------
+- **Configurable Context Limits & Auto-Truncation (`context_limit.py`)**:
+  - Introduced `ContextLimiter` engine with token estimation heuristic (~4 bytes/token), warning triggers at 70% and 90% capacity, and turn/content auto-truncation.
+  - Added `/context_limit [tokens|off]` command to set, inspect, or disable session token limits, plus model-level `context_limit` in `chat_config.toml`.
+  - Added `/auto_truncate [on|off|10-100]` command to toggle or configure truncation thresholds.
+  - Dynamically refreshed tool system prompt preambles and instructions whenever context limits change.
+  - Reported context limits and remaining token budgets in `get_context_metrics` and tool context.
+- **Permanent Capability Error Guard & Auto-Disabling**:
+  - Implemented `_is_permanent_capability_error()` in `chatybot_app.py` to detect unrecoverable protocol/capability errors (such as unsupported MCP client elicitation or missing RPC methods).
+  - Implemented automatic dispatcher-level tool disabling (`self.tool_overrides[tool] = False`) to prevent infinite LLM retry loops upon permanent errors.
+  - Added diagnostic `[TOOL USAGE HINT]` to `calculate` in `math_utils.py` distinguishing scalar math operators from list/array statistical operations.
+  - Added `sys_default` profile (`sys_default.chatdsl`) prompting the agent to prefer writing temporary Python/bash scripts in `/tmp` via `run_command` over multiple separate tool turns.
+- **Rate Limit Delay Configuration**:
+  - Added `/tool rate_limit <seconds>` with runtime caching and per-turn delay calculations in the agentic loop.
+- **Session List Filtering & Sorting (`/session list`)**:
+  - Sorted session files by most recent modification timestamp (newest first).
+  - Added model filtering: `/session list model=<alias>`.
+  - Added pagination options: `/session list limit=10`, `/session list range=start:end`, and `/session list all`.
+- **Multilingual Support (i18n) & Documentation**:
+  - Expanded `translations.json` across all 6 supported locales (EN, ES, FR, IT, ZH, AR) for new v0.7.0+ commands and context budgeting.
+  - Updated all language-specific ChatDSL documentation guides in `doc/`.
+
+August 15th, 2026
+-------------------------
+- **Partial File Reading**:
+  - Extended `read_file` in `src/chatybot/tools/file_utils.py` with `start_line` and `end_line` parameters for ranged line filtering.
+- **Memory Diagnostic Help Updates**:
+  - Updated `/mem` help and inspection with detail and debug options.
+
+August 14th, 2026
+-------------------------
+- **Context Metrics Tool (`get_context_metrics`)**:
+  - Introduced `get_context_metrics` native tool to inspect live session context usage, prompt token counts, and agentic loop payload size.
+- **Tool Payload Safety Limits**:
+  - Added soft warnings (at 30KB) and hard truncation safeguards (at 50KB) for tool execution outputs to protect against runaway context bloat.
+- **Agentic Loop Turn Tracking**:
+  - Counted agentic loop turns in total turn count and clarified context summary reporting.
+
+August 13th, 2026
+-------------------------
+- **Documentation & Milestone Updates**:
+  - Updated `README.md` key features, command reference, and change log with recent commit milestones.
 
 August 11th, 2026
 -------------------------
