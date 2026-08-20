@@ -1152,7 +1152,7 @@ class ChatybotApp:
                     content = msg.get("content", "")
                     if isinstance(content, str) and "Do not output any more tool calls" in content:
                         break
-                    reminder = "\n\n(Reminder: You are in a tool loop. You MUST output ONLY the JSON tool call(s) wrapped in ```json and ``` code fences. Do NOT write any conversational text, descriptions, or explanations before or after the JSON block.)"
+                    reminder = "\n\n(Reminder: If you need to perform additional tool actions, output ONLY the JSON tool call(s) wrapped in ```json and ``` code fences without surrounding conversational text. If you have finished all tool executions, provide your final response in natural language.)"
                     if isinstance(content, str):
                         msg["content"] = content + reminder
                     elif isinstance(content, list):
