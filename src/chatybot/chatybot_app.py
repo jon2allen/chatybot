@@ -70,8 +70,9 @@ app = None  # Global app instance for database functions to access
 class ChatybotApp:
     """Main application class for Chatybot."""
 
-    def __init__(self, config_path: Optional[str] = None, lang: str = "en"):
+    def __init__(self, config_path: Optional[str] = None, lang: str = "en", no_tools: bool = False):
         """Initialize the Chatybot application."""
+        self.no_tools: bool = no_tools
         # Initialize managers
         from .localization import LocalizationManager
         self.i18n = LocalizationManager(locale=lang)
@@ -264,9 +265,14 @@ class ChatybotApp:
                 except Exception:
                     pass
 
-        # Initialize MCP Client Manager
-        from .mcp_client import MCPClientManager
-        self.mcp_manager = MCPClientManager(self.config_manager.config)
+        # Initialize MCP Client Manager unless disabled via --no-tools
+        if self.no_tools:
+            self.mcp_manager = None
+            self.tool_mode = False
+            self.tool_auto = False
+        else:
+            from .mcp_client import MCPClientManager
+            self.mcp_manager = MCPClientManager(self.config_manager.config)
 
         # Load default profile from tools_config.toml under [config]
         self.default_profile = None
@@ -1207,7 +1213,7 @@ class ChatybotApp:
         is_google = "googleapis.com" in model_config.get("base_url", "").lower()
         is_bytez = "bytez.com" in model_config.get("base_url", "").lower()
 
-        tp = self.top_p if self.top_p is not None else model_config.get("top_p")
+        tp = None if self.top_p in ("off", "none", "disable", False) else (self.top_p if self.top_p is not None else model_config.get("top_p"))
         if tp is not None:
             if is_nvidia:
                 kwargs.setdefault("extra_body", {}).setdefault("nvext", {})["top_p"] = (
@@ -1216,19 +1222,11 @@ class ChatybotApp:
             else:
                 kwargs["top_p"] = tp
 
-        fp = (
-            self.freq_penalty
-            if self.freq_penalty is not None
-            else model_config.get("frequency_penalty")
-        )
+        fp = None if self.freq_penalty in ("off", "none", "disable", False) else (self.freq_penalty if self.freq_penalty is not None else model_config.get("frequency_penalty"))
         if fp is not None:
             kwargs["frequency_penalty"] = fp
 
-        pp = (
-            self.pres_penalty
-            if self.pres_penalty is not None
-            else model_config.get("presence_penalty")
-        )
+        pp = None if self.pres_penalty in ("off", "none", "disable", False) else (self.pres_penalty if self.pres_penalty is not None else model_config.get("presence_penalty"))
         if pp is not None:
             kwargs["presence_penalty"] = pp
 
@@ -1250,7 +1248,16 @@ class ChatybotApp:
                 if any(x in model_name.lower() for x in ["mistral-small-latest", "mistral-medium-3.5", "mistral-medium-2604", "magistral", "devstral"]):
                     kwargs["reasoning_effort"] = self.reasoning_effort
 
-        tk = self.top_k if self.top_k is not None else model_config.get("top_k")
+        omit_tk = model_config.get("omit_top_k", False)
+        if self.top_k in ("off", "none", "disable", False):
+            tk = None
+        elif self.top_k is not None:
+            tk = self.top_k
+        elif not omit_tk:
+            tk = model_config.get("top_k")
+        else:
+            tk = None
+
         if tk is not None:
             if is_nvidia:
                 kwargs.setdefault("extra_body", {}).setdefault("nvext", {})["top_k"] = (
@@ -5461,15 +5468,21 @@ class ChatybotApp:
                 print(f"Current temperature: {current_temp}")
                 return True
 
+            arg = parts[1].strip().lower()
+            if arg in ["default", "reset"]:
+                self.temperature = None
+                print("Temperature reset to model default")
+                return True
+
             try:
-                temp = float(parts[1])
+                temp = float(arg)
                 if not 0.0 <= temp <= 2.0:
                     raise ValueError
                 self.temperature = temp
                 print(f"Temperature set to {temp}")
             except ValueError:
                 print(
-                    "Invalid temperature value. Please provide a number between 0.0 and 2.0."
+                    "Invalid temperature value. Please provide a number between 0.0 and 2.0, or 'default'."
                 )
             return True
 
@@ -5561,78 +5574,126 @@ class ChatybotApp:
 
         elif cmd == "/top_p":
             if len(parts) < 2:
-                current_tp = (
-                    self.top_p
-                    if self.top_p is not None
-                    else self.config_manager.get_model_config(
+                if self.top_p in ("off", "none", "disable", False):
+                    current_tp = "Disabled (off)"
+                elif self.top_p is not None:
+                    current_tp = self.top_p
+                else:
+                    cfg_tp = self.config_manager.get_model_config(
                         self.config_manager.active_model_alias
                     ).get("top_p", "Default")
-                )
+                    current_tp = f"{cfg_tp} (model default)"
                 print(f"Current top_p: {current_tp}")
                 return True
-            try:
-                val = float(parts[1])
-                self.top_p = val
-                print(f"top_p set to {val}")
-            except ValueError:
-                print("Invalid top_p value. Please enter a float.")
+
+            arg = parts[1].strip().lower()
+            if arg in ["off", "none", "disable"]:
+                self.top_p = "off"
+                print("top_p disabled (will not be sent in payloads)")
+            elif arg in ["default", "reset"]:
+                self.top_p = None
+                print("top_p reset to model default")
+            else:
+                try:
+                    val = float(arg)
+                    if not 0.0 <= val <= 1.0:
+                        raise ValueError
+                    self.top_p = val
+                    print(f"top_p set to {val}")
+                except ValueError:
+                    print("Invalid top_p value. Please enter a float between 0.0 and 1.0, 'off', 'none', or 'default'.")
             return True
 
         elif cmd == "/top_k":
             if len(parts) < 2:
-                current_tk = (
-                    self.top_k
-                    if self.top_k is not None
-                    else self.config_manager.get_model_config(
+                if self.top_k in ("off", "none", "disable", False):
+                    current_tk = "Disabled (off)"
+                elif self.top_k is not None:
+                    current_tk = self.top_k
+                else:
+                    cfg_tk = self.config_manager.get_model_config(
                         self.config_manager.active_model_alias
                     ).get("top_k", "Default")
-                )
+                    current_tk = f"{cfg_tk} (model default)"
                 print(f"Current top_k: {current_tk}")
                 return True
-            try:
-                val = int(parts[1])
-                self.top_k = val
-                print(f"top_k set to {val}")
-            except ValueError:
-                print("Invalid top_k value. Please enter an integer.")
+
+            arg = parts[1].strip().lower()
+            if arg in ["off", "none", "disable"]:
+                self.top_k = "off"
+                print("top_k disabled (will not be sent in payloads)")
+            elif arg in ["default", "reset"]:
+                self.top_k = None
+                print("top_k reset to model default")
+            else:
+                try:
+                    val = int(arg)
+                    if val <= 0:
+                        raise ValueError
+                    self.top_k = val
+                    print(f"top_k set to {val}")
+                except ValueError:
+                    print("Invalid top_k value. Please enter a positive integer, 'off', 'none', or 'default'.")
             return True
 
         elif cmd == "/freq_penalty":
             if len(parts) < 2:
-                current_fp = (
-                    self.freq_penalty
-                    if self.freq_penalty is not None
-                    else self.config_manager.get_model_config(
+                if self.freq_penalty in ("off", "none", "disable", False):
+                    current_fp = "Disabled (off)"
+                elif self.freq_penalty is not None:
+                    current_fp = self.freq_penalty
+                else:
+                    cfg_fp = self.config_manager.get_model_config(
                         self.config_manager.active_model_alias
                     ).get("frequency_penalty", "Default")
-                )
+                    current_fp = f"{cfg_fp} (model default)"
                 print(f"Current frequency penalty: {current_fp}")
                 return True
-            try:
-                val = float(parts[1])
-                self.freq_penalty = val
-                print(f"Frequency penalty set to {val}")
-            except ValueError:
-                print("Invalid frequency penalty value. Please enter a float.")
+
+            arg = parts[1].strip().lower()
+            if arg in ["off", "none", "disable"]:
+                self.freq_penalty = "off"
+                print("Frequency penalty disabled (will not be sent in payloads)")
+            elif arg in ["default", "reset"]:
+                self.freq_penalty = None
+                print("Frequency penalty reset to model default")
+            else:
+                try:
+                    val = float(arg)
+                    self.freq_penalty = val
+                    print(f"Frequency penalty set to {val}")
+                except ValueError:
+                    print("Invalid frequency penalty value. Please enter a float, 'off', 'none', or 'default'.")
             return True
 
         elif cmd == "/pres_penalty":
             if len(parts) < 2:
-                current_pp = (
-                    self.pres_penalty
-                    if self.pres_penalty is not None
-                    else self.config_manager.get_model_config(
+                if self.pres_penalty in ("off", "none", "disable", False):
+                    current_pp = "Disabled (off)"
+                elif self.pres_penalty is not None:
+                    current_pp = self.pres_penalty
+                else:
+                    cfg_pp = self.config_manager.get_model_config(
                         self.config_manager.active_model_alias
                     ).get("presence_penalty", "Default")
-                )
+                    current_pp = f"{cfg_pp} (model default)"
                 print(f"Current presence penalty: {current_pp}")
                 return True
-            try:
-                val = float(parts[1])
-                self.pres_penalty = val
-                print(f"Presence penalty set to {val}")
-            except ValueError:
-                print("Invalid presence penalty value. Please enter a float.")
+
+            arg = parts[1].strip().lower()
+            if arg in ["off", "none", "disable"]:
+                self.pres_penalty = "off"
+                print("Presence penalty disabled (will not be sent in payloads)")
+            elif arg in ["default", "reset"]:
+                self.pres_penalty = None
+                print("Presence penalty reset to model default")
+            else:
+                try:
+                    val = float(arg)
+                    self.pres_penalty = val
+                    print(f"Presence penalty set to {val}")
+                except ValueError:
+                    print("Invalid presence penalty value. Please enter a float, 'off', 'none', or 'default'.")
             return True
 
         elif cmd == "/reasoning":
@@ -7625,14 +7686,14 @@ class ChatybotApp:
         print("  /codeoff - Reverse the code-only flag.")
         print("  /multiline - Toggle multi-line input mode (use ';;' to end input).")
         print("  /system <message> - Set a custom system message.")
-        print("  /temp <value> - Set temperature for the current model (0.0-2.0).")
+        print("  /temp [<value>|default] - Set temperature for the current model (0.0-2.0, or 'default').")
         print("  /maxtokens <value> - Set max tokens for the current model.")
         print("  /context_limit [tokens|off] - Set or show hard input context token limit.")
         print("  /auto_truncate [on|off|10-100] - Toggle automatic truncation of oldest messages when exceeding context limit percentage.")
-        print("  /top_p <value> - Set top_p for the current model (0.0-1.0).")
-        print("  /top_k <value> - Set top_k for the current model.")
-        print("  /freq_penalty <value> - Set frequency penalty (-2.0-2.0).")
-        print("  /pres_penalty <value> - Set presence penalty (-2.0-2.0).")
+        print("  /top_p [<value>|off|default] - Set top_p (0.0-1.0), 'off' to disable, or 'default'.")
+        print("  /top_k [<value>|off|default] - Set top_k integer, 'off' to disable, or 'default'.")
+        print("  /freq_penalty [<value>|off|default] - Set frequency penalty (-2.0-2.0), 'off', or 'default'.")
+        print("  /pres_penalty [<value>|off|default] - Set presence penalty (-2.0-2.0), 'off', or 'default'.")
         print(
             "  /reasoning <on|off> - Toggle reasoning (thinking) for NVIDIA and Qwen models."
         )
@@ -7767,6 +7828,13 @@ class ChatybotApp:
                 if getattr(self, 'profile_to_load', None):
                     print(f"Warning: Profile script not found: {expanded_path}")
 
+        # If --no-tools was passed, ensure tools start in a disabled state
+        if self.no_tools:
+            self.tool_mode = False
+            self.tool_auto = False
+            self.tool_context = ""
+            self.buffer_manager.set_script_var('TOOL_CONTEXT', '')
+
         while True:
             try:
                 # Check for interrupt flag at start of each loop iteration
@@ -7896,6 +7964,11 @@ def run():
         help="UI and scripting language (english/en, spanish/es, french/fr, chinese/zh, italian/it, arabic/ar)",
         default="en"
     )
+    parser.add_argument(
+        "--no-tools",
+        action="store_true",
+        help="Disable tools on startup and bypass all MCP server loading via stdio"
+    )
     args, unknown = parser.parse_known_args()
 
     if args.config_edit:
@@ -7903,7 +7976,7 @@ def run():
         sys.exit(tui_main(config_path=args.config))
 
     if args.profile_list:
-        tmp = ChatybotApp(config_path=args.config, lang=args.lang)
+        tmp = ChatybotApp(config_path=args.config, lang=args.lang, no_tools=args.no_tools)
         tmp.initialize()
         from .profile_manager import ProfileManager
         pm = ProfileManager(getattr(tmp, 'profile_dir', '~/.config/chatybot/profiles'))
@@ -7923,7 +7996,7 @@ def run():
         sys.exit(0)
 
     if args.profile_edit is not None:
-        tmp = ChatybotApp(config_path=args.config, lang=args.lang)
+        tmp = ChatybotApp(config_path=args.config, lang=args.lang, no_tools=args.no_tools)
         tmp.initialize()
         from .profile_tui import run_profile_tui
         sys.exit(run_profile_tui(
@@ -7933,7 +8006,7 @@ def run():
         ))
 
     global app
-    app = ChatybotApp(config_path=args.config, lang=args.lang)
+    app = ChatybotApp(config_path=args.config, lang=args.lang, no_tools=args.no_tools)
     # Also set the module-level app variable
     current_module = sys.modules[__name__]
     current_module.app = app

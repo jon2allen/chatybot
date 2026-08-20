@@ -273,6 +273,7 @@ chat --> Hello!      # Start a conversation
 | `--script <path>` | Execute a script file and exit | `chatybot --script test.chatdsl` |
 | `--run <query>` | Execute a single query (prompts or chained escape commands) and exit | `chatybot --run "/model gpt4; list 5 cities"` |
 | `--profile <name\|path>` | Load a startup profile or script prior to entering interactive REPL | `chatybot --profile coding` |
+| `--no-tools` | Disable tools on startup and bypass all MCP server loading via stdio | `chatybot --no-tools` |
 
 ---
 
@@ -754,6 +755,8 @@ chat --> Create a blog post outline about ${topic}
 
 August 19th, 2026 (v0.7.3)
 -------------------------
+- **CLI Startup Flag (`--no-tools`)**:
+  - Added `--no-tools` command-line option to disable tools on startup and bypass all MCP server initialization via stdio, while keeping internal tools available to enable dynamically during the session.
 - **Release Version Synchronization**:
   - Synchronized package version strings across `pyproject.toml`, `src/chatybot/__init__.py`, and runtime REPL startup banners to **0.7.3**.
   - Synchronized compatibility notices and timestamps across all multi-language documentation guides in `doc/`.
