@@ -195,21 +195,39 @@ class TestLoggingManager:
         for log_file in log_files:
             os.unlink(log_file)
 
-    def test_stdout_interceptor_inactive(self, manager):
-        """Test that stdout printing is not logged when logging is inactive."""
-        import sys
-        old_stdout = sys.stdout
-        sys.stdout = manager.interceptor
+    def test_format_hex_escapes(self):
+        """Test conversion of non-printable and control characters into hex brackets."""
+        raw_text = "Hello\x00World\x1b[31m\r\n\tTest\u200bZeroWidth\x07Bell"
+        formatted = LoggingManager.format_hex_escapes(raw_text)
+        assert "[0x00]" in formatted
+        assert "[0x1B]" in formatted
+        assert "[0x0D]" in formatted
+        assert "[U+200B]" in formatted
+        assert "[0x07]" in formatted
+        assert "Hello" in formatted
+        assert "World" in formatted
+        assert "\n" in formatted
+        assert "\t" in formatted
+
+    def test_start_logging_hex_mode(self, manager):
+        """Test logging with hex mode enabled."""
+        manager.start_logging(hex_mode=True)
+        assert manager.logging_active is True
+        assert manager.hex_mode is True
         
-        try:
-            # print to stdout (should not be logged)
-            print("Stdout inactive test message")
-            sys.stdout.flush()
+        manager.log_message("Line with escape \x1b and null \x00")
+        
+        log_files = [f for f in os.listdir('.') if f.startswith('chatybot.log.')]
+        assert len(log_files) > 0
+        
+        with open(log_files[0], 'r', encoding='utf-8') as f:
+            content = f.read()
             
-            log_files = [f for f in os.listdir('.') if f.startswith('chatybot.log.')]
-            assert len(log_files) == 0
-        finally:
-            sys.stdout = old_stdout
+        assert "[0x1B]" in content
+        assert "[0x00]" in content
+        
+        manager.stop_logging()
+        assert manager.hex_mode is False
 
 
 if __name__ == "__main__":

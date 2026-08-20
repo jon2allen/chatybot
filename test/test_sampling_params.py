@@ -104,3 +104,31 @@ class TestSamplingParams:
         res = await app.handle_escape_command("/pres_penalty default")
         assert res is True
         assert app.pres_penalty is None
+
+    @pytest.mark.anyio
+    async def test_logging_hex_escape_commands(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        app = ChatybotApp()
+        app.initialize()
+
+        # Start logging with hex mode
+        res = await app.handle_escape_command("/logging start hex")
+        assert res is True
+        assert app.logging_manager.logging_active is True
+        assert app.logging_manager.hex_mode is True
+
+        # Toggle hex mode off
+        res = await app.handle_escape_command("/logging hex off")
+        assert res is True
+        assert app.logging_manager.hex_mode is False
+
+        # Toggle hex mode on
+        res = await app.handle_escape_command("/logging hex on")
+        assert res is True
+        assert app.logging_manager.hex_mode is True
+
+        # Stop logging
+        res = await app.handle_escape_command("/logging end")
+        assert res is True
+        assert app.logging_manager.logging_active is False
+

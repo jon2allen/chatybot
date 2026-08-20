@@ -147,7 +147,7 @@ Active escape commands:
   /model [alias] - Switch to a different model or show current model.
   /listmodels - List available models from toml.
   /env [filter] - Display defined API keys and environment variables (set | grep -i api).
-  /logging <start|end> - Start or stop logging.
+  /logging <start [hex]|end|hex [on|off]> - Start (with optional hex mode) or stop logging.
   /save <file> [all] [nothink|withthink] - Save last completion or all history to a file (respects /thinking state by default).
   /notemode <on|off> - Toggle note mode for /save command.
   /codeonly - Set flag to generate code only without explanations.
@@ -231,7 +231,7 @@ chat --> Hello!      # Start a conversation
 | `/codeoff` | Disable code-only mode | `/codeoff` |
 | `/notemode <on\|off>` | Toggle note block separation | `/notemode on` |
 | `/multiline` | Enter multi-line input | `/multiline` |
-| `/logging <start\|end>` | Start/stop logging | `/logging start` |
+| `/logging <start [hex]\|end\|hex [on\|off]>` | Start (with optional hex escaping) or stop logging | `/logging start hex` |
 | `/save <file> [all] [nothink\|withthink]` | Save last response or all history, with optional thinking stripping | `/save output.txt all nothink` |
 | `/script <path>` | Execute a script | `/script setup.dsl` |
 | `/source <path>` | Execute a script dynamically in the current session | `/source ~/.chatybot_profile` |

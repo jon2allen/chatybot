@@ -4740,16 +4740,31 @@ class ChatybotApp:
 
         elif cmd == "/logging":
             if len(parts) < 2:
-                print("Usage: /logging <start|end>")
+                status = "active" if self.logging_manager.logging_active else "inactive"
+                hex_status = "on" if self.logging_manager.hex_mode else "off"
+                print(f"Logging is {status} (hex mode: {hex_status}). Usage: /logging <start [hex]|end|hex [on|off]>")
                 return True
 
             action = parts[1].lower()
             if action == "start":
-                self.logging_manager.start_logging()
-            elif action == "end":
+                hex_mode = False
+                if len(parts) > 2 and parts[2].lower() in ("hex", "raw", "on"):
+                    hex_mode = True
+                self.logging_manager.start_logging(hex_mode=hex_mode)
+            elif action in ("hex", "hexmode"):
+                if len(parts) > 2 and parts[2].lower() in ("off", "false", "disable"):
+                    self.logging_manager.hex_mode = False
+                    print("Logging hex mode disabled.")
+                else:
+                    self.logging_manager.hex_mode = True
+                    if not self.logging_manager.logging_active:
+                        self.logging_manager.start_logging(hex_mode=True)
+                    else:
+                        print("Logging hex mode enabled.")
+            elif action in ("end", "stop"):
                 self.logging_manager.stop_logging()
             else:
-                print("Invalid logging action. Use 'start' or 'end'.")
+                print("Invalid logging action. Use 'start [hex]', 'hex [on|off]', or 'end'.")
             return True
 
         elif cmd == "/save":
@@ -7679,7 +7694,7 @@ class ChatybotApp:
         print("  /model [alias] - Switch to a different model or show current model.")
         print("  /listmodels - List available models from toml.")
         print("  /env [filter] - Display defined API keys and environment variables (set | grep -i api).")
-        print("  /logging <start|end> - Start or stop logging.")
+        print("  /logging <start [hex]|end|hex [on|off]> - Start (with optional hex mode) or stop logging.")
         print("  /save <file> [all] [nothink|withthink] - Save last completion or all history to a file (respects /thinking state by default).")
         print("  /notemode <on|off> - Toggle note mode for /save command.")
         print("  /codeonly - Set flag to generate code only without explanations.")
