@@ -27,7 +27,7 @@ import tomllib
 from pathlib import Path
 from typing import Annotated, Literal, Optional, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 # ============================================================================
@@ -206,6 +206,22 @@ class MCPConfig(BaseModel):
 
 
 # ============================================================================
+# DEFAULT SETTINGS
+# ============================================================================
+
+class DefaultSettings(BaseModel):
+    """Explicit defaults that override positional (first-in-TOML) selection.
+
+    When ``model`` is set, it names a model alias (a ``[models.<alias>]`` key)
+    to use as the default regardless of where it appears in the file.
+    When unset, the first model in TOML order is used as the default.
+    """
+
+    model: Optional[str] = None
+    """Alias of the model to use as the default (e.g. 'mistral_1')."""
+
+
+# ============================================================================
 # TOP-LEVEL CONFIG CONTAINER
 # ============================================================================
 
@@ -227,6 +243,9 @@ class ChatConfig(BaseModel):
 
     mcp: MCPConfig = Field(default_factory=MCPConfig)
     """Model Context Protocol (MCP) server configuration."""
+
+    default: DefaultSettings = Field(default_factory=DefaultSettings)
+    """Explicit default-model selection. See :class:`DefaultSettings`."""
 
     models: dict[str, ModelConfig] = {}
     """All model entries, keyed by their TOML alias (e.g. 'mistral_1')."""
@@ -305,6 +324,16 @@ class ChatConfig(BaseModel):
         """
         raw = tomllib.loads(toml_str)
         return cls.model_validate(cls._prepare_raw(raw))
+
+    @model_validator(mode="after")
+    def _validate_default_model(self) -> "ChatConfig":
+        """Ensure ``default.model`` (if set) names an existing model alias."""
+        if self.default.model is not None and self.default.model not in self.models:
+            raise ValueError(
+                f"default.model '{self.default.model}' does not match any "
+                f"[models.*] alias; known aliases: {list(self.models.keys())}"
+            )
+        return self
 
     # ------------------------------------------------------------------
     # Accessors / Filters
@@ -386,6 +415,16 @@ class ChatConfig(BaseModel):
                         lines.append(f'{k} = {str(v).lower()}')
                     else:
                         lines.append(f'{k} = {v}')
+            lines.append("")
+
+        # 1b. Default settings
+        if self.default.model is not None:
+            lines.append("# ============================================================================")
+            lines.append("# DEFAULT SETTINGS")
+            lines.append("# ============================================================================")
+            lines.append("")
+            lines.append("[default]")
+            lines.append(f'model = "{self.default.model}"')
             lines.append("")
 
         # 2. Global image generation settings

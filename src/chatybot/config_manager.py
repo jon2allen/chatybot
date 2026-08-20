@@ -45,8 +45,14 @@ class ConfigManager:
         except Exception as e:
             raise ValueError(f"Failed to parse or validate config at '{config_path}': {e}")
         
-        # Set the default model alias to the first model in the config
-        self.default_model_alias = next(iter(self.config["models"]))
+        # Set the default model alias: use [default].model if specified,
+        # otherwise fall back to the first model in TOML order.
+        default_cfg = self.config.get("default", {})
+        default_model = default_cfg.get("model") if isinstance(default_cfg, dict) else None
+        if default_model and default_model in self.config["models"]:
+            self.default_model_alias = default_model
+        else:
+            self.default_model_alias = next(iter(self.config["models"]))
         self.active_model_alias = self.default_model_alias
         
         # Load system message if specified in config
