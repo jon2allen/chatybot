@@ -360,10 +360,10 @@ class HelpSystem:
         self.register_command(CommandHelp(
             name="/logging",
             category="debug",
-            short_desc="Start or stop logging",
-            usage="/logging <start|end>",
-            long_desc="Start or stop logging of chat interactions to a file.",
-            examples=["/logging start", "/logging end"]
+            short_desc="Start (with optional hex mode) or stop logging",
+            usage="/logging <start [hex]|end|hex [on|off]>",
+            long_desc="Start or stop logging of chat interactions to a file. Pass 'hex' (e.g. '/logging start hex' or '/logging hex on') to convert unprintable/control characters and zero-width tokens into hex escapes like [0x1B] or [U+200B].",
+            examples=["/logging start", "/logging start hex", "/logging hex on", "/logging end"]
         ))
         
         # Save command

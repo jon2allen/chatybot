@@ -24,6 +24,7 @@ class LoggingManager:
     
     def __init__(self):
         self.logging_active: bool = False
+        self.hex_mode: bool = False
         self.log_file: Optional[object] = None
         self.buffer = []
         self._lock = threading.Lock()
@@ -86,16 +87,24 @@ class LoggingManager:
             if sys.stdout is self.interceptor:
                 sys.stdout = self.original_stdout
     
-    def start_logging(self) -> None:
+    def start_logging(self, hex_mode: bool = False) -> None:
         """
         Start logging to a file with a timestamp.
+        
+        Args:
+            hex_mode: If True, non-printable/control characters will be converted to hex escapes.
         """
+        self.hex_mode = hex_mode
         if not self.logging_active:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             log_filename = f"chatybot.log.{timestamp}"
-            self.log_file = open(log_filename, "w")
+            self.log_file = open(log_filename, "w", encoding="utf-8")
             self.logging_active = True
-            print(f"Logging started. Writing to '{log_filename}'.")
+            hex_note = " (hex mode enabled)" if self.hex_mode else ""
+            print(f"Logging started{hex_note}. Writing to '{log_filename}'.")
+        else:
+            hex_note = "enabled" if self.hex_mode else "disabled"
+            print(f"Logging is already active. Hex mode is now {hex_note}.")
     
     def stop_logging(self) -> None:
         """
@@ -104,6 +113,7 @@ class LoggingManager:
         if self.logging_active and self.log_file:
             self.log_file.close()
             self.logging_active = False
+            self.hex_mode = False
             print("Logging stopped.")
     
     def format_datetime(self, dt: datetime) -> str:
@@ -118,6 +128,37 @@ class LoggingManager:
         """
         return dt.strftime("%b %d, %Y, %I:%M:%S %p %Z")
     
+    @staticmethod
+    def format_hex_escapes(text: str) -> str:
+        """
+        Convert unprintable ASCII control characters, escape codes, and invisible
+        Unicode code points into human-readable hex brackets like [0x1B] or [U+200B].
+        
+        Preserves standard whitespace (newlines, tabs) and printable characters.
+        """
+        import unicodedata
+        
+        out = []
+        for ch in text:
+            code = ord(ch)
+            if ch in ("\n", "\t"):
+                out.append(ch)
+            elif 32 <= code <= 126:
+                out.append(ch)
+            elif code < 32 or (127 <= code <= 159):
+                out.append(f"[0x{code:02X}]")
+            else:
+                cat = unicodedata.category(ch)
+                # Check for invisible/control/format/surrogate/unassigned Unicode
+                if cat in ("Cc", "Cf", "Cs", "Co", "Cn"):
+                    if code <= 0xFFFF:
+                        out.append(f"[U+{code:04X}]")
+                    else:
+                        out.append(f"[U+{code:06X}]")
+                else:
+                    out.append(ch)
+        return "".join(out)
+    
     def log_message(self, message: str) -> None:
         """
         Log a message to the log file if logging is active.
@@ -126,6 +167,8 @@ class LoggingManager:
             message: Message to log
         """
         if self.logging_active and self.log_file:
+            if self.hex_mode:
+                message = self.format_hex_escapes(message)
             timestamp = self.format_datetime(datetime.now())
             self.log_file.write(f"{timestamp} - {message}\n")
             self.log_file.flush()
