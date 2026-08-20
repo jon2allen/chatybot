@@ -204,22 +204,23 @@ class HelpSystem:
         
         # Model parameter commands
         model_params = [
-            ("temp", "temperature", "0.0-2.0", "Controls randomness in model output"),
-            ("maxtokens", "max_tokens", "integer", "Maximum number of tokens to generate"),
-            ("top_p", "top_p", "0.0-1.0", "Nucleus sampling parameter"),
-            ("top_k", "top_k", "integer", "Number of most likely tokens to consider"),
-            ("freq_penalty", "frequency_penalty", "-2.0-2.0", "Penalty for repeated tokens"),
-            ("pres_penalty", "presence_penalty", "-2.0-2.0", "Penalty for new tokens based on presence"),
+            ("temp", "temperature", "0.0-2.0", "Controls randomness in model output", ["/temp 0.7", "/temp default", "/temp"]),
+            ("maxtokens", "max_tokens", "integer", "Maximum number of tokens to generate", ["/maxtokens 2048", "/maxtokens"]),
+            ("top_p", "top_p", "0.0-1.0|off|default", "Nucleus sampling parameter", ["/top_p 0.9", "/top_p off", "/top_p default", "/top_p"]),
+            ("top_k", "top_k", "integer|off|default", "Number of most likely tokens to consider (pass 'off' to disable)", ["/top_k 50", "/top_k off", "/top_k default", "/top_k"]),
+            ("freq_penalty", "frequency_penalty", "-2.0-2.0|off|default", "Penalty for repeated tokens", ["/freq_penalty 0.5", "/freq_penalty off", "/freq_penalty default", "/freq_penalty"]),
+            ("pres_penalty", "presence_penalty", "-2.0-2.0|off|default", "Penalty for new tokens based on presence", ["/pres_penalty 0.5", "/pres_penalty off", "/pres_penalty default", "/pres_penalty"]),
         ]
         
-        for cmd, param, value_range, desc in model_params:
+        for item in model_params:
+            cmd, param, value_range, desc, examples = item
             self.register_command(CommandHelp(
                 name=f"/{cmd}",
                 category="model",
-                short_desc=f"Set {param}",
+                short_desc=f"Set or toggle {param}",
                 usage=f"/{cmd} [{value_range}]",
-                long_desc=f"Set the {param} parameter for the current model. {desc}.",
-                examples=[f"/{cmd} 0.7", f"/{cmd}"],
+                long_desc=f"Set or disable the {param} parameter for the current model. {desc}.",
+                examples=examples,
                 parameters={"value": value_range}
             ))
 
