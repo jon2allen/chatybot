@@ -4,11 +4,11 @@
 
 ChatDSL (Lenguaje de Dominio Específico para Chat) es un potente lenguaje de scripting diseñado para automatizar las interacciones con Modelos de Lenguaje Grande (LLMs). Esta guía proporciona una referencia completa para trabajar con ChatDSL, incluyendo características, tutoriales, guías prácticas y una referencia exhaustiva de palabras clave.
 
-> *Última actualización: 23 de julio de 2026*
+> *Última actualización: 19 de agosto de 2026*
 >
 > *Versión: 1.0*
 >
-> *Compatible con Chatybot v0.6.4+*
+> *Compatible con Chatybot v0.7.3+*
 
 ---
 
