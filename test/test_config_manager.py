@@ -218,6 +218,97 @@ presence_penalty = 0.1
         assert "Test Model" in captured.out
         assert "http://localhost:11434" in captured.out
 
+    @pytest.fixture
+    def multi_model_config_file(self):
+        """Config with several models and no [default] table."""
+        config_content = """
+[models.alpha]
+name = "Alpha Model"
+base_url = "http://localhost:11434"
+temperature = 0.7
+
+[models.beta]
+name = "Beta Model"
+base_url = "http://localhost:11434"
+temperature = 0.7
+
+[models.gamma]
+name = "Gamma Model"
+base_url = "http://localhost:11434"
+temperature = 0.7
+"""
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.toml') as f:
+            f.write(config_content)
+            f.flush()
+            yield f.name
+        os.unlink(f.name)
+
+    @pytest.fixture
+    def default_model_config_file(self):
+        """Config with a [default] table pointing at a non-first model."""
+        config_content = """
+[default]
+model = "gamma"
+
+[models.alpha]
+name = "Alpha Model"
+base_url = "http://localhost:11434"
+temperature = 0.7
+
+[models.beta]
+name = "Beta Model"
+base_url = "http://localhost:11434"
+temperature = 0.7
+
+[models.gamma]
+name = "Gamma Model"
+base_url = "http://localhost:11434"
+temperature = 0.7
+"""
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.toml') as f:
+            f.write(config_content)
+            f.flush()
+            yield f.name
+        os.unlink(f.name)
+
+    @pytest.fixture
+    def invalid_default_model_config_file(self):
+        """Config with a [default] table pointing at a nonexistent alias."""
+        config_content = """
+[default]
+model = "nonexistent"
+
+[models.alpha]
+name = "Alpha Model"
+base_url = "http://localhost:11434"
+temperature = 0.7
+"""
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.toml') as f:
+            f.write(config_content)
+            f.flush()
+            yield f.name
+        os.unlink(f.name)
+
+    def test_default_model_falls_back_to_first(self, multi_model_config_file):
+        """Without [default].model, the first model in TOML order is the default."""
+        manager = ConfigManager(config_path=multi_model_config_file)
+        manager.load_config()
+        assert manager.default_model_alias == "alpha"
+        assert manager.active_model_alias == "alpha"
+
+    def test_default_model_uses_explicit_table(self, default_model_config_file):
+        """[default].model selects the named alias regardless of TOML order."""
+        manager = ConfigManager(config_path=default_model_config_file)
+        manager.load_config()
+        assert manager.default_model_alias == "gamma"
+        assert manager.active_model_alias == "gamma"
+
+    def test_default_model_invalid_alias_raises(self, invalid_default_model_config_file):
+        """An [default].model that names no existing alias fails to load."""
+        manager = ConfigManager(config_path=invalid_default_model_config_file)
+        with pytest.raises(ValueError):
+            manager.load_config()
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

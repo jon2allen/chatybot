@@ -13,6 +13,17 @@ default_size = "1024x1024"
 default_quality = "standard"
 
 # ============================================================================
+# DEFAULT SETTINGS (optional)
+# ============================================================================
+# To pin a specific model as the default regardless of where it appears
+# below, add a [default] table naming one of the [models.<alias>] keys.
+# When omitted, the first [models.*] entry in this file is the default.
+#
+# Example:
+#   [default]
+#   model = "mistral_1"
+
+# ============================================================================
 # CHAT MODELS
 # ============================================================================
 
