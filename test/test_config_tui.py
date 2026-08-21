@@ -611,6 +611,49 @@ def test_bulk_replace_preview_dialog_flow():
     assert tui.config.models["m1"].api_key == "NEW_KEY"
 
 
+def test_cycle_index_fallback():
+    opts = ["mistral", "google", "openai"]
+    # Existing in list
+    assert ConfigTUI._cycle_index(opts, "google") == 1
+    # Not in list (custom vendor) -> fallback to 0 safely without crash
+    assert ConfigTUI._cycle_index(opts, "custom_unlisted_vendor") == 0
+
+
+def test_apply_form_edits_preserves_context_limit():
+    tui = ConfigTUI()
+    tui.config = ChatConfig(models={
+        "m1": ChatModelConfig(
+            name="old-name",
+            base_url="https://api.test/v1",
+            context_limit=128000,
+            vendor="mistral",
+        )
+    })
+    tui.sync_models_list()
+
+    form_data = {
+        "alias": "m1",
+        "name": "new-name",
+        "type": "chat",
+        "base_url": "https://api.test/v1",
+        "api_key": "",
+        "vendor": "mistral",
+        "temperature": "0.7",
+        "top_k": "1",
+        "image_generation": "false",
+        "image_endpoint": "",
+        "image_modalities": "",
+    }
+
+    success = tui.apply_form_edits("m1", form_data, is_new=False)
+    assert success is True
+    updated_model = tui.config.models["m1"]
+    assert updated_model.name == "new-name"
+    # Verify context_limit was preserved from the existing model
+    assert updated_model.context_limit == 128000
+
+
+
 
 
 
