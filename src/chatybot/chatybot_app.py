@@ -6597,8 +6597,11 @@ class ChatybotApp:
             if len(parts) < 2:
                 print("Usage: /searchdb <query>")
                 return True
-            query = parts[1].strip('"')
-            search_db(query)
+            # parts was split with maxsplit=2, so a multi-word query lands in
+            # parts[2]. Rejoin so "/searchdb python web framework" searches for
+            # the full phrase rather than just "python".
+            query = parts[1] if len(parts) < 3 else f"{parts[1]} {parts[2]}"
+            search_db(query.strip('"'))
             return True
         elif cmd == "/dblog":
             dblog()
