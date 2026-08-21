@@ -90,7 +90,7 @@ class ChatybotApp:
                 "loadimage", "loadimage1", "loadimage2", "loadimage3", "loadimage4", "loadimage5",
                 "listimages", "showimage", "imagedir", "imagine", "saveimage", "imagesize", "imagequality",
                 "model", "listmodels", "logging", "save", "codeonly", "codeoff", "multiline",
-                "system", "temp", "maxtokens", "top_p", "top_k", "freq_penalty", "pres_penalty",
+                "system", "temp", "maxtokens", "max_tokens", "top_p", "top_k", "freq_penalty", "pres_penalty",
                 "reasoning", "effort", "thinking", "thoughtstyle", "seed", "echo", "def",
                 "reloadmacros", "listmacros", "calc", "stream", "script", "source", "profile", "quit", "exit",
                 "setdb", "dblist", "searchdb", "dblog", "dbprint", "documents", "rerank",
@@ -5501,7 +5501,7 @@ class ChatybotApp:
                 )
             return True
 
-        elif cmd == "/maxtokens":
+        elif cmd in ("/maxtokens", "/max_tokens"):
             if len(parts) < 2:
                 current_max = (
                     self.config_manager.max_tokens
