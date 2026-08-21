@@ -177,6 +177,8 @@ class ConfigTUI:
                 if self.filtered_list:
                     alias, model = self.filtered_list[self.selected_idx]
                     self.delete_model_dialog(stdscr, alias, model)
+            elif ch == ord('r') or ch == ord('R'):
+                self.bulk_replace_dialog(stdscr)
             elif ch == ord('s') or ch == ord('S'):
                 self.save_menu_dialog(stdscr)
             elif ch == ord('e') or ch == ord('E'):
@@ -284,7 +286,7 @@ class ConfigTUI:
             stdscr.addstr(h - 2, 2, f" {self.status_message} "[:w-4], color | curses.A_BOLD)
             
         # Key bindings bar
-        keys_bar = " ↑↓ Navigate │ ↵ Edit │ N New │ C Clone │ D Delete │ S Save │ E Env │ Q Quit │ / Filter"
+        keys_bar = " ↑↓ Navigate │ ↵ Edit │ N New │ C Clone │ D Delete │ R Replace │ S Save │ E Env │ Q Quit │ / Filter"
         stdscr.addstr(h - 1, 0, keys_bar[:w-1], curses.color_pair(2))
         stdscr.refresh()
 
@@ -696,6 +698,516 @@ class ConfigTUI:
         except Exception as e:
             self.set_status(f"Error cloning model: {str(e)}", is_error=True)
             return False
+
+    REPLACE_FIELDS = [
+        ("api_key", "API Key Env Var", "str"),
+        ("base_url", "Base URL Endpoint", "str"),
+        ("temperature", "Temperature", "float"),
+        ("top_k", "Top K", "int"),
+        ("context_limit", "Context Limit", "int"),
+        ("vendor", "Vendor Tag", "str"),
+        ("image_generation", "Image Generation", "bool"),
+        ("image_endpoint", "Image Endpoint", "str"),
+    ]
+
+    def get_available_replace_scopes(self) -> list[tuple[str, str, str]]:
+        """Returns list of available scopes: (display_label, scope_type, scope_value)."""
+        scopes = [("All Models", "all", "")]
+        if self.filter_text:
+            scopes.append((f"Matching Filter ({len(self.filtered_list)})", "filter", ""))
+
+        vendors = set()
+        if self.config and self.config.models:
+            for _, m in self.config.models.items():
+                v = getattr(m, "vendor", None) or getattr(m, "detected_vendor", "")
+                if v:
+                    vendors.add(v.lower())
+        for v in sorted(vendors):
+            scopes.append((f"Vendor: {v}", "vendor", v))
+        return scopes
+
+    def compute_bulk_replacements(
+        self,
+        field_key: str,
+        scope_type: str,
+        scope_value: str,
+        mode: str,
+        find_str: str,
+        replace_str: str,
+    ) -> tuple[Optional[str], list[dict]]:
+        """
+        Calculate candidate changes for bulk find/replace.
+        Returns (error_msg, candidate_changes).
+        """
+        if not self.config or not self.config.models:
+            return "No models available in configuration", []
+
+        f_info = next((f for f in self.REPLACE_FIELDS if f[0] == field_key), None)
+        if not f_info:
+            return f"Unknown field: '{field_key}'", []
+        _, _, f_type = f_info
+
+        target_items = []
+        if scope_type == "filter":
+            target_items = list(self.filtered_list)
+        elif scope_type == "vendor":
+            v_target = scope_value.lower()
+            for alias, m in self.config.models.items():
+                v = (getattr(m, "vendor", None) or getattr(m, "detected_vendor", "")).lower()
+                if v == v_target:
+                    target_items.append((alias, m))
+        else:
+            target_items = list(self.config.models.items())
+
+        if not target_items:
+            return "No models match the selected scope", []
+
+        parsed_replace_val = None
+        if mode == "clear":
+            parsed_replace_val = False if f_type == "bool" else None
+        elif mode == "set":
+            if f_type == "float":
+                if not replace_str.strip():
+                    parsed_replace_val = None
+                else:
+                    try:
+                        parsed_replace_val = float(replace_str.strip())
+                        if parsed_replace_val < 0.0:
+                            return "Temperature must be >= 0.0", []
+                    except ValueError:
+                        return f"Invalid float value for {field_key}: '{replace_str}'", []
+            elif f_type == "int":
+                if not replace_str.strip():
+                    parsed_replace_val = None
+                else:
+                    try:
+                        parsed_replace_val = int(replace_str.strip())
+                        if parsed_replace_val < 0:
+                            return f"{field_key} must be >= 0", []
+                    except ValueError:
+                        return f"Invalid integer value for {field_key}: '{replace_str}'", []
+            elif f_type == "bool":
+                parsed_replace_val = replace_str.strip().lower() in ("true", "1", "yes", "on", "t")
+            else:
+                parsed_replace_val = replace_str.strip() if replace_str.strip() else None
+        elif mode == "replace":
+            if not find_str and f_type == "str":
+                return "Find value cannot be empty in Replace mode", []
+            if f_type in ("float", "int"):
+                if not replace_str.strip():
+                    parsed_replace_val = None
+                else:
+                    try:
+                        parsed_replace_val = float(replace_str.strip()) if f_type == "float" else int(replace_str.strip())
+                    except ValueError:
+                        return f"Invalid number value for {field_key}: '{replace_str}'", []
+            elif f_type == "bool":
+                parsed_replace_val = replace_str.strip().lower() in ("true", "1", "yes", "on", "t")
+            else:
+                parsed_replace_val = replace_str.strip()
+        else:
+            return f"Unknown mode: '{mode}'", []
+
+        candidates = []
+        for alias, model in target_items:
+            old_val = getattr(model, field_key, None)
+            new_val = None
+            should_change = False
+            vendor_disp = getattr(model, "vendor", None) or getattr(model, "detected_vendor", "") or "—"
+
+            if mode == "clear":
+                new_val = parsed_replace_val
+                if old_val is not None and old_val != new_val:
+                    should_change = True
+            elif mode == "set":
+                new_val = parsed_replace_val
+                if old_val != new_val:
+                    should_change = True
+            elif mode == "replace":
+                if f_type == "str":
+                    old_str = str(old_val) if old_val is not None else ""
+                    if find_str in old_str:
+                        new_str = old_str.replace(find_str, parsed_replace_val)
+                        new_val = new_str if new_str else None
+                        if old_val != new_val:
+                            should_change = True
+                else:
+                    match = False
+                    if not find_str.strip():
+                        match = True
+                    else:
+                        try:
+                            if f_type == "float" and old_val is not None:
+                                match = (abs(old_val - float(find_str.strip())) < 1e-6)
+                            elif f_type == "int" and old_val is not None:
+                                match = (old_val == int(find_str.strip()))
+                            elif f_type == "bool" and old_val is not None:
+                                match = (old_val == (find_str.strip().lower() in ("true", "1", "yes", "on", "t")))
+                        except ValueError:
+                            match = False
+                    if match:
+                        new_val = parsed_replace_val
+                        if old_val != new_val:
+                            should_change = True
+
+            if should_change:
+                candidates.append({
+                    "alias": alias,
+                    "model_name": model.name,
+                    "vendor": vendor_disp,
+                    "field": field_key,
+                    "old_val": old_val,
+                    "new_val": new_val,
+                    "enabled": True,
+                })
+
+        return None, candidates
+
+    def apply_bulk_replacements(self, changes: list[dict]) -> int:
+        """Applies enabled changes to models and syncs list."""
+        if not self.config or not self.config.models:
+            return 0
+
+        count = 0
+        for change in changes:
+            if not change.get("enabled", False):
+                continue
+            alias = change["alias"]
+            field = change["field"]
+            new_val = change["new_val"]
+
+            if alias in self.config.models:
+                model = self.config.models[alias]
+                try:
+                    updated = model.model_copy(update={field: new_val})
+                    self.config.models[alias] = updated
+                    count += 1
+                except Exception:
+                    setattr(model, field, new_val)
+                    count += 1
+
+        if count > 0:
+            self.has_changes = True
+            self.sync_models_list()
+            self.set_status(f"Bulk updated {count} model(s)")
+        else:
+            self.set_status("No changes applied")
+        return count
+
+    def bulk_replace_dialog(self, stdscr):
+        """Interactive modal for Bulk Find & Replace across endpoints/providers."""
+        h, w = stdscr.getmaxyx()
+        win_h, win_w = 17, 64
+        if h < win_h + 2 or w < win_w + 2:
+            self.set_status("Terminal too small for Bulk Replace dialog", is_error=True)
+            return
+
+        win_y = (h - win_h) // 2
+        win_x = (w - win_w) // 2
+
+        win = curses.newwin(win_h, win_w, win_y, win_x)
+        win.keypad(True)
+
+        scopes = self.get_available_replace_scopes()
+        modes = [
+            ("replace", "Replace Value"),
+            ("set", "Set Unconditionally"),
+            ("clear", "Clear Field / None"),
+        ]
+
+        field_idx = 0
+        scope_idx = 0
+        mode_idx = 0
+        find_str = ""
+        replace_str = ""
+        focus = 0  # 0=Field, 1=Scope, 2=Mode, 3=Find, 4=Replace, 5=Preview Btn, 6=Cancel Btn
+
+        while True:
+            self.draw_dialog_border(win, "Bulk Find & Replace Settings")
+
+            # Field info
+            cur_field_key, cur_field_label, cur_field_type = self.REPLACE_FIELDS[field_idx]
+            cur_scope_label, cur_scope_type, cur_scope_value = scopes[scope_idx]
+            cur_mode_key, cur_mode_label = modes[mode_idx]
+
+            # Render row 0: Target Field
+            win.addstr(2, 4, "Target Field:")
+            f_disp = f"< {cur_field_label} >"
+            if focus == 0:
+                win.addstr(2, 20, f_disp[:40], curses.color_pair(2))
+            else:
+                win.addstr(2, 20, f_disp[:40], curses.color_pair(1))
+
+            # Render row 1: Scope
+            win.addstr(4, 4, "Scope:")
+            s_disp = f"< {cur_scope_label} >"
+            if focus == 1:
+                win.addstr(4, 20, s_disp[:40], curses.color_pair(2))
+            else:
+                win.addstr(4, 20, s_disp[:40], curses.color_pair(1))
+
+            # Render row 2: Mode
+            win.addstr(6, 4, "Mode:")
+            m_disp = f"< {cur_mode_label} >"
+            if focus == 2:
+                win.addstr(6, 20, m_disp[:40], curses.color_pair(2))
+            else:
+                win.addstr(6, 20, m_disp[:40], curses.color_pair(1))
+
+            # Render row 3: Find Text
+            win.addstr(8, 4, "Find Value:")
+            find_box_w = 38
+            if cur_mode_key == "replace":
+                win.addstr(8, 20, "[" + " " * (find_box_w - 2) + "]")
+                if focus == 3:
+                    win.addstr(8, 21, find_str[:find_box_w-2], curses.color_pair(2))
+                else:
+                    win.addstr(8, 21, find_str[:find_box_w-2], curses.color_pair(1))
+            else:
+                win.addstr(8, 20, "─" * find_box_w, curses.A_DIM)
+
+            # Render row 4: Replace With
+            win.addstr(10, 4, "Replace With:")
+            repl_box_w = 38
+            if cur_mode_key != "clear":
+                win.addstr(10, 20, "[" + " " * (repl_box_w - 2) + "]")
+                if focus == 4:
+                    win.addstr(10, 21, replace_str[:repl_box_w-2], curses.color_pair(2))
+                else:
+                    win.addstr(10, 21, replace_str[:repl_box_w-2], curses.color_pair(1))
+            else:
+                win.addstr(10, 20, "─" * repl_box_w, curses.A_DIM)
+
+            # Buttons
+            btn_prev = "[ Preview Changes ]"
+            btn_canc = "[ Cancel ]"
+            if focus == 5:
+                win.addstr(13, 8, btn_prev, curses.color_pair(2))
+            else:
+                win.addstr(13, 8, btn_prev)
+
+            if focus == 6:
+                win.addstr(13, 36, btn_canc, curses.color_pair(2))
+            else:
+                win.addstr(13, 36, btn_canc)
+
+            # Helper instructions
+            win.addstr(15, 4, "↑↓ Focus │ ←→/Space Cycle │ ↵ Edit/Action │ ESC Cancel", curses.A_DIM)
+            win.refresh()
+
+            ch = win.getch()
+            if ch == 27:  # ESC
+                break
+            elif ch == curses.KEY_UP:
+                focus = (focus - 1) % 7
+                # Skip disabled inputs
+                if focus == 3 and cur_mode_key != "replace":
+                    focus = 2
+                elif focus == 4 and cur_mode_key == "clear":
+                    focus = 3 if cur_mode_key == "replace" else 2
+            elif ch in (curses.KEY_DOWN, 9):  # Down or Tab
+                focus = (focus + 1) % 7
+                # Skip disabled inputs
+                if focus == 3 and cur_mode_key != "replace":
+                    focus = 4 if cur_mode_key != "clear" else 5
+                elif focus == 4 and cur_mode_key == "clear":
+                    focus = 5
+            elif ch in (curses.KEY_LEFT, curses.KEY_RIGHT, 32):  # Left, Right, Space
+                if focus == 0:
+                    delta = 1 if ch in (curses.KEY_RIGHT, 32) else -1
+                    field_idx = (field_idx + delta) % len(self.REPLACE_FIELDS)
+                elif focus == 1:
+                    delta = 1 if ch in (curses.KEY_RIGHT, 32) else -1
+                    scope_idx = (scope_idx + delta) % len(scopes)
+                elif focus == 2:
+                    delta = 1 if ch in (curses.KEY_RIGHT, 32) else -1
+                    mode_idx = (mode_idx + delta) % len(modes)
+                elif focus == 3 and cur_mode_key == "replace":
+                    find_str = self.edit_text_input(win, 8, 20, find_box_w, find_str, "Find Value")
+                elif focus == 4 and cur_mode_key != "clear":
+                    replace_str = self.edit_text_input(win, 10, 20, repl_box_w, replace_str, "Replace With")
+            elif ch in (10, 13):  # Enter
+                if focus == 0:
+                    field_idx = (field_idx + 1) % len(self.REPLACE_FIELDS)
+                elif focus == 1:
+                    scope_idx = (scope_idx + 1) % len(scopes)
+                elif focus == 2:
+                    mode_idx = (mode_idx + 1) % len(modes)
+                elif focus == 3 and cur_mode_key == "replace":
+                    find_str = self.edit_text_input(win, 8, 20, find_box_w, find_str, "Find Value")
+                elif focus == 4 and cur_mode_key != "clear":
+                    replace_str = self.edit_text_input(win, 10, 20, repl_box_w, replace_str, "Replace With")
+                elif focus == 5:  # Preview Changes
+                    err, candidates = self.compute_bulk_replacements(
+                        cur_field_key,
+                        cur_scope_type,
+                        cur_scope_value,
+                        cur_mode_key,
+                        find_str,
+                        replace_str,
+                    )
+                    if err:
+                        self.set_status(f"Error: {err}", is_error=True)
+                        break
+                    if not candidates:
+                        self.set_status("No models matched the criteria for replacement", is_error=False)
+                        break
+
+                    applied = self.bulk_replace_preview_dialog(
+                        stdscr,
+                        candidates,
+                        f"Field: '{cur_field_key}' ({cur_mode_label})",
+                    )
+                    if applied:
+                        break
+                elif focus == 6:  # Cancel
+                    break
+            elif 32 <= ch <= 126 or ch in (8, 127, curses.KEY_BACKSPACE):
+                if focus == 3 and cur_mode_key == "replace":
+                    init_val = "" if ch in (8, 127, curses.KEY_BACKSPACE) else chr(ch)
+                    find_str = self.edit_text_input(win, 8, 20, find_box_w, init_val, "Find Value")
+                elif focus == 4 and cur_mode_key != "clear":
+                    init_val = "" if ch in (8, 127, curses.KEY_BACKSPACE) else chr(ch)
+                    replace_str = self.edit_text_input(win, 10, 20, repl_box_w, init_val, "Replace With")
+
+    def bulk_replace_preview_dialog(self, stdscr, candidates: list[dict], summary_desc: str) -> bool:
+        """Preview candidate bulk changes and let user toggle items before applying."""
+        h, w = stdscr.getmaxyx()
+        win_h = min(24, max(14, h - 4))
+        win_w = min(92, max(64, w - 4))
+        if win_h < 12 or win_w < 56:
+            self.set_status("Terminal too small for Preview dialog", is_error=True)
+            return False
+
+        win_y = (h - win_h) // 2
+        win_x = (w - win_w) // 2
+
+        win = curses.newwin(win_h, win_w, win_y, win_x)
+        win.keypad(True)
+
+        sel = 0
+        scroll = 0
+        focus_buttons = False
+        btn_idx = 0  # 0=Apply, 1=Back, 2=Cancel
+        max_rows = win_h - 9
+
+        while True:
+            self.draw_dialog_border(win, f"Preview Bulk Changes — {summary_desc}")
+
+            # Top summary
+            selected_count = sum(1 for c in candidates if c["enabled"])
+            total_count = len(candidates)
+            win.addstr(2, 2, f"Matching Models: {total_count}  ({selected_count} selected to apply)", curses.color_pair(3) | curses.A_BOLD)
+
+            # Table header
+            hdr = f"  {'[✓]':<5} {'Alias':<18} {'Vendor':<10} {'Current Value':<18} {'->':<3} {'New Value':<18}"
+            win.addstr(4, 2, hdr[:win_w-4], curses.color_pair(1) | curses.A_BOLD)
+            win.addstr(5, 2, "─" * (win_w - 4), curses.A_DIM)
+
+            # Table rows
+            for idx in range(min(max_rows, total_count - scroll)):
+                actual_idx = scroll + idx
+                item = candidates[actual_idx]
+                y = 6 + idx
+
+                chk_str = "[X]" if item["enabled"] else "[ ]"
+                alias_str = item["alias"][:17]
+                vendor_str = item["vendor"][:9]
+                old_str = str(item["old_val"])[:17] if item["old_val"] is not None else "None"
+                new_str = str(item["new_val"])[:17] if item["new_val"] is not None else "None"
+
+                row_text = f"  {chk_str:<5} {alias_str:<18} {vendor_str:<10} {old_str:<18} {'->':<3} {new_str:<18}"[:win_w-4]
+
+                if not focus_buttons and actual_idx == sel:
+                    win.addstr(y, 2, row_text, curses.color_pair(2))
+                else:
+                    chk_color = curses.color_pair(5) if item["enabled"] else curses.A_DIM
+                    win.addstr(y, 2, f"  {chk_str:<5} ", chk_color | curses.A_BOLD)
+                    win.addstr(y, 9, f"{alias_str:<18} {vendor_str:<10} {old_str:<18} {'->':<3} {new_str:<18}"[:win_w-11])
+
+            # Fill blank rows
+            for idx in range(total_count, max_rows):
+                win.addstr(6 + idx, 2, " " * (win_w - 4))
+
+            # Buttons
+            btn_apply = f"[ Apply ({selected_count}) ]"
+            btn_back = "[ Back ]"
+            btn_cancel = "[ Cancel ]"
+            btn_y = win_h - 3
+
+            if focus_buttons and btn_idx == 0:
+                win.addstr(btn_y, 4, btn_apply, curses.color_pair(2))
+            else:
+                win.addstr(btn_y, 4, btn_apply, curses.color_pair(5) | curses.A_BOLD)
+
+            if focus_buttons and btn_idx == 1:
+                win.addstr(btn_y, 26, btn_back, curses.color_pair(2))
+            else:
+                win.addstr(btn_y, 26, btn_back)
+
+            if focus_buttons and btn_idx == 2:
+                win.addstr(btn_y, 40, btn_cancel, curses.color_pair(2))
+            else:
+                win.addstr(btn_y, 40, btn_cancel)
+
+            # Help
+            win.addstr(win_h - 2, 2, "↑↓ Navigate │ Space Toggle │ A Select/Deselect All │ Tab Buttons │ ESC Cancel", curses.A_DIM)
+            win.refresh()
+
+            ch = win.getch()
+            if ch == 27:  # ESC
+                return False
+            elif ch == 9:  # Tab
+                if not focus_buttons:
+                    focus_buttons = True
+                    btn_idx = 0
+                else:
+                    btn_idx = (btn_idx + 1) % 3
+                    if btn_idx == 0:
+                        focus_buttons = False
+            elif ch in (curses.KEY_UP, ord('k')):
+                if focus_buttons:
+                    focus_buttons = False
+                else:
+                    if sel > 0:
+                        sel -= 1
+                        if sel < scroll:
+                            scroll = sel
+            elif ch in (curses.KEY_DOWN, ord('j')):
+                if not focus_buttons:
+                    if sel < total_count - 1:
+                        sel += 1
+                        if sel >= scroll + max_rows:
+                            scroll = sel - max_rows + 1
+                    else:
+                        focus_buttons = True
+                        btn_idx = 0
+            elif ch == curses.KEY_LEFT:
+                if focus_buttons:
+                    btn_idx = (btn_idx - 1) % 3
+            elif ch == curses.KEY_RIGHT:
+                if focus_buttons:
+                    btn_idx = (btn_idx + 1) % 3
+            elif ch == 32:  # Space
+                if not focus_buttons:
+                    candidates[sel]["enabled"] = not candidates[sel]["enabled"]
+            elif ch in (ord('a'), ord('A')):
+                # Toggle all
+                any_off = any(not c["enabled"] for c in candidates)
+                for c in candidates:
+                    c["enabled"] = any_off
+            elif ch in (10, 13):  # Enter
+                if focus_buttons:
+                    if btn_idx == 0:  # Apply
+                        self.apply_bulk_replacements(candidates)
+                        return True
+                    elif btn_idx == 1:  # Back
+                        return False
+                    else:  # Cancel
+                        return False
+                else:
+                    # Space toggle or focus apply
+                    candidates[sel]["enabled"] = not candidates[sel]["enabled"]
 
     def show_env_vars_dialog(self, stdscr):
         """Display environment variables & API keys in a scrollable dialog overlay."""
