@@ -298,19 +298,20 @@ class ConfigTUI:
         
         # Read text character by character
         curses.curs_set(1)  # Show cursor
+        original_filter = self.filter_text
         current_filter = self.filter_text
-        
+
         while True:
             stdscr.move(h - 1, 8)
             stdscr.clrtoeol()
             stdscr.addstr(h - 1, 8, current_filter[:w-12])
             stdscr.refresh()
-            
+
             ch = stdscr.getch()
             if ch in (10, 13):  # Enter
                 break
-            elif ch == 27:  # Escape
-                current_filter = ""
+            elif ch == 27:  # Escape — restore original filter (matches edit_text_input)
+                current_filter = original_filter
                 break
             elif ch in (curses.KEY_BACKSPACE, 127, 8):
                 current_filter = current_filter[:-1]
@@ -864,11 +865,17 @@ class ConfigTUI:
         return None, candidates
 
     def apply_bulk_replacements(self, changes: list[dict]) -> int:
-        """Applies enabled changes to models and syncs list."""
+        """Applies enabled changes to models and syncs list.
+
+        Returns the number of successfully applied changes. Changes that fail
+        Pydantic validation are skipped (never written) and reported in the
+        status bar so invalid data is never silently persisted.
+        """
         if not self.config or not self.config.models:
             return 0
 
-        count = 0
+        applied = 0
+        failed = 0
         for change in changes:
             if not change.get("enabled", False):
                 continue
@@ -879,20 +886,29 @@ class ConfigTUI:
             if alias in self.config.models:
                 model = self.config.models[alias]
                 try:
-                    updated = model.model_copy(update={field: new_val})
+                    # model_copy skips validation, so re-validate the merged
+                    # model to reject invalid values rather than persisting them.
+                    merged = {**model.model_dump(), field: new_val}
+                    updated = type(model).model_validate(merged)
                     self.config.models[alias] = updated
-                    count += 1
-                except Exception:
-                    setattr(model, field, new_val)
-                    count += 1
+                    applied += 1
+                except Exception as e:
+                    failed += 1
+                    self.set_status(
+                        f"Skipped '{alias}': {field}={new_val!r} rejected ({e})",
+                        is_error=True,
+                    )
 
-        if count > 0:
+        if applied > 0:
             self.has_changes = True
             self.sync_models_list()
-            self.set_status(f"Bulk updated {count} model(s)")
+        if failed:
+            self.set_status(f"Bulk updated {applied} model(s), {failed} skipped (invalid)", is_error=True)
+        elif applied > 0:
+            self.set_status(f"Bulk updated {applied} model(s)")
         else:
             self.set_status("No changes applied")
-        return count
+        return applied
 
     def bulk_replace_dialog(self, stdscr):
         """Interactive modal for Bulk Find & Replace across endpoints/providers."""
@@ -1100,7 +1116,7 @@ class ConfigTUI:
             win.addstr(2, 2, f"Matching Models: {total_count}  ({selected_count} selected to apply)", curses.color_pair(3) | curses.A_BOLD)
 
             # Table header
-            hdr = f"  {'[✓]':<5} {'Alias':<18} {'Vendor':<10} {'Current Value':<18} {'->':<3} {'New Value':<18}"
+            hdr = f"  {'[X]':<5} {'Alias':<18} {'Vendor':<10} {'Current Value':<18} {'->':<3} {'New Value':<18}"
             win.addstr(4, 2, hdr[:win_w-4], curses.color_pair(1) | curses.A_BOLD)
             win.addstr(5, 2, "─" * (win_w - 4), curses.A_DIM)
 
@@ -1230,7 +1246,7 @@ class ConfigTUI:
         max_rows = win_h - 7  # lines available for items
         
         while True:
-            self.draw_dialog_border(win, "Environment Variables & API Keys (set | grep -i api)")
+            self.draw_dialog_border(win, "Environment Variables & API Keys")
             
             # Header
             header_str = f"  {'Status':<10} {'Variable Name':<24} {'Value / Masked':<18} {'Len':<5} {'Source':<20}"
@@ -1429,7 +1445,6 @@ class ConfigTUI:
             "vendor": getattr(model, "vendor", "") or getattr(model, "detected_vendor", "") or "",
             "temperature": f"{model.temperature}" if getattr(model, "temperature", None) is not None else "",
             "top_k": f"{model.top_k}" if getattr(model, "top_k", None) is not None else "",
-            "max_tokens": "", # Default blank
             "image_generation": "false",
             "image_endpoint": "",
             "image_modalities": "",
@@ -1541,7 +1556,7 @@ class ConfigTUI:
                     if f_type == "cycle":
                         # Cycle left
                         curr_val = form_data[key]
-                        c_idx = opts.index(curr_val)
+                        c_idx = self._cycle_index(opts, curr_val)
                         form_data[key] = opts[(c_idx - 1) % len(opts)]
                         # Auto-update presets if type/vendor cycles
                         self.handle_preset_auto_pop(key, form_data)
@@ -1555,7 +1570,7 @@ class ConfigTUI:
                     if f_type == "cycle":
                         # Cycle right
                         curr_val = form_data[key]
-                        c_idx = opts.index(curr_val)
+                        c_idx = self._cycle_index(opts, curr_val)
                         form_data[key] = opts[(c_idx + 1) % len(opts)]
                         self.handle_preset_auto_pop(key, form_data)
                 else:
@@ -1576,7 +1591,7 @@ class ConfigTUI:
                     elif f_type == "cycle" and ch in (10, 13):
                         # Pressing enter on cycle just goes to next value
                         curr_val = form_data[key]
-                        c_idx = opts.index(curr_val)
+                        c_idx = self._cycle_index(opts, curr_val)
                         form_data[key] = opts[(c_idx + 1) % len(opts)]
                         self.handle_preset_auto_pop(key, form_data)
                 elif ch in (10, 13):
@@ -1601,6 +1616,18 @@ class ConfigTUI:
         if key in ("image_endpoint", "image_modalities") and form_data["image_generation"] == "false":
             return True
         return False
+
+    @staticmethod
+    def _cycle_index(opts: list, curr_val: str) -> int:
+        """Return the index of curr_val in opts, or 0 if not present.
+
+        Guards cycle fields (e.g. vendor) against values that are not in the
+        preset list, which would otherwise raise ValueError and crash the TUI.
+        """
+        try:
+            return opts.index(curr_val)
+        except ValueError:
+            return 0
 
     def handle_preset_auto_pop(self, changed_key: str, form_data: dict):
         """Auto-populate fields if vendor changed or type changed."""
@@ -1652,42 +1679,51 @@ class ConfigTUI:
             except ValueError:
                 self.set_status("Warning: Invalid Top K representation.", is_error=False)
 
-        # 3. Build Pydantic model
+        # 3. Build the updated model, preserving fields not exposed in the form
+        # (e.g. context_limit) when editing an existing model. We apply edits
+        # via model_copy so unedited fields are carried over untouched.
         try:
             m_type = form_data["type"]
             api_key = form_data["api_key"].strip() or None
-            
+            existing = None if is_new else self.config.models.get(old_alias)
+
+            update = {
+                "alias": new_alias,
+                "name": form_data["name"].strip(),
+                "base_url": form_data["base_url"].strip(),
+                "api_key": api_key,
+                "temperature": temp_val,
+                "top_k": top_k_val,
+            }
+
             if m_type == "reranker":
-                updated_model = RerankerModelConfig(
-                    alias=new_alias,
-                    name=form_data["name"].strip(),
-                    base_url=form_data["base_url"].strip(),
-                    api_key=api_key,
-                    temperature=temp_val,
-                    top_k=top_k_val
-                )
+                if isinstance(existing, RerankerModelConfig):
+                    updated_model = existing.model_copy(update=update)
+                else:
+                    # Switching chat -> reranker: carry over shared BaseModelConfig fields
+                    if isinstance(existing, ChatModelConfig):
+                        update["context_limit"] = existing.context_limit
+                    updated_model = RerankerModelConfig(**update)
             else:
                 img_gen = form_data["image_generation"] == "true"
                 img_end = form_data["image_endpoint"].strip() or None
                 img_mods = None
                 if form_data["image_modalities"].strip():
                     img_mods = [x.strip() for x in form_data["image_modalities"].split(",") if x.strip()]
-                    
-                vendor_val = form_data["vendor"].strip() or None
-                
-                updated_model = ChatModelConfig(
-                    alias=new_alias,
-                    name=form_data["name"].strip(),
-                    base_url=form_data["base_url"].strip(),
-                    api_key=api_key,
-                    temperature=temp_val,
-                    top_k=top_k_val,
-                    vendor=vendor_val,
-                    image_generation=img_gen,
-                    image_endpoint=img_end,
-                    image_modalities=img_mods
-                )
-                
+
+                update["vendor"] = form_data["vendor"].strip() or None
+                update["image_generation"] = img_gen
+                update["image_endpoint"] = img_end
+                update["image_modalities"] = img_mods
+
+                if isinstance(existing, ChatModelConfig):
+                    updated_model = existing.model_copy(update=update)
+                else:
+                    # Switching reranker -> chat: carry over shared BaseModelConfig fields
+                    if isinstance(existing, RerankerModelConfig):
+                        update["context_limit"] = existing.context_limit
+                    updated_model = ChatModelConfig(**update)
+
             # Perform operations on config dictionary
             if not is_new and old_alias != new_alias:
                 # Alias renamed: delete old key
