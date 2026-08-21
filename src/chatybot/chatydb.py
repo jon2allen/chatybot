@@ -182,18 +182,24 @@ def search_db(query: str) -> None:
         )
 
 
-def dblog() -> None:
+def dblog(include_thinking: bool = False) -> None:
     """Log the last chat completion into the active TinyDB as a ``chat`` item.
 
     The item stores the raw response text and a timestamp.
 
     - type: "chat"
     - name: "last_chat"
-    - content: The AI response text
+    - content: The AI response text (with thinking tags intact, matching what
+      is stored in chat_history)
       - metadata: A dictionary containing:
        - timestamp: When the chat occurred
        - model_alias: The short alias used (e.g., "mistral_1")
        - model_name: The full model name (e.g., "mistral-large-2512")
+       - prompt: The user prompt for this turn
+       - thinking_content: Extracted reasoning text, or None when not requested
+         (only present when include_thinking=True)
+       - thinking_tokens: Reasoning token count from the API, or 0 when unknown
+       - reasoning_effort: The active reasoning effort setting, or None
     """
     if _manager is None:
         print("No database selected. Use /setdb <dbname> first.")
@@ -253,9 +259,33 @@ def dblog() -> None:
         metadata["model_name"] = "unknown"
 
     metadata["prompt"] = last_prompt
+
+    # Thinking/reasoning awareness. The thinking text is already embedded in
+    # the stored response as <think>...</think> tags (standardized at
+    # completion time). When the user requests it, re-extract it via the app's
+    # existing extractor rather than storing it separately in chat_history.
+    # Token counts and reasoning_effort come from the app instance, which
+    # captures them at completion time.
+    if include_thinking:
+        thinking_content = None
+        if app_instance is not None:
+            extractor = getattr(app_instance, "_extract_thinking_tokens", None)
+            if callable(extractor):
+                thinking_content, _ = extractor(last_response)
+        metadata["thinking_content"] = thinking_content
+        metadata["thinking_tokens"] = getattr(app_instance, "last_reasoning_tokens", 0) if app_instance else 0
+        metadata["reasoning_effort"] = getattr(app_instance, "reasoning_effort", None) if app_instance else None
+    else:
+        metadata["thinking_content"] = None
+        metadata["thinking_tokens"] = 0
+        metadata["reasoning_effort"] = getattr(app_instance, "reasoning_effort", None) if app_instance else None
+
     _manager.add_item("chat", "last_chat", last_response, metadata)
 
-    print("Last chat completion logged to the database.")
+    if include_thinking and metadata["thinking_content"]:
+        print("Last chat completion logged to the database (with thinking).")
+    else:
+        print("Last chat completion logged to the database.")
 
 
 def load_var(var_name: str, extra: str = None) -> None:
@@ -419,12 +449,30 @@ def dbprint(target_file: str = None) -> None:
             if metadata:
                 report_lines.append(f"    Metadata:")
                 for key, value in metadata.items():
+                    # Skip the verbose thinking_content here; it gets its own
+                    # styled section below when present.
+                    if key == "thinking_content":
+                        continue
                     report_lines.append(f"      {key}: {value}")
             else:
                 report_lines.append(f"    Metadata: [None]")
 
             report_lines.append(f"    Type: {item.get('type', 'N/A')}")
             report_lines.append(f"    Name: {item.get('name', 'N/A')}")
+
+            # Styled thinking section (only when thinking was logged)
+            thinking = metadata.get("thinking_content") if metadata else None
+            if thinking:
+                report_lines.append(f"    -- Thinking --")
+                formatted_thinking = duplicate_linefeeds(thinking)
+                for part in formatted_thinking.split("\n\n"):
+                    if part.strip():
+                        report_lines.append(f"    {part}")
+                tok = metadata.get("thinking_tokens", 0) if metadata else 0
+                if tok:
+                    report_lines.append(f"    [thinking tokens: {tok}]")
+                report_lines.append(f"    -- End Thinking --")
+
             content = item.get("content", "")
             if content:
                 # Duplicate line feeds in content for better readability

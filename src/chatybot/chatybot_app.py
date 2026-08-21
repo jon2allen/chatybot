@@ -123,6 +123,10 @@ class ChatybotApp:
         self.reasoning_mode: bool = True
         self.reasoning_effort: Optional[str] = None
         self.show_thinking: bool = True
+        # Reasoning token count from the most recent completion's usage, if the
+        # provider exposes one (e.g. OpenAI completion_tokens_details.reasoning_tokens).
+        # Read by /dblog --thinking. Reset to 0 each completion.
+        self.last_reasoning_tokens: int = 0
         self.multi_line_mode: bool = False
         self.auto_exit_pending: bool = False
         self.script_context: bool = False
@@ -1790,11 +1794,22 @@ class ChatybotApp:
             print(f"\nExecution time: {elapsed_time:.2f} seconds")
 
             out_tokens = 0
+            # Reset reasoning token count for this completion; updated below if
+            # the provider exposes reasoning token usage.
+            self.last_reasoning_tokens = 0
             if hasattr(response, "usage") and response.usage:
                 out_tokens = response.usage.completion_tokens
                 print(
                     f"Input tokens: {response.usage.prompt_tokens}, Output tokens: {out_tokens}"
                 )
+                # Capture reasoning token count if the provider reports it
+                # (e.g. OpenAI completion_tokens_details.reasoning_tokens).
+                try:
+                    details = getattr(response.usage, "completion_tokens_details", None)
+                    if details is not None:
+                        self.last_reasoning_tokens = int(getattr(details, "reasoning_tokens", 0) or 0)
+                except Exception:
+                    pass
 
             if think_tokens_estimate + regular_tokens_estimate > 0 and out_tokens > 0:
                 ratio_think = think_tokens_estimate / (
@@ -6604,7 +6619,16 @@ class ChatybotApp:
             search_db(query.strip('"'))
             return True
         elif cmd == "/dblog":
-            dblog()
+            # /dblog logs the final answer only (legacy behavior).
+            # /dblog thinking (or withthink) also persists the extracted
+            # reasoning text and reasoning token count into the item's metadata.
+            # Matches the bare-word convention used by /save (nothink/withthink)
+            # and /logging (hex) rather than a --prefix flag.
+            include_thinking = False
+            if len(parts) > 1:
+                flags = parts[1].lower() if len(parts) < 3 else f"{parts[1]} {parts[2]}".lower()
+                include_thinking = any(w in flags for w in ("thinking", "withthink", "with-think"))
+            dblog(include_thinking=include_thinking)
             return True
         elif cmd == "/dbprint":
             if len(parts) > 1:
@@ -7752,7 +7776,8 @@ class ChatybotApp:
         )
         print("  /dblist - List all TinyDB databases in the db directory.")
         print("  /searchdb <query> - Search all docs in the current database.")
-        print("  /dblog - Log the last chat completion to the database.")
+        print("  /dblog [thinking] - Log the last chat completion to the database.")
+        print("    thinking: also persist extracted reasoning text and token count.")
         print("  /dbprint - Print the entire database contents in a formatted report.")
         print(
             "  /loadvar <varname> [ALL|id|range] - Load search buffer, all docs, a doc ID, or a range (e.g. 1-5) into a variable."
