@@ -4746,21 +4746,36 @@ class ChatybotApp:
                 return True
 
             action = parts[1].lower()
+            # parts was split with maxsplit=2, so parts[2] (if present) may hold
+            # multiple space-separated sub-args. Re-split them into tokens so
+            # e.g. "/logging start hex on" is parsed correctly.
+            sub_args = parts[2].split() if len(parts) > 2 else []
+
             if action == "start":
-                hex_mode = False
-                if len(parts) > 2 and parts[2].lower() in ("hex", "raw", "on"):
-                    hex_mode = True
+                hex_aliases = ("hex", "raw", "on")
+                hex_mode = any(a.lower() in hex_aliases for a in sub_args)
                 self.logging_manager.start_logging(hex_mode=hex_mode)
             elif action in ("hex", "hexmode"):
-                if len(parts) > 2 and parts[2].lower() in ("off", "false", "disable"):
+                off_aliases = ("off", "false", "disable")
+                on_aliases = ("on", "true", "enable")
+                if sub_args and sub_args[0].lower() in off_aliases:
                     self.logging_manager.hex_mode = False
                     print("Logging hex mode disabled.")
-                else:
+                elif sub_args and sub_args[0].lower() in on_aliases:
                     self.logging_manager.hex_mode = True
                     if not self.logging_manager.logging_active:
                         self.logging_manager.start_logging(hex_mode=True)
                     else:
                         print("Logging hex mode enabled.")
+                elif not sub_args:
+                    # No argument: enable (preserves original toggle-on behavior)
+                    self.logging_manager.hex_mode = True
+                    if not self.logging_manager.logging_active:
+                        self.logging_manager.start_logging(hex_mode=True)
+                    else:
+                        print("Logging hex mode enabled.")
+                else:
+                    print(f"Invalid hex mode argument '{sub_args[0]}'. Use 'on' or 'off'.")
             elif action in ("end", "stop"):
                 self.logging_manager.stop_logging()
             else:
