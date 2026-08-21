@@ -1,4 +1,5 @@
 import os
+import re
 import json
 from typing import List, Dict, Any, Optional
 from datetime import datetime
@@ -13,6 +14,11 @@ SEARCHBUFFER: List[Dict[str, Any]] = []  # Holds the last search results
 _manager: Optional[CorpusManager] = None
 # Storage for the current database path
 _db_path: Optional[str] = None
+
+# A database name must be a single safe path component: no slashes, no "..",
+# no path separators, no empty/whitespace. This prevents path traversal and
+# weird filenames like "db/.json".
+_DB_NAME_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
 
 
 def _ensure_db_path(db_name: str) -> str:
@@ -32,11 +38,34 @@ def set_db(db_name: str) -> None:
     """
     global _manager, _db_path
     if db_name.lower() == "null":
+        # Close the previous manager before deactivating so its file handle
+        # is released.
+        if _manager is not None:
+            try:
+                _manager.close()
+            except Exception:
+                pass
         _manager = None
         _db_path = None
         print("Database support deactivated.")
         return
-    db_path = _ensure_db_path(db_name)
+
+    name = db_name.strip()
+    if not name or not _DB_NAME_RE.match(name):
+        print(
+            f"Invalid database name '{db_name}'. Use letters, digits, '.', '_', or '-' "
+            "(no slashes, spaces, or '..')."
+        )
+        return
+
+    db_path = _ensure_db_path(name)
+    # Close the previous manager before opening a new one so its file handle
+    # is released rather than leaked across repeated /setdb calls.
+    if _manager is not None:
+        try:
+            _manager.close()
+        except Exception:
+            pass
     _manager = CorpusManager(db_path)
     _db_path = db_path
     print(f"Database set to '{db_path}'.")
@@ -84,20 +113,45 @@ def search_db(query: str) -> None:
     """Search all items in the active database for *query*.
 
     Results are stored in the global ``SEARCHBUFFER`` and printed to the console.
+
+    An empty query, ``*``, or ``all`` is an explicit "list all" shorthand.
     """
     global SEARCHBUFFER
     if _manager is None:
         print("No database selected. Use /setdb <dbname> first.")
         return
-    # Simple case‑insensitive substring search across name, content, and metadata fields
+
     all_items = _manager.get_all_items()
-    results = []
+
+    # Empty/whitespace, "*", or "all" is an explicit "list all" shorthand
+    # rather than an emergent property of substring matching.
+    if not query.strip() or query.strip() in ("*", "all"):
+        results = list(all_items)
+        SEARCHBUFFER.clear()
+        SEARCHBUFFER.extend(results)
+        if not results:
+            print("No documents in database.")
+            return
+        print(f"Empty query — showing all {len(results)} document(s):")
+        for i, doc in enumerate(results, 1):
+            snippet = (doc.get("content") or "")[:100]
+            print(
+                f"{i}. id={doc.doc_id if hasattr(doc, 'doc_id') else 'N/A'} "
+                f"type={doc.get('type')} name={doc.get('name')} snippet='{snippet}...'"
+            )
+        return
+
+    # Simple case-insensitive substring search across name, content, and metadata fields
     q = query.lower()
+    results = []
     for item in all_items:
-        name = item.get("name", "")
-        content = item.get("content", "")
+        # Coerce to str so None values (possible via direct TinyDB writes) don't
+        # crash on .lower(); the .get(..., "") default only fires when the key
+        # is absent, not when it's present with value None.
+        name = str(item.get("name") or "")
+        content = str(item.get("content") or "")
         metadata = item.get("metadata", {})
-        
+
         in_metadata = False
         if isinstance(metadata, dict):
             for k, val in metadata.items():
@@ -112,7 +166,7 @@ def search_db(query: str) -> None:
         elif metadata:
             if q in str(metadata).lower():
                 in_metadata = True
-        
+
         if q in name.lower() or q in content.lower() or in_metadata:
             results.append(item)
     SEARCHBUFFER.clear()
@@ -177,14 +231,27 @@ def dblog() -> None:
 
     last_prompt = CHAT_HISTORY[-1][0]
     # Store with a simple metadata dict containing a timestamp
-
     metadata = {"timestamp": datetime.now().isoformat()}
-    # gather model alias and name
-    metadata["model_alias"] = app_instance.config_manager.active_model_alias
-    model_config = app_instance.config_manager.get_model_config(
-        app_instance.config_manager.active_model_alias
-    )
-    metadata["model_name"] = model_config["name"]
+
+    # Gather model alias/name when the app instance is available. These are
+    # secondary metadata; a missing or invalid alias must never abort the log.
+    if app_instance:
+        metadata["model_alias"] = getattr(
+            app_instance.config_manager, "active_model_alias", "unknown"
+        )
+        try:
+            model_config = app_instance.config_manager.get_model_config(
+                app_instance.config_manager.active_model_alias
+            )
+            metadata["model_name"] = (
+                model_config["name"] if model_config else "unknown"
+            )
+        except Exception:
+            metadata["model_name"] = "unknown"
+    else:
+        metadata["model_alias"] = "unknown"
+        metadata["model_name"] = "unknown"
+
     metadata["prompt"] = last_prompt
     _manager.add_item("chat", "last_chat", last_response, metadata)
 
