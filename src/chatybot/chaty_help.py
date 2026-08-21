@@ -522,7 +522,7 @@ class HelpSystem:
             ("setdb", "Create or select a TinyDB database", "/setdb <dbname>", "Use 'Null' to deactivate", ["/setdb mydb", "/setdb Null"]),
             ("dblist", "List all TinyDB databases", "/dblist", "", []),
             ("searchdb", "Search all docs in current database", "/searchdb <query>", "", ["/searchdb python"]),
-            ("dblog", "Log last completion to database", "/dblog", "", []),
+            ("dblog", "Log last completion to database", "/dblog [thinking]", "Add 'thinking' to also persist extracted reasoning text and token count", ["/dblog", "/dblog thinking"]),
             ("dbprint", "Print entire database contents", "/dbprint", "", []),
         ]
         
