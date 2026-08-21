@@ -258,11 +258,11 @@ class HelpSystem:
         self.register_command(CommandHelp(
             name="/effort",
             category="model",
-            short_desc="Set reasoning effort",
-            usage="/effort <low|medium|high|none>",
-            long_desc="Set the reasoning effort level for models that support it (e.g., OpenAI o1/o3, Mistral).",
-            examples=["/effort high", "/effort none"],
-            parameters={"level": "low, medium, high, or none"}
+            short_desc="Set reasoning effort / reasoning strength",
+            usage="/effort <low|medium|high|xhigh|none>",
+            long_desc="Set the reasoning effort / reasoning strength level for models that support it (e.g., OpenAI o1/o3, Mistral, Meta Muse Glimmer).",
+            examples=["/effort high", "/effort xhigh", "/effort none"],
+            parameters={"level": "low, medium, high, xhigh, or none"}
         ))
         
         self.register_command(CommandHelp(

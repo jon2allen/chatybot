@@ -1234,12 +1234,17 @@ class ChatybotApp:
         if "qwen" in model_name.lower() and not self.reasoning_mode:
             kwargs.setdefault("extra_body", {})["enable_reasoning"] = False
 
-        # Add reasoning_effort if set (for OpenAI o1/o3, Mistral models with adjustable reasoning)
-        # Supported by: OpenAI official API, OpenRouter, Mistral AI API for reasoning models
-        # Mistral models: mistral-small-latest, mistral-medium-3.5 (includes mistral-medium-2604)
-        # OpenAI models: o1, o3, etc.
+        # Add reasoning_effort / reasoning_strength if set
+        # Supported by:
+        # - Meta Muse Glimmer: via extra_body.chat_template_kwargs.reasoning_strength (low, medium, high, xhigh)
+        # - OpenAI (o1, o3): via top-level reasoning_effort
+        # - Mistral (magistral, devstral, mistral-medium-3.5): via top-level reasoning_effort
         if self.reasoning_effort is not None:
-            if is_openai_official or "openrouter" in model_config.get("base_url", "").lower():
+            active_alias_lower = (self.config_manager.active_model_alias or "").lower()
+            is_muse_model = any(x in model_name.lower() for x in ["muse", "glimmer"]) or any(x in active_alias_lower for x in ["muse", "glimmer"])
+            if is_muse_model:
+                kwargs.setdefault("extra_body", {}).setdefault("chat_template_kwargs", {})["reasoning_strength"] = self.reasoning_effort
+            elif is_openai_official or "openrouter" in model_config.get("base_url", "").lower():
                 # OpenAI and OpenRouter support reasoning_effort at top level
                 kwargs["reasoning_effort"] = self.reasoning_effort
             elif is_mistral:
@@ -5725,18 +5730,54 @@ class ChatybotApp:
             return True
 
         elif cmd == "/effort":
+            active_alias = self.config_manager.active_model_alias
+            active_config = (
+                self.config_manager.get_model_config(active_alias) if active_alias else {}
+            )
+            model_name = active_config.get("name", active_alias or "").lower()
+            active_alias_lower = (active_alias or "").lower()
+            is_muse = (
+                any(x in model_name for x in ["muse", "glimmer"])
+                or any(x in active_alias_lower for x in ["muse", "glimmer"])
+            )
+
             if len(parts) > 1:
                 effort = parts[1].lower()
-                if effort in ["low", "medium", "high", "none"]:
+                allowed_efforts = ["low", "medium", "high", "xhigh", "none"]
+                if effort in allowed_efforts:
                     self.reasoning_effort = effort if effort != "none" else None
-                    print(f"Reasoning effort set to {effort}")
+                    if is_muse:
+                        if self.reasoning_effort is None:
+                            print("Reasoning effort disabled for Muse (reasoning_strength cleared).")
+                        else:
+                            print(
+                                f"Active model is Muse Glimmer: setting reasoning_strength to '{effort}' (via chat_template_kwargs)."
+                            )
+                    else:
+                        if self.reasoning_effort is None:
+                            print("Reasoning effort set to none (disabled).")
+                        else:
+                            print(f"Reasoning effort set to {effort}")
                 else:
-                    print("Invalid effort level. Use: low, medium, high, or none")
+                    if is_muse:
+                        print("Invalid effort level for Muse. Use: low, medium, high, xhigh, or none")
+                    else:
+                        print("Invalid effort level. Use: low, medium, high, xhigh, or none")
             else:
-                if self.reasoning_effort:
-                    print(f"Reasoning effort is currently: {self.reasoning_effort}")
+                if is_muse:
+                    if self.reasoning_effort:
+                        print(
+                            f"Active model is Muse Glimmer: reasoning_strength is currently '{self.reasoning_effort}'"
+                        )
+                    else:
+                        print(
+                            "Active model is Muse Glimmer: reasoning_strength is currently not set (default)"
+                        )
                 else:
-                    print("Reasoning effort is currently: none (not set)")
+                    if self.reasoning_effort:
+                        print(f"Reasoning effort is currently: {self.reasoning_effort}")
+                    else:
+                        print("Reasoning effort is currently: none (not set)")
             return True
 
         elif cmd == "/thinking":
@@ -7712,7 +7753,7 @@ class ChatybotApp:
         print(
             "  /reasoning <on|off> - Toggle reasoning (thinking) for NVIDIA and Qwen models."
         )
-        print("  /effort <low|medium|high|none> - Set reasoning effort for OpenAI (o1, o3) and Mistral (mistral-small-latest, mistral-medium-3.5) models.")
+        print("  /effort <low|medium|high|xhigh|none> - Set reasoning effort / reasoning strength for OpenAI (o1, o3), Mistral, and Meta Muse Glimmer models.")
         print(
             "  /thinking <on|off> - Toggle display of <think> blocks and reasoning text."
         )

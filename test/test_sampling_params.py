@@ -132,3 +132,42 @@ class TestSamplingParams:
         assert res is True
         assert app.logging_manager.logging_active is False
 
+    @pytest.mark.anyio
+    async def test_effort_muse_glimmer_escape_commands(self, capsys):
+        app = ChatybotApp()
+        app.initialize()
+
+        # Set active model to a Muse Glimmer model
+        app.config_manager.active_model_alias = "glimmer"
+        app.config_manager.config["models"]["glimmer"] = {
+            "name": "meta/muse-glimmer-30b",
+            "base_url": "https://integrate.api.nvidia.com/v1",
+        }
+
+        # Set effort to high for Muse
+        res = await app.handle_escape_command("/effort high")
+        assert res is True
+        assert app.reasoning_effort == "high"
+        captured = capsys.readouterr()
+        assert "Active model is Muse Glimmer: setting reasoning_strength to 'high'" in captured.out
+
+        # Query effort
+        res = await app.handle_escape_command("/effort")
+        assert res is True
+        captured = capsys.readouterr()
+        assert "Active model is Muse Glimmer: reasoning_strength is currently 'high'" in captured.out
+
+        # Set effort to xhigh (Muse-specific)
+        res = await app.handle_escape_command("/effort xhigh")
+        assert res is True
+        assert app.reasoning_effort == "xhigh"
+        captured = capsys.readouterr()
+        assert "Active model is Muse Glimmer: setting reasoning_strength to 'xhigh'" in captured.out
+
+        # Disable effort
+        res = await app.handle_escape_command("/effort none")
+        assert res is True
+        assert app.reasoning_effort is None
+        captured = capsys.readouterr()
+        assert "Reasoning effort disabled for Muse" in captured.out
+
