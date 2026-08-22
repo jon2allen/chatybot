@@ -255,6 +255,8 @@ chat --> Hello!      # Start a conversation
 | `/imagebank{1-5} clear` | Clear an image bank | `/imagebank1 clear` |
 | `/session [subcommand]` | Manage multi-turn session persistence, note annotations, exports, merging, compression, and pruning | `/session start my_project` |
 | `/listmacros [filter]` | List loaded macros with signatures, templates, and search filter | `/listmacros debug` |
+
+> **Warning: Concurrent Session Access.** If two chatybot instances run under the same user and load the same session via `/session use`, their writes will interleave. Each instance keeps its own in-memory turn list and overwrites the other's turns on save (last-write-wins), producing a divergent or incoherent transcript. A `.lock` file sentinel warns when a session is already in use by a live process, but does not block the load. For separate conversations, use `/session start` to create independent sessions. See `session_concurrency.md` for details.
 | `/reloadmacros [file]` | Reload macro definitions from `macro.chatdsl` or a custom file | `/reloadmacros` |
 | `/str_search "<pat>" <var> [flags] [dest]` | Search substring patterns in a text variable into `${STR_SEARCH}` (flags: `c`=count, `m`=positions, `i`=ignore case) | `/str_search "error" ${LOG} ic count_var` |
 | `/proc <name> [p1="v1"]` | Execute a named procedure block defined with `defproc` | `/proc summarize_text text="${file_buffer}"` |
