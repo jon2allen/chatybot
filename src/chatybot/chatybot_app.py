@@ -170,7 +170,6 @@ class ChatybotApp:
 
         # Session persistence settings
         self.session_mode: str = "auto"          # "off", "on", "auto"
-        self.session_type: str = "clean"         # "clean", "telemetry", "hybrid"
         self.session_dir: str = os.path.expanduser("~/.local/share/chatybot/sessions")
         self.session_strip_thinking: str = "separate" # "separate", "true", "false"
         self.active_session_id: Optional[str] = None
@@ -753,8 +752,6 @@ class ChatybotApp:
     def _resolve_session_file(self, target: str) -> Optional[str]:
         """Find a session JSON or JSON.GZ file path by exact path, ID, or custom name."""
         sessions_dir = self.get_sessions_dir()
-        if not os.path.exists(sessions_dir):
-            return None
 
         # 1. Exact path / filename check
         for ext in ("", ".json", ".json.gz"):
@@ -4073,8 +4070,6 @@ class ChatybotApp:
 
         if 'session_mode' in config_section:
             self.session_mode = str(config_section.get('session_mode')).lower()
-        if 'session_type' in config_section:
-            self.session_type = str(config_section.get('session_type')).lower()
         if 'session_dir' in config_section:
             self.session_dir = os.path.expanduser(str(config_section.get('session_dir')))
         if 'session_strip_thinking' in config_section:
