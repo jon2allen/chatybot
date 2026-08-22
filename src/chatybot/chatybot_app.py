@@ -5080,51 +5080,54 @@ class ChatybotApp:
                 # Filter by model if specified
                 if model_filter:
                     files = [f for f in files if model_filter in f.lower()]
-                
-                # Sort files by updated_at timestamp from session metadata
-                files_with_dates = []
+
+                # Parse all session files in a single pass, cache metadata for sorting + display
                 import gzip
+                parsed_sessions = []
                 for fname in files:
                     fpath = os.path.join(sessions_dir, fname)
                     try:
                         open_fn = gzip.open if fname.endswith(".gz") else open
                         with open_fn(fpath, "rt", encoding="utf-8") as sf:
                             sdata = json.load(sf)
-                            updated_at = sdata.get("updated_at", "1970-01-01T00:00:00")
-                            files_with_dates.append((fname, updated_at))
+                        parsed_sessions.append({
+                            "fname": fname,
+                            "updated_at": sdata.get("updated_at", "1970-01-01T00:00:00"),
+                            "sid": sdata.get("session_id", fname),
+                            "cname": sdata.get("custom_name"),
+                            "slug": sdata.get("first_prompt_slug", ""),
+                            "turns_cnt": len(sdata.get("turns", [])),
+                            "upd": sdata.get("updated_at", "")[:16].replace("T", " "),
+                            "snote": sdata.get("notes"),
+                        })
                     except Exception:
-                        files_with_dates.append((fname, "1970-01-01T00:00:00"))
+                        parsed_sessions.append({
+                            "fname": fname,
+                            "updated_at": "1970-01-01T00:00:00",
+                            "sid": fname,
+                            "cname": None,
+                            "slug": "",
+                            "turns_cnt": 0,
+                            "upd": "",
+                            "snote": None,
+                        })
 
                 # Sort by updated_at in descending order (newest first)
-                files_with_dates.sort(key=lambda x: x[1], reverse=True)
-                files = [fname for fname, _ in files_with_dates]
-                
+                parsed_sessions.sort(key=lambda x: x["updated_at"], reverse=True)
+
                 # Apply pagination
                 if limit is not None:
-                    files = files[offset:offset+limit]
+                    parsed_sessions = parsed_sessions[offset:offset+limit]
                 print("\nAvailable Sessions:")
-                for idx, fname in enumerate(files, 1):
-                    fpath = os.path.join(sessions_dir, fname)
-                    try:
-                        open_fn = gzip.open if fname.endswith(".gz") else open
-                        with open_fn(fpath, "rt", encoding="utf-8") as sf:
-                            sdata = json.load(sf)
-                            sid = sdata.get("session_id", fname)
-                            cname = sdata.get("custom_name")
-                            slug = sdata.get("first_prompt_slug", "")
-                            turns_cnt = len(sdata.get("turns", []))
-                            upd = sdata.get("updated_at", "")[:16].replace("T", " ")
-                            snote = sdata.get("notes")
-                            name_str = f" (Name: '{cname}')" if cname else ""
-                            gz_str = " [compressed]" if fname.endswith(".gz") else ""
-                            print(f"  {idx}. {sid}{name_str}{gz_str}")
-                            print(f"     ├─ Prompt: \"{slug}\"")
-                            if snote:
-                                short_note = snote[:60] + "..." if len(snote) > 60 else snote
-                                print(f"     ├─ Notes: \"{short_note}\"")
-                            print(f"     └─ Turns: {turns_cnt} exchanges (Updated: {upd})")
-                    except Exception:
-                        print(f"  {idx}. {fname}")
+                for idx, s in enumerate(parsed_sessions, 1):
+                    name_str = f" (Name: '{s['cname']}')" if s["cname"] else ""
+                    gz_str = " [compressed]" if s["fname"].endswith(".gz") else ""
+                    print(f"  {idx}. {s['sid']}{name_str}{gz_str}")
+                    print(f"     ├─ Prompt: \"{s['slug']}\"")
+                    if s["snote"]:
+                        short_note = s["snote"][:60] + "..." if len(s["snote"]) > 60 else s["snote"]
+                        print(f"     ├─ Notes: \"{short_note}\"")
+                    print(f"     └─ Turns: {s['turns_cnt']} exchanges (Updated: {s['upd']})")
                 print("")
                 return True
 
