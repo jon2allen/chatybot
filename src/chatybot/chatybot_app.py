@@ -5392,6 +5392,7 @@ class ChatybotApp:
                 merged_turns = []
                 merged_models = []
                 first_slug = None
+                source_notes = []
 
                 for st in source_targets:
                     sf_path = self._resolve_session_file(st)
@@ -5406,6 +5407,10 @@ class ChatybotApp:
                         m_alias = sdata.get("model_alias", "default")
                         if m_alias not in merged_models:
                             merged_models.append(m_alias)
+                        src_label = sdata.get("custom_name") or sdata.get("session_id", st)
+                        src_note = sdata.get("notes")
+                        if src_note:
+                            source_notes.append(f"[{src_label}] {src_note}")
                         for turn in sdata.get("turns", []):
                             new_turn = dict(turn)
                             new_turn["turn_id"] = len(merged_turns) + 1
@@ -5416,6 +5421,8 @@ class ChatybotApp:
                 timestamp = now.strftime("%Y%m%d_%H%M%S")
                 new_session_id = f"merged_{timestamp}"
 
+                merged_notes = " | ".join(source_notes)[:1024] if source_notes else None
+
                 payload = {
                     "session_id": new_session_id,
                     "model_alias": model_alias,
@@ -5423,6 +5430,7 @@ class ChatybotApp:
                     "updated_at": now.isoformat(),
                     "first_prompt_slug": first_slug or "merged_session",
                     "custom_name": target_name,
+                    "notes": merged_notes,
                     "turns": merged_turns
                 }
 

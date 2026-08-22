@@ -836,7 +836,7 @@ August 7th, 2026
 August 3rd - 4th, 2026
 ------------------------
 - **Session Workspace Management Suite**:
-  - Added comprehensive workspace commands: `/session info` (workspace size, turn counts, file stats), `/session delete <name|id|all>`, `/session merge <target> <s1> <s2>`, `/session compress [days|all]` (gzip compression), and `/session prune [keep=N] [days=D] [size=M]`.
+  - Added comprehensive workspace commands: `/session info` (workspace size, turn counts, file stats), `/session delete <name|id|all>`, `/session merge <target> <s1> <s2>` (with automatic source notes consolidation), `/session compress [days|all]` (gzip compression), and `/session prune [keep=N] [days=D] [size=M]`.
   - Added session annotation notes (`/session note <text>`) capped at 1024 characters, displayed in session metadata without consuming LLM context tokens.
   - Auto-generated prompt slugs derived from Turn 1 for session auto-naming.
   - Fixed variable permissions by passing `allow_protected=True` when updating `RUN_*` and `LAST_COMPLETION` system variables.
