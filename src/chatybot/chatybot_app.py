@@ -4069,7 +4069,12 @@ class ChatybotApp:
                 self.strip_thinking_from_filebanks = False
 
         if 'session_mode' in config_section:
-            self.session_mode = str(config_section.get('session_mode')).lower()
+            val = str(config_section.get('session_mode')).lower()
+            if val in ("off", "on", "auto"):
+                self.session_mode = val
+            else:
+                print(f"Warning: Invalid session_mode '{val}'. Using default 'auto'.")
+                self.session_mode = "auto"
         if 'session_dir' in config_section:
             self.session_dir = os.path.expanduser(str(config_section.get('session_dir')))
         if 'session_strip_thinking' in config_section:
