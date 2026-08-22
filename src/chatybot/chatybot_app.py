@@ -175,6 +175,7 @@ class ChatybotApp:
         self.session_strip_thinking: str = "separate" # "separate", "true", "false"
         self.active_session_id: Optional[str] = None
         self.active_session_name: Optional[str] = None
+        self.session_model_alias: Optional[str] = None
         self.session_turns: List[Dict[str, Any]] = []
         self.session_created_at: Optional[str] = None
         self.session_first_prompt_slug: Optional[str] = None
@@ -354,6 +355,8 @@ class ChatybotApp:
 
     def cleanup_mcp_sync(self) -> None:
         """Synchronously cleanup MCP manager and active sessions on exit."""
+        if hasattr(self, "active_session_id"):
+            self._release_session_lock()
         if hasattr(self, "mcp_manager") and self.mcp_manager:
             try:
                 try:
@@ -790,7 +793,8 @@ class ChatybotApp:
         candidate = base_id
         counter = 1
         while os.path.exists(os.path.join(sessions_dir, f"{candidate}.json")) or \
-              os.path.exists(os.path.join(sessions_dir, f"{candidate}.json.gz")):
+              os.path.exists(os.path.join(sessions_dir, f"{candidate}.json.gz")) or \
+              os.path.exists(os.path.join(sessions_dir, f"{candidate}.lock")):
             candidate = f"{base_id}_{counter}"
             counter += 1
         return candidate
@@ -812,13 +816,69 @@ class ChatybotApp:
         if not self.active_session_id:
             now = datetime.now()
             model_alias = getattr(self.config_manager, "active_model_alias", None) or "default"
+            self.session_model_alias = model_alias
             self.active_session_id = self._generate_session_id(model_alias)
             self.session_created_at = now.isoformat()
             if initial_prompt:
                 self.session_first_prompt_slug = self._slugify_text(initial_prompt)
+            self._acquire_session_lock(self.active_session_id)
+
+    def _pid_alive(self, pid: int) -> bool:
+        """Check whether a process with the given PID is currently running."""
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+        except OSError:
+            return False
+        return True
+
+    def _session_lock_path(self, session_id: str) -> str:
+        """Get the path to the lock file for a session."""
+        return os.path.join(self.get_sessions_dir(), f"{session_id}.lock")
+
+    def _acquire_session_lock(self, session_id: str) -> bool:
+        """Acquire a lock file for the session. Returns True if acquired or already held."""
+        lock_path = self._session_lock_path(session_id)
+        if os.path.exists(lock_path):
+            try:
+                with open(lock_path, "r") as f:
+                    pid = int(f.read().strip())
+                if pid == os.getpid():
+                    return True
+                if self._pid_alive(pid):
+                    print(f"Warning: Session '{session_id}' is in use by PID {pid}. "
+                          f"Concurrent writes may cause divergent or lost history. "
+                          f"Use /session start for a new session.")
+                    return False
+            except (ValueError, IOError):
+                pass
+        try:
+            with open(lock_path, "w") as f:
+                f.write(str(os.getpid()))
+            return True
+        except IOError:
+            return False
+
+    def _release_session_lock(self, session_id: Optional[str] = None) -> None:
+        """Release the lock file for the given session (or the active session if None)."""
+        sid = session_id or self.active_session_id
+        if not sid:
+            return
+        lock_path = self._session_lock_path(sid)
+        try:
+            if os.path.exists(lock_path):
+                with open(lock_path, "r") as f:
+                    pid = int(f.read().strip())
+                if pid == os.getpid():
+                    os.remove(lock_path)
+        except (ValueError, IOError, OSError):
+            pass
 
     def save_active_session(self):
-        """Save current active session state to disk."""
+        """Save current active session state to disk atomically."""
         if self.session_mode == "off" or not self.active_session_id:
             return
 
@@ -830,8 +890,9 @@ class ChatybotApp:
 
         sessions_dir = self.get_sessions_dir()
         file_path = os.path.join(sessions_dir, f"{self.active_session_id}.json")
+        tmp_path = file_path + ".tmp"
 
-        model_alias = getattr(self.config_manager, "active_model_alias", None) or "default"
+        model_alias = self.session_model_alias or "default"
         payload = {
             "session_id": self.active_session_id,
             "model_alias": model_alias,
@@ -843,8 +904,9 @@ class ChatybotApp:
             "turns": self.session_turns
         }
 
-        with open(file_path, "w", encoding="utf-8") as f:
+        with open(tmp_path, "w", encoding="utf-8") as f:
             json.dump(payload, f, indent=2, ensure_ascii=False)
+        os.replace(tmp_path, file_path)
 
     def append_session_turn(self, prompt: str, response: str, agentic_loop_data: Optional[List[Dict[str, Any]]] = None):
         """Append a completed exchange turn to active session and save to disk."""
@@ -857,6 +919,7 @@ class ChatybotApp:
         
         turn_data: Dict[str, Any] = {
             "turn_id": len(self.session_turns) + 1,
+            "model_alias": getattr(self.config_manager, "active_model_alias", None) or "default",
             "prompt": prompt,
             "response": clean_resp if self.session_strip_thinking != "false" else response
         }
@@ -4907,16 +4970,19 @@ class ChatybotApp:
                     print("Usage: /session start <name>")
                     return True
                 session_name = " ".join(parts[2:]).strip(" \"'")
+                self._release_session_lock()
                 self.chat_history.clear()
                 self.session_turns.clear()
                 now = datetime.now()
                 model_alias = getattr(self.config_manager, "active_model_alias", None) or "default"
+                self.session_model_alias = model_alias
                 self.active_session_id = self._generate_session_id(model_alias)
                 self.active_session_name = session_name
                 self.session_created_at = now.isoformat()
                 self.session_first_prompt_slug = None
                 self.session_notes = None
                 self.session_mode = "on" if self.session_mode == "off" else self.session_mode
+                self._acquire_session_lock(self.active_session_id)
                 self.save_active_session()
                 self.buffer_manager.set_script_var('SESSION_NAME', session_name, allow_protected=True)
                 print(f"Started new session '{session_name}' (ID: {self.active_session_id})")
@@ -4938,6 +5004,7 @@ class ChatybotApp:
                 return True
 
             elif subcmd in ("stop", "off"):
+                self._release_session_lock()
                 self.session_mode = "off"
                 print("Session recording paused.")
                 return True
@@ -5081,19 +5148,22 @@ class ChatybotApp:
                 open_fn = gzip.open if matched_file.endswith(".gz") else open
                 with open_fn(matched_file, "rt", encoding="utf-8") as sf:
                     sdata = json.load(sf)
+                    self._release_session_lock()
                     self.active_session_id = sdata.get("session_id")
                     self.active_session_name = sdata.get("custom_name")
+                    self.session_model_alias = sdata.get("model_alias")
                     self.session_created_at = sdata.get("created_at")
                     self.session_first_prompt_slug = sdata.get("first_prompt_slug")
                     self.session_notes = sdata.get("notes")
                     self.session_turns = sdata.get("turns", [])
-                    
+
                     # Hydrate chat_history for LLM completion context
                     self.chat_history.clear()
                     for turn in self.session_turns:
                         self.chat_history.append((turn.get("prompt", ""), turn.get("response", "")))
-                
+
                 self.session_mode = "on" if self.session_mode == "off" else self.session_mode
+                self._acquire_session_lock(self.active_session_id)
                 self.buffer_manager.set_script_var('SESSION_NAME', self.active_session_name or self.active_session_id, allow_protected=True)
                 print(f"Loaded session '{self.active_session_name or self.active_session_id}' ({len(self.session_turns)} exchanges).")
                 return True
@@ -5109,7 +5179,7 @@ class ChatybotApp:
 
                 print("\n" + "=" * 80)
                 name_str = f" (Name: {self.active_session_name})" if self.active_session_name else ""
-                model_alias = getattr(self.config_manager, "active_model_alias", None) or "default"
+                model_alias = self.session_model_alias or "default"
                 print(f"SESSION: {self.active_session_id or 'Unsaved'}{name_str}")
                 print(f"Model: {model_alias} | Created: {self.session_created_at or 'N/A'} | Total Turns: {len(self.session_turns)}")
                 if self.session_notes:
@@ -5118,7 +5188,9 @@ class ChatybotApp:
 
                 for turn in self.session_turns:
                     t_id = turn.get("turn_id", 1)
-                    print(f"[Turn {t_id}]")
+                    t_model = turn.get("model_alias")
+                    model_str = f" ({t_model})" if t_model else ""
+                    print(f"[Turn {t_id}]{model_str}")
                     print(f"User: {turn.get('prompt')}")
                     if show_thinking and "thinking" in turn:
                         print("Thinking:")
@@ -5151,7 +5223,7 @@ class ChatybotApp:
 
                 md_lines = []
                 name_title = self.active_session_name or self.active_session_id or "Session Transcript"
-                model_alias = getattr(self.config_manager, "active_model_alias", None) or "default"
+                model_alias = self.session_model_alias or "default"
                 md_lines.append(f"# Session Transcript: {name_title}\n")
                 md_lines.append(f"- **Session ID**: `{self.active_session_id or 'N/A'}`")
                 md_lines.append(f"- **Model**: `{model_alias}`")
@@ -5163,7 +5235,11 @@ class ChatybotApp:
 
                 for turn in self.session_turns:
                     t_id = turn.get("turn_id", 1)
-                    md_lines.append(f"## Turn {t_id}\n")
+                    t_model = turn.get("model_alias")
+                    header = f"## Turn {t_id}"
+                    if t_model:
+                        header += f" ({t_model})"
+                    md_lines.append(f"{header}\n")
                     md_lines.append("### User")
                     md_lines.append(f"{turn.get('prompt')}\n")
                     if show_thinking and "thinking" in turn:
@@ -5267,6 +5343,9 @@ class ChatybotApp:
                             if f.endswith(".json") or f.endswith(".json.gz"):
                                 os.remove(os.path.join(sessions_dir, f))
                                 count += 1
+                            elif f.endswith(".lock"):
+                                os.remove(os.path.join(sessions_dir, f))
+                        self._release_session_lock()
                         self.active_session_id = None
                         self.active_session_name = None
                         self.session_turns.clear()
@@ -5288,6 +5367,7 @@ class ChatybotApp:
                     or base_name == f"{self.active_session_id}.json.gz"
                     or self.active_session_name == parts[2]
                 ):
+                    self._release_session_lock()
                     self.active_session_id = None
                     self.active_session_name = None
                     self.session_turns.clear()
