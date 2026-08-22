@@ -782,13 +782,27 @@ class ChatybotApp:
         slug = "_".join(words).lower()
         return slug if slug else "untitled_session"
 
+    def _generate_session_id(self, model_alias: str) -> str:
+        """Generate a unique session ID, appending a counter if the timestamp collides."""
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        base_id = f"{model_alias}_{timestamp}"
+        sessions_dir = self.get_sessions_dir()
+        candidate = base_id
+        counter = 1
+        while os.path.exists(os.path.join(sessions_dir, f"{candidate}.json")) or \
+              os.path.exists(os.path.join(sessions_dir, f"{candidate}.json.gz")):
+            candidate = f"{base_id}_{counter}"
+            counter += 1
+        return candidate
+
     def _extract_thinking_tokens(self, response_text: str) -> Tuple[Optional[str], str]:
         """Extract reasoning traces (<think>...</think>) from response text."""
-        match = re.search(r"<think>(.*?)</think>|<thought>(.*?)</thought>", response_text, flags=re.DOTALL)
-        if match:
-            thinking_content = (match.group(1) or match.group(2) or "").strip()
+        matches = re.findall(r"<think>(.*?)</think>|<thought>(.*?)</thought>", response_text, flags=re.DOTALL)
+        if matches:
+            thinking_parts = [(m[0] or m[1] or "").strip() for m in matches]
+            thinking_content = "\n\n".join(p for p in thinking_parts if p)
             clean_text = re.sub(r"<think>.*?</think>\s*|<thought>.*?</thought>\s*", "", response_text, flags=re.DOTALL).strip()
-            return thinking_content, clean_text
+            return (thinking_content or None), clean_text
         return None, response_text
 
     def _ensure_active_session(self, initial_prompt: str = ""):
@@ -798,8 +812,7 @@ class ChatybotApp:
         if not self.active_session_id:
             now = datetime.now()
             model_alias = getattr(self.config_manager, "active_model_alias", None) or "default"
-            timestamp = now.strftime("%Y%m%d_%H%M%S")
-            self.active_session_id = f"{model_alias}_{timestamp}"
+            self.active_session_id = self._generate_session_id(model_alias)
             self.session_created_at = now.isoformat()
             if initial_prompt:
                 self.session_first_prompt_slug = self._slugify_text(initial_prompt)
@@ -4002,7 +4015,12 @@ class ChatybotApp:
         if 'session_dir' in config_section:
             self.session_dir = os.path.expanduser(str(config_section.get('session_dir')))
         if 'session_strip_thinking' in config_section:
-            self.session_strip_thinking = str(config_section.get('session_strip_thinking')).lower()
+            val = str(config_section.get('session_strip_thinking')).lower()
+            if val in ("separate", "true", "false"):
+                self.session_strip_thinking = val
+            else:
+                print(f"Warning: Invalid session_strip_thinking '{val}'. Using default 'separate'.")
+                self.session_strip_thinking = "separate"
 
         tools = config.get('tools', {})
         
@@ -4893,8 +4911,7 @@ class ChatybotApp:
                 self.session_turns.clear()
                 now = datetime.now()
                 model_alias = getattr(self.config_manager, "active_model_alias", None) or "default"
-                timestamp = now.strftime("%Y%m%d_%H%M%S")
-                self.active_session_id = f"{model_alias}_{timestamp}"
+                self.active_session_id = self._generate_session_id(model_alias)
                 self.active_session_name = session_name
                 self.session_created_at = now.isoformat()
                 self.session_first_prompt_slug = None
@@ -4982,7 +4999,6 @@ class ChatybotApp:
                             range_parts = param[6:].split(":")
                             if len(range_parts) == 2:
                                 offset, limit = map(int, range_parts)
-                                limit = offset + limit
                             else:
                                 offset = int(range_parts[0])
                         except ValueError:
@@ -5075,7 +5091,7 @@ class ChatybotApp:
                     # Hydrate chat_history for LLM completion context
                     self.chat_history.clear()
                     for turn in self.session_turns:
-                        self.chat_history.append((turn["prompt"], turn["response"]))
+                        self.chat_history.append((turn.get("prompt", ""), turn.get("response", "")))
                 
                 self.session_mode = "on" if self.session_mode == "off" else self.session_mode
                 self.buffer_manager.set_script_var('SESSION_NAME', self.active_session_name or self.active_session_id, allow_protected=True)
@@ -5234,12 +5250,16 @@ class ChatybotApp:
 
             elif subcmd == "delete":
                 if len(parts) < 3:
-                    print("Usage: /session delete <name|id|all>")
+                    print("Usage: /session delete <name|id|--all>")
                     return True
                 target = parts[2].lower()
 
-                if target == "all":
-                    confirm = input("Are you sure you want to delete ALL saved sessions? (y/N): ").strip().lower()
+                if target == "--all":
+                    try:
+                        confirm = input("Are you sure you want to delete ALL saved sessions? (y/N): ").strip().lower()
+                    except EOFError:
+                        print("Delete all cancelled (non-interactive input).")
+                        return True
                     if confirm in ("y", "yes"):
                         sessions_dir = self.get_sessions_dir()
                         count = 0
@@ -5263,7 +5283,11 @@ class ChatybotApp:
 
                 os.remove(matched_file)
                 base_name = os.path.basename(matched_file)
-                if self.active_session_id and (self.active_session_id in base_name or self.active_session_name == parts[2]):
+                if self.active_session_id and (
+                    base_name == f"{self.active_session_id}.json"
+                    or base_name == f"{self.active_session_id}.json.gz"
+                    or self.active_session_name == parts[2]
+                ):
                     self.active_session_id = None
                     self.active_session_name = None
                     self.session_turns.clear()
@@ -5344,9 +5368,12 @@ class ChatybotApp:
                 now_ts = time.time()
                 count = 0
                 saved_bytes = 0
+                active_json = f"{self.active_session_id}.json" if self.active_session_id else None
 
                 for fname in os.listdir(sessions_dir):
                     if fname.endswith(".json") and not fname.endswith(".json.gz"):
+                        if fname == active_json:
+                            continue
                         fp = os.path.join(sessions_dir, fname)
                         mtime = os.path.getmtime(fp)
                         age_days = (now_ts - mtime) / 86400.0
@@ -5399,8 +5426,15 @@ class ChatybotApp:
                     print("No session directory found.")
                     return True
 
+                active_names = set()
+                if self.active_session_id:
+                    active_names.add(f"{self.active_session_id}.json")
+                    active_names.add(f"{self.active_session_id}.json.gz")
+
                 file_entries = []
                 for fname in os.listdir(sessions_dir):
+                    if fname in active_names:
+                        continue
                     if fname.endswith(".json") or fname.endswith(".json.gz"):
                         fp = os.path.join(sessions_dir, fname)
                         file_entries.append({
