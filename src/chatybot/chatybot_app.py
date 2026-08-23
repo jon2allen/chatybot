@@ -1918,6 +1918,11 @@ class ChatybotApp:
 
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 csv_filename = f"tps+{timestamp}.csv"
+                # Avoid overwriting a CSV from the same second.
+                counter = 1
+                while os.path.exists(csv_filename):
+                    csv_filename = f"tps+{timestamp}_{counter}.csv"
+                    counter += 1
                 try:
                     import csv
 
@@ -1933,6 +1938,8 @@ class ChatybotApp:
                     print(f"TPS performance saved to '{csv_filename}'")
                 except Exception as e:
                     print(f"Error saving TPS performance: {e}")
+            elif self.trace_tps_perf:
+                print("Warning: trace_tps_perf requires streaming mode. Enable streaming to capture per-second token throughput.")
 
             # Log user entry with datetime and model info
             if self.logging_manager.logging_active:
@@ -4214,7 +4221,18 @@ class ChatybotApp:
         elif cmd == "/trace":
             if len(parts) >= 3:
                 subcmd = parts[1].lower()
-                state = parts[2].lower()
+                state = parts[2].lower().strip()
+                # Guard against trailing tokens (e.g. "/trace tps on please")
+                # which maxsplit=2 would fold into state, silently disabling.
+                extra = command.split()[3:]
+                if extra:
+                    print(f"Error: unexpected argument(s) after '{state}': {' '.join(extra)}")
+                    print("Usage: /trace <rawpayload|tps|tpsperf|imagedbg|rerank|agentic_loop> <on|off>")
+                    return True
+                if state not in ("on", "off"):
+                    print(f"Error: invalid state '{state}'. Use 'on' or 'off'.")
+                    print("Usage: /trace <rawpayload|tps|tpsperf|imagedbg|rerank|agentic_loop> <on|off>")
+                    return True
                 is_on = state == "on"
                 if subcmd == "rawpayload":
                     self.trace_raw_payload = is_on
@@ -4243,7 +4261,7 @@ class ChatybotApp:
                 else:
                     print("Unknown /trace subcommand. Use rawpayload, tps, tpsperf, imagedbg, rerank, or agentic_loop.")
             else:
-                print("Usage: /trace <rawpayload|tps|tpsperf|imagedbg|rerank> <on|off>")
+                print("Usage: /trace <rawpayload|tps|tpsperf|imagedbg|rerank|agentic_loop> <on|off>")
             return True
 
         elif cmd == "/debug":
