@@ -1409,55 +1409,58 @@ class ChatybotApp:
 
             # Capture payload for debug mode
             if self.debug_payload_mode:
+                if self.script_context:
+                    print("Warning: /debug payload is not allowed in script context. Skipping.")
+                    self.debug_payload_mode = False
+                else:
+                    import tempfile
+                    import os
+                    import subprocess
 
-                import tempfile
-                import os
-                import subprocess
-                
-                self.debug_payload_data = kwargs.copy()
-                
-                # Create a temporary file with the payload
-                temp_file = tempfile.NamedTemporaryFile(
-                    mode='w+', 
-                    suffix='.json', 
-                    delete=False,
-                    encoding='utf-8'
-                )
-                
-                try:
-                    # Write the payload to the temp file
-                    json.dump(self.debug_payload_data, temp_file, indent=2)
-                    temp_file.flush()
-                    
-                    print(f"\nPayload captured and saved to: {temp_file.name}")
-                    print("Opening in editor...")
-                    
-                    # Determine the editor to use
-                    editor = os.environ.get('EDITOR', 'vi')
-                    
-                    # Open the file in the editor
-                    subprocess.run([editor, temp_file.name])
-                    
-                    # After editing, read the modified payload
-                    with open(temp_file.name, 'r', encoding='utf-8') as f:
-                        modified_payload = json.load(f)
-                    
-                    # Update kwargs with the modified payload
-                    kwargs.update(modified_payload)
-                    
-                    print(f"\nUsing modified payload from: {temp_file.name}")
-                    
-                except Exception as e:
-                    print(f"Error in debug payload mode: {str(e)}")
-                    self.debug_payload_mode = False
-                finally:
-                    # Clean up and reset debug mode
-                    temp_file.close()
+                    self.debug_payload_data = kwargs.copy()
+
+                    # Create a temporary file with the payload
+                    temp_file = tempfile.NamedTemporaryFile(
+                        mode='w+',
+                        suffix='.json',
+                        delete=False,
+                        encoding='utf-8'
+                    )
+
                     try:
-                        os.unlink(temp_file.name)
-                    except:
-                        pass
-                    self.debug_payload_mode = False
+                        # Write the payload to the temp file
+                        json.dump(self.debug_payload_data, temp_file, indent=2)
+                        temp_file.flush()
+
+                        print(f"\nPayload captured and saved to: {temp_file.name}")
+                        print("Opening in editor...")
+
+                        # Determine the editor to use
+                        editor = os.environ.get('EDITOR', 'vi')
+
+                        # Open the file in the editor
+                        subprocess.run([editor, temp_file.name])
+
+                        # After editing, read the modified payload
+                        with open(temp_file.name, 'r', encoding='utf-8') as f:
+                            modified_payload = json.load(f)
+
+                        # Update kwargs with the modified payload
+                        kwargs.update(modified_payload)
+
+                        print(f"\nUsing modified payload from: {temp_file.name}")
+
+                    except Exception as e:
+                        print(f"Error in debug payload mode: {str(e)}")
+                        self.debug_payload_mode = False
+                    finally:
+                        # Clean up and reset debug mode
+                        temp_file.close()
+                        try:
+                            os.unlink(temp_file.name)
+                        except:
+                            pass
+                        self.debug_payload_mode = False
 
             # Clean assistant messages to ensure they are not empty (which causes API 400 error)
             cleaned_messages = []
