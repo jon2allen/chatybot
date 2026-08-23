@@ -246,7 +246,31 @@ class TestCommandVerbValidation:
 
         assert "Warning: trace_tps_perf requires streaming mode. Enable streaming to capture per-second token throughput." in captured.out
 
+    @pytest.mark.anyio
+    async def test_empty_assistant_message_cleaning_for_cohere(self, app):
+        """Verify chat history with thought-only assistant response falls back to non-empty text."""
+        from unittest.mock import AsyncMock
+        mock_completion = MagicMock()
+        mock_choice = MagicMock()
+        mock_choice.message.content = "OK response"
+        mock_choice.message.reasoning_content = None
+        mock_completion.choices = [mock_choice]
 
+        mock_create = AsyncMock(return_value=mock_completion)
+        client = app.get_openai_client()
+        client.chat.completions.create = mock_create
 
+        app.chat_history = [
+            ("user prompt", "<think>internal reasoning trace</think>")
+        ]
 
+        await app.chat_completion("Next prompt", stream=False)
+
+        call_kwargs = mock_create.call_args[1]
+        sent_messages = call_kwargs["messages"]
+
+        assistant_msg = sent_messages[0] if sent_messages[0]["role"] == "assistant" else sent_messages[1]
+        assert assistant_msg["role"] == "assistant"
+        assert assistant_msg["content"].strip() != ""
+        assert assistant_msg["content"] != " "
 
