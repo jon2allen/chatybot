@@ -236,3 +236,84 @@ async def test_interactive_proc_execution_with_prompts(app):
     app.chat_completion.assert_any_call("what are five cities in Italy", stream=app.streaming_enabled)
     app.chat_completion.assert_any_call("what are five cities in Bulgaria", stream=app.streaming_enabled)
     assert app.script_context is False  # Restored after proc finish
+
+
+@pytest.mark.anyio
+async def test_proc_redefinition_warning(app, capsys):
+    """Verify redefining an existing procedure outputs warning message."""
+    script = """
+defproc my_proc(a)
+set x = 1
+endproc
+
+defproc my_proc(a, b)
+set x = 2
+endproc
+"""
+    with tempfile.NamedTemporaryFile("w+", suffix=".chatdsl", delete=False) as f:
+        f.write(script)
+        f.flush()
+        temp_path = f.name
+
+    try:
+        await app.execute_script(temp_path)
+        captured = capsys.readouterr()
+        assert "Warning: Redefining procedure 'my_proc' (previously defined with 1 parameters)." in captured.out
+    finally:
+        os.unlink(temp_path)
+
+
+@pytest.mark.anyio
+async def test_proc_invalid_max_depth_string(app, capsys):
+    """Verify invalid PROC_MAX_DEPTH string produces warning and defaults to 20."""
+    app.buffer_manager.script_vars["PROC_MAX_DEPTH"] = "not_an_int"
+    app.procedures["empty_proc"] = {"params": [], "body": []}
+
+    result = await app.handle_escape_command("/proc empty_proc")
+    assert result is True
+    captured = capsys.readouterr()
+    assert "Warning: PROC_MAX_DEPTH is not a valid integer; defaulting to 20." in captured.out
+
+
+@pytest.mark.anyio
+async def test_file_based_proc_with_defproc_wrapper(app):
+    """Test procedure file wrapped in defproc...endproc strips header/footer properly."""
+    os.makedirs("procs", exist_ok=True)
+    file_proc_path = os.path.join("procs", "wrapped_proc.chatdsl")
+    with open(file_proc_path, "w", encoding="utf-8") as f:
+        f.write("defproc wrapped_proc(val)\nset wrapped_result = \"ok_${val}\"\nendproc\n")
+
+    try:
+        cmd = '/proc wrapped_proc val="123"'
+        result = await app.handle_escape_command(cmd)
+        assert result is True
+        assert app.buffer_manager.script_vars.get("wrapped_result") == "ok_123"
+    finally:
+        if os.path.exists(file_proc_path):
+            os.unlink(file_proc_path)
+
+
+@pytest.mark.anyio
+async def test_proc_arity_validation_warnings(app, capsys):
+    """Verify calling procedure with missing or extra parameters prints arity warnings."""
+    script = """
+defproc rigid_proc(req1, req2)
+set done = "yes"
+endproc
+
+/proc rigid_proc req1="val1"
+/proc rigid_proc req1="val1" req2="val2" extra_param="val3"
+"""
+    with tempfile.NamedTemporaryFile("w+", suffix=".chatdsl", delete=False) as f:
+        f.write(script)
+        f.flush()
+        temp_path = f.name
+
+    try:
+        await app.execute_script(temp_path)
+        captured = capsys.readouterr()
+        assert "Warning: Procedure 'rigid_proc' called without parameter(s): req2." in captured.out
+        assert "Warning: Procedure 'rigid_proc' called with unknown parameter(s): extra_param." in captured.out
+    finally:
+        os.unlink(temp_path)
+
