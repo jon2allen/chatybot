@@ -1161,6 +1161,8 @@ class ChatybotApp:
                     messages.append({"role": "user", "content": past_p})
                     # Strip thinking tags from past assistant responses for token efficiency
                     clean_r = re.sub(r"<think>.*?</think>\s*|<thought>.*?</thought>\s*", "", past_r, flags=re.DOTALL).strip()
+                    if not clean_r and past_r:
+                        clean_r = past_r
                     messages.append({"role": "assistant", "content": clean_r})
 
             # For multimodal (vision) models, use content array with text + images
@@ -1465,8 +1467,8 @@ class ChatybotApp:
             # Clean assistant messages to ensure they are not empty (which causes API 400 error)
             cleaned_messages = []
             for msg in kwargs.get("messages", []):
-                if msg.get("role") == "assistant" and not (msg.get("content") or "").strip():
-                    cleaned_messages.append({"role": "assistant", "content": " "})
+                if msg.get("role") == "assistant" and not (msg.get("content") or "").strip() and not msg.get("tool_calls"):
+                    cleaned_messages.append({"role": "assistant", "content": "[No response content]"})
                 else:
                     cleaned_messages.append(msg)
             kwargs["messages"] = cleaned_messages
@@ -7222,18 +7224,7 @@ class ChatybotApp:
 
                 results = ranker.rerank(query=query, top_n=top_n, verbose=False)
                 self.latest_rerank_results = results
-                
-                if self.debug_response_mode:
-                    print("\n--- DEBUG RESPONSE (JSON) ---")
-                    print(json.dumps(results, indent=2))
-                    print("--- END DEBUG RESPONSE ---\n")
-                    self.debug_response_mode = False
-                elif self.debug_response_raw:
-                    print("\n--- DEBUG RESPONSE (RAW) ---")
-                    print(results)
-                    print("--- END DEBUG RESPONSE ---\n")
-                    self.debug_response_raw = False
-                
+
                 # Pre-resolve matching texts and references
                 resolved_matches = []
                 for idx, res in enumerate(results, 1):
