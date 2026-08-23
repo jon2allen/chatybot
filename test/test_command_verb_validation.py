@@ -198,4 +198,17 @@ class TestCommandVerbValidation:
         assert app.i18n.resolve_command("/procedure") == "/proc"
         assert app.i18n.translate_script("pourchaque line en lignes(doc)") == "foreach line en lignes(doc)"
 
+    @pytest.mark.anyio
+    async def test_debug_payload_in_script_context(self, app, capsys):
+        """Verify /debug payload mode is skipped when executing in script context."""
+        app.debug_payload_mode = True
+        app.script_context = True
+
+        await app.chat_completion("Test prompt", stream=False)
+        captured = capsys.readouterr()
+
+        assert "Warning: /debug payload is not allowed in script context. Skipping." in captured.out
+        assert app.debug_payload_mode is False
+
+
 
