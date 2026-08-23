@@ -103,6 +103,9 @@ class ChatybotApp:
         self.procedures: Dict[str, Dict[str, Any]] = {}
         self.proc_depth: int = 0
         self.active_proc_stack: List[Dict[str, Any]] = []
+        # Tracks active foreach loops so 'break' can detect use outside a loop
+        # and defproc can warn when defined inside a loop body.
+        self.foreach_active: int = 0
 
         # Image generation settings
         self.image_size = "1024x1024"
@@ -2161,6 +2164,9 @@ class ChatybotApp:
 
         # Handle break command (exits foreach loop early)
         if stripped_command == "break":
+            if self.foreach_active < 1:
+                print("Error: 'break' used outside of a foreach loop.")
+                return True
             raise LoopBreak()
 
         # Handle if-then commands
@@ -2499,6 +2505,8 @@ class ChatybotApp:
                 return
             body_lines.append(line)
         
+        if proc_name in self.procedures:
+            print(f"Warning: Redefining procedure '{proc_name}' (previously defined with {len(self.procedures[proc_name]['params'])} parameters).")
         self.procedures[proc_name] = {"params": params, "body": body_lines}
         print(f"Procedure '{proc_name}' defined with params: {params}")
 
@@ -2523,13 +2531,15 @@ class ChatybotApp:
                         start = int(parts[0])
                         end = int(parts[1])
                         step = 1 if start <= end else -1
-                    elif len(parts) == 3 and sep == ":":
+                    elif len(parts) == 3:
                         start = int(parts[0])
                         end = int(parts[1])
                         step = int(parts[2])
                     else:
                         return None, f"Invalid range format: '{expr_str}'"
-                    
+
+                    if step == 0:
+                        return None, f"Invalid range step (zero) in range expression: '{expr_str}'"
                     end_inclusive = (end + 1) if step > 0 else (end - 1)
                     return range(start, end_inclusive, step), None
                 except ValueError:
@@ -2538,7 +2548,7 @@ class ChatybotApp:
                 try:
                     count = int(resolved_inner)
                     if count < 1:
-                        return range(0), None
+                        return None, f"Warning: range count {count} is less than 1 in '{expr_str}'. Skipping."
                     return range(1, count + 1), None
                 except ValueError:
                     return None, f"Invalid numeric count in range expression: '{expr_str}'"
@@ -2563,7 +2573,7 @@ class ChatybotApp:
             elif isinstance(content, str):
                 return content.splitlines(), None
             else:
-                return [], None
+                return None, f"Warning: lines() could not resolve '{inner_str}' to any content. Skipping."
 
         # 3. Standard Array / Variable lookup: my_array
         array_data = self.buffer_manager.script_vars.get(raw_expr)
@@ -2634,6 +2644,7 @@ class ChatybotApp:
             self.buffer_manager.script_vars._is_user_write = True
 
         try:
+            self.foreach_active += 1
             for elem in iterable:
                 val_str = str(elem) if not isinstance(elem, (str, int, float, bool)) else elem
                 self.buffer_manager.set_script_var(item_var, val_str)
@@ -2642,6 +2653,7 @@ class ChatybotApp:
                 except LoopBreak:
                     break
         finally:
+            self.foreach_active -= 1
             old_user_write_inner = getattr(self.buffer_manager.script_vars, '_is_user_write', False)
             if hasattr(self.buffer_manager.script_vars, '_is_user_write'):
                 self.buffer_manager.script_vars._is_user_write = True
@@ -2707,6 +2719,8 @@ class ChatybotApp:
                 # 2. Handle active defproc buffer capture
                 if in_defproc:
                     if stripped_cmd == "endproc":
+                        if cur_proc_name in self.procedures:
+                            print(f"Warning: Redefining procedure '{cur_proc_name}' (previously defined with {len(self.procedures[cur_proc_name]['params'])} parameters).")
                         self.procedures[cur_proc_name] = {
                             "params": cur_proc_params,
                             "body": cur_proc_body
@@ -2739,6 +2753,8 @@ class ChatybotApp:
 
                 # 4. Check for defproc start
                 if lstripped_cmd.startswith("defproc ") or stripped_cmd == "defproc":
+                    if self.foreach_active > 0:
+                        print(f"Warning: defproc defined inside a foreach loop body; it will be re-evaluated on every iteration.")
                     m = re.match(r"defproc\s+([a-zA-Z_]\w*)(?:\(([^)]*)\))?", lstripped_cmd)
                     if m:
                         cur_proc_name = m.group(1)
@@ -6638,7 +6654,11 @@ class ChatybotApp:
                 var_value = match.group(3).strip('"\'')
                 call_args[var_name] = var_value
 
-            max_depth = int(self.buffer_manager.script_vars.get("PROC_MAX_DEPTH", 20))
+            try:
+                max_depth = int(self.buffer_manager.script_vars.get("PROC_MAX_DEPTH", 20))
+            except (ValueError, TypeError):
+                print("Warning: PROC_MAX_DEPTH is not a valid integer; defaulting to 20.")
+                max_depth = 20
             if self.proc_depth >= max_depth:
                 print(f"Error: Maximum procedure recursion depth of {max_depth} reached.", flush=True)
                 return True
@@ -6663,6 +6683,15 @@ class ChatybotApp:
                         with open(found_path, "r", encoding="utf-8") as f:
                             content = f.read()
                         body_lines = content.split("\n")
+                        # Allow proc files to be written as full defproc...endproc
+                        # blocks by stripping the header and trailing endproc so
+                        # only the body is executed on call.
+                        if body_lines and re.match(r"\s*defproc\s+\w+", body_lines[0]):
+                            body_lines = body_lines[1:]
+                            for i in range(len(body_lines) - 1, -1, -1):
+                                if body_lines[i].strip() == "endproc":
+                                    body_lines = body_lines[:i] + body_lines[i + 1:]
+                                    break
                     except Exception as e:
                         print(f"Error reading procedure file '{found_path}': {e}")
                         return True
@@ -6672,7 +6701,19 @@ class ChatybotApp:
 
             frame = {"saved_vars": {}, "local_vars": set()}
             self.active_proc_stack.append(frame)
-            
+
+            # Validate arity for in-memory procedures (file-based procs have no
+            # declared param list, so they are skipped).
+            if proc_name in self.procedures:
+                declared = set(self.procedures[proc_name]["params"])
+                provided = set(call_args.keys())
+                missing = declared - provided
+                extra = provided - declared
+                if missing:
+                    print(f"Warning: Procedure '{proc_name}' called without parameter(s): {', '.join(sorted(missing))}.")
+                if extra:
+                    print(f"Warning: Procedure '{proc_name}' called with unknown parameter(s): {', '.join(sorted(extra))}.")
+
             old_user_write = getattr(self.buffer_manager.script_vars, '_is_user_write', False)
             if hasattr(self.buffer_manager.script_vars, '_is_user_write'):
                 self.buffer_manager.script_vars._is_user_write = True
@@ -6694,6 +6735,8 @@ class ChatybotApp:
             self.script_context = True
             try:
                 await self.execute_command_list(body_lines)
+            except LoopBreak:
+                raise
             except Exception as e:
                 print(f"Error executing procedure '{proc_name}': {e}")
             finally:
