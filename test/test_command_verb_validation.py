@@ -210,5 +210,43 @@ class TestCommandVerbValidation:
         assert "Warning: /debug payload is not allowed in script context. Skipping." in captured.out
         assert app.debug_payload_mode is False
 
+    @pytest.mark.anyio
+    async def test_trace_command_validation(self, app, capsys):
+        """Verify /trace validates state strictly and rejects extra arguments."""
+        # Valid state on
+        await app.handle_escape_command("/trace tps on")
+        captured = capsys.readouterr()
+        assert "Trace tps set to True" in captured.out
+        assert app.trace_tps is True
+
+        # Valid state off
+        await app.handle_escape_command("/trace tps off")
+        captured = capsys.readouterr()
+        assert "Trace tps set to False" in captured.out
+        assert app.trace_tps is False
+
+        # Invalid state
+        await app.handle_escape_command("/trace tps maybe")
+        captured = capsys.readouterr()
+        assert "Error: invalid state 'maybe'. Use 'on' or 'off'." in captured.out
+
+        # Extra trailing arguments
+        await app.handle_escape_command("/trace tps on please")
+        captured = capsys.readouterr()
+        assert "Error: unexpected argument(s) after 'on please': please" in captured.out
+
+    @pytest.mark.anyio
+    async def test_trace_tps_perf_non_streaming_warning(self, app, capsys):
+        """Verify trace_tps_perf outputs warning when streaming is disabled."""
+        app.trace_tps_perf = True
+        app.streaming_enabled = False
+
+        await app.chat_completion("Test prompt", stream=False)
+        captured = capsys.readouterr()
+
+        assert "Warning: trace_tps_perf requires streaming mode. Enable streaming to capture per-second token throughput." in captured.out
+
+
+
 
 
