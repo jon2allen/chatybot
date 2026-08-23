@@ -1988,6 +1988,11 @@ class ChatybotApp:
             if self.logging_manager.logging_active:
                 self.logging_manager.log_message(error_msg)
             return f"Error: {str(e)}"
+        finally:
+            # Ensure one-shot debug flags never leak past this completion,
+            # even when the API call raises before the flags are consumed.
+            self.debug_response_mode = False
+            self.debug_response_raw = False
 
     async def execute_script_command(
         self, command: str, original_handler: Callable[[str], Union[bool, str]]
@@ -3995,7 +4000,7 @@ class ChatybotApp:
             return
 
         total = len(loop_data)
-        successes = sum(1 for r in loop_data if r.get("status") == "success")
+        successes = sum(1 for r in loop_data if isinstance(r, dict) and r.get("status") == "success")
         failures = total - successes
 
         print("\n=== AGENTIC LOOP TRACE ===")
@@ -4003,6 +4008,9 @@ class ChatybotApp:
         print("-" * 60)
 
         for i, rec in enumerate(loop_data, 1):
+            if not isinstance(rec, dict):
+                print(f"[{i}] (invalid record: {type(rec).__name__}) — SKIPPED")
+                continue
             tool_name = rec.get("tool", "unknown")
             turn = rec.get("turn", "?")
             status = rec.get("status", "error")

@@ -57,6 +57,7 @@ PROFILE_PRESETS: Dict[str, Dict[str, Any]] = {
         "trace_raw_payload": False,
         "trace_rerank": False,
         "trace_tps_perf": False,
+        "trace_imagedbg": False,
         "disabled_tools": [],
     },
     "general": {
@@ -75,6 +76,7 @@ PROFILE_PRESETS: Dict[str, Dict[str, Any]] = {
         "trace_raw_payload": False,
         "trace_rerank": False,
         "trace_tps_perf": False,
+        "trace_imagedbg": False,
         "disabled_tools": [],
     },
     "explorer": {
@@ -93,6 +95,7 @@ PROFILE_PRESETS: Dict[str, Dict[str, Any]] = {
         "trace_raw_payload": False,
         "trace_rerank": False,
         "trace_tps_perf": False,
+        "trace_imagedbg": False,
         "disabled_tools": ["run_command", "run_safe", "run_unsafe", "setdb"],
     },
 }
