@@ -28,6 +28,7 @@ class ProfileEditor:
         self.trace_raw_payload = False
         self.trace_rerank = False
         self.trace_tps_perf = False
+        self.trace_imagedbg = False
         self.reasoning = False
         self.show_thinking = False
         self.reasoning_effort = "none"  # none, low, medium, high
@@ -72,6 +73,7 @@ class ProfileEditor:
             ("trace_raw_payload", "Raw Payload", "checkbox"),
             ("trace_rerank", "Rerank", "checkbox"),
             ("trace_tps_perf", "TPS Perf", "checkbox"),
+            ("trace_imagedbg", "ImageDbg", "checkbox"),
             # Reasoning
             ("reasoning", "Reasoning", "checkbox"),
             ("show_thinking", "Show Thinking", "checkbox"),
@@ -147,6 +149,8 @@ class ProfileEditor:
                         self.trace_rerank = state
                     elif sub == "tpsperf":
                         self.trace_tps_perf = state
+                    elif sub == "imagedbg":
+                        self.trace_imagedbg = state
 
     def generate_chatdsl(self) -> str:
         lines = []
@@ -181,6 +185,8 @@ class ProfileEditor:
             lines.append("/trace rerank on")
         if self.trace_tps_perf:
             lines.append("/trace tpsperf on")
+        if self.trace_imagedbg:
+            lines.append("/trace imagedbg on")
             
         lines.append(f"/reasoning {'on' if self.reasoning else 'off'}")
         lines.append(f"/thinking {'on' if self.show_thinking else 'off'}")
@@ -467,6 +473,9 @@ class ProfileEditor:
             elif fid == "trace_tps_perf":
                 marker = "[x]" if self.trace_tps_perf else "[ ]"
                 stdscr.addstr(17, 50, f"{marker} TPSPerf", style)
+            elif fid == "trace_imagedbg":
+                marker = "[x]" if self.trace_imagedbg else "[ ]"
+                stdscr.addstr(17, 62, f"{marker} ImageDbg", style)
                 
             elif fid == "reasoning":
                 marker = "[x]" if self.reasoning else "[ ]"
