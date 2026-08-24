@@ -160,8 +160,8 @@ Active escape commands:
   /top_k <value> - Set top_k for the current model.
   /freq_penalty <value> - Set frequency penalty (-2.0-2.0).
   /pres_penalty <value> - Set presence penalty (-2.0-2.0).
-  /reasoning <on|off> - Toggle reasoning (thinking) for NVIDIA and Qwen models.
-  /effort <low|medium|high|none> - Set reasoning effort for OpenAI (o1, o3) and Mistral (mistral-small-latest, mistral-medium-3.5) models.
+  /reasoning <on|off> - Toggle reasoning (thinking) for NVIDIA, Qwen, and GLM models.
+  /effort <low|medium|high|none> - Set reasoning effort for OpenAI (o1, o3), Mistral (mistral-small-latest, mistral-medium-3.5), and GLM (GLM-5.2) models.
   /thinking <on|off> - Toggle display of <think> and <thought> blocks and reasoning text.
   /thoughtstyle <none|gemma4|nanbeige|nanbeige_code> - Set prompting format for negative prompt to disable reasoning - auto.
   /seed <value> - Set seed (int, 'time', or 'random <min>,<max>').
@@ -219,8 +219,8 @@ chat --> Hello!      # Start a conversation
 | `/top_k <value>` | Set top_k | `/top_k 40` |
 | `/freq_penalty <value>` | Set freq penalty | `/freq_penalty 0.5` |
 | `/pres_penalty <value>` | Set presence penalty | `/pres_penalty 0.5` |
-| `/reasoning <on\|off>` | Toggle NVIDIA/Qwen reasoning | `/reasoning off` |
-| `/effort <low\|medium\|high\|none>` | Set reasoning effort for OpenAI (o1, o3) and Mistral (mistral-small-latest, mistral-medium-3.5) models | `/effort high` |
+| `/reasoning <on\|off>` | Toggle NVIDIA/Qwen/GLM reasoning | `/reasoning off` |
+| `/effort <low\|medium\|high\|none>` | Set reasoning effort for OpenAI (o1, o3), Mistral, and GLM (GLM-5.2) models | `/effort high` |
 | `/thinking <on\|off>` | Toggle `<think>` and `<thought>` visibility | `/thinking off` |
 | `/thoughtstyle <none\|gemma4\|nanbeige\|nanbeige_code>` | Set prompting format for negative prompt to disable reasoning - auto | `/thoughtstyle nanbeige_code` |
 | `/seed <value>` | Set PRNG Seed | `/seed time` |
@@ -754,6 +754,47 @@ chat --> Create a blog post outline about ${topic}
 ```
 
 ### Change log
+
+August 24th, 2026
+-------------------------
+- **GLM Model Reasoning Support**:
+  - Added native reasoning mode (`is_reasoning_model`) and `/effort` forwarding support for GLM 5.2 / GLM models across Mistral AI and custom OpenAI-compatible endpoints.
+  - Added unit test `test_glm_reasoning_effort_and_mode` in `test_command_verb_validation.py` to verify reasoning parameters.
+  - Updated `README.md` command reference and Change log entries.
+
+August 23rd, 2026
+-------------------------
+- **Empty Assistant Payload Guard**:
+  - Retained original past response content when stripping thinking tags from thought-only responses, falling back to `[No response content]` to eliminate Cohere API 400 validation errors.
+- **Trace ImageDbg Profile Integration**:
+  - Added `imagedbg` trace field to `Profile` model, presets, and ChatDSL parser/serializer.
+  - Integrated `ImageDbg` trace option into `ProfileEditor` and `ProfileTUI` curses interfaces with layout alignment.
+- **Trace & Loop Validation**:
+  - Enhanced `/trace` command validation and TPS performance file handling to prevent second-based file collision.
+  - Guarded interactive editor subprocesses during non-interactive `/debug payload` script execution.
+  - Enhanced procedure redefinition warnings, loop break validation, and 3-part step syntax in `range()`.
+
+August 22nd, 2026
+-------------------------
+- **Session Engineering & Path Optimization**:
+  - Added atomic writes, session locking, initial model alias, turn model tracking, and metadata caching (`/session list`).
+  - Streamlined session path resolution and added TOML validation for `session_mode` configuration.
+  - Preserved source notes during `/session merge`.
+
+August 21st, 2026
+-------------------------
+- **Database & Log Enhancements**:
+  - Added thinking token awareness and reasoning metadata tracking to `/dblog`.
+  - Improved search query rejoining, database name validation, sub-argument parsing, and hex mode formatting (`/logging`).
+- **Config TUI Bulk Operations**:
+  - Added bulk find-and-replace feature across endpoints and providers in Config TUI (`config_tui.py`).
+
+August 20th, 2026
+-------------------------
+- **Parameter Controls & Logging**:
+  - Added hex mode formatting to `/logging` to escape unprintable characters.
+  - Added support for disabling `/top_k`, `/top_p`, `/temp`, and penalties.
+  - Harmonized agentic tool loop turn reminders with natural language completion rules.
 
 August 19th, 2026 (v0.7.3)
 -------------------------
