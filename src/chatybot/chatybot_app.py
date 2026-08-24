@@ -1177,7 +1177,7 @@ class ChatybotApp:
             "nvidia" in model_config.get("base_url", "").lower()
             or "nvidia" in model_name.lower()
         )
-        is_reasoning_model = is_nvidia or "qwen" in model_name.lower()
+        is_reasoning_model = is_nvidia or "qwen" in model_name.lower() or "glm" in model_name.lower()
 
         current_system_message = self.config_manager.system_message
         if self.tool_mode and self.tool_context:
@@ -1312,13 +1312,13 @@ class ChatybotApp:
         if pp is not None:
             kwargs["presence_penalty"] = pp
 
-        # Add explicit reasoning control for models that support it (e.g. SiliconFlow Qwen)
-        if "qwen" in model_name.lower() and not self.reasoning_mode:
+        # Add explicit reasoning control for models that support it (e.g. SiliconFlow Qwen, GLM models)
+        if any(k in model_name.lower() for k in ["qwen", "glm"]) and not self.reasoning_mode:
             kwargs.setdefault("extra_body", {})["enable_reasoning"] = False
 
-        # Add reasoning_effort if set (for OpenAI o1/o3, Mistral models with adjustable reasoning)
+        # Add reasoning_effort if set (for OpenAI o1/o3, Mistral, GLM models with adjustable reasoning)
         # Supported by: OpenAI official API, OpenRouter, Mistral AI API for reasoning models
-        # Mistral models: mistral-small-latest, mistral-medium-3.5 (includes mistral-medium-2604)
+        # Mistral models: mistral-small-latest, mistral-medium-3.5 (includes mistral-medium-2604), GLM-5.2
         # OpenAI models: o1, o3, etc.
         if self.reasoning_effort is not None:
             if is_openai_official or "openrouter" in model_config.get("base_url", "").lower():
@@ -1327,7 +1327,11 @@ class ChatybotApp:
             elif is_mistral:
                 # Mistral supports reasoning_effort at top level for reasoning models
                 # Check if model name suggests it's a reasoning model
-                if any(x in model_name.lower() for x in ["mistral-small-latest", "mistral-medium-3.5", "mistral-medium-2604", "magistral", "devstral"]):
+                if any(x in model_name.lower() for x in ["mistral-small-latest", "mistral-medium-3.5", "mistral-medium-2604", "magistral", "devstral", "glm"]):
+                    kwargs["reasoning_effort"] = self.reasoning_effort
+            else:
+                # Fallback for GLM or reasoning models on custom endpoints
+                if any(x in model_name.lower() for x in ["glm", "reasoning"]):
                     kwargs["reasoning_effort"] = self.reasoning_effort
 
         omit_tk = model_config.get("omit_top_k", False)

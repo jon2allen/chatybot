@@ -274,3 +274,25 @@ class TestCommandVerbValidation:
         assert assistant_msg["content"].strip() != ""
         assert assistant_msg["content"] != " "
 
+    @pytest.mark.anyio
+    async def test_glm_reasoning_effort_and_mode(self, app):
+        """Verify GLM 5.2 / GLM models pass reasoning_effort and enable_reasoning parameters."""
+        from unittest.mock import AsyncMock
+        mock_completion = MagicMock()
+        mock_choice = MagicMock()
+        mock_choice.message.content = "GLM response"
+        mock_choice.message.reasoning_content = "GLM thought process"
+        mock_completion.choices = [mock_choice]
+
+        mock_create = AsyncMock(return_value=mock_completion)
+        client = app.get_openai_client()
+        client.chat.completions.create = mock_create
+
+        # Enable reasoning effort and model name with GLM 5.2
+        app.reasoning_effort = "medium"
+        app.config_manager.model_alias = "glm-5.2"
+
+        await app.chat_completion("Test GLM prompt", stream=False)
+
+        call_kwargs = mock_create.call_args[1]
+        assert call_kwargs.get("reasoning_effort") == "medium"
