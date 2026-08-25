@@ -214,6 +214,7 @@ class HelpSystem:
         
         for item in model_params:
             cmd, param, value_range, desc, examples = item
+            aliases = ["/max_tokens"] if cmd == "maxtokens" else []
             self.register_command(CommandHelp(
                 name=f"/{cmd}",
                 category="model",
@@ -221,6 +222,7 @@ class HelpSystem:
                 usage=f"/{cmd} [{value_range}]",
                 long_desc=f"Set or disable the {param} parameter for the current model. {desc}.",
                 examples=examples,
+                aliases=aliases,
                 parameters={"value": value_range}
             ))
 
@@ -260,7 +262,7 @@ class HelpSystem:
             category="model",
             short_desc="Set reasoning effort / reasoning strength",
             usage="/effort <low|medium|high|xhigh|none>",
-            long_desc="Set the reasoning effort / reasoning strength level for models that support it (e.g., OpenAI o1/o3, Mistral, Meta Muse Glimmer).",
+            long_desc="Set the reasoning effort / reasoning strength level for models that support it (e.g., OpenAI o1/o3, Mistral, GLM-5.2, Meta Muse Glimmer).",
             examples=["/effort high", "/effort xhigh", "/effort none"],
             parameters={"level": "low, medium, high, xhigh, or none"}
         ))

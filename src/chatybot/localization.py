@@ -60,12 +60,12 @@ class LocalizationManager:
         """Resolve a localized slash command alias back to the canonical English command."""
         cmd_lower = raw_cmd.lower()
         # First check the current locale
-        locale_aliases = self.catalog.get(self.locale, {}).get("aliases", {})
+        locale_aliases = {k.lower(): v for k, v in self.catalog.get(self.locale, {}).get("aliases", {}).items()}
         if cmd_lower in locale_aliases:
             return locale_aliases[cmd_lower]
         # Fallback to checking all locales
         for loc, data in self.catalog.items():
-            aliases = data.get("aliases", {})
+            aliases = {k.lower(): v for k, v in data.get("aliases", {}).items()}
             if cmd_lower in aliases:
                 return aliases[cmd_lower]
         return raw_cmd
@@ -78,21 +78,21 @@ class LocalizationManager:
         for loc, data in self.catalog.items():
             keywords = data.get("keywords", {})
             for localized, canonical in keywords.items():
-                reverse_map[localized] = canonical
+                reverse_map[localized.lower()] = canonical
             aliases = data.get("aliases", {})
             for localized, canonical in aliases.items():
                 if localized != canonical:
-                    reverse_map[localized] = canonical
+                    reverse_map[localized.lower()] = canonical
                     
         # 2. Override with current locale's specific definitions to preserve priority
         locale_data = self.catalog.get(self.locale, {})
         keywords = locale_data.get("keywords", {})
         for localized, canonical in keywords.items():
-            reverse_map[localized] = canonical
+            reverse_map[localized.lower()] = canonical
         aliases = locale_data.get("aliases", {})
         for localized, canonical in aliases.items():
             if localized != canonical:
-                reverse_map[localized] = canonical
+                reverse_map[localized.lower()] = canonical
                 
         return reverse_map
 
