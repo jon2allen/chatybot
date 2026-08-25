@@ -424,6 +424,237 @@ def test_show_env_vars_dialog():
     mock_win.refresh.assert_called()
 
 
+def test_bulk_replace_scopes():
+    tui = ConfigTUI()
+    tui.config = ChatConfig(models={
+        "mistral_1": ChatModelConfig(name="mistral-large", base_url="https://api.mistral.ai/v1", vendor="mistral"),
+        "gemini_1": ChatModelConfig(name="gemini-flash", base_url="https://generativelanguage.googleapis.com/v1beta/openai/", vendor="google"),
+        "gemini_2": ChatModelConfig(name="gemini-pro", base_url="https://generativelanguage.googleapis.com/v1beta/openai/", vendor="google"),
+    })
+    tui.sync_models_list()
+
+    scopes = tui.get_available_replace_scopes()
+    scope_labels = [s[0] for s in scopes]
+    assert "All Models" in scope_labels
+    assert "Vendor: google" in scope_labels
+    assert "Vendor: mistral" in scope_labels
+
+
+def test_compute_bulk_replacements_api_key_replace():
+    tui = ConfigTUI()
+    tui.config = ChatConfig(models={
+        "gemini_1": ChatModelConfig(name="gemini-flash", base_url="https://generativelanguage.googleapis.com/v1beta/openai/", api_key="GEMINI_API_KEY", vendor="google"),
+        "gemini_2": ChatModelConfig(name="gemini-pro", base_url="https://generativelanguage.googleapis.com/v1beta/openai/", api_key="GEMINI_API_KEY", vendor="google"),
+        "mistral_1": ChatModelConfig(name="mistral-large", base_url="https://api.mistral.ai/v1", api_key="MISTRAL_API_KEY", vendor="mistral"),
+    })
+    tui.sync_models_list()
+
+    # Replace GEMINI_API_KEY -> GOOGLE_API_KEY for all models
+    err, candidates = tui.compute_bulk_replacements(
+        field_key="api_key",
+        scope_type="all",
+        scope_value="",
+        mode="replace",
+        find_str="GEMINI_API_KEY",
+        replace_str="GOOGLE_API_KEY",
+    )
+    assert err is None
+    assert len(candidates) == 2
+    for c in candidates:
+        assert c["old_val"] == "GEMINI_API_KEY"
+        assert c["new_val"] == "GOOGLE_API_KEY"
+        assert c["enabled"] is True
+
+
+def test_compute_bulk_replacements_vendor_scope():
+    tui = ConfigTUI()
+    tui.config = ChatConfig(models={
+        "gemini_1": ChatModelConfig(name="gemini-flash", base_url="https://generativelanguage.googleapis.com/v1beta/openai/", temperature=0.7, vendor="google"),
+        "gemini_2": ChatModelConfig(name="gemini-pro", base_url="https://generativelanguage.googleapis.com/v1beta/openai/", temperature=0.7, vendor="google"),
+        "mistral_1": ChatModelConfig(name="mistral-large", base_url="https://api.mistral.ai/v1", temperature=0.7, vendor="mistral"),
+    })
+    tui.sync_models_list()
+
+    # Set temperature = 0.0 only for google vendor
+    err, candidates = tui.compute_bulk_replacements(
+        field_key="temperature",
+        scope_type="vendor",
+        scope_value="google",
+        mode="set",
+        find_str="",
+        replace_str="0.0",
+    )
+    assert err is None
+    assert len(candidates) == 2
+    aliases = [c["alias"] for c in candidates]
+    assert "gemini_1" in aliases
+    assert "gemini_2" in aliases
+    assert "mistral_1" not in aliases
+    assert candidates[0]["new_val"] == 0.0
+
+
+def test_compute_bulk_replacements_validation_and_errors():
+    tui = ConfigTUI()
+    tui.config = ChatConfig(models={
+        "mistral_1": ChatModelConfig(name="mistral-large", base_url="https://api.mistral.ai/v1", vendor="mistral"),
+    })
+    tui.sync_models_list()
+
+    # Invalid float
+    err, candidates = tui.compute_bulk_replacements(
+        field_key="temperature",
+        scope_type="all",
+        scope_value="",
+        mode="set",
+        find_str="",
+        replace_str="invalid_float",
+    )
+    assert "Invalid float value" in err
+
+    # Negative temperature
+    err, candidates = tui.compute_bulk_replacements(
+        field_key="temperature",
+        scope_type="all",
+        scope_value="",
+        mode="set",
+        find_str="",
+        replace_str="-0.5",
+    )
+    assert "Temperature must be >= 0.0" in err
+
+    # Empty find string in replace mode for string
+    err, candidates = tui.compute_bulk_replacements(
+        field_key="base_url",
+        scope_type="all",
+        scope_value="",
+        mode="replace",
+        find_str="",
+        replace_str="https://new-url.com",
+    )
+    assert "Find value cannot be empty" in err
+
+
+def test_apply_bulk_replacements():
+    tui = ConfigTUI()
+    tui.config = ChatConfig(models={
+        "m1": ChatModelConfig(name="m1", base_url="https://api.test/v1", api_key="OLD_KEY"),
+        "m2": ChatModelConfig(name="m2", base_url="https://api.test/v1", api_key="OLD_KEY"),
+    })
+    tui.sync_models_list()
+
+    changes = [
+        {"alias": "m1", "field": "api_key", "new_val": "NEW_KEY", "enabled": True},
+        {"alias": "m2", "field": "api_key", "new_val": "NEW_KEY", "enabled": False},  # unchecked
+    ]
+
+    applied_count = tui.apply_bulk_replacements(changes)
+    assert applied_count == 1
+    assert tui.config.models["m1"].api_key == "NEW_KEY"
+    assert tui.config.models["m2"].api_key == "OLD_KEY"
+    assert tui.has_changes is True
+
+
+def test_bulk_replace_dialog_cancel():
+    tui = ConfigTUI(config_path="test_config.toml")
+    tui.config = ChatConfig(models={
+        "mistral_1": ChatModelConfig(name="mistral-large", base_url="https://api.mistral.ai/v1", vendor="mistral")
+    })
+    tui.sync_models_list()
+
+    mock_stdscr = MagicMock()
+    mock_stdscr.getmaxyx.return_value = (40, 80)
+
+    mock_win = MagicMock()
+    mock_win.getmaxyx.return_value = (17, 64)
+    # Press ESC to exit dialog
+    mock_win.getch.side_effect = [27]
+
+    with patch("curses.newwin", return_value=mock_win), \
+         patch("curses.color_pair", return_value=0):
+        tui.bulk_replace_dialog(mock_stdscr)
+
+    mock_win.refresh.assert_called()
+
+
+def test_bulk_replace_preview_dialog_flow():
+    tui = ConfigTUI(config_path="test_config.toml")
+    tui.config = ChatConfig(models={
+        "m1": ChatModelConfig(name="m1", base_url="https://api.test/v1", api_key="OLD_KEY")
+    })
+    tui.sync_models_list()
+
+    mock_stdscr = MagicMock()
+    mock_stdscr.getmaxyx.return_value = (40, 80)
+
+    mock_win = MagicMock()
+    mock_win.getmaxyx.return_value = (20, 70)
+    # Press Tab to focus Apply, then Enter
+    mock_win.getch.side_effect = [9, 10]
+
+    candidates = [
+        {
+            "alias": "m1",
+            "model_name": "m1",
+            "vendor": "custom",
+            "field": "api_key",
+            "old_val": "OLD_KEY",
+            "new_val": "NEW_KEY",
+            "enabled": True,
+        }
+    ]
+
+    with patch("curses.newwin", return_value=mock_win), \
+         patch("curses.color_pair", return_value=0):
+        result = tui.bulk_replace_preview_dialog(mock_stdscr, candidates, "Test Summary")
+
+    assert result is True
+    assert tui.config.models["m1"].api_key == "NEW_KEY"
+
+
+def test_cycle_index_fallback():
+    opts = ["mistral", "google", "openai"]
+    # Existing in list
+    assert ConfigTUI._cycle_index(opts, "google") == 1
+    # Not in list (custom vendor) -> fallback to 0 safely without crash
+    assert ConfigTUI._cycle_index(opts, "custom_unlisted_vendor") == 0
+
+
+def test_apply_form_edits_preserves_context_limit():
+    tui = ConfigTUI()
+    tui.config = ChatConfig(models={
+        "m1": ChatModelConfig(
+            name="old-name",
+            base_url="https://api.test/v1",
+            context_limit=128000,
+            vendor="mistral",
+        )
+    })
+    tui.sync_models_list()
+
+    form_data = {
+        "alias": "m1",
+        "name": "new-name",
+        "type": "chat",
+        "base_url": "https://api.test/v1",
+        "api_key": "",
+        "vendor": "mistral",
+        "temperature": "0.7",
+        "top_k": "1",
+        "image_generation": "false",
+        "image_endpoint": "",
+        "image_modalities": "",
+    }
+
+    success = tui.apply_form_edits("m1", form_data, is_new=False)
+    assert success is True
+    updated_model = tui.config.models["m1"]
+    assert updated_model.name == "new-name"
+    # Verify context_limit was preserved from the existing model
+    assert updated_model.context_limit == 128000
+
+
+
+
 
 
 

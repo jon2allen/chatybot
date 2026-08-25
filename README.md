@@ -160,8 +160,8 @@ Active escape commands:
   /top_k <value> - Set top_k for the current model.
   /freq_penalty <value> - Set frequency penalty (-2.0-2.0).
   /pres_penalty <value> - Set presence penalty (-2.0-2.0).
-  /reasoning <on|off> - Toggle reasoning (thinking) for NVIDIA and Qwen models.
-  /effort <low|medium|high|none> - Set reasoning effort for OpenAI (o1, o3) and Mistral (mistral-small-latest, mistral-medium-3.5) models.
+  /reasoning <on|off> - Toggle reasoning (thinking) for NVIDIA, Qwen, and GLM models.
+  /effort <low|medium|high|none> - Set reasoning effort for OpenAI (o1, o3), Mistral (mistral-small-latest, mistral-medium-3.5), and GLM (GLM-5.2) models.
   /thinking <on|off> - Toggle display of <think> and <thought> blocks and reasoning text.
   /thoughtstyle <none|gemma4|nanbeige|nanbeige_code> - Set prompting format for negative prompt to disable reasoning - auto.
   /seed <value> - Set seed (int, 'time', or 'random <min>,<max>').
@@ -219,8 +219,8 @@ chat --> Hello!      # Start a conversation
 | `/top_k <value>` | Set top_k | `/top_k 40` |
 | `/freq_penalty <value>` | Set freq penalty | `/freq_penalty 0.5` |
 | `/pres_penalty <value>` | Set presence penalty | `/pres_penalty 0.5` |
-| `/reasoning <on\|off>` | Toggle NVIDIA/Qwen reasoning | `/reasoning off` |
-| `/effort <low\|medium\|high\|none>` | Set reasoning effort for OpenAI (o1, o3) and Mistral (mistral-small-latest, mistral-medium-3.5) models | `/effort high` |
+| `/reasoning <on\|off>` | Toggle NVIDIA/Qwen/GLM reasoning | `/reasoning off` |
+| `/effort <low\|medium\|high\|none>` | Set reasoning effort for OpenAI (o1, o3), Mistral, and GLM (GLM-5.2) models | `/effort high` |
 | `/thinking <on\|off>` | Toggle `<think>` and `<thought>` visibility | `/thinking off` |
 | `/thoughtstyle <none\|gemma4\|nanbeige\|nanbeige_code>` | Set prompting format for negative prompt to disable reasoning - auto | `/thoughtstyle nanbeige_code` |
 | `/seed <value>` | Set PRNG Seed | `/seed time` |
@@ -255,6 +255,8 @@ chat --> Hello!      # Start a conversation
 | `/imagebank{1-5} clear` | Clear an image bank | `/imagebank1 clear` |
 | `/session [subcommand]` | Manage multi-turn session persistence, note annotations, exports, merging, compression, and pruning | `/session start my_project` |
 | `/listmacros [filter]` | List loaded macros with signatures, templates, and search filter | `/listmacros debug` |
+
+> **Warning: Concurrent Session Access.** If two chatybot instances run under the same user and load the same session via `/session use`, their writes will interleave. Each instance keeps its own in-memory turn list and overwrites the other's turns on save (last-write-wins), producing a divergent or incoherent transcript. A `.lock` file sentinel warns when a session is already in use by a live process, but does not block the load. For separate conversations, use `/session start` to create independent sessions. See `session_concurrency.md` for details.
 | `/reloadmacros [file]` | Reload macro definitions from `macro.chatdsl` or a custom file | `/reloadmacros` |
 | `/str_search "<pat>" <var> [flags] [dest]` | Search substring patterns in a text variable into `${STR_SEARCH}` (flags: `c`=count, `m`=positions, `i`=ignore case) | `/str_search "error" ${LOG} ic count_var` |
 | `/proc <name> [p1="v1"]` | Execute a named procedure block defined with `defproc` | `/proc summarize_text text="${file_buffer}"` |
@@ -753,6 +755,47 @@ chat --> Create a blog post outline about ${topic}
 
 ### Change log
 
+August 24th, 2026
+-------------------------
+- **GLM Model Reasoning Support**:
+  - Added native reasoning mode (`is_reasoning_model`) and `/effort` forwarding support for GLM 5.2 / GLM models across Mistral AI and custom OpenAI-compatible endpoints.
+  - Added unit test `test_glm_reasoning_effort_and_mode` in `test_command_verb_validation.py` to verify reasoning parameters.
+  - Updated `README.md` command reference and Change log entries.
+
+August 23rd, 2026
+-------------------------
+- **Empty Assistant Payload Guard**:
+  - Retained original past response content when stripping thinking tags from thought-only responses, falling back to `[No response content]` to eliminate Cohere API 400 validation errors.
+- **Trace ImageDbg Profile Integration**:
+  - Added `imagedbg` trace field to `Profile` model, presets, and ChatDSL parser/serializer.
+  - Integrated `ImageDbg` trace option into `ProfileEditor` and `ProfileTUI` curses interfaces with layout alignment.
+- **Trace & Loop Validation**:
+  - Enhanced `/trace` command validation and TPS performance file handling to prevent second-based file collision.
+  - Guarded interactive editor subprocesses during non-interactive `/debug payload` script execution.
+  - Enhanced procedure redefinition warnings, loop break validation, and 3-part step syntax in `range()`.
+
+August 22nd, 2026
+-------------------------
+- **Session Engineering & Path Optimization**:
+  - Added atomic writes, session locking, initial model alias, turn model tracking, and metadata caching (`/session list`).
+  - Streamlined session path resolution and added TOML validation for `session_mode` configuration.
+  - Preserved source notes during `/session merge`.
+
+August 21st, 2026
+-------------------------
+- **Database & Log Enhancements**:
+  - Added thinking token awareness and reasoning metadata tracking to `/dblog`.
+  - Improved search query rejoining, database name validation, sub-argument parsing, and hex mode formatting (`/logging`).
+- **Config TUI Bulk Operations**:
+  - Added bulk find-and-replace feature across endpoints and providers in Config TUI (`config_tui.py`).
+
+August 20th, 2026
+-------------------------
+- **Parameter Controls & Logging**:
+  - Added hex mode formatting to `/logging` to escape unprintable characters.
+  - Added support for disabling `/top_k`, `/top_p`, `/temp`, and penalties.
+  - Harmonized agentic tool loop turn reminders with natural language completion rules.
+
 August 19th, 2026 (v0.7.3)
 -------------------------
 - **CLI Startup Flag (`--no-tools`)**:
@@ -834,7 +877,7 @@ August 7th, 2026
 August 3rd - 4th, 2026
 ------------------------
 - **Session Workspace Management Suite**:
-  - Added comprehensive workspace commands: `/session info` (workspace size, turn counts, file stats), `/session delete <name|id|all>`, `/session merge <target> <s1> <s2>`, `/session compress [days|all]` (gzip compression), and `/session prune [keep=N] [days=D] [size=M]`.
+  - Added comprehensive workspace commands: `/session info` (workspace size, turn counts, file stats), `/session delete <name|id|all>`, `/session merge <target> <s1> <s2>` (with automatic source notes consolidation), `/session compress [days|all]` (gzip compression), and `/session prune [keep=N] [days=D] [size=M]`.
   - Added session annotation notes (`/session note <text>`) capped at 1024 characters, displayed in session metadata without consuming LLM context tokens.
   - Auto-generated prompt slugs derived from Turn 1 for session auto-naming.
   - Fixed variable permissions by passing `allow_protected=True` when updating `RUN_*` and `LAST_COMPLETION` system variables.

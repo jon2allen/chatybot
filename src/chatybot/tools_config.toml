@@ -8,7 +8,6 @@ default_profile = ""
 profile_dir = "~/.config/chatybot/profiles"
 enable_profile_edit = true
 session_mode = "auto"
-session_type = "clean"
 session_dir = "~/.local/share/chatybot/sessions"
 session_strip_thinking = "separate"
 # editor = "nano"

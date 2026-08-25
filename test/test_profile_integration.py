@@ -94,3 +94,21 @@ class TestProfileIntegration:
         # Verify matcher autocomplete contains profile
         assert "profile" in app.matcher.words
 
+    def test_imagedbg_trace_setting_profile_roundtrip(self):
+        """Verify /trace imagedbg parses and serializes correctly in Profile model."""
+        from src.chatybot.profile_model import Profile
+        chatdsl = """
+/model test_model
+/trace imagedbg on
+"""
+        profile = Profile.from_chatdsl_string(chatdsl)
+        assert profile.config.trace_settings.imagedbg is True
+
+        generated_dsl = profile.to_chatdsl()
+        assert "/trace imagedbg on" in generated_dsl
+
+        reloaded_profile = Profile.from_chatdsl_string(generated_dsl)
+        assert reloaded_profile.config.trace_settings.imagedbg is True
+
+
+

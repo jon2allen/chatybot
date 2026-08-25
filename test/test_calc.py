@@ -118,5 +118,72 @@ async def test_calc_multilingual(app, capsys):
     assert str(app.buffer_manager.get_script_var("ar_test2")) == "30"
 
 
+def test_calculate_tool_fractional_exponent():
+    from chatybot.tools.math_utils import calculate
+    res = calculate("2 ^ 0.5")
+    assert res["status"] == "success"
+    assert "1.414" in str(res["result"])
+
+
+def test_calculate_tool_decimal_exponent_sqrt():
+    from chatybot.tools.math_utils import calculate
+    res = calculate("100 ^ 0.5")
+    assert res["status"] == "success"
+    assert str(res["result"]) == "10"
+
+
+def test_calculate_tool_integer_exponent_still_works():
+    from chatybot.tools.math_utils import calculate
+    res = calculate("2 ^ 10")
+    assert res["status"] == "success"
+    assert res["result"] == 1024
+
+
+def test_calculate_tool_pemdas_with_exponent():
+    from chatybot.tools.math_utils import calculate
+    res = calculate("2 + 3 ^ 2")
+    assert res["status"] == "success"
+    assert res["result"] == 11
+
+
+def test_calculate_tool_division_by_zero():
+    from chatybot.tools.math_utils import calculate
+    res = calculate("10 / 0")
+    assert res["status"] == "error"
+    assert "Division by zero" in res["message"]
+    assert res["result"] is None
+
+
+def test_calculate_tool_division_by_zero_no_store(app):
+    from chatybot.tools.math_utils import calculate
+    res = calculate("10 / 0", target_variable="bad_val", app=app)
+    assert res["status"] == "error"
+    assert app.buffer_manager.get_script_var("bad_val") is None
+
+
+@pytest.mark.anyio
+async def test_calc_unquoted_no_var_name(app, capsys):
+    await app.handle_escape_command('/calc 2 + 3')
+    captured = capsys.readouterr()
+    assert "CALC = 5" in captured.out
+    assert str(app.buffer_manager.get_script_var("CALC")) == "5"
+
+
+@pytest.mark.anyio
+async def test_calc_unquoted_with_var_name(app, capsys):
+    await app.handle_escape_command('/calc 10 * 4 result')
+    captured = capsys.readouterr()
+    assert "result = 40" in captured.out
+    assert str(app.buffer_manager.get_script_var("result")) == "40"
+
+
+@pytest.mark.anyio
+async def test_calc_division_by_zero(app, capsys):
+    await app.handle_escape_command('/calc "10 / 0"')
+    captured = capsys.readouterr()
+    assert "Division by zero" in captured.out
+    assert app.buffer_manager.get_script_var("CALC") is None
+
+
 
 
