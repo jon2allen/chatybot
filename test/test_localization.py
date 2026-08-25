@@ -285,3 +285,22 @@ def test_v075_features_localization():
         mgr = LocalizationManager(loc)
         assert mgr.resolve_command(cmd) == expected, f"Failed for {loc} max_tokens alias {cmd}"
 
+
+def test_v077_history_keyword_localization():
+    """Verify v0.7.7 history keyword mapping across all supported languages."""
+    locales_and_history_kws = {
+        "en": ["history"],
+        "es": ["history", "historial", "historia"],
+        "fr": ["history", "historique"],
+        "zh": ["history", "历史", "历史记录"],
+        "it": ["history", "cronologia", "storia"],
+        "ar": ["history", "تاريخ", "سجل"],
+    }
+
+    for loc, kws in locales_and_history_kws.items():
+        mgr = LocalizationManager(loc)
+        rev = mgr.get_reverse_aliases()
+        for kw in kws:
+            assert rev.get(kw.lower()) == "history", f"Failed for {loc} keyword {kw}"
+
+

@@ -778,6 +778,25 @@ chat --> Create a blog post outline about ${topic}
 
 ### Change log
 
+August 25th, 2026 (v0.7.7)
+-------------------------
+- **Windows Platform Compatibility**:
+  - Added Windows conditional dependencies (`pyreadline3`, `windows-curses`) in `pyproject.toml`.
+  - Added platform-conditional readline imports and safe calls in `chatybot_app.py`.
+  - Added defensive curses imports and fallback instructions in TUI modules (`config_tui.py`, `profile_tui.py`, `profile_editor.py`).
+  - Added Windows Python App Execution Aliases troubleshooting section to `README.md`.
+- **Chat History Control & Agentic Guard**:
+  - Added `enable_chat_history` toggle to configuration model, manager, and `chat_config.toml`.
+  - Added `/session history [on|off]` command to inspect and dynamically toggle in-memory history collection.
+  - Enforced policy guard preventing agentic tool loops when chat history collection is disabled.
+  - Added test suite in `test/test_chat_history_flag.py`.
+- **Tool Config TUI Manager**:
+  - Added full curses-based interactive tool manager (`tool_config_tui.py`) for configuring tool timeouts, rate limits, turn limits, and enabling/disabling individual tools.
+- **Localization & Version Synchronization**:
+  - Added `history` keyword translations across all supported locales (EN, ES, FR, ZH, IT, AR) in `translations.json`.
+  - Synchronized package version strings across `pyproject.toml`, `src/chatybot/__init__.py`, and runtime REPL startup banners to **0.7.7**.
+  - Synchronized compatibility notices across multi-language documentation guides in `doc/`.
+
 August 24th, 2026 (v0.7.6)
 -------------------------
 - **Documentation & Table Formatting**:
