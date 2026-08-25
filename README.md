@@ -767,13 +767,15 @@ chat --> Create a blog post outline about ${topic}
 
 ### Change log
 
-August 24th, 2026 (v0.7.5)
+August 24th, 2026 (v0.7.6)
 -------------------------
+- **Documentation & Table Formatting**:
+  - Restored clean Command Reference Markdown table rendering and moved the Concurrent Session Access warning into a dedicated **Session Management & Persistence** section under Advanced Features.
 - **Meta Muse Glimmer & Reasoning Strength**:
   - Added reasoning strength support for Meta Muse Glimmer models via `/effort` (`low`, `medium`, `high`, `xhigh`) mapped to `extra_body.chat_template_kwargs.reasoning_strength`.
   - Added `/max_tokens` alias for `/maxtokens` across CLI, scripts, and localization catalogs.
   - Added native reasoning mode (`is_reasoning_model`) and `/effort` forwarding support for GLM 5.2 / GLM models across Mistral AI and custom OpenAI-compatible endpoints.
-  - Synchronized package version strings across `pyproject.toml`, `src/chatybot/__init__.py`, and runtime REPL startup banners to **0.7.5**.
+  - Synchronized package version strings across `pyproject.toml`, `src/chatybot/__init__.py`, and runtime REPL startup banners to **0.7.6**.
   - Synchronized compatibility notices across multi-language documentation guides in `doc/`.
 
 August 23rd, 2026
