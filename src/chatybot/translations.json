@@ -21,7 +21,9 @@
       "/session": "/session",
       "/context_limit": "/context_limit",
       "/auto_truncate": "/auto_truncate",
-      "/env": "/env"
+      "/env": "/env",
+      "/max_tokens": "/maxtokens",
+      "/effort": "/effort"
     },
     "keywords": {
       "set": "set",
