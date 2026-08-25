@@ -256,3 +256,32 @@ def test_v070_new_features_localization():
     assert reverse_ar.get("سطر_النهاية") == "end_line"
     assert reverse_ar.get("حد_المعدل") == "rate_limit"
     assert reverse_ar.get("تفاصيل") == "detail"
+
+
+def test_v075_features_localization():
+    """Verify v0.7.5 /max_tokens and /effort alias resolution across all supported languages."""
+    locales_and_effort = {
+        "en": ("/effort", "/effort"),
+        "es": ("/esfuerzo", "/effort"),
+        "fr": ("/effort", "/effort"),
+        "zh": ("/推理强度", "/effort"),
+        "it": ("/sforzo", "/effort"),
+        "ar": ("/جهد", "/effort"),
+    }
+    locales_and_maxtokens = {
+        "en": ("/max_tokens", "/maxtokens"),
+        "es": ("/max_tokens", "/maxtokens"),
+        "fr": ("/max_jetons", "/maxtokens"),
+        "zh": ("/最大Token", "/maxtokens"),
+        "it": ("/max_token", "/maxtokens"),
+        "ar": ("/أقصى_توكن", "/maxtokens"),
+    }
+
+    for loc, (cmd, expected) in locales_and_effort.items():
+        mgr = LocalizationManager(loc)
+        assert mgr.resolve_command(cmd) == expected, f"Failed for {loc} effort alias {cmd}"
+
+    for loc, (cmd, expected) in locales_and_maxtokens.items():
+        mgr = LocalizationManager(loc)
+        assert mgr.resolve_command(cmd) == expected, f"Failed for {loc} max_tokens alias {cmd}"
+

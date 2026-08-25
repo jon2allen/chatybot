@@ -8,7 +8,7 @@ ChatDSL (Chat Domain-Specific Language) est un langage de script puissant conçu
 >
 > *Version : 1.0*
 >
-> *Compatible avec Chatybot v0.7.3+*
+> *Compatible avec Chatybot v0.7.5+*
 
 ---
 

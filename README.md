@@ -214,13 +214,13 @@ chat --> Hello!      # Start a conversation
 | `/prompt <path>` | Load prompt template | `/prompt template.txt` |
 | `/system <msg>` | Set system message | `/system "You are an expert coder."` |
 | `/temp <value>` | Set temperature (0.0-2.0) | `/temp 0.7` |
-| `/maxtokens <value>` | Set max tokens | `/maxtokens 1000` |
+| `/maxtokens <value>` | Set max tokens (alias: `/max_tokens`) | `/maxtokens 1000` |
 | `/top_p <value>` | Set top_p (0.0-1.0) | `/top_p 0.9` |
 | `/top_k <value>` | Set top_k | `/top_k 40` |
 | `/freq_penalty <value>` | Set freq penalty | `/freq_penalty 0.5` |
 | `/pres_penalty <value>` | Set presence penalty | `/pres_penalty 0.5` |
 | `/reasoning <on\|off>` | Toggle NVIDIA/Qwen/GLM reasoning | `/reasoning off` |
-| `/effort <low\|medium\|high\|none>` | Set reasoning effort for OpenAI (o1, o3), Mistral, and GLM (GLM-5.2) models | `/effort high` |
+| `/effort <low\|medium\|high\|xhigh\|none>` | Set reasoning effort / strength for OpenAI (o1, o3), Mistral, GLM (GLM-5.2), and Meta Muse Glimmer | `/effort high` |
 | `/thinking <on\|off>` | Toggle `<think>` and `<thought>` visibility | `/thinking off` |
 | `/thoughtstyle <none\|gemma4\|nanbeige\|nanbeige_code>` | Set prompting format for negative prompt to disable reasoning - auto | `/thoughtstyle nanbeige_code` |
 | `/seed <value>` | Set PRNG Seed | `/seed time` |
@@ -755,12 +755,14 @@ chat --> Create a blog post outline about ${topic}
 
 ### Change log
 
-August 24th, 2026
+August 24th, 2026 (v0.7.5)
 -------------------------
-- **GLM Model Reasoning Support**:
+- **Meta Muse Glimmer & Reasoning Strength**:
+  - Added reasoning strength support for Meta Muse Glimmer models via `/effort` (`low`, `medium`, `high`, `xhigh`) mapped to `extra_body.chat_template_kwargs.reasoning_strength`.
+  - Added `/max_tokens` alias for `/maxtokens` across CLI, scripts, and localization catalogs.
   - Added native reasoning mode (`is_reasoning_model`) and `/effort` forwarding support for GLM 5.2 / GLM models across Mistral AI and custom OpenAI-compatible endpoints.
-  - Added unit test `test_glm_reasoning_effort_and_mode` in `test_command_verb_validation.py` to verify reasoning parameters.
-  - Updated `README.md` command reference and Change log entries.
+  - Synchronized package version strings across `pyproject.toml`, `src/chatybot/__init__.py`, and runtime REPL startup banners to **0.7.5**.
+  - Synchronized compatibility notices across multi-language documentation guides in `doc/`.
 
 August 23rd, 2026
 -------------------------
