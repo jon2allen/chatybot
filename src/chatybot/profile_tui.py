@@ -113,6 +113,11 @@ FIELD_HELP_DATABASE = {
         "description": "Detailed timing breakdown of prompt processing vs token generation stages.",
         "tips": "Helps pinpoint bottlenecks in prompt ingestion vs completion generation.",
     },
+    "trace_imagedbg": {
+        "title": "Trace Image Debug",
+        "description": "Writes a debug log file for image generation with prompt, model, and error tracebacks.",
+        "tips": "Turn on when diagnosing image generation failures or unexpected API behavior.",
+    },
     "reasoning": {
         "title": "Reasoning Mode",
         "description": "Enables extended reasoning / chain-of-thought processing for supported models (e.g. Gemini 2.0, DeepSeek-R1).",
@@ -731,7 +736,7 @@ class ProfileTUI:
     ):
         """Run form editor overlay for a profile."""
         h, w = stdscr.getmaxyx()
-        win_h, win_w = 32, 70
+        win_h, win_w = 33, 70
         win_y = (h - win_h) // 2
         win_x = (w - win_w) // 2
 
@@ -762,6 +767,7 @@ class ProfileTUI:
             "trace_raw_payload": str(config.trace_settings.raw_payload).lower(),
             "trace_rerank": str(config.trace_settings.rerank).lower(),
             "trace_tps_perf": str(config.trace_settings.tps_perf).lower(),
+            "trace_imagedbg": str(config.trace_settings.imagedbg).lower(),
             "reasoning": str(config.reasoning_settings.enabled).lower(),
             "show_thinking": str(config.reasoning_settings.show_thinking).lower(),
             "reasoning_effort": config.reasoning_settings.effort,
@@ -795,11 +801,12 @@ class ProfileTUI:
             ("trace_raw_payload","Raw Payload:",     23, 18, 12, "cycle", ["true", "false"]),
             ("trace_rerank",     "Rerank:",           24, 18, 8, "cycle", ["true", "false"]),
             ("trace_tps_perf",   "TPS Perf:",         25, 18, 10, "cycle", ["true", "false"]),
+            ("trace_imagedbg",   "ImageDbg:",         26, 18, 10, "cycle", ["true", "false"]),
 
-            ("section_reasoning", "-- Reasoning --", 26, 4, 0, "header", None),
-            ("reasoning",        "Enabled:",          27, 18, 8, "cycle", ["true", "false"]),
-            ("show_thinking",     "Show Thinking:",    28, 18, 12, "cycle", ["true", "false"]),
-            ("reasoning_effort", "Effort:",           29, 18, 12, "cycle", ["none", "low", "medium", "high"]),
+            ("section_reasoning", "-- Reasoning --", 27, 4, 0, "header", None),
+            ("reasoning",        "Enabled:",          28, 18, 8, "cycle", ["true", "false"]),
+            ("show_thinking",     "Show Thinking:",    29, 18, 12, "cycle", ["true", "false"]),
+            ("reasoning_effort", "Effort:",           30, 18, 12, "cycle", ["none", "low", "medium", "high"]),
         ]
 
         # Interactive elements only (filter out headers)
@@ -1007,6 +1014,7 @@ class ProfileTUI:
                 raw_payload=form_data["trace_raw_payload"].lower() == "true",
                 rerank=form_data["trace_rerank"].lower() == "true",
                 tps_perf=form_data["trace_tps_perf"].lower() == "true",
+                imagedbg=form_data["trace_imagedbg"].lower() == "true",
             )
             
             reasoning_settings = ReasoningSettings(
@@ -1213,6 +1221,7 @@ class ProfileTUI:
             raw_payload=form_data["trace_raw_payload"].lower() == "true",
             rerank=form_data["trace_rerank"].lower() == "true",
             tps_perf=form_data["trace_tps_perf"].lower() == "true",
+            imagedbg=form_data["trace_imagedbg"].lower() == "true",
         )
 
         # Parse reasoning settings

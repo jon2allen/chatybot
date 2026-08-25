@@ -207,7 +207,6 @@ During an autonomous tool calling loop (`in_tool_loop = True`):
 ```toml
 [config]
 session_mode = "auto"              # Options: "off", "on", "auto"
-session_type = "clean"             # Options: "clean", "telemetry", "hybrid"
 session_dir = "~/.local/share/chatybot/sessions"
 session_auto_save = true
 ```
@@ -225,7 +224,7 @@ session_auto_save = true
 ## 6. Implementation Checklist & File Touches
 
 - [ ] **`src/chatybot/chatybot_app.py`**:
-  - Add session attributes (`active_session_name`, `session_mode`, `session_type`, `session_dir`).
+  - Add session attributes (`active_session_name`, `session_mode`, `session_dir`).
   - Implement `handle_session_command()`, `save_session_turn()`, and `load_session()`.
   - Integrate turn auto-save at end of `run_prompt()` and `run_tool_loop()`.
 - [ ] **`src/chatybot/buffer_manager.py`**:

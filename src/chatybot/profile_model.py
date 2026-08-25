@@ -97,6 +97,9 @@ class TraceSettings(BaseModel):
     tps_perf: bool = False
     """Trace TPS performance metrics."""
 
+    imagedbg: bool = False
+    """Trace image generation debug output."""
+
 
 # ============================================================================
 # REASONING SETTINGS
@@ -464,6 +467,8 @@ class Profile(BaseModel):
                     config.trace_settings.rerank = state
                 elif subcmd == "tpsperf" or subcmd == "tps_perf":
                     config.trace_settings.tps_perf = state
+                elif subcmd == "imagedbg":
+                    config.trace_settings.imagedbg = state
 
             # Reasoning
             elif cmd == "/reasoning" and len(parts) >= 2:
@@ -558,6 +563,8 @@ class Profile(BaseModel):
             lines.append("/trace rerank on")
         if traces.tps_perf:
             lines.append("/trace tpsperf on")
+        if traces.imagedbg:
+            lines.append("/trace imagedbg on")
 
         # Reasoning settings
         reasoning = self.config.reasoning_settings

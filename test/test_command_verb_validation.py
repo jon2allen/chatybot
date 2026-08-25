@@ -198,4 +198,101 @@ class TestCommandVerbValidation:
         assert app.i18n.resolve_command("/procedure") == "/proc"
         assert app.i18n.translate_script("pourchaque line en lignes(doc)") == "foreach line en lignes(doc)"
 
+    @pytest.mark.anyio
+    async def test_debug_payload_in_script_context(self, app, capsys):
+        """Verify /debug payload mode is skipped when executing in script context."""
+        app.debug_payload_mode = True
+        app.script_context = True
 
+        await app.chat_completion("Test prompt", stream=False)
+        captured = capsys.readouterr()
+
+        assert "Warning: /debug payload is not allowed in script context. Skipping." in captured.out
+        assert app.debug_payload_mode is False
+
+    @pytest.mark.anyio
+    async def test_trace_command_validation(self, app, capsys):
+        """Verify /trace validates state strictly and rejects extra arguments."""
+        # Valid state on
+        await app.handle_escape_command("/trace tps on")
+        captured = capsys.readouterr()
+        assert "Trace tps set to True" in captured.out
+        assert app.trace_tps is True
+
+        # Valid state off
+        await app.handle_escape_command("/trace tps off")
+        captured = capsys.readouterr()
+        assert "Trace tps set to False" in captured.out
+        assert app.trace_tps is False
+
+        # Invalid state
+        await app.handle_escape_command("/trace tps maybe")
+        captured = capsys.readouterr()
+        assert "Error: invalid state 'maybe'. Use 'on' or 'off'." in captured.out
+
+        # Extra trailing arguments
+        await app.handle_escape_command("/trace tps on please")
+        captured = capsys.readouterr()
+        assert "Error: unexpected argument(s) after 'on please': please" in captured.out
+
+    @pytest.mark.anyio
+    async def test_trace_tps_perf_non_streaming_warning(self, app, capsys):
+        """Verify trace_tps_perf outputs warning when streaming is disabled."""
+        app.trace_tps_perf = True
+        app.streaming_enabled = False
+
+        await app.chat_completion("Test prompt", stream=False)
+        captured = capsys.readouterr()
+
+        assert "Warning: trace_tps_perf requires streaming mode. Enable streaming to capture per-second token throughput." in captured.out
+
+    @pytest.mark.anyio
+    async def test_empty_assistant_message_cleaning_for_cohere(self, app):
+        """Verify chat history with thought-only assistant response falls back to non-empty text."""
+        from unittest.mock import AsyncMock
+        mock_completion = MagicMock()
+        mock_choice = MagicMock()
+        mock_choice.message.content = "OK response"
+        mock_choice.message.reasoning_content = None
+        mock_completion.choices = [mock_choice]
+
+        mock_create = AsyncMock(return_value=mock_completion)
+        client = app.get_openai_client()
+        client.chat.completions.create = mock_create
+
+        app.chat_history = [
+            ("user prompt", "<think>internal reasoning trace</think>")
+        ]
+
+        await app.chat_completion("Next prompt", stream=False)
+
+        call_kwargs = mock_create.call_args[1]
+        sent_messages = call_kwargs["messages"]
+
+        assistant_msg = sent_messages[0] if sent_messages[0]["role"] == "assistant" else sent_messages[1]
+        assert assistant_msg["role"] == "assistant"
+        assert assistant_msg["content"].strip() != ""
+        assert assistant_msg["content"] != " "
+
+    @pytest.mark.anyio
+    async def test_glm_reasoning_effort_and_mode(self, app):
+        """Verify GLM 5.2 / GLM models pass reasoning_effort and enable_reasoning parameters."""
+        from unittest.mock import AsyncMock
+        mock_completion = MagicMock()
+        mock_choice = MagicMock()
+        mock_choice.message.content = "GLM response"
+        mock_choice.message.reasoning_content = "GLM thought process"
+        mock_completion.choices = [mock_choice]
+
+        mock_create = AsyncMock(return_value=mock_completion)
+        client = app.get_openai_client()
+        client.chat.completions.create = mock_create
+
+        # Enable reasoning effort and model name with GLM 5.2
+        app.reasoning_effort = "medium"
+        app.config_manager.model_alias = "glm-5.2"
+
+        await app.chat_completion("Test GLM prompt", stream=False)
+
+        call_kwargs = mock_create.call_args[1]
+        assert call_kwargs.get("reasoning_effort") == "medium"

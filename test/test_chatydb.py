@@ -76,3 +76,43 @@ class TestChatyDB:
         finally:
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
+
+    def test_dblog_with_thinking(self):
+        """Test dblog with include_thinking=True logs thinking_content and thinking_tokens."""
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
+            tmp_path = tmp.name
+
+        try:
+            manager = CorpusManager(tmp_path)
+            chatydb._manager = manager
+            chatydb._db_path = tmp_path
+
+            # Mock chatybot module with mock app instance
+            mock_app = MagicMock()
+            mock_app.chat_history = [("What is 2+2?", "<think>\n2 + 2 = 4\n</think>\nThe answer is 4.")]
+            mock_app._extract_thinking_tokens.return_value = ("2 + 2 = 4", "The answer is 4.")
+            mock_app.last_reasoning_tokens = 42
+            mock_app.reasoning_effort = "high"
+            mock_app.config_manager.active_model_alias = "gemini_flash"
+            mock_app.config_manager.get_model_config.return_value = {"name": "gemini-2.5-flash"}
+
+            mock_mod = MagicMock()
+            mock_mod.app = mock_app
+
+            import sys
+            with patch.dict(sys.modules, {"chatybot.chatybot_app": mock_mod}):
+                chatydb.dblog(include_thinking=True)
+
+            items = manager.get_all_items()
+            assert len(items) == 1
+            item = items[0]
+            assert item["type"] == "chat"
+            assert item["metadata"]["thinking_content"] == "2 + 2 = 4"
+            assert item["metadata"]["thinking_tokens"] == 42
+            assert item["metadata"]["reasoning_effort"] == "high"
+            assert item["metadata"]["prompt"] == "What is 2+2?"
+
+        finally:
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+

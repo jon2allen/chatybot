@@ -103,6 +103,9 @@ class ChatybotApp:
         self.procedures: Dict[str, Dict[str, Any]] = {}
         self.proc_depth: int = 0
         self.active_proc_stack: List[Dict[str, Any]] = []
+        # Tracks active foreach loops so 'break' can detect use outside a loop
+        # and defproc can warn when defined inside a loop body.
+        self.foreach_active: int = 0
 
         # Image generation settings
         self.image_size = "1024x1024"
@@ -123,6 +126,10 @@ class ChatybotApp:
         self.reasoning_mode: bool = True
         self.reasoning_effort: Optional[str] = None
         self.show_thinking: bool = True
+        # Reasoning token count from the most recent completion's usage, if the
+        # provider exposes one (e.g. OpenAI completion_tokens_details.reasoning_tokens).
+        # Read by /dblog --thinking. Reset to 0 each completion.
+        self.last_reasoning_tokens: int = 0
         self.multi_line_mode: bool = False
         self.auto_exit_pending: bool = False
         self.script_context: bool = False
@@ -166,11 +173,11 @@ class ChatybotApp:
 
         # Session persistence settings
         self.session_mode: str = "auto"          # "off", "on", "auto"
-        self.session_type: str = "clean"         # "clean", "telemetry", "hybrid"
         self.session_dir: str = os.path.expanduser("~/.local/share/chatybot/sessions")
         self.session_strip_thinking: str = "separate" # "separate", "true", "false"
         self.active_session_id: Optional[str] = None
         self.active_session_name: Optional[str] = None
+        self.session_model_alias: Optional[str] = None
         self.session_turns: List[Dict[str, Any]] = []
         self.session_created_at: Optional[str] = None
         self.session_first_prompt_slug: Optional[str] = None
@@ -350,6 +357,8 @@ class ChatybotApp:
 
     def cleanup_mcp_sync(self) -> None:
         """Synchronously cleanup MCP manager and active sessions on exit."""
+        if hasattr(self, "active_session_id"):
+            self._release_session_lock()
         if hasattr(self, "mcp_manager") and self.mcp_manager:
             try:
                 try:
@@ -746,8 +755,6 @@ class ChatybotApp:
     def _resolve_session_file(self, target: str) -> Optional[str]:
         """Find a session JSON or JSON.GZ file path by exact path, ID, or custom name."""
         sessions_dir = self.get_sessions_dir()
-        if not os.path.exists(sessions_dir):
-            return None
 
         # 1. Exact path / filename check
         for ext in ("", ".json", ".json.gz"):
@@ -778,13 +785,28 @@ class ChatybotApp:
         slug = "_".join(words).lower()
         return slug if slug else "untitled_session"
 
+    def _generate_session_id(self, model_alias: str) -> str:
+        """Generate a unique session ID, appending a counter if the timestamp collides."""
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        base_id = f"{model_alias}_{timestamp}"
+        sessions_dir = self.get_sessions_dir()
+        candidate = base_id
+        counter = 1
+        while os.path.exists(os.path.join(sessions_dir, f"{candidate}.json")) or \
+              os.path.exists(os.path.join(sessions_dir, f"{candidate}.json.gz")) or \
+              os.path.exists(os.path.join(sessions_dir, f"{candidate}.lock")):
+            candidate = f"{base_id}_{counter}"
+            counter += 1
+        return candidate
+
     def _extract_thinking_tokens(self, response_text: str) -> Tuple[Optional[str], str]:
         """Extract reasoning traces (<think>...</think>) from response text."""
-        match = re.search(r"<think>(.*?)</think>|<thought>(.*?)</thought>", response_text, flags=re.DOTALL)
-        if match:
-            thinking_content = (match.group(1) or match.group(2) or "").strip()
+        matches = re.findall(r"<think>(.*?)</think>|<thought>(.*?)</thought>", response_text, flags=re.DOTALL)
+        if matches:
+            thinking_parts = [(m[0] or m[1] or "").strip() for m in matches]
+            thinking_content = "\n\n".join(p for p in thinking_parts if p)
             clean_text = re.sub(r"<think>.*?</think>\s*|<thought>.*?</thought>\s*", "", response_text, flags=re.DOTALL).strip()
-            return thinking_content, clean_text
+            return (thinking_content or None), clean_text
         return None, response_text
 
     def _ensure_active_session(self, initial_prompt: str = ""):
@@ -794,14 +816,69 @@ class ChatybotApp:
         if not self.active_session_id:
             now = datetime.now()
             model_alias = getattr(self.config_manager, "active_model_alias", None) or "default"
-            timestamp = now.strftime("%Y%m%d_%H%M%S")
-            self.active_session_id = f"{model_alias}_{timestamp}"
+            self.session_model_alias = model_alias
+            self.active_session_id = self._generate_session_id(model_alias)
             self.session_created_at = now.isoformat()
             if initial_prompt:
                 self.session_first_prompt_slug = self._slugify_text(initial_prompt)
+            self._acquire_session_lock(self.active_session_id)
+
+    def _pid_alive(self, pid: int) -> bool:
+        """Check whether a process with the given PID is currently running."""
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+        except OSError:
+            return False
+        return True
+
+    def _session_lock_path(self, session_id: str) -> str:
+        """Get the path to the lock file for a session."""
+        return os.path.join(self.get_sessions_dir(), f"{session_id}.lock")
+
+    def _acquire_session_lock(self, session_id: str) -> bool:
+        """Acquire a lock file for the session. Returns True if acquired or already held."""
+        lock_path = self._session_lock_path(session_id)
+        if os.path.exists(lock_path):
+            try:
+                with open(lock_path, "r") as f:
+                    pid = int(f.read().strip())
+                if pid == os.getpid():
+                    return True
+                if self._pid_alive(pid):
+                    print(f"Warning: Session '{session_id}' is in use by PID {pid}. "
+                          f"Concurrent writes may cause divergent or lost history. "
+                          f"Use /session start for a new session.")
+                    return False
+            except (ValueError, IOError):
+                pass
+        try:
+            with open(lock_path, "w") as f:
+                f.write(str(os.getpid()))
+            return True
+        except IOError:
+            return False
+
+    def _release_session_lock(self, session_id: Optional[str] = None) -> None:
+        """Release the lock file for the given session (or the active session if None)."""
+        sid = session_id or self.active_session_id
+        if not sid:
+            return
+        lock_path = self._session_lock_path(sid)
+        try:
+            if os.path.exists(lock_path):
+                with open(lock_path, "r") as f:
+                    pid = int(f.read().strip())
+                if pid == os.getpid():
+                    os.remove(lock_path)
+        except (ValueError, IOError, OSError):
+            pass
 
     def save_active_session(self):
-        """Save current active session state to disk."""
+        """Save current active session state to disk atomically."""
         if self.session_mode == "off" or not self.active_session_id:
             return
 
@@ -813,8 +890,9 @@ class ChatybotApp:
 
         sessions_dir = self.get_sessions_dir()
         file_path = os.path.join(sessions_dir, f"{self.active_session_id}.json")
+        tmp_path = file_path + ".tmp"
 
-        model_alias = getattr(self.config_manager, "active_model_alias", None) or "default"
+        model_alias = self.session_model_alias or "default"
         payload = {
             "session_id": self.active_session_id,
             "model_alias": model_alias,
@@ -826,8 +904,9 @@ class ChatybotApp:
             "turns": self.session_turns
         }
 
-        with open(file_path, "w", encoding="utf-8") as f:
+        with open(tmp_path, "w", encoding="utf-8") as f:
             json.dump(payload, f, indent=2, ensure_ascii=False)
+        os.replace(tmp_path, file_path)
 
     def append_session_turn(self, prompt: str, response: str, agentic_loop_data: Optional[List[Dict[str, Any]]] = None):
         """Append a completed exchange turn to active session and save to disk."""
@@ -840,6 +919,7 @@ class ChatybotApp:
         
         turn_data: Dict[str, Any] = {
             "turn_id": len(self.session_turns) + 1,
+            "model_alias": getattr(self.config_manager, "active_model_alias", None) or "default",
             "prompt": prompt,
             "response": clean_resp if self.session_strip_thinking != "false" else response
         }
@@ -1081,6 +1161,8 @@ class ChatybotApp:
                     messages.append({"role": "user", "content": past_p})
                     # Strip thinking tags from past assistant responses for token efficiency
                     clean_r = re.sub(r"<think>.*?</think>\s*|<thought>.*?</thought>\s*", "", past_r, flags=re.DOTALL).strip()
+                    if not clean_r and past_r:
+                        clean_r = past_r
                     messages.append({"role": "assistant", "content": clean_r})
 
             # For multimodal (vision) models, use content array with text + images
@@ -1095,7 +1177,7 @@ class ChatybotApp:
             "nvidia" in model_config.get("base_url", "").lower()
             or "nvidia" in model_name.lower()
         )
-        is_reasoning_model = is_nvidia or "qwen" in model_name.lower()
+        is_reasoning_model = is_nvidia or "qwen" in model_name.lower() or "glm" in model_name.lower()
 
         current_system_message = self.config_manager.system_message
         if self.tool_mode and self.tool_context:
@@ -1230,15 +1312,16 @@ class ChatybotApp:
         if pp is not None:
             kwargs["presence_penalty"] = pp
 
-        # Add explicit reasoning control for models that support it (e.g. SiliconFlow Qwen)
-        if "qwen" in model_name.lower() and not self.reasoning_mode:
+        # Add explicit reasoning control for models that support it (e.g. SiliconFlow Qwen, GLM models)
+        if any(k in model_name.lower() for k in ["qwen", "glm"]) and not self.reasoning_mode:
             kwargs.setdefault("extra_body", {})["enable_reasoning"] = False
 
         # Add reasoning_effort / reasoning_strength if set
         # Supported by:
         # - Meta Muse Glimmer: via extra_body.chat_template_kwargs.reasoning_strength (low, medium, high, xhigh)
         # - OpenAI (o1, o3): via top-level reasoning_effort
-        # - Mistral (magistral, devstral, mistral-medium-3.5): via top-level reasoning_effort
+        # - Mistral (mistral-small-latest, mistral-medium-3.5, mistral-medium-2604, magistral, devstral): via top-level reasoning_effort
+        # - GLM models: via top-level reasoning_effort or extra_body
         if self.reasoning_effort is not None:
             active_alias_lower = (self.config_manager.active_model_alias or "").lower()
             is_muse_model = any(x in model_name.lower() for x in ["muse", "glimmer"]) or any(x in active_alias_lower for x in ["muse", "glimmer"])
@@ -1250,7 +1333,11 @@ class ChatybotApp:
             elif is_mistral:
                 # Mistral supports reasoning_effort at top level for reasoning models
                 # Check if model name suggests it's a reasoning model
-                if any(x in model_name.lower() for x in ["mistral-small-latest", "mistral-medium-3.5", "mistral-medium-2604", "magistral", "devstral"]):
+                if any(x in model_name.lower() for x in ["mistral-small-latest", "mistral-medium-3.5", "mistral-medium-2604", "magistral", "devstral", "glm"]):
+                    kwargs["reasoning_effort"] = self.reasoning_effort
+            else:
+                # Fallback for GLM or reasoning models on custom endpoints
+                if any(x in model_name.lower() for x in ["glm", "reasoning"]):
                     kwargs["reasoning_effort"] = self.reasoning_effort
 
         omit_tk = model_config.get("omit_top_k", False)
@@ -1334,61 +1421,64 @@ class ChatybotApp:
 
             # Capture payload for debug mode
             if self.debug_payload_mode:
+                if self.script_context:
+                    print("Warning: /debug payload is not allowed in script context. Skipping.")
+                    self.debug_payload_mode = False
+                else:
+                    import tempfile
+                    import os
+                    import subprocess
 
-                import tempfile
-                import os
-                import subprocess
-                
-                self.debug_payload_data = kwargs.copy()
-                
-                # Create a temporary file with the payload
-                temp_file = tempfile.NamedTemporaryFile(
-                    mode='w+', 
-                    suffix='.json', 
-                    delete=False,
-                    encoding='utf-8'
-                )
-                
-                try:
-                    # Write the payload to the temp file
-                    json.dump(self.debug_payload_data, temp_file, indent=2)
-                    temp_file.flush()
-                    
-                    print(f"\nPayload captured and saved to: {temp_file.name}")
-                    print("Opening in editor...")
-                    
-                    # Determine the editor to use
-                    editor = os.environ.get('EDITOR', 'vi')
-                    
-                    # Open the file in the editor
-                    subprocess.run([editor, temp_file.name])
-                    
-                    # After editing, read the modified payload
-                    with open(temp_file.name, 'r', encoding='utf-8') as f:
-                        modified_payload = json.load(f)
-                    
-                    # Update kwargs with the modified payload
-                    kwargs.update(modified_payload)
-                    
-                    print(f"\nUsing modified payload from: {temp_file.name}")
-                    
-                except Exception as e:
-                    print(f"Error in debug payload mode: {str(e)}")
-                    self.debug_payload_mode = False
-                finally:
-                    # Clean up and reset debug mode
-                    temp_file.close()
+                    self.debug_payload_data = kwargs.copy()
+
+                    # Create a temporary file with the payload
+                    temp_file = tempfile.NamedTemporaryFile(
+                        mode='w+',
+                        suffix='.json',
+                        delete=False,
+                        encoding='utf-8'
+                    )
+
                     try:
-                        os.unlink(temp_file.name)
-                    except:
-                        pass
-                    self.debug_payload_mode = False
+                        # Write the payload to the temp file
+                        json.dump(self.debug_payload_data, temp_file, indent=2)
+                        temp_file.flush()
+
+                        print(f"\nPayload captured and saved to: {temp_file.name}")
+                        print("Opening in editor...")
+
+                        # Determine the editor to use
+                        editor = os.environ.get('EDITOR', 'vi')
+
+                        # Open the file in the editor
+                        subprocess.run([editor, temp_file.name])
+
+                        # After editing, read the modified payload
+                        with open(temp_file.name, 'r', encoding='utf-8') as f:
+                            modified_payload = json.load(f)
+
+                        # Update kwargs with the modified payload
+                        kwargs.update(modified_payload)
+
+                        print(f"\nUsing modified payload from: {temp_file.name}")
+
+                    except Exception as e:
+                        print(f"Error in debug payload mode: {str(e)}")
+                        self.debug_payload_mode = False
+                    finally:
+                        # Clean up and reset debug mode
+                        temp_file.close()
+                        try:
+                            os.unlink(temp_file.name)
+                        except:
+                            pass
+                        self.debug_payload_mode = False
 
             # Clean assistant messages to ensure they are not empty (which causes API 400 error)
             cleaned_messages = []
             for msg in kwargs.get("messages", []):
-                if msg.get("role") == "assistant" and not (msg.get("content") or "").strip():
-                    cleaned_messages.append({"role": "assistant", "content": " "})
+                if msg.get("role") == "assistant" and not (msg.get("content") or "").strip() and not msg.get("tool_calls"):
+                    cleaned_messages.append({"role": "assistant", "content": "[No response content]"})
                 else:
                     cleaned_messages.append(msg)
             kwargs["messages"] = cleaned_messages
@@ -1795,11 +1885,22 @@ class ChatybotApp:
             print(f"\nExecution time: {elapsed_time:.2f} seconds")
 
             out_tokens = 0
+            # Reset reasoning token count for this completion; updated below if
+            # the provider exposes reasoning token usage.
+            self.last_reasoning_tokens = 0
             if hasattr(response, "usage") and response.usage:
                 out_tokens = response.usage.completion_tokens
                 print(
                     f"Input tokens: {response.usage.prompt_tokens}, Output tokens: {out_tokens}"
                 )
+                # Capture reasoning token count if the provider reports it
+                # (e.g. OpenAI completion_tokens_details.reasoning_tokens).
+                try:
+                    details = getattr(response.usage, "completion_tokens_details", None)
+                    if details is not None:
+                        self.last_reasoning_tokens = int(getattr(details, "reasoning_tokens", 0) or 0)
+                except Exception:
+                    pass
 
             if think_tokens_estimate + regular_tokens_estimate > 0 and out_tokens > 0:
                 ratio_think = think_tokens_estimate / (
@@ -1829,6 +1930,11 @@ class ChatybotApp:
 
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 csv_filename = f"tps+{timestamp}.csv"
+                # Avoid overwriting a CSV from the same second.
+                counter = 1
+                while os.path.exists(csv_filename):
+                    csv_filename = f"tps+{timestamp}_{counter}.csv"
+                    counter += 1
                 try:
                     import csv
 
@@ -1844,6 +1950,8 @@ class ChatybotApp:
                     print(f"TPS performance saved to '{csv_filename}'")
                 except Exception as e:
                     print(f"Error saving TPS performance: {e}")
+            elif self.trace_tps_perf:
+                print("Warning: trace_tps_perf requires streaming mode. Enable streaming to capture per-second token throughput.")
 
             # Log user entry with datetime and model info
             if self.logging_manager.logging_active:
@@ -1892,6 +2000,11 @@ class ChatybotApp:
             if self.logging_manager.logging_active:
                 self.logging_manager.log_message(error_msg)
             return f"Error: {str(e)}"
+        finally:
+            # Ensure one-shot debug flags never leak past this completion,
+            # even when the API call raises before the flags are consumed.
+            self.debug_response_mode = False
+            self.debug_response_raw = False
 
     async def execute_script_command(
         self, command: str, original_handler: Callable[[str], Union[bool, str]]
@@ -2078,6 +2191,9 @@ class ChatybotApp:
 
         # Handle break command (exits foreach loop early)
         if stripped_command == "break":
+            if self.foreach_active < 1:
+                print("Error: 'break' used outside of a foreach loop.")
+                return True
             raise LoopBreak()
 
         # Handle if-then commands
@@ -2416,6 +2532,8 @@ class ChatybotApp:
                 return
             body_lines.append(line)
         
+        if proc_name in self.procedures:
+            print(f"Warning: Redefining procedure '{proc_name}' (previously defined with {len(self.procedures[proc_name]['params'])} parameters).")
         self.procedures[proc_name] = {"params": params, "body": body_lines}
         print(f"Procedure '{proc_name}' defined with params: {params}")
 
@@ -2440,13 +2558,15 @@ class ChatybotApp:
                         start = int(parts[0])
                         end = int(parts[1])
                         step = 1 if start <= end else -1
-                    elif len(parts) == 3 and sep == ":":
+                    elif len(parts) == 3:
                         start = int(parts[0])
                         end = int(parts[1])
                         step = int(parts[2])
                     else:
                         return None, f"Invalid range format: '{expr_str}'"
-                    
+
+                    if step == 0:
+                        return None, f"Invalid range step (zero) in range expression: '{expr_str}'"
                     end_inclusive = (end + 1) if step > 0 else (end - 1)
                     return range(start, end_inclusive, step), None
                 except ValueError:
@@ -2455,7 +2575,7 @@ class ChatybotApp:
                 try:
                     count = int(resolved_inner)
                     if count < 1:
-                        return range(0), None
+                        return None, f"Warning: range count {count} is less than 1 in '{expr_str}'. Skipping."
                     return range(1, count + 1), None
                 except ValueError:
                     return None, f"Invalid numeric count in range expression: '{expr_str}'"
@@ -2480,7 +2600,7 @@ class ChatybotApp:
             elif isinstance(content, str):
                 return content.splitlines(), None
             else:
-                return [], None
+                return None, f"Warning: lines() could not resolve '{inner_str}' to any content. Skipping."
 
         # 3. Standard Array / Variable lookup: my_array
         array_data = self.buffer_manager.script_vars.get(raw_expr)
@@ -2551,6 +2671,7 @@ class ChatybotApp:
             self.buffer_manager.script_vars._is_user_write = True
 
         try:
+            self.foreach_active += 1
             for elem in iterable:
                 val_str = str(elem) if not isinstance(elem, (str, int, float, bool)) else elem
                 self.buffer_manager.set_script_var(item_var, val_str)
@@ -2559,6 +2680,7 @@ class ChatybotApp:
                 except LoopBreak:
                     break
         finally:
+            self.foreach_active -= 1
             old_user_write_inner = getattr(self.buffer_manager.script_vars, '_is_user_write', False)
             if hasattr(self.buffer_manager.script_vars, '_is_user_write'):
                 self.buffer_manager.script_vars._is_user_write = True
@@ -2624,6 +2746,8 @@ class ChatybotApp:
                 # 2. Handle active defproc buffer capture
                 if in_defproc:
                     if stripped_cmd == "endproc":
+                        if cur_proc_name in self.procedures:
+                            print(f"Warning: Redefining procedure '{cur_proc_name}' (previously defined with {len(self.procedures[cur_proc_name]['params'])} parameters).")
                         self.procedures[cur_proc_name] = {
                             "params": cur_proc_params,
                             "body": cur_proc_body
@@ -2656,6 +2780,8 @@ class ChatybotApp:
 
                 # 4. Check for defproc start
                 if lstripped_cmd.startswith("defproc ") or stripped_cmd == "defproc":
+                    if self.foreach_active > 0:
+                        print(f"Warning: defproc defined inside a foreach loop body; it will be re-evaluated on every iteration.")
                     m = re.match(r"defproc\s+([a-zA-Z_]\w*)(?:\(([^)]*)\))?", lstripped_cmd)
                     if m:
                         cur_proc_name = m.group(1)
@@ -3886,7 +4012,7 @@ class ChatybotApp:
             return
 
         total = len(loop_data)
-        successes = sum(1 for r in loop_data if r.get("status") == "success")
+        successes = sum(1 for r in loop_data if isinstance(r, dict) and r.get("status") == "success")
         failures = total - successes
 
         print("\n=== AGENTIC LOOP TRACE ===")
@@ -3894,6 +4020,9 @@ class ChatybotApp:
         print("-" * 60)
 
         for i, rec in enumerate(loop_data, 1):
+            if not isinstance(rec, dict):
+                print(f"[{i}] (invalid record: {type(rec).__name__}) — SKIPPED")
+                continue
             tool_name = rec.get("tool", "unknown")
             turn = rec.get("turn", "?")
             status = rec.get("status", "error")
@@ -3986,13 +4115,21 @@ class ChatybotApp:
                 self.strip_thinking_from_filebanks = False
 
         if 'session_mode' in config_section:
-            self.session_mode = str(config_section.get('session_mode')).lower()
-        if 'session_type' in config_section:
-            self.session_type = str(config_section.get('session_type')).lower()
+            val = str(config_section.get('session_mode')).lower()
+            if val in ("off", "on", "auto"):
+                self.session_mode = val
+            else:
+                print(f"Warning: Invalid session_mode '{val}'. Using default 'auto'.")
+                self.session_mode = "auto"
         if 'session_dir' in config_section:
             self.session_dir = os.path.expanduser(str(config_section.get('session_dir')))
         if 'session_strip_thinking' in config_section:
-            self.session_strip_thinking = str(config_section.get('session_strip_thinking')).lower()
+            val = str(config_section.get('session_strip_thinking')).lower()
+            if val in ("separate", "true", "false"):
+                self.session_strip_thinking = val
+            else:
+                print(f"Warning: Invalid session_strip_thinking '{val}'. Using default 'separate'.")
+                self.session_strip_thinking = "separate"
 
         tools = config.get('tools', {})
         
@@ -4104,7 +4241,18 @@ class ChatybotApp:
         elif cmd == "/trace":
             if len(parts) >= 3:
                 subcmd = parts[1].lower()
-                state = parts[2].lower()
+                state = parts[2].lower().strip()
+                # Guard against trailing tokens (e.g. "/trace tps on please")
+                # which maxsplit=2 would fold into state, silently disabling.
+                extra = command.split()[3:]
+                if extra:
+                    print(f"Error: unexpected argument(s) after '{state}': {' '.join(extra)}")
+                    print("Usage: /trace <rawpayload|tps|tpsperf|imagedbg|rerank|agentic_loop> <on|off>")
+                    return True
+                if state not in ("on", "off"):
+                    print(f"Error: invalid state '{state}'. Use 'on' or 'off'.")
+                    print("Usage: /trace <rawpayload|tps|tpsperf|imagedbg|rerank|agentic_loop> <on|off>")
+                    return True
                 is_on = state == "on"
                 if subcmd == "rawpayload":
                     self.trace_raw_payload = is_on
@@ -4133,7 +4281,7 @@ class ChatybotApp:
                 else:
                     print("Unknown /trace subcommand. Use rawpayload, tps, tpsperf, imagedbg, rerank, or agentic_loop.")
             else:
-                print("Usage: /trace <rawpayload|tps|tpsperf|imagedbg|rerank> <on|off>")
+                print("Usage: /trace <rawpayload|tps|tpsperf|imagedbg|rerank|agentic_loop> <on|off>")
             return True
 
         elif cmd == "/debug":
@@ -4751,21 +4899,36 @@ class ChatybotApp:
                 return True
 
             action = parts[1].lower()
+            # parts was split with maxsplit=2, so parts[2] (if present) may hold
+            # multiple space-separated sub-args. Re-split them into tokens so
+            # e.g. "/logging start hex on" is parsed correctly.
+            sub_args = parts[2].split() if len(parts) > 2 else []
+
             if action == "start":
-                hex_mode = False
-                if len(parts) > 2 and parts[2].lower() in ("hex", "raw", "on"):
-                    hex_mode = True
+                hex_aliases = ("hex", "raw", "on")
+                hex_mode = any(a.lower() in hex_aliases for a in sub_args)
                 self.logging_manager.start_logging(hex_mode=hex_mode)
             elif action in ("hex", "hexmode"):
-                if len(parts) > 2 and parts[2].lower() in ("off", "false", "disable"):
+                off_aliases = ("off", "false", "disable")
+                on_aliases = ("on", "true", "enable")
+                if sub_args and sub_args[0].lower() in off_aliases:
                     self.logging_manager.hex_mode = False
                     print("Logging hex mode disabled.")
-                else:
+                elif sub_args and sub_args[0].lower() in on_aliases:
                     self.logging_manager.hex_mode = True
                     if not self.logging_manager.logging_active:
                         self.logging_manager.start_logging(hex_mode=True)
                     else:
                         print("Logging hex mode enabled.")
+                elif not sub_args:
+                    # No argument: enable (preserves original toggle-on behavior)
+                    self.logging_manager.hex_mode = True
+                    if not self.logging_manager.logging_active:
+                        self.logging_manager.start_logging(hex_mode=True)
+                    else:
+                        print("Logging hex mode enabled.")
+                else:
+                    print(f"Invalid hex mode argument '{sub_args[0]}'. Use 'on' or 'off'.")
             elif action in ("end", "stop"):
                 self.logging_manager.stop_logging()
             else:
@@ -4864,17 +5027,19 @@ class ChatybotApp:
                     print("Usage: /session start <name>")
                     return True
                 session_name = " ".join(parts[2:]).strip(" \"'")
+                self._release_session_lock()
                 self.chat_history.clear()
                 self.session_turns.clear()
                 now = datetime.now()
                 model_alias = getattr(self.config_manager, "active_model_alias", None) or "default"
-                timestamp = now.strftime("%Y%m%d_%H%M%S")
-                self.active_session_id = f"{model_alias}_{timestamp}"
+                self.session_model_alias = model_alias
+                self.active_session_id = self._generate_session_id(model_alias)
                 self.active_session_name = session_name
                 self.session_created_at = now.isoformat()
                 self.session_first_prompt_slug = None
                 self.session_notes = None
                 self.session_mode = "on" if self.session_mode == "off" else self.session_mode
+                self._acquire_session_lock(self.active_session_id)
                 self.save_active_session()
                 self.buffer_manager.set_script_var('SESSION_NAME', session_name, allow_protected=True)
                 print(f"Started new session '{session_name}' (ID: {self.active_session_id})")
@@ -4896,6 +5061,7 @@ class ChatybotApp:
                 return True
 
             elif subcmd in ("stop", "off"):
+                self._release_session_lock()
                 self.session_mode = "off"
                 print("Session recording paused.")
                 return True
@@ -4957,7 +5123,6 @@ class ChatybotApp:
                             range_parts = param[6:].split(":")
                             if len(range_parts) == 2:
                                 offset, limit = map(int, range_parts)
-                                limit = offset + limit
                             else:
                                 offset = int(range_parts[0])
                         except ValueError:
@@ -4977,51 +5142,54 @@ class ChatybotApp:
                 # Filter by model if specified
                 if model_filter:
                     files = [f for f in files if model_filter in f.lower()]
-                
-                # Sort files by updated_at timestamp from session metadata
-                files_with_dates = []
+
+                # Parse all session files in a single pass, cache metadata for sorting + display
                 import gzip
+                parsed_sessions = []
                 for fname in files:
                     fpath = os.path.join(sessions_dir, fname)
                     try:
                         open_fn = gzip.open if fname.endswith(".gz") else open
                         with open_fn(fpath, "rt", encoding="utf-8") as sf:
                             sdata = json.load(sf)
-                            updated_at = sdata.get("updated_at", "1970-01-01T00:00:00")
-                            files_with_dates.append((fname, updated_at))
+                        parsed_sessions.append({
+                            "fname": fname,
+                            "updated_at": sdata.get("updated_at", "1970-01-01T00:00:00"),
+                            "sid": sdata.get("session_id", fname),
+                            "cname": sdata.get("custom_name"),
+                            "slug": sdata.get("first_prompt_slug", ""),
+                            "turns_cnt": len(sdata.get("turns", [])),
+                            "upd": sdata.get("updated_at", "")[:16].replace("T", " "),
+                            "snote": sdata.get("notes"),
+                        })
                     except Exception:
-                        files_with_dates.append((fname, "1970-01-01T00:00:00"))
+                        parsed_sessions.append({
+                            "fname": fname,
+                            "updated_at": "1970-01-01T00:00:00",
+                            "sid": fname,
+                            "cname": None,
+                            "slug": "",
+                            "turns_cnt": 0,
+                            "upd": "",
+                            "snote": None,
+                        })
 
                 # Sort by updated_at in descending order (newest first)
-                files_with_dates.sort(key=lambda x: x[1], reverse=True)
-                files = [fname for fname, _ in files_with_dates]
-                
+                parsed_sessions.sort(key=lambda x: x["updated_at"], reverse=True)
+
                 # Apply pagination
                 if limit is not None:
-                    files = files[offset:offset+limit]
+                    parsed_sessions = parsed_sessions[offset:offset+limit]
                 print("\nAvailable Sessions:")
-                for idx, fname in enumerate(files, 1):
-                    fpath = os.path.join(sessions_dir, fname)
-                    try:
-                        open_fn = gzip.open if fname.endswith(".gz") else open
-                        with open_fn(fpath, "rt", encoding="utf-8") as sf:
-                            sdata = json.load(sf)
-                            sid = sdata.get("session_id", fname)
-                            cname = sdata.get("custom_name")
-                            slug = sdata.get("first_prompt_slug", "")
-                            turns_cnt = len(sdata.get("turns", []))
-                            upd = sdata.get("updated_at", "")[:16].replace("T", " ")
-                            snote = sdata.get("notes")
-                            name_str = f" (Name: '{cname}')" if cname else ""
-                            gz_str = " [compressed]" if fname.endswith(".gz") else ""
-                            print(f"  {idx}. {sid}{name_str}{gz_str}")
-                            print(f"     ├─ Prompt: \"{slug}\"")
-                            if snote:
-                                short_note = snote[:60] + "..." if len(snote) > 60 else snote
-                                print(f"     ├─ Notes: \"{short_note}\"")
-                            print(f"     └─ Turns: {turns_cnt} exchanges (Updated: {upd})")
-                    except Exception:
-                        print(f"  {idx}. {fname}")
+                for idx, s in enumerate(parsed_sessions, 1):
+                    name_str = f" (Name: '{s['cname']}')" if s["cname"] else ""
+                    gz_str = " [compressed]" if s["fname"].endswith(".gz") else ""
+                    print(f"  {idx}. {s['sid']}{name_str}{gz_str}")
+                    print(f"     ├─ Prompt: \"{s['slug']}\"")
+                    if s["snote"]:
+                        short_note = s["snote"][:60] + "..." if len(s["snote"]) > 60 else s["snote"]
+                        print(f"     ├─ Notes: \"{short_note}\"")
+                    print(f"     └─ Turns: {s['turns_cnt']} exchanges (Updated: {s['upd']})")
                 print("")
                 return True
 
@@ -5040,19 +5208,22 @@ class ChatybotApp:
                 open_fn = gzip.open if matched_file.endswith(".gz") else open
                 with open_fn(matched_file, "rt", encoding="utf-8") as sf:
                     sdata = json.load(sf)
+                    self._release_session_lock()
                     self.active_session_id = sdata.get("session_id")
                     self.active_session_name = sdata.get("custom_name")
+                    self.session_model_alias = sdata.get("model_alias")
                     self.session_created_at = sdata.get("created_at")
                     self.session_first_prompt_slug = sdata.get("first_prompt_slug")
                     self.session_notes = sdata.get("notes")
                     self.session_turns = sdata.get("turns", [])
-                    
+
                     # Hydrate chat_history for LLM completion context
                     self.chat_history.clear()
                     for turn in self.session_turns:
-                        self.chat_history.append((turn["prompt"], turn["response"]))
-                
+                        self.chat_history.append((turn.get("prompt", ""), turn.get("response", "")))
+
                 self.session_mode = "on" if self.session_mode == "off" else self.session_mode
+                self._acquire_session_lock(self.active_session_id)
                 self.buffer_manager.set_script_var('SESSION_NAME', self.active_session_name or self.active_session_id, allow_protected=True)
                 print(f"Loaded session '{self.active_session_name or self.active_session_id}' ({len(self.session_turns)} exchanges).")
                 return True
@@ -5068,7 +5239,7 @@ class ChatybotApp:
 
                 print("\n" + "=" * 80)
                 name_str = f" (Name: {self.active_session_name})" if self.active_session_name else ""
-                model_alias = getattr(self.config_manager, "active_model_alias", None) or "default"
+                model_alias = self.session_model_alias or "default"
                 print(f"SESSION: {self.active_session_id or 'Unsaved'}{name_str}")
                 print(f"Model: {model_alias} | Created: {self.session_created_at or 'N/A'} | Total Turns: {len(self.session_turns)}")
                 if self.session_notes:
@@ -5077,7 +5248,9 @@ class ChatybotApp:
 
                 for turn in self.session_turns:
                     t_id = turn.get("turn_id", 1)
-                    print(f"[Turn {t_id}]")
+                    t_model = turn.get("model_alias")
+                    model_str = f" ({t_model})" if t_model else ""
+                    print(f"[Turn {t_id}]{model_str}")
                     print(f"User: {turn.get('prompt')}")
                     if show_thinking and "thinking" in turn:
                         print("Thinking:")
@@ -5110,7 +5283,7 @@ class ChatybotApp:
 
                 md_lines = []
                 name_title = self.active_session_name or self.active_session_id or "Session Transcript"
-                model_alias = getattr(self.config_manager, "active_model_alias", None) or "default"
+                model_alias = self.session_model_alias or "default"
                 md_lines.append(f"# Session Transcript: {name_title}\n")
                 md_lines.append(f"- **Session ID**: `{self.active_session_id or 'N/A'}`")
                 md_lines.append(f"- **Model**: `{model_alias}`")
@@ -5122,7 +5295,11 @@ class ChatybotApp:
 
                 for turn in self.session_turns:
                     t_id = turn.get("turn_id", 1)
-                    md_lines.append(f"## Turn {t_id}\n")
+                    t_model = turn.get("model_alias")
+                    header = f"## Turn {t_id}"
+                    if t_model:
+                        header += f" ({t_model})"
+                    md_lines.append(f"{header}\n")
                     md_lines.append("### User")
                     md_lines.append(f"{turn.get('prompt')}\n")
                     if show_thinking and "thinking" in turn:
@@ -5209,12 +5386,16 @@ class ChatybotApp:
 
             elif subcmd == "delete":
                 if len(parts) < 3:
-                    print("Usage: /session delete <name|id|all>")
+                    print("Usage: /session delete <name|id|--all>")
                     return True
                 target = parts[2].lower()
 
-                if target == "all":
-                    confirm = input("Are you sure you want to delete ALL saved sessions? (y/N): ").strip().lower()
+                if target == "--all":
+                    try:
+                        confirm = input("Are you sure you want to delete ALL saved sessions? (y/N): ").strip().lower()
+                    except EOFError:
+                        print("Delete all cancelled (non-interactive input).")
+                        return True
                     if confirm in ("y", "yes"):
                         sessions_dir = self.get_sessions_dir()
                         count = 0
@@ -5222,6 +5403,9 @@ class ChatybotApp:
                             if f.endswith(".json") or f.endswith(".json.gz"):
                                 os.remove(os.path.join(sessions_dir, f))
                                 count += 1
+                            elif f.endswith(".lock"):
+                                os.remove(os.path.join(sessions_dir, f))
+                        self._release_session_lock()
                         self.active_session_id = None
                         self.active_session_name = None
                         self.session_turns.clear()
@@ -5238,7 +5422,12 @@ class ChatybotApp:
 
                 os.remove(matched_file)
                 base_name = os.path.basename(matched_file)
-                if self.active_session_id and (self.active_session_id in base_name or self.active_session_name == parts[2]):
+                if self.active_session_id and (
+                    base_name == f"{self.active_session_id}.json"
+                    or base_name == f"{self.active_session_id}.json.gz"
+                    or self.active_session_name == parts[2]
+                ):
+                    self._release_session_lock()
                     self.active_session_id = None
                     self.active_session_name = None
                     self.session_turns.clear()
@@ -5260,6 +5449,7 @@ class ChatybotApp:
                 merged_turns = []
                 merged_models = []
                 first_slug = None
+                source_notes = []
 
                 for st in source_targets:
                     sf_path = self._resolve_session_file(st)
@@ -5274,6 +5464,10 @@ class ChatybotApp:
                         m_alias = sdata.get("model_alias", "default")
                         if m_alias not in merged_models:
                             merged_models.append(m_alias)
+                        src_label = sdata.get("custom_name") or sdata.get("session_id", st)
+                        src_note = sdata.get("notes")
+                        if src_note:
+                            source_notes.append(f"[{src_label}] {src_note}")
                         for turn in sdata.get("turns", []):
                             new_turn = dict(turn)
                             new_turn["turn_id"] = len(merged_turns) + 1
@@ -5284,6 +5478,8 @@ class ChatybotApp:
                 timestamp = now.strftime("%Y%m%d_%H%M%S")
                 new_session_id = f"merged_{timestamp}"
 
+                merged_notes = " | ".join(source_notes)[:1024] if source_notes else None
+
                 payload = {
                     "session_id": new_session_id,
                     "model_alias": model_alias,
@@ -5291,6 +5487,7 @@ class ChatybotApp:
                     "updated_at": now.isoformat(),
                     "first_prompt_slug": first_slug or "merged_session",
                     "custom_name": target_name,
+                    "notes": merged_notes,
                     "turns": merged_turns
                 }
 
@@ -5319,9 +5516,12 @@ class ChatybotApp:
                 now_ts = time.time()
                 count = 0
                 saved_bytes = 0
+                active_json = f"{self.active_session_id}.json" if self.active_session_id else None
 
                 for fname in os.listdir(sessions_dir):
                     if fname.endswith(".json") and not fname.endswith(".json.gz"):
+                        if fname == active_json:
+                            continue
                         fp = os.path.join(sessions_dir, fname)
                         mtime = os.path.getmtime(fp)
                         age_days = (now_ts - mtime) / 86400.0
@@ -5374,8 +5574,15 @@ class ChatybotApp:
                     print("No session directory found.")
                     return True
 
+                active_names = set()
+                if self.active_session_id:
+                    active_names.add(f"{self.active_session_id}.json")
+                    active_names.add(f"{self.active_session_id}.json.gz")
+
                 file_entries = []
                 for fname in os.listdir(sessions_dir):
+                    if fname in active_names:
+                        continue
                     if fname.endswith(".json") or fname.endswith(".json.gz"):
                         fp = os.path.join(sessions_dir, fname)
                         file_entries.append({
@@ -6524,7 +6731,11 @@ class ChatybotApp:
                 var_value = match.group(3).strip('"\'')
                 call_args[var_name] = var_value
 
-            max_depth = int(self.buffer_manager.script_vars.get("PROC_MAX_DEPTH", 20))
+            try:
+                max_depth = int(self.buffer_manager.script_vars.get("PROC_MAX_DEPTH", 20))
+            except (ValueError, TypeError):
+                print("Warning: PROC_MAX_DEPTH is not a valid integer; defaulting to 20.")
+                max_depth = 20
             if self.proc_depth >= max_depth:
                 print(f"Error: Maximum procedure recursion depth of {max_depth} reached.", flush=True)
                 return True
@@ -6549,6 +6760,15 @@ class ChatybotApp:
                         with open(found_path, "r", encoding="utf-8") as f:
                             content = f.read()
                         body_lines = content.split("\n")
+                        # Allow proc files to be written as full defproc...endproc
+                        # blocks by stripping the header and trailing endproc so
+                        # only the body is executed on call.
+                        if body_lines and re.match(r"\s*defproc\s+\w+", body_lines[0]):
+                            body_lines = body_lines[1:]
+                            for i in range(len(body_lines) - 1, -1, -1):
+                                if body_lines[i].strip() == "endproc":
+                                    body_lines = body_lines[:i] + body_lines[i + 1:]
+                                    break
                     except Exception as e:
                         print(f"Error reading procedure file '{found_path}': {e}")
                         return True
@@ -6558,7 +6778,19 @@ class ChatybotApp:
 
             frame = {"saved_vars": {}, "local_vars": set()}
             self.active_proc_stack.append(frame)
-            
+
+            # Validate arity for in-memory procedures (file-based procs have no
+            # declared param list, so they are skipped).
+            if proc_name in self.procedures:
+                declared = set(self.procedures[proc_name]["params"])
+                provided = set(call_args.keys())
+                missing = declared - provided
+                extra = provided - declared
+                if missing:
+                    print(f"Warning: Procedure '{proc_name}' called without parameter(s): {', '.join(sorted(missing))}.")
+                if extra:
+                    print(f"Warning: Procedure '{proc_name}' called with unknown parameter(s): {', '.join(sorted(extra))}.")
+
             old_user_write = getattr(self.buffer_manager.script_vars, '_is_user_write', False)
             if hasattr(self.buffer_manager.script_vars, '_is_user_write'):
                 self.buffer_manager.script_vars._is_user_write = True
@@ -6580,6 +6812,8 @@ class ChatybotApp:
             self.script_context = True
             try:
                 await self.execute_command_list(body_lines)
+            except LoopBreak:
+                raise
             except Exception as e:
                 print(f"Error executing procedure '{proc_name}': {e}")
             finally:
@@ -6623,11 +6857,23 @@ class ChatybotApp:
             if len(parts) < 2:
                 print("Usage: /searchdb <query>")
                 return True
-            query = parts[1].strip('"')
-            search_db(query)
+            # parts was split with maxsplit=2, so a multi-word query lands in
+            # parts[2]. Rejoin so "/searchdb python web framework" searches for
+            # the full phrase rather than just "python".
+            query = parts[1] if len(parts) < 3 else f"{parts[1]} {parts[2]}"
+            search_db(query.strip('"'))
             return True
         elif cmd == "/dblog":
-            dblog()
+            # /dblog logs the final answer only (legacy behavior).
+            # /dblog thinking (or withthink) also persists the extracted
+            # reasoning text and reasoning token count into the item's metadata.
+            # Matches the bare-word convention used by /save (nothink/withthink)
+            # and /logging (hex) rather than a --prefix flag.
+            include_thinking = False
+            if len(parts) > 1:
+                flags = parts[1].lower() if len(parts) < 3 else f"{parts[1]} {parts[2]}".lower()
+                include_thinking = any(w in flags for w in ("thinking", "withthink", "with-think"))
+            dblog(include_thinking=include_thinking)
             return True
         elif cmd == "/dbprint":
             if len(parts) > 1:
@@ -7024,18 +7270,7 @@ class ChatybotApp:
 
                 results = ranker.rerank(query=query, top_n=top_n, verbose=False)
                 self.latest_rerank_results = results
-                
-                if self.debug_response_mode:
-                    print("\n--- DEBUG RESPONSE (JSON) ---")
-                    print(json.dumps(results, indent=2))
-                    print("--- END DEBUG RESPONSE ---\n")
-                    self.debug_response_mode = False
-                elif self.debug_response_raw:
-                    print("\n--- DEBUG RESPONSE (RAW) ---")
-                    print(results)
-                    print("--- END DEBUG RESPONSE ---\n")
-                    self.debug_response_raw = False
-                
+
                 # Pre-resolve matching texts and references
                 resolved_matches = []
                 for idx, res in enumerate(results, 1):
@@ -7237,7 +7472,12 @@ class ChatybotApp:
                     expr_str = tokens[0]
                 elif len(tokens) >= 2:
                     last = tokens[-1].strip()
-                    if not any(op in last for op in "+-*/^()"):
+                    try:
+                        float(last)
+                        is_number = True
+                    except ValueError:
+                        is_number = False
+                    if not any(op in last for op in "+-*/^()") and not is_number:
                         var_target = last
                         expr_str = " ".join(tokens[:-1])
                     else:
@@ -7247,7 +7487,7 @@ class ChatybotApp:
             expr_str = self.buffer_manager.replace_placeholders_legacy(expr_str, clear_unresolved=False)
 
             try:
-                from .tools.math_utils import ensure_mathparse_patched, preprocess_multilingual_expression
+                from .tools.math_utils import ensure_mathparse_patched, preprocess_multilingual_expression, normalize_result
                 ensure_mathparse_patched()
                 from mathparse import mathparse
                 lang_code = {
@@ -7264,7 +7504,10 @@ class ChatybotApp:
                     result = mathparse.parse(expr_str)
                 if result is None:
                     print(f"Error: Could not parse math expression '{expr_str}'.")
+                elif result == 'undefined':
+                    print(f"Error: Division by zero in expression '{expr_str}'.")
                 else:
+                    result = normalize_result(result)
                     # Save to target script var (allowing protected variables like CALC)
                     self.buffer_manager.set_script_var(var_target, result, allow_protected=True)
                     print(f"{var_target} = {result}")
@@ -7775,7 +8018,8 @@ class ChatybotApp:
         )
         print("  /dblist - List all TinyDB databases in the db directory.")
         print("  /searchdb <query> - Search all docs in the current database.")
-        print("  /dblog - Log the last chat completion to the database.")
+        print("  /dblog [thinking] - Log the last chat completion to the database.")
+        print("    thinking: also persist extracted reasoning text and token count.")
         print("  /dbprint - Print the entire database contents in a formatted report.")
         print(
             "  /loadvar <varname> [ALL|id|range] - Load search buffer, all docs, a doc ID, or a range (e.g. 1-5) into a variable."

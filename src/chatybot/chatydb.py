@@ -1,4 +1,5 @@
 import os
+import re
 import json
 from typing import List, Dict, Any, Optional
 from datetime import datetime
@@ -13,6 +14,11 @@ SEARCHBUFFER: List[Dict[str, Any]] = []  # Holds the last search results
 _manager: Optional[CorpusManager] = None
 # Storage for the current database path
 _db_path: Optional[str] = None
+
+# A database name must be a single safe path component: no slashes, no "..",
+# no path separators, no empty/whitespace. This prevents path traversal and
+# weird filenames like "db/.json".
+_DB_NAME_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
 
 
 def _ensure_db_path(db_name: str) -> str:
@@ -32,11 +38,34 @@ def set_db(db_name: str) -> None:
     """
     global _manager, _db_path
     if db_name.lower() == "null":
+        # Close the previous manager before deactivating so its file handle
+        # is released.
+        if _manager is not None:
+            try:
+                _manager.close()
+            except Exception:
+                pass
         _manager = None
         _db_path = None
         print("Database support deactivated.")
         return
-    db_path = _ensure_db_path(db_name)
+
+    name = db_name.strip()
+    if not name or not _DB_NAME_RE.match(name):
+        print(
+            f"Invalid database name '{db_name}'. Use letters, digits, '.', '_', or '-' "
+            "(no slashes, spaces, or '..')."
+        )
+        return
+
+    db_path = _ensure_db_path(name)
+    # Close the previous manager before opening a new one so its file handle
+    # is released rather than leaked across repeated /setdb calls.
+    if _manager is not None:
+        try:
+            _manager.close()
+        except Exception:
+            pass
     _manager = CorpusManager(db_path)
     _db_path = db_path
     print(f"Database set to '{db_path}'.")
@@ -84,20 +113,45 @@ def search_db(query: str) -> None:
     """Search all items in the active database for *query*.
 
     Results are stored in the global ``SEARCHBUFFER`` and printed to the console.
+
+    An empty query, ``*``, or ``all`` is an explicit "list all" shorthand.
     """
     global SEARCHBUFFER
     if _manager is None:
         print("No database selected. Use /setdb <dbname> first.")
         return
-    # Simple case‑insensitive substring search across name, content, and metadata fields
+
     all_items = _manager.get_all_items()
-    results = []
+
+    # Empty/whitespace, "*", or "all" is an explicit "list all" shorthand
+    # rather than an emergent property of substring matching.
+    if not query.strip() or query.strip() in ("*", "all"):
+        results = list(all_items)
+        SEARCHBUFFER.clear()
+        SEARCHBUFFER.extend(results)
+        if not results:
+            print("No documents in database.")
+            return
+        print(f"Empty query — showing all {len(results)} document(s):")
+        for i, doc in enumerate(results, 1):
+            snippet = (doc.get("content") or "")[:100]
+            print(
+                f"{i}. id={doc.doc_id if hasattr(doc, 'doc_id') else 'N/A'} "
+                f"type={doc.get('type')} name={doc.get('name')} snippet='{snippet}...'"
+            )
+        return
+
+    # Simple case-insensitive substring search across name, content, and metadata fields
     q = query.lower()
+    results = []
     for item in all_items:
-        name = item.get("name", "")
-        content = item.get("content", "")
+        # Coerce to str so None values (possible via direct TinyDB writes) don't
+        # crash on .lower(); the .get(..., "") default only fires when the key
+        # is absent, not when it's present with value None.
+        name = str(item.get("name") or "")
+        content = str(item.get("content") or "")
         metadata = item.get("metadata", {})
-        
+
         in_metadata = False
         if isinstance(metadata, dict):
             for k, val in metadata.items():
@@ -112,7 +166,7 @@ def search_db(query: str) -> None:
         elif metadata:
             if q in str(metadata).lower():
                 in_metadata = True
-        
+
         if q in name.lower() or q in content.lower() or in_metadata:
             results.append(item)
     SEARCHBUFFER.clear()
@@ -128,18 +182,24 @@ def search_db(query: str) -> None:
         )
 
 
-def dblog() -> None:
+def dblog(include_thinking: bool = False) -> None:
     """Log the last chat completion into the active TinyDB as a ``chat`` item.
 
     The item stores the raw response text and a timestamp.
 
     - type: "chat"
     - name: "last_chat"
-    - content: The AI response text
+    - content: The AI response text (with thinking tags intact, matching what
+      is stored in chat_history)
       - metadata: A dictionary containing:
        - timestamp: When the chat occurred
        - model_alias: The short alias used (e.g., "mistral_1")
        - model_name: The full model name (e.g., "mistral-large-2512")
+       - prompt: The user prompt for this turn
+       - thinking_content: Extracted reasoning text, or None when not requested
+         (only present when include_thinking=True)
+       - thinking_tokens: Reasoning token count from the API, or 0 when unknown
+       - reasoning_effort: The active reasoning effort setting, or None
     """
     if _manager is None:
         print("No database selected. Use /setdb <dbname> first.")
@@ -177,18 +237,55 @@ def dblog() -> None:
 
     last_prompt = CHAT_HISTORY[-1][0]
     # Store with a simple metadata dict containing a timestamp
-
     metadata = {"timestamp": datetime.now().isoformat()}
-    # gather model alias and name
-    metadata["model_alias"] = app_instance.config_manager.active_model_alias
-    model_config = app_instance.config_manager.get_model_config(
-        app_instance.config_manager.active_model_alias
-    )
-    metadata["model_name"] = model_config["name"]
+
+    # Gather model alias/name when the app instance is available. These are
+    # secondary metadata; a missing or invalid alias must never abort the log.
+    if app_instance:
+        metadata["model_alias"] = getattr(
+            app_instance.config_manager, "active_model_alias", "unknown"
+        )
+        try:
+            model_config = app_instance.config_manager.get_model_config(
+                app_instance.config_manager.active_model_alias
+            )
+            metadata["model_name"] = (
+                model_config["name"] if model_config else "unknown"
+            )
+        except Exception:
+            metadata["model_name"] = "unknown"
+    else:
+        metadata["model_alias"] = "unknown"
+        metadata["model_name"] = "unknown"
+
     metadata["prompt"] = last_prompt
+
+    # Thinking/reasoning awareness. The thinking text is already embedded in
+    # the stored response as <think>...</think> tags (standardized at
+    # completion time). When the user requests it, re-extract it via the app's
+    # existing extractor rather than storing it separately in chat_history.
+    # Token counts and reasoning_effort come from the app instance, which
+    # captures them at completion time.
+    if include_thinking:
+        thinking_content = None
+        if app_instance is not None:
+            extractor = getattr(app_instance, "_extract_thinking_tokens", None)
+            if callable(extractor):
+                thinking_content, _ = extractor(last_response)
+        metadata["thinking_content"] = thinking_content
+        metadata["thinking_tokens"] = getattr(app_instance, "last_reasoning_tokens", 0) if app_instance else 0
+        metadata["reasoning_effort"] = getattr(app_instance, "reasoning_effort", None) if app_instance else None
+    else:
+        metadata["thinking_content"] = None
+        metadata["thinking_tokens"] = 0
+        metadata["reasoning_effort"] = getattr(app_instance, "reasoning_effort", None) if app_instance else None
+
     _manager.add_item("chat", "last_chat", last_response, metadata)
 
-    print("Last chat completion logged to the database.")
+    if include_thinking and metadata["thinking_content"]:
+        print("Last chat completion logged to the database (with thinking).")
+    else:
+        print("Last chat completion logged to the database.")
 
 
 def load_var(var_name: str, extra: str = None) -> None:
@@ -352,12 +449,30 @@ def dbprint(target_file: str = None) -> None:
             if metadata:
                 report_lines.append(f"    Metadata:")
                 for key, value in metadata.items():
+                    # Skip the verbose thinking_content here; it gets its own
+                    # styled section below when present.
+                    if key == "thinking_content":
+                        continue
                     report_lines.append(f"      {key}: {value}")
             else:
                 report_lines.append(f"    Metadata: [None]")
 
             report_lines.append(f"    Type: {item.get('type', 'N/A')}")
             report_lines.append(f"    Name: {item.get('name', 'N/A')}")
+
+            # Styled thinking section (only when thinking was logged)
+            thinking = metadata.get("thinking_content") if metadata else None
+            if thinking:
+                report_lines.append(f"    -- Thinking --")
+                formatted_thinking = duplicate_linefeeds(thinking)
+                for part in formatted_thinking.split("\n\n"):
+                    if part.strip():
+                        report_lines.append(f"    {part}")
+                tok = metadata.get("thinking_tokens", 0) if metadata else 0
+                if tok:
+                    report_lines.append(f"    [thinking tokens: {tok}]")
+                report_lines.append(f"    -- End Thinking --")
+
             content = item.get("content", "")
             if content:
                 # Duplicate line feeds in content for better readability

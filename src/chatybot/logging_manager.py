@@ -9,6 +9,7 @@ Uses pyio-intercept for thread-safe stdout interception with middleware chains.
 import os
 import sys
 import threading
+import unicodedata
 from datetime import datetime
 from typing import Optional
 
@@ -90,12 +91,12 @@ class LoggingManager:
     def start_logging(self, hex_mode: bool = False) -> None:
         """
         Start logging to a file with a timestamp.
-        
+
         Args:
             hex_mode: If True, non-printable/control characters will be converted to hex escapes.
         """
-        self.hex_mode = hex_mode
         if not self.logging_active:
+            self.hex_mode = hex_mode
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             log_filename = f"chatybot.log.{timestamp}"
             self.log_file = open(log_filename, "w", encoding="utf-8")
@@ -103,8 +104,15 @@ class LoggingManager:
             hex_note = " (hex mode enabled)" if self.hex_mode else ""
             print(f"Logging started{hex_note}. Writing to '{log_filename}'.")
         else:
-            hex_note = "enabled" if self.hex_mode else "disabled"
-            print(f"Logging is already active. Hex mode is now {hex_note}.")
+            # Logging is already active: only update hex_mode when the caller
+            # explicitly requests it, so re-running `/logging start` (without
+            # `hex`) does not silently disable an active hex mode.
+            if hex_mode and not self.hex_mode:
+                self.hex_mode = True
+                print("Logging is already active. Hex mode is now enabled.")
+            else:
+                hex_note = "enabled" if self.hex_mode else "disabled"
+                print(f"Logging is already active. Hex mode remains {hex_note}.")
     
     def stop_logging(self) -> None:
         """
@@ -133,11 +141,9 @@ class LoggingManager:
         """
         Convert unprintable ASCII control characters, escape codes, and invisible
         Unicode code points into human-readable hex brackets like [0x1B] or [U+200B].
-        
+
         Preserves standard whitespace (newlines, tabs) and printable characters.
         """
-        import unicodedata
-        
         out = []
         for ch in text:
             code = ord(ch)
@@ -149,12 +155,18 @@ class LoggingManager:
                 out.append(f"[0x{code:02X}]")
             else:
                 cat = unicodedata.category(ch)
-                # Check for invisible/control/format/surrogate/unassigned Unicode
-                if cat in ("Cc", "Cf", "Cs", "Co", "Cn"):
+                # Check for invisible/control/format/surrogate/private-use/unassigned
+                # Unicode, plus line/paragraph separators (Zl/Zp) which act as line
+                # breaks in many viewers and would corrupt the one-line-per-entry
+                # log format that hex mode is meant to make visible.
+                if cat in ("Cc", "Cf", "Cs", "Co", "Cn", "Zl", "Zp"):
+                    # Use the conventional variable-width U+ notation (no leading
+                    # zeros beyond the 4-digit BMP minimum) so supplementary-plane
+                    # code points render as [U+E0001], not [U+0E0001].
                     if code <= 0xFFFF:
                         out.append(f"[U+{code:04X}]")
                     else:
-                        out.append(f"[U+{code:06X}]")
+                        out.append(f"[U+{code:5X}]")
                 else:
                     out.append(ch)
         return "".join(out)

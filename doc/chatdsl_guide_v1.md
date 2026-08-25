@@ -748,7 +748,7 @@ src/chatybot/profiles/          # Preset profiles
 | `/calc` | General | `/calc <expr>` | Evaluate math expression |
 | `/str_search` | General | `/str_search <needle> [haystack]` | Search for substring in text |
 | `/proc` | General | `/proc <name> [args]` | Execute defined procedure |
-| `/session` | General | `/session <subcmd> [args]` | Manage chat sessions (list/show/save/prune/etc.) |
+| `/session` | General | `/session <subcmd> [args]` | Manage chat sessions (list/show/save/merge/prune/etc.) |
 | `/reloadmacros` | General | `/reloadmacros [file]` | Reload macro definitions |
 
 ### Model & LLM Commands
