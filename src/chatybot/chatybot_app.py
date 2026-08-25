@@ -7430,7 +7430,12 @@ class ChatybotApp:
                     expr_str = tokens[0]
                 elif len(tokens) >= 2:
                     last = tokens[-1].strip()
-                    if not any(op in last for op in "+-*/^()"):
+                    try:
+                        float(last)
+                        is_number = True
+                    except ValueError:
+                        is_number = False
+                    if not any(op in last for op in "+-*/^()") and not is_number:
                         var_target = last
                         expr_str = " ".join(tokens[:-1])
                     else:
@@ -7440,7 +7445,7 @@ class ChatybotApp:
             expr_str = self.buffer_manager.replace_placeholders_legacy(expr_str, clear_unresolved=False)
 
             try:
-                from .tools.math_utils import ensure_mathparse_patched, preprocess_multilingual_expression
+                from .tools.math_utils import ensure_mathparse_patched, preprocess_multilingual_expression, normalize_result
                 ensure_mathparse_patched()
                 from mathparse import mathparse
                 lang_code = {
@@ -7457,7 +7462,10 @@ class ChatybotApp:
                     result = mathparse.parse(expr_str)
                 if result is None:
                     print(f"Error: Could not parse math expression '{expr_str}'.")
+                elif result == 'undefined':
+                    print(f"Error: Division by zero in expression '{expr_str}'.")
                 else:
+                    result = normalize_result(result)
                     # Save to target script var (allowing protected variables like CALC)
                     self.buffer_manager.set_script_var(var_target, result, allow_protected=True)
                     print(f"{var_target} = {result}")
