@@ -23,6 +23,7 @@ class ConfigManager:
         self.top_k: Optional[int] = None
         self.freq_penalty: Optional[float] = None
         self.pres_penalty: Optional[float] = None
+        self.enable_chat_history: bool = True
     
     def load_config(self) -> None:
         """
@@ -72,6 +73,8 @@ class ConfigManager:
             self.freq_penalty = self.config["frequency_penalty"]
         if "presence_penalty" in self.config:
             self.pres_penalty = self.config["presence_penalty"]
+        if "enable_chat_history" in self.config:
+            self.enable_chat_history = bool(self.config["enable_chat_history"])
         
         # Image generation settings
         self.image_dir = os.path.expanduser("~/chatybot_images")

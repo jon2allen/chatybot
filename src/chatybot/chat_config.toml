@@ -19,6 +19,9 @@ default_quality = "standard"
 # below, add a [default] table naming one of the [models.<alias>] keys.
 # When omitted, the first [models.*] entry in this file is the default.
 #
+# Enable or disable in-memory conversation history collection (default: true)
+# enable_chat_history = true
+#
 # Example:
 #   [default]
 #   model = "mistral_1"

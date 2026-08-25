@@ -6,7 +6,17 @@ Orchestrates all components and provides the main interface
 
 import asyncio
 import os
-import readline
+import sys
+try:
+    if sys.platform == "win32":
+        try:
+            import pyreadline3 as readline
+        except ImportError:
+            import readline
+    else:
+        import readline
+except ImportError:
+    readline = None
 import time
 import re
 import shlex
@@ -18,7 +28,6 @@ from datetime import datetime
 from typing import Dict, Any, List, Tuple, Optional, Callable, Union
 import logging
 import atexit
-import sys
 import ctypes
 import ctypes.util
 import struct
@@ -182,6 +191,7 @@ class ChatybotApp:
         self.session_created_at: Optional[str] = None
         self.session_first_prompt_slug: Optional[str] = None
         self.session_notes: Optional[str] = None
+        self.enable_chat_history: bool = True
 
         # Trace settings
         self.trace_raw_payload: bool = False
@@ -316,13 +326,19 @@ class ChatybotApp:
             except Exception as e:
                 print(f"Error seeding profile presets: {e}")
 
+        self.enable_chat_history = getattr(self.config_manager, "enable_chat_history", True)
+
         # Set up input history
         self.load_input_history()
 
         # Set up readline for command history
-        readline.set_completer(self.input_history_completer)
-        readline.parse_and_bind("tab: complete")
-        readline.set_completer_delims(" \t\n;") 
+        if readline:
+            try:
+                readline.set_completer(self.input_history_completer)
+                readline.parse_and_bind("tab: complete")
+                readline.set_completer_delims(" \t\n;")
+            except Exception:
+                pass 
 
         # Register save and cleanup functions to be called on exit
         atexit.register(self.save_input_history)
@@ -961,8 +977,12 @@ class ChatybotApp:
                     line.strip() for line in f.readlines() if line.strip()
                 ]
             # Set up readline history
-            for line in self.input_history:
-                readline.add_history(line)
+            if readline:
+                for line in self.input_history:
+                    try:
+                        readline.add_history(line)
+                    except Exception:
+                        pass
         except FileNotFoundError:
             pass
 
@@ -1960,7 +1980,7 @@ class ChatybotApp:
                 self.logging_manager.log_message(f"Model: {model_alias} ({model_name})")
                 self.logging_manager.log_message(f"User: {prompt}")
 
-            if not self.in_tool_loop:
+            if not self.in_tool_loop and self.enable_chat_history:
                 self.chat_history.append((prompt, full_response))
                 if self.session_mode != "off":
                     self.append_session_turn(prompt, full_response)
@@ -1970,6 +1990,8 @@ class ChatybotApp:
                     if self.chat_history:
                         _, final_resp = self.chat_history[-1]
                         return final_resp
+            elif not self.enable_chat_history and self.extract_tool_calls(full_response):
+                print("Notice: Agentic tool loop skipped (chat history is disabled).")
 
             # Log assistant entry with completion datetime and token count
             if self.logging_manager.logging_active:
@@ -3767,6 +3789,10 @@ class ChatybotApp:
         # Initialize or reset the AGENTIC_LOOP script variable
         self.buffer_manager.set_script_var('AGENTIC_LOOP', [], allow_protected=True)
 
+        if not self.enable_chat_history:
+            print("Error: Agentic tool loops are disabled when chat history collection is turned off.")
+            return
+
         if not self.chat_history:
             print("No prompt has been executed yet. Please run a prompt first.")
             return
@@ -5016,6 +5042,7 @@ class ChatybotApp:
                 print(f"Active Session ID: {self.active_session_id or 'None'}")
                 print(f"Custom Name: {self.active_session_name or 'None'}")
                 print(f"Session Mode: {self.session_mode}")
+                print(f"Chat History: {'ON' if self.enable_chat_history else 'OFF'}")
                 print(f"Turn Count: {len(self.session_turns)}")
                 print(f"Session Directory: {self.get_sessions_dir()}")
                 return True
@@ -5070,10 +5097,26 @@ class ChatybotApp:
                 print(f"Active Session ID: {self.active_session_id or 'None'}")
                 print(f"Custom Name: {self.active_session_name or 'None'}")
                 print(f"Session Mode: {self.session_mode}")
+                print(f"Chat History: {'ON' if self.enable_chat_history else 'OFF'}")
                 print(f"Turn Count: {len(self.session_turns)}")
                 print(f"Session Directory: {self.get_sessions_dir()}")
                 if self.session_notes:
                     print(f"Notes: {self.session_notes}")
+                return True
+
+            elif subcmd == "history":
+                if len(parts) < 3:
+                    print(f"Chat History Collection is currently: {'ON' if self.enable_chat_history else 'OFF'}")
+                    return True
+                action = parts[2].lower()
+                if action in ("on", "1", "true"):
+                    self.enable_chat_history = True
+                    print("Chat history collection enabled.")
+                elif action in ("off", "0", "false"):
+                    self.enable_chat_history = False
+                    print("Chat history collection disabled. Note: Agentic tool loops are also disabled in this mode.")
+                else:
+                    print("Invalid action. Use 'on' or 'off'.")
                 return True
 
             elif subcmd == "note":
@@ -5219,8 +5262,9 @@ class ChatybotApp:
 
                     # Hydrate chat_history for LLM completion context
                     self.chat_history.clear()
-                    for turn in self.session_turns:
-                        self.chat_history.append((turn.get("prompt", ""), turn.get("response", "")))
+                    if self.enable_chat_history:
+                        for turn in self.session_turns:
+                            self.chat_history.append((turn.get("prompt", ""), turn.get("response", "")))
 
                 self.session_mode = "on" if self.session_mode == "off" else self.session_mode
                 self._acquire_session_lock(self.active_session_id)
@@ -8164,7 +8208,11 @@ class ChatybotApp:
                             not self.input_history or selected_command != self.input_history[-1]
                         ):
                             self.input_history.append(selected_command)
-                            readline.add_history(selected_command)
+                            if readline:
+                                try:
+                                    readline.add_history(selected_command)
+                                except Exception:
+                                    pass
                         
                         # Execute the selected command
                         await self.execute_line(selected_command)
@@ -8175,7 +8223,11 @@ class ChatybotApp:
                     not self.input_history or prompt != self.input_history[-1]
                 ):
                     self.input_history.append(prompt)
-                    readline.add_history(prompt)
+                    if readline:
+                        try:
+                            readline.add_history(prompt)
+                        except Exception:
+                            pass
 
                 if not prompt.strip():
                     continue

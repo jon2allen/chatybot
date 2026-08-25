@@ -1,4 +1,7 @@
-import curses
+try:
+    import curses
+except ImportError:
+    curses = None
 import os
 import re
 import sys
@@ -539,6 +542,14 @@ class ProfileEditor:
 
 def run_profile_editor(name: str, pm: Any, config_manager: Any) -> int:
     """Wrapper function to execute curses TUI."""
+    if curses is None:
+        print(
+            "Error: 'curses' module is unavailable. "
+            "On Windows, please install windows-curses ('pip install windows-curses').",
+            file=sys.stderr
+        )
+        return 1
+
     editor = ProfileEditor(name, pm, config_manager)
     try:
         res = curses.wrapper(editor.run)

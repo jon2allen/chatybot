@@ -20,7 +20,9 @@ dependencies = [
     "pyio-intercept>=0.1.0",
     "psutil",
     "mcp<2.0.0",
-    "mathparse>=0.2.8"
+    "mathparse>=0.2.8",
+    "pyreadline3; sys_platform == 'win32'",
+    "windows-curses; sys_platform == 'win32'"
 ]
 
 [project.scripts]
