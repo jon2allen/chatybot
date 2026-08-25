@@ -492,6 +492,33 @@
         },
         "/run_unsafe": {
           "short_desc": "Deshabilita el modo seguro para comandos de terminal (/run)"
+        },
+        "/session": {
+          "short_desc": "Administra la persistencia de sesiones, métricas, notas, exportaciones y depuración"
+        },
+        "/proc": {
+          "short_desc": "Ejecuta un procedimiento definido con defproc"
+        },
+        "defproc": {
+          "short_desc": "Define un bloque de procedimiento reutilizable con ámbito local"
+        },
+        "local": {
+          "short_desc": "Declara una variable local dentro de un procedimiento"
+        },
+        "foreach": {
+          "short_desc": "Itera sobre matrices, rangos numéricos o líneas de texto"
+        },
+        "/listmacros": {
+          "short_desc": "Muestra los macros cargados con firmas y plantillas"
+        },
+        "/str_search": {
+          "short_desc": "Busca patrones de subcadenas en una variable de texto"
+        },
+        "/context_limit": {
+          "short_desc": "Establece o muestra el límite de tokens de contexto de entrada"
+        },
+        "/auto_truncate": {
+          "short_desc": "Alterna el truncamiento automático del contexto con porcentaje opcional"
         }
       }
     }
@@ -882,6 +909,33 @@
         },
         "/run_unsafe": {
           "short_desc": "Désactive le mode sécurisé pour l'exécution shell (/run)"
+        },
+        "/session": {
+          "short_desc": "Gère la persistance des sessions, les métriques, notes, exports et le nettoyage"
+        },
+        "/proc": {
+          "short_desc": "Exécute une procédure définie avec defproc"
+        },
+        "defproc": {
+          "short_desc": "Définit un bloc de procédure réutilisable avec portée locale"
+        },
+        "local": {
+          "short_desc": "Déclare une variable locale au sein d'une procédure"
+        },
+        "foreach": {
+          "short_desc": "Itère sur des tableaux, des plages numériques ou des lignes de texte"
+        },
+        "/listmacros": {
+          "short_desc": "Affiche les macros chargées avec leurs signatures et modèles"
+        },
+        "/str_search": {
+          "short_desc": "Recherche des motifs de sous-chaînes dans une variable texte"
+        },
+        "/context_limit": {
+          "short_desc": "Définit ou affiche la limite de jetons de contexte d'entrée"
+        },
+        "/auto_truncate": {
+          "short_desc": "Bascule la troncature automatique du contexte avec pourcentage optionnel"
         }
       }
     }
@@ -1267,6 +1321,33 @@
         },
         "/run_unsafe": {
           "short_desc": "关闭外部 Shell 命令防灾保护并允许高危指令"
+        },
+        "/session": {
+          "short_desc": "管理对话会话持久化、工作区指标、笔记、导出及清理"
+        },
+        "/proc": {
+          "short_desc": "执行由 defproc 定义的过程或函数"
+        },
+        "defproc": {
+          "short_desc": "定义具有局部作用域的可复用过程块"
+        },
+        "local": {
+          "short_desc": "在过程内部声明局部变量"
+        },
+        "foreach": {
+          "short_desc": "循环遍历数组、数字范围或文本行"
+        },
+        "/listmacros": {
+          "short_desc": "列出已加载的宏定义及其签名和模板"
+        },
+        "/str_search": {
+          "short_desc": "在文本变量中搜索子字符串匹配模式"
+        },
+        "/context_limit": {
+          "short_desc": "设置或查看输入上下文的 Token 硬性上限"
+        },
+        "/auto_truncate": {
+          "short_desc": "开启或关闭达到上下文限制时的历史记录自动截断"
         }
       }
     }
@@ -1653,6 +1734,33 @@
         },
         "/run_unsafe": {
           "short_desc": "Disabilita la modalità sicura per l'esecuzione shell (/run)"
+        },
+        "/session": {
+          "short_desc": "Gestisce la persistenza delle sessioni, metriche, note, esportazioni e pulizia"
+        },
+        "/proc": {
+          "short_desc": "Esegue una procedura definita con defproc"
+        },
+        "defproc": {
+          "short_desc": "Definisce un blocco di procedura riutilizzabile con ambito locale"
+        },
+        "local": {
+          "short_desc": "Dichiara una variabile locale all'interno di una procedura"
+        },
+        "foreach": {
+          "short_desc": "Itera su array, intervalli numerici o righe di testo"
+        },
+        "/listmacros": {
+          "short_desc": "Elenca le macro caricate con le relative firme e modelli"
+        },
+        "/str_search": {
+          "short_desc": "Cerca modelli di sottostringhe in una variabile di testo"
+        },
+        "/context_limit": {
+          "short_desc": "Imposta o mostra il limite di token del contesto di input"
+        },
+        "/auto_truncate": {
+          "short_desc": "Attiva o disattiva il troncamento automatico del contesto con percentuale opzionale"
         }
       }
     }
@@ -2036,6 +2144,33 @@
         },
         "/run_unsafe": {
           "short_desc": "بيوقف الوضع الآمن لتشغيل أوامر الشيل"
+        },
+        "/session": {
+          "short_desc": "إدارة حفظ واسترجاع الجلسات، مقاييس مساحة العمل، الملاحظات والتصدير"
+        },
+        "/proc": {
+          "short_desc": "تنفيذ إجراء معرف باستخدام defproc"
+        },
+        "defproc": {
+          "short_desc": "تعريف كتلة إجراء قابلة لإعادة الاستخدام بنطاق محلي"
+        },
+        "local": {
+          "short_desc": "الإعلان عن متغير محلي داخل الإجراء"
+        },
+        "foreach": {
+          "short_desc": "التكرار عبر المصفوفات أو النطاقات العددية أو أسطر النص"
+        },
+        "/listmacros": {
+          "short_desc": "عرض وحدات الماكرو المحملة مع توقيعاتها وقوالبها"
+        },
+        "/str_search": {
+          "short_desc": "البحث عن أنماط السلاسل الفرعية في متغير نصي"
+        },
+        "/context_limit": {
+          "short_desc": "تعيين أو عرض الحد الأقصى لرموز السياق المدخلة"
+        },
+        "/auto_truncate": {
+          "short_desc": "التبديل بين تشغيل وإيقاف الاقتطاع التلقائي للسياق بنسبة اختيارية"
         }
       }
     }
