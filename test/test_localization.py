@@ -156,6 +156,8 @@ def test_help_localization():
     assert "/ayuda - Muestra este mensaje de ayuda" in help_text_es
     assert "ARCHIVO:" in help_text_es
     assert "/archivo - Carga un archivo de texto en el búfer" in help_text_es
+    assert "/sesion - Administra la persistencia de sesiones, métricas, notas, exportaciones y depuración" in help_text_es
+    assert "/proc - Ejecuta un procedimiento definido con defproc" in help_text_es
     
     # 2. Detailed Command Help Localization (with localized search)
     detail_es = help_sys.get_help_text("/archivo", i18n=mgr_es)
