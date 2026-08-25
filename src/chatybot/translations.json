@@ -57,7 +57,8 @@
       "end_line": "end_line",
       "rate_limit": "rate_limit",
       "ratelimit": "rate_limit",
-      "detail": "detail"
+      "detail": "detail",
+      "history": "history"
     },
     "ui": {
       "language_changed": "Language set to: {lang}",
@@ -247,7 +248,10 @@
       "limite_velocidad": "rate_limit",
       "detail": "detail",
       "detalle": "detail",
-      "detalles": "detail"
+      "detalles": "detail",
+      "history": "history",
+      "historial": "history",
+      "historia": "history"
     },
     "ui": {
       "language_changed": "Idioma establecido en: {lang}",
@@ -635,7 +639,9 @@
       "limite_taux": "rate_limit",
       "limite_debit": "rate_limit",
       "detail": "detail",
-      "details": "detail"
+      "details": "detail",
+      "history": "history",
+      "historique": "history"
     },
     "ui": {
       "language_changed": "Langue définie sur : {lang}",
@@ -1017,7 +1023,10 @@
       "频率限制": "rate_limit",
       "detail": "detail",
       "详细": "detail",
-      "详情": "detail"
+      "详情": "detail",
+      "history": "history",
+      "历史": "history",
+      "历史记录": "history"
     },
     "ui": {
       "language_changed": "语言设置为: {lang}",
@@ -1400,7 +1409,10 @@
       "limite_tasso": "rate_limit",
       "detail": "detail",
       "dettaglio": "detail",
-      "dettagli": "detail"
+      "dettagli": "detail",
+      "history": "history",
+      "cronologia": "history",
+      "storia": "history"
     },
     "ui": {
       "language_changed": "Lingua impostata su: {lang}",
@@ -1780,7 +1792,10 @@
       "معدل_الطلبات": "rate_limit",
       "detail": "detail",
       "تفصيل": "detail",
-      "تفاصيل": "detail"
+      "تفاصيل": "detail",
+      "history": "history",
+      "تاريخ": "history",
+      "سجل": "history"
     },
     "ui": {
       "language_changed": "تغيرت اللغة لـ: {lang}",
