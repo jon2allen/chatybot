@@ -9,8 +9,11 @@ This follows the same pattern as config_tui.py for consistent look and feel.
 import os
 import sys
 import argparse
-import curses
-import curses.textpad
+try:
+    import curses
+    import curses.textpad
+except ImportError:
+    curses = None
 from datetime import datetime
 from typing import Optional, List, Tuple, Dict, Any
 
@@ -1410,6 +1413,14 @@ def run_profile_tui(profile_dir: Optional[str] = None, config_manager: Any = Non
     Returns:
         Exit code (0 for success, 1 for error).
     """
+    if curses is None:
+        print(
+            "Error: 'curses' module is unavailable. "
+            "On Windows, please install windows-curses ('pip install windows-curses').",
+            file=sys.stderr
+        )
+        return 1
+
     tui = ProfileTUI(profile_dir=profile_dir, config_manager=config_manager, initial_profile=initial_profile)
 
     try:

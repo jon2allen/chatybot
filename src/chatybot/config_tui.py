@@ -7,8 +7,11 @@ Allows browsing, editing, cloning, deleting models with vendor presets.
 import os
 import sys
 import argparse
-import curses
-import curses.textpad
+try:
+    import curses
+    import curses.textpad
+except ImportError:
+    curses = None
 from typing import Optional, List, Tuple, Dict, Any
 
 from .config_model import ChatConfig, ChatModelConfig, RerankerModelConfig
@@ -1753,6 +1756,14 @@ def main(config_path: Optional[str] = None) -> int:
         args, _ = parser.parse_known_args()
         config_path = args.config
         
+    if curses is None:
+        print(
+            "Error: 'curses' module is unavailable. "
+            "On Windows, please install windows-curses ('pip install windows-curses').",
+            file=sys.stderr
+        )
+        return 1
+
     tui = ConfigTUI(config_path=config_path)
     
     # Run curses wrapper

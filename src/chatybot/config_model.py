@@ -268,6 +268,9 @@ class ChatConfig(BaseModel):
     presence_penalty: Optional[float] = None
     """Global default presence penalty."""
 
+    enable_chat_history: bool = True
+    """Global default for in-memory chat history collection."""
+
     # ------------------------------------------------------------------
     # Constructors
     # ------------------------------------------------------------------

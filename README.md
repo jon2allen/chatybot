@@ -122,6 +122,17 @@ mkdir -p ~/.config
 sudo chown -R $(whoami) ~/.config
 ```
 
+**Windows Python App Execution Aliases Conflict**
+On Windows, Microsoft includes "App Execution Aliases" by default that redirect `python.exe` and `python3.exe` calls to the Microsoft Store redirector (`C:\Users\<user>\AppData\Local\Microsoft\WindowsApps`) if Python path priority collides. This can intercept `python` calls and interfere with Chatybot's tool execution environment.
+
+**Recommended Solution**:
+1. Open Windows Settings (`Win + I`).
+2. Navigate to: **Apps** → **Advanced app settings** → **App execution aliases**.
+3. Turn **OFF** the toggles for:
+   - **App Installer (`python.exe`)**
+   - **App Installer (`python3.exe`)**
+4. Restart your terminal and verify your installation with `python --version`.
+
 ---
 
 ## **Quick Start**
