@@ -24,14 +24,22 @@ async def test_session_start_and_append(app):
     assert app.session_turns[0]["prompt"] == "What is Python?"
     assert app.session_turns[0]["response"] == "Python is a programming language."
 
-    # Verify JSON file written to disk
-    session_file = os.path.join(app.get_sessions_dir(), f"{app.active_session_id}.json")
-    assert os.path.exists(session_file)
+    # Verify JSONL session storage written to disk
+    session_dir = os.path.join(app.get_sessions_dir(), app.active_session_id)
+    meta_file = os.path.join(session_dir, "meta.json")
+    turns_file = os.path.join(session_dir, "turns.jsonl")
+    assert os.path.exists(meta_file)
+    assert os.path.exists(turns_file)
 
-    with open(session_file, "r", encoding="utf-8") as f:
+    with open(meta_file, "r", encoding="utf-8") as f:
         data = json.load(f)
         assert data["custom_name"] == "unit_test_session"
-        assert len(data["turns"]) == 1
+        assert data["turn_count"] == 1
+
+    with open(turns_file, "r", encoding="utf-8") as f:
+        turns = [json.loads(line) for line in f if line.strip()]
+        assert len(turns) == 1
+        assert turns[0]["prompt"] == "What is Python?"
 
 @pytest.mark.anyio
 async def test_session_use_and_load(app):
@@ -159,10 +167,30 @@ async def test_session_merge_compress_prune(app, capsys):
     captured = capsys.readouterr()
     assert "Merged 2 sessions" in captured.out
 
-    # Test compress
-    await app.handle_escape_command("/session compress all")
+    # Test compress with wildcard pattern
+    await app.handle_escape_command("/session compress merged*")
     captured_comp = capsys.readouterr()
     assert "Compressed" in captured_comp.out
+
+    # Test list compressed filter
+    await app.handle_escape_command("/session list compressed all")
+    captured_compressed_list = capsys.readouterr()
+    assert "merged_target" in captured_compressed_list.out
+    assert "[compressed]" in captured_compressed_list.out
+
+    # Test uncompress with wildcard glob pattern
+    await app.handle_escape_command("/session uncompress merged*")
+    captured_uncomp_glob = capsys.readouterr()
+    assert "Uncompressed" in captured_uncomp_glob.out
+
+    # Test uncompress all remaining
+    await app.handle_escape_command("/session uncompress all")
+    captured_uncomp = capsys.readouterr()
+
+    # Test list compressed is now empty
+    await app.handle_escape_command("/session list compressed all")
+    captured_empty = capsys.readouterr()
+    assert "No saved sessions found" in captured_empty.out
 
     # Test prune
     await app.handle_escape_command("/session prune keep=1")

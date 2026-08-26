@@ -184,6 +184,8 @@ class ChatybotApp:
         self.session_mode: str = "auto"          # "off", "on", "auto"
         self.session_dir: str = os.path.expanduser("~/.local/share/chatybot/sessions")
         self.session_strip_thinking: str = "separate" # "separate", "true", "false"
+        self.session_storage_engine: str = "jsonl"    # "jsonl", "monolithic"
+        self.session_store = None
         self.active_session_id: Optional[str] = None
         self.active_session_name: Optional[str] = None
         self.session_model_alias: Optional[str] = None
@@ -758,6 +760,16 @@ class ChatybotApp:
         
         return elem
 
+    def _get_session_store(self):
+        """Get or initialize the configured BaseSessionStore instance."""
+        if self.session_store is None:
+            from .session_factory import get_session_store
+            self.session_store = get_session_store(
+                engine=self.session_storage_engine,
+                sessions_dir=self.get_sessions_dir(),
+            )
+        return self.session_store
+
     def get_sessions_dir(self) -> str:
         """Get directory path for storing session files."""
         import sys
@@ -769,30 +781,8 @@ class ChatybotApp:
         return path
 
     def _resolve_session_file(self, target: str) -> Optional[str]:
-        """Find a session JSON or JSON.GZ file path by exact path, ID, or custom name."""
-        sessions_dir = self.get_sessions_dir()
-
-        # 1. Exact path / filename check
-        for ext in ("", ".json", ".json.gz"):
-            cand = target + ext if not target.endswith(ext) or ext == "" else target
-            p = os.path.join(sessions_dir, cand) if not os.path.isabs(cand) else cand
-            if os.path.isfile(p):
-                return p
-
-        # 2. Match custom_name or session_id metadata
-        import gzip
-        for fname in os.listdir(sessions_dir):
-            if fname.endswith(".json") or fname.endswith(".json.gz"):
-                fp = os.path.join(sessions_dir, fname)
-                try:
-                    open_fn = gzip.open if fname.endswith(".gz") else open
-                    with open_fn(fp, "rt", encoding="utf-8") as sf:
-                        sdata = json.load(sf)
-                        if sdata.get("custom_name") == target or sdata.get("session_id") == target:
-                            return fp
-                except Exception:
-                    pass
-        return None
+        """Resolve a session identifier or custom name using session store."""
+        return self._get_session_store().resolve_session(target)
 
     def _slugify_text(self, text: str, max_words: int = 6) -> str:
         """Convert text prompt into a clean filename slug."""
@@ -805,12 +795,10 @@ class ChatybotApp:
         """Generate a unique session ID, appending a counter if the timestamp collides."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         base_id = f"{model_alias}_{timestamp}"
-        sessions_dir = self.get_sessions_dir()
         candidate = base_id
         counter = 1
-        while os.path.exists(os.path.join(sessions_dir, f"{candidate}.json")) or \
-              os.path.exists(os.path.join(sessions_dir, f"{candidate}.json.gz")) or \
-              os.path.exists(os.path.join(sessions_dir, f"{candidate}.lock")):
+        store = self._get_session_store()
+        while store.resolve_session(candidate) is not None:
             candidate = f"{base_id}_{counter}"
             counter += 1
         return candidate
@@ -838,78 +826,36 @@ class ChatybotApp:
             if initial_prompt:
                 self.session_first_prompt_slug = self._slugify_text(initial_prompt)
             self._acquire_session_lock(self.active_session_id)
-
-    def _pid_alive(self, pid: int) -> bool:
-        """Check whether a process with the given PID is currently running."""
-        try:
-            os.kill(pid, 0)
-        except ProcessLookupError:
-            return False
-        except PermissionError:
-            return True
-        except OSError:
-            return False
-        return True
-
-    def _session_lock_path(self, session_id: str) -> str:
-        """Get the path to the lock file for a session."""
-        return os.path.join(self.get_sessions_dir(), f"{session_id}.lock")
+            self._get_session_store().create_session(
+                session_id=self.active_session_id,
+                model_alias=self.session_model_alias,
+                custom_name=self.active_session_name,
+                initial_prompt=initial_prompt,
+                notes=self.session_notes,
+            )
 
     def _acquire_session_lock(self, session_id: str) -> bool:
         """Acquire a lock file for the session. Returns True if acquired or already held."""
-        lock_path = self._session_lock_path(session_id)
-        if os.path.exists(lock_path):
-            try:
-                with open(lock_path, "r") as f:
-                    pid = int(f.read().strip())
-                if pid == os.getpid():
-                    return True
-                if self._pid_alive(pid):
-                    print(f"Warning: Session '{session_id}' is in use by PID {pid}. "
-                          f"Concurrent writes may cause divergent or lost history. "
-                          f"Use /session start for a new session.")
-                    return False
-            except (ValueError, IOError):
-                pass
-        try:
-            with open(lock_path, "w") as f:
-                f.write(str(os.getpid()))
-            return True
-        except IOError:
-            return False
+        return self._get_session_store().acquire_lock(session_id)
 
     def _release_session_lock(self, session_id: Optional[str] = None) -> None:
         """Release the lock file for the given session (or the active session if None)."""
         sid = session_id or self.active_session_id
-        if not sid:
-            return
-        lock_path = self._session_lock_path(sid)
-        try:
-            if os.path.exists(lock_path):
-                with open(lock_path, "r") as f:
-                    pid = int(f.read().strip())
-                if pid == os.getpid():
-                    os.remove(lock_path)
-        except (ValueError, IOError, OSError):
-            pass
+        if sid:
+            self._get_session_store().release_lock(sid)
 
     def save_active_session(self):
         """Save current active session state to disk atomically."""
         if self.session_mode == "off" or not self.active_session_id:
             return
 
-        # If slug is missing or "untitled_session", try to compute from Turn 1 prompt
         if (not self.session_first_prompt_slug or self.session_first_prompt_slug == "untitled_session") and self.session_turns:
             turn1_prompt = self.session_turns[0].get("prompt", "")
             if turn1_prompt:
                 self.session_first_prompt_slug = self._slugify_text(turn1_prompt)
 
-        sessions_dir = self.get_sessions_dir()
-        file_path = os.path.join(sessions_dir, f"{self.active_session_id}.json")
-        tmp_path = file_path + ".tmp"
-
         model_alias = self.session_model_alias or "default"
-        payload = {
+        meta = {
             "session_id": self.active_session_id,
             "model_alias": model_alias,
             "created_at": self.session_created_at or datetime.now().isoformat(),
@@ -917,12 +863,10 @@ class ChatybotApp:
             "first_prompt_slug": self.session_first_prompt_slug or "untitled_session",
             "custom_name": self.active_session_name,
             "notes": self.session_notes[:1024] if self.session_notes else None,
-            "turns": self.session_turns
+            "turn_count": len(self.session_turns),
+            "turns": self.session_turns,
         }
-
-        with open(tmp_path, "w", encoding="utf-8") as f:
-            json.dump(payload, f, indent=2, ensure_ascii=False)
-        os.replace(tmp_path, file_path)
+        self._get_session_store().save_meta(self.active_session_id, meta)
 
     def append_session_turn(self, prompt: str, response: str, agentic_loop_data: Optional[List[Dict[str, Any]]] = None):
         """Append a completed exchange turn to active session and save to disk."""
@@ -945,7 +889,7 @@ class ChatybotApp:
             turn_data["agentic_loop"] = agentic_loop_data
 
         self.session_turns.append(turn_data)
-        self.save_active_session()
+        self._get_session_store().append_turn(self.active_session_id, turn_data)
         self.buffer_manager.set_script_var('SESSION_NAME', self.active_session_name or self.active_session_id, allow_protected=True)
 
     def get_history_path(self) -> str:
@@ -5147,15 +5091,20 @@ class ChatybotApp:
                 return True
 
             elif subcmd == "list":
-                # Parse pagination parameters
-                limit = 10  # Default limit
+                limit = 10
                 offset = 0
                 model_filter = None
+                compressed_filter = None
 
-                if len(parts) >= 3:
-                    param = parts[2].lower()
+                args = parts[2].split() if len(parts) >= 3 else []
+                for arg in args:
+                    param = arg.lower()
                     if param == "all":
                         limit = None
+                    elif param in ("compressed", "status=compressed"):
+                        compressed_filter = True
+                    elif param in ("uncompressed", "status=uncompressed"):
+                        compressed_filter = False
                     elif param.startswith("limit="):
                         try:
                             limit = int(param[6:])
@@ -5173,63 +5122,24 @@ class ChatybotApp:
                     elif param.startswith("model="):
                         model_filter = param[6:].lower()
 
-                sessions_dir = self.get_sessions_dir()
-                if not os.path.exists(sessions_dir):
+                store = self._get_session_store()
+                parsed_sessions = store.list_sessions(
+                    offset=offset,
+                    limit=limit,
+                    model_filter=model_filter,
+                    compressed_filter=compressed_filter,
+                )
+                if not parsed_sessions:
                     print("No saved sessions found.")
                     return True
-                files = [f for f in os.listdir(sessions_dir) if f.endswith(".json") or f.endswith(".json.gz")]
-                if not files:
-                    print("No saved sessions found.")
-                    return True
-                
-                # Filter by model if specified
-                if model_filter:
-                    files = [f for f in files if model_filter in f.lower()]
 
-                # Parse all session files in a single pass, cache metadata for sorting + display
-                import gzip
-                parsed_sessions = []
-                for fname in files:
-                    fpath = os.path.join(sessions_dir, fname)
-                    try:
-                        open_fn = gzip.open if fname.endswith(".gz") else open
-                        with open_fn(fpath, "rt", encoding="utf-8") as sf:
-                            sdata = json.load(sf)
-                        parsed_sessions.append({
-                            "fname": fname,
-                            "updated_at": sdata.get("updated_at", "1970-01-01T00:00:00"),
-                            "sid": sdata.get("session_id", fname),
-                            "cname": sdata.get("custom_name"),
-                            "slug": sdata.get("first_prompt_slug", ""),
-                            "turns_cnt": len(sdata.get("turns", [])),
-                            "upd": sdata.get("updated_at", "")[:16].replace("T", " "),
-                            "snote": sdata.get("notes"),
-                        })
-                    except Exception:
-                        parsed_sessions.append({
-                            "fname": fname,
-                            "updated_at": "1970-01-01T00:00:00",
-                            "sid": fname,
-                            "cname": None,
-                            "slug": "",
-                            "turns_cnt": 0,
-                            "upd": "",
-                            "snote": None,
-                        })
-
-                # Sort by updated_at in descending order (newest first)
-                parsed_sessions.sort(key=lambda x: x["updated_at"], reverse=True)
-
-                # Apply pagination
-                if limit is not None:
-                    parsed_sessions = parsed_sessions[offset:offset+limit]
                 print("\nAvailable Sessions:")
                 for idx, s in enumerate(parsed_sessions, 1):
                     name_str = f" (Name: '{s['cname']}')" if s["cname"] else ""
-                    gz_str = " [compressed]" if s["fname"].endswith(".gz") else ""
+                    gz_str = " [compressed]" if s.get("compressed") else ""
                     print(f"  {idx}. {s['sid']}{name_str}{gz_str}")
                     print(f"     ├─ Prompt: \"{s['slug']}\"")
-                    if s["snote"]:
+                    if s.get("snote"):
                         short_note = s["snote"][:60] + "..." if len(s["snote"]) > 60 else s["snote"]
                         print(f"     ├─ Notes: \"{short_note}\"")
                     print(f"     └─ Turns: {s['turns_cnt']} exchanges (Updated: {s['upd']})")
@@ -5241,30 +5151,28 @@ class ChatybotApp:
                     print("Usage: /session use <session_id|custom_name>")
                     return True
                 target = " ".join(parts[2:]).strip(" \"'")
-                matched_file = self._resolve_session_file(target)
+                store = self._get_session_store()
 
-                if not matched_file:
+                try:
+                    sdata, turns = store.load_session(target)
+                except Exception as e:
                     print(f"Error: Session '{target}' not found.")
                     return True
 
-                import gzip
-                open_fn = gzip.open if matched_file.endswith(".gz") else open
-                with open_fn(matched_file, "rt", encoding="utf-8") as sf:
-                    sdata = json.load(sf)
-                    self._release_session_lock()
-                    self.active_session_id = sdata.get("session_id")
-                    self.active_session_name = sdata.get("custom_name")
-                    self.session_model_alias = sdata.get("model_alias")
-                    self.session_created_at = sdata.get("created_at")
-                    self.session_first_prompt_slug = sdata.get("first_prompt_slug")
-                    self.session_notes = sdata.get("notes")
-                    self.session_turns = sdata.get("turns", [])
+                self._release_session_lock()
+                self.active_session_id = sdata.get("session_id")
+                self.active_session_name = sdata.get("custom_name")
+                self.session_model_alias = sdata.get("model_alias")
+                self.session_created_at = sdata.get("created_at")
+                self.session_first_prompt_slug = sdata.get("first_prompt_slug")
+                self.session_notes = sdata.get("notes")
+                self.session_turns = turns
 
-                    # Hydrate chat_history for LLM completion context
-                    self.chat_history.clear()
-                    if self.enable_chat_history:
-                        for turn in self.session_turns:
-                            self.chat_history.append((turn.get("prompt", ""), turn.get("response", "")))
+                # Hydrate chat_history for LLM completion context
+                self.chat_history.clear()
+                if self.enable_chat_history:
+                    for turn in self.session_turns:
+                        self.chat_history.append((turn.get("prompt", ""), turn.get("response", "")))
 
                 self.session_mode = "on" if self.session_mode == "off" else self.session_mode
                 self._acquire_session_lock(self.active_session_id)
@@ -5373,58 +5281,36 @@ class ChatybotApp:
                 return True
 
             elif subcmd in ("info", "stats"):
-                sessions_dir = self.get_sessions_dir()
-                if not os.path.exists(sessions_dir):
-                    print("No session directory found.")
-                    return True
-
-                files = [f for f in os.listdir(sessions_dir) if f.endswith(".json") or f.endswith(".json.gz")]
-                if not files:
+                metrics = self._get_session_store().get_workspace_metrics()
+                total_cnt = metrics["total_count"]
+                if total_cnt == 0:
                     print("No saved sessions.")
                     return True
 
-                import gzip
-                total_bytes = 0
-                oldest_file = None
-                newest_file = None
-                oldest_mtime = float("inf")
-                newest_mtime = 0
-                largest_file = None
-                largest_bytes = 0
-
-                for fname in files:
-                    fp = os.path.join(sessions_dir, fname)
-                    sz = os.path.getsize(fp)
-                    mtime = os.path.getmtime(fp)
-                    total_bytes += sz
-                    if mtime < oldest_mtime:
-                        oldest_mtime = mtime
-                        oldest_file = fname
-                    if mtime > newest_mtime:
-                        newest_mtime = mtime
-                        newest_file = fname
-                    if sz > largest_bytes:
-                        largest_bytes = sz
-                        largest_file = fname
-
+                total_bytes = metrics["total_bytes"]
                 kb = total_bytes / 1024.0
                 mb = kb / 1024.0
                 size_str = f"{mb:.2f} MB ({kb:.1f} KB)" if mb >= 1.0 else f"{kb:.2f} KB"
+
+                oldest_name, oldest_mtime = metrics["oldest"]
+                newest_name, newest_mtime = metrics["newest"]
+                largest_name, largest_bytes = metrics["largest"]
+
                 largest_kb = largest_bytes / 1024.0
                 largest_mb = largest_kb / 1024.0
                 largest_str = f"{largest_mb:.2f} MB" if largest_mb >= 1.0 else f"{largest_kb:.2f} KB"
 
-                oldest_dt = datetime.fromtimestamp(oldest_mtime).strftime("%Y-%m-%d %H:%M:%S") if oldest_file else "N/A"
-                newest_dt = datetime.fromtimestamp(newest_mtime).strftime("%Y-%m-%d %H:%M:%S") if newest_file else "N/A"
+                oldest_dt = datetime.fromtimestamp(oldest_mtime).strftime("%Y-%m-%d %H:%M:%S") if oldest_name else "N/A"
+                newest_dt = datetime.fromtimestamp(newest_mtime).strftime("%Y-%m-%d %H:%M:%S") if newest_name else "N/A"
 
                 print("\n" + "=" * 60)
                 print("SESSION WORKSPACE METRICS")
                 print("=" * 60)
-                print(f"Total Sessions:   {len(files)}")
+                print(f"Total Sessions:   {total_cnt}")
                 print(f"Space Consumed:   {size_str}")
-                print(f"Oldest Session:   {oldest_file or 'N/A'} ({oldest_dt})")
-                print(f"Newest Session:   {newest_file or 'N/A'} ({newest_dt})")
-                print(f"Largest Session:  {largest_file or 'N/A'} ({largest_str})")
+                print(f"Oldest Session:   {oldest_name or 'N/A'} ({oldest_dt})")
+                print(f"Newest Session:   {newest_name or 'N/A'} ({newest_dt})")
+                print(f"Largest Session:  {largest_name or 'N/A'} ({largest_str})")
                 print("=" * 60 + "\n")
                 return True
 
@@ -5434,6 +5320,7 @@ class ChatybotApp:
                     return True
                 target = parts[2].lower()
 
+                store = self._get_session_store()
                 if target == "--all":
                     try:
                         confirm = input("Are you sure you want to delete ALL saved sessions? (y/N): ").strip().lower()
@@ -5441,14 +5328,7 @@ class ChatybotApp:
                         print("Delete all cancelled (non-interactive input).")
                         return True
                     if confirm in ("y", "yes"):
-                        sessions_dir = self.get_sessions_dir()
-                        count = 0
-                        for f in os.listdir(sessions_dir):
-                            if f.endswith(".json") or f.endswith(".json.gz"):
-                                os.remove(os.path.join(sessions_dir, f))
-                                count += 1
-                            elif f.endswith(".lock"):
-                                os.remove(os.path.join(sessions_dir, f))
+                        count = store.delete_all_sessions()
                         self._release_session_lock()
                         self.active_session_id = None
                         self.active_session_name = None
@@ -5459,24 +5339,25 @@ class ChatybotApp:
                         print("Delete all cancelled.")
                     return True
 
-                matched_file = self._resolve_session_file(parts[2])
-                if not matched_file:
+                matched_sid = store.resolve_session(parts[2])
+                if not matched_sid:
                     print(f"Error: Session '{parts[2]}' not found.")
                     return True
 
-                os.remove(matched_file)
-                base_name = os.path.basename(matched_file)
-                if self.active_session_id and (
-                    base_name == f"{self.active_session_id}.json"
-                    or base_name == f"{self.active_session_id}.json.gz"
-                    or self.active_session_name == parts[2]
-                ):
-                    self._release_session_lock()
-                    self.active_session_id = None
-                    self.active_session_name = None
-                    self.session_turns.clear()
-                    self.chat_history.clear()
-                print(f"Deleted session file '{base_name}'.")
+                deleted = store.delete_session(matched_sid)
+                if deleted:
+                    if self.active_session_id and (
+                        self.active_session_id == matched_sid
+                        or self.active_session_name == parts[2]
+                    ):
+                        self._release_session_lock()
+                        self.active_session_id = None
+                        self.active_session_name = None
+                        self.session_turns.clear()
+                        self.chat_history.clear()
+                    print(f"Deleted session '{matched_sid}'.")
+                else:
+                    print(f"Error deleting session '{parts[2]}'.")
                 return True
 
             elif subcmd == "merge":
@@ -5488,101 +5369,52 @@ class ChatybotApp:
 
                 target_name = merge_words[0].strip(" \"'")
                 source_targets = merge_words[1:]
-                import gzip
 
-                merged_turns = []
-                merged_models = []
-                first_slug = None
-                source_notes = []
-
-                for st in source_targets:
-                    sf_path = self._resolve_session_file(st)
-                    if not sf_path:
-                        print(f"Error: Source session '{st}' not found. Merge aborted.")
-                        return True
-                    open_fn = gzip.open if sf_path.endswith(".gz") else open
-                    with open_fn(sf_path, "rt", encoding="utf-8") as sf:
-                        sdata = json.load(sf)
-                        if not first_slug:
-                            first_slug = sdata.get("first_prompt_slug")
-                        m_alias = sdata.get("model_alias", "default")
-                        if m_alias not in merged_models:
-                            merged_models.append(m_alias)
-                        src_label = sdata.get("custom_name") or sdata.get("session_id", st)
-                        src_note = sdata.get("notes")
-                        if src_note:
-                            source_notes.append(f"[{src_label}] {src_note}")
-                        for turn in sdata.get("turns", []):
-                            new_turn = dict(turn)
-                            new_turn["turn_id"] = len(merged_turns) + 1
-                            merged_turns.append(new_turn)
-
-                now = datetime.now()
-                model_alias = "_".join(merged_models)
-                timestamp = now.strftime("%Y%m%d_%H%M%S")
-                new_session_id = f"merged_{timestamp}"
-
-                merged_notes = " | ".join(source_notes)[:1024] if source_notes else None
-
-                payload = {
-                    "session_id": new_session_id,
-                    "model_alias": model_alias,
-                    "created_at": now.isoformat(),
-                    "updated_at": now.isoformat(),
-                    "first_prompt_slug": first_slug or "merged_session",
-                    "custom_name": target_name,
-                    "notes": merged_notes,
-                    "turns": merged_turns
-                }
-
-                out_path = os.path.join(self.get_sessions_dir(), f"{new_session_id}.json")
-                with open(out_path, "w", encoding="utf-8") as out_f:
-                    json.dump(payload, out_f, indent=2, ensure_ascii=False)
-
-                print(f"Merged {len(source_targets)} sessions into '{target_name}' (ID: {new_session_id}) with {len(merged_turns)} exchanges.")
+                store = self._get_session_store()
+                try:
+                    new_session_id = store.merge_sessions(target_name, source_targets)
+                    _, turns = store.load_session(new_session_id)
+                    print(f"Merged {len(source_targets)} sessions into '{target_name}' (ID: {new_session_id}) with {len(turns)} exchanges.")
+                except Exception as e:
+                    print(f"Error: {e}")
                 return True
 
             elif subcmd == "compress":
                 older_than_days = None
-                if len(parts) >= 3 and parts[2].lower() != "all":
-                    try:
-                        older_than_days = float(parts[2])
-                    except ValueError:
-                        print("Usage: /session compress [older_than_days|all]")
-                        return True
+                target = None
 
-                sessions_dir = self.get_sessions_dir()
-                if not os.path.exists(sessions_dir):
-                    print("No sessions directory found.")
-                    return True
+                args = parts[2].split() if len(parts) >= 3 else []
+                for arg in args:
+                    arg_l = arg.lower()
+                    if arg_l == "all":
+                        target = "all"
+                    else:
+                        try:
+                            older_than_days = float(arg)
+                        except ValueError:
+                            target = arg
 
-                import gzip
-                now_ts = time.time()
-                count = 0
-                saved_bytes = 0
-                active_json = f"{self.active_session_id}.json" if self.active_session_id else None
-
-                for fname in os.listdir(sessions_dir):
-                    if fname.endswith(".json") and not fname.endswith(".json.gz"):
-                        if fname == active_json:
-                            continue
-                        fp = os.path.join(sessions_dir, fname)
-                        mtime = os.path.getmtime(fp)
-                        age_days = (now_ts - mtime) / 86400.0
-
-                        if older_than_days is None or age_days >= older_than_days:
-                            gz_path = fp + ".gz"
-                            orig_sz = os.path.getsize(fp)
-                            with open(fp, "rb") as f_in:
-                                with gzip.open(gz_path, "wb") as f_out:
-                                    f_out.writelines(f_in)
-                            new_sz = os.path.getsize(gz_path)
-                            saved_bytes += (orig_sz - new_sz)
-                            os.remove(fp)
-                            count += 1
-
+                store = self._get_session_store()
+                count, saved_bytes = store.compress_sessions(
+                    older_than_days=older_than_days,
+                    target=target,
+                    active_session_id=self.active_session_id,
+                )
                 saved_kb = saved_bytes / 1024.0
                 print(f"Compressed {count} session file(s). Saved {saved_kb:.1f} KB of disk space.")
+                return True
+
+            elif subcmd in ("uncompress", "decompress"):
+                target = parts[2] if len(parts) >= 3 else "all"
+                store = self._get_session_store()
+                count = store.uncompress_sessions(target)
+                if count > 0:
+                    print(f"Uncompressed {count} session file(s).")
+                else:
+                    if target.lower() == "all":
+                        print("No compressed sessions found to uncompress.")
+                    else:
+                        print(f"Session '{target}' was not compressed or not found.")
                 return True
 
             elif subcmd == "prune":
@@ -5613,66 +5445,13 @@ class ChatybotApp:
                     print("Example: /session prune keep=10 days=30 size=50")
                     return True
 
-                sessions_dir = self.get_sessions_dir()
-                if not os.path.exists(sessions_dir):
-                    print("No session directory found.")
-                    return True
-
-                active_names = set()
-                if self.active_session_id:
-                    active_names.add(f"{self.active_session_id}.json")
-                    active_names.add(f"{self.active_session_id}.json.gz")
-
-                file_entries = []
-                for fname in os.listdir(sessions_dir):
-                    if fname in active_names:
-                        continue
-                    if fname.endswith(".json") or fname.endswith(".json.gz"):
-                        fp = os.path.join(sessions_dir, fname)
-                        file_entries.append({
-                            "path": fp,
-                            "name": fname,
-                            "mtime": os.path.getmtime(fp),
-                            "size": os.path.getsize(fp)
-                        })
-
-                # Sort oldest to newest
-                file_entries.sort(key=lambda x: x["mtime"])
-                now_ts = time.time()
-                to_delete = set()
-
-                # Filter 1: days=D
-                if max_days is not None:
-                    for entry in file_entries:
-                        age_days = (now_ts - entry["mtime"]) / 86400.0
-                        if age_days > max_days:
-                            to_delete.add(entry["path"])
-
-                # Filter 2: keep=N
-                if keep_n is not None and len(file_entries) > keep_n:
-                    excess = len(file_entries) - keep_n
-                    for entry in file_entries[:excess]:
-                        to_delete.add(entry["path"])
-
-                # Filter 3: size=M (total workspace size cap)
-                if max_size_mb is not None:
-                    target_bytes = max_size_mb * 1024.0 * 1024.0
-                    current_total = sum(e["size"] for e in file_entries if e["path"] not in to_delete)
-                    for entry in file_entries:
-                        if current_total <= target_bytes:
-                            break
-                        if entry["path"] not in to_delete:
-                            to_delete.add(entry["path"])
-                            current_total -= entry["size"]
-
-                deleted_count = 0
-                for path in to_delete:
-                    try:
-                        os.remove(path)
-                        deleted_count += 1
-                    except Exception as e:
-                        print(f"Error removing {path}: {e}")
-
+                store = self._get_session_store()
+                deleted_count = store.prune_sessions(
+                    keep_n=keep_n,
+                    max_days=max_days,
+                    max_size_mb=max_size_mb,
+                    active_session_id=self.active_session_id,
+                )
                 print(f"Pruned {deleted_count} session file(s).")
                 return True
 
