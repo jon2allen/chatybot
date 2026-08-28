@@ -297,3 +297,22 @@ class TestCommandVerbValidation:
 
         call_kwargs = mock_create.call_args[1]
         assert call_kwargs.get("reasoning_effort") == "medium"
+
+    @pytest.mark.anyio
+    async def test_prompt_command_not_found(self, app, capsys):
+        """Test /prompt with non-existent file path."""
+        res = await app.handle_escape_command("/prompt non_existent_prompt_file.txt")
+        assert res is True
+        captured = capsys.readouterr()
+        assert "Error: Prompt file not found:" in captured.out
+
+    @pytest.mark.anyio
+    async def test_prompt_command_success_script_context(self, app, tmp_path):
+        """Test /prompt loads content and returns EXECUTE_PROMPT in script context."""
+        prompt_file = tmp_path / "my_prompt.txt"
+        prompt_file.write_text("What is quantum computing?", encoding="utf-8")
+
+        app.script_context = True
+        res = await app.handle_escape_command(f"/prompt {prompt_file}")
+        assert res == "EXECUTE_PROMPT"
+        assert app.buffer_manager.prompt_buffer == "What is quantum computing?"

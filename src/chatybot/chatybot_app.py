@@ -4291,10 +4291,43 @@ class ChatybotApp:
                 return True
 
             file_path = command.split(maxsplit=1)[1].strip(" \"'")
+            expanded_path = os.path.expanduser(file_path)
+            if not os.path.exists(expanded_path):
+                print(f"Error: Prompt file not found: {expanded_path}")
+                return True
+
             try:
-                with open(file_path, "r") as f:
-                    self.buffer_manager.prompt_buffer = f.read()
-                print(f"\nPrompt loaded from '{file_path}':")
+                # Hard byte cap to catch accidental huge/binary loads.
+                MAX_PROMPT_BYTES = 256 * 1024
+                with open(expanded_path, "r", encoding="utf-8") as f:
+                    content = f.read()
+                content_bytes = len(content.encode("utf-8"))
+                if content_bytes > MAX_PROMPT_BYTES:
+                    print(
+                        f"Error: Prompt file '{expanded_path}' is {content_bytes:,} bytes, "
+                        f"exceeds the {MAX_PROMPT_BYTES:,}-byte limit."
+                    )
+                    return True
+
+                # Cross-check against context_limit if known.
+                if hasattr(self, "context_limiter") and self.context_limiter.context_limit:
+                    prompt_tokens = self.context_limiter.count_tokens_text(content)
+                    ctx_limit = self.context_limiter.context_limit
+                    if prompt_tokens > ctx_limit:
+                        print(
+                            f"Error: Prompt file '{expanded_path}' is ~{prompt_tokens:,} tokens, "
+                            f"exceeds the context limit of {ctx_limit:,} tokens."
+                        )
+                        return True
+                    if prompt_tokens > ctx_limit * 0.5:
+                        pct = (prompt_tokens / ctx_limit) * 100.0
+                        print(
+                            f"Warning: Prompt is ~{prompt_tokens:,} tokens "
+                            f"({pct:.0f}% of context limit {ctx_limit:,})."
+                        )
+
+                self.buffer_manager.prompt_buffer = content
+                print(f"\nPrompt loaded from '{expanded_path}':")
                 print("-" * 40)
                 print(self.buffer_manager.prompt_buffer)
                 print("-" * 40)
