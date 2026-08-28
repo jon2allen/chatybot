@@ -4289,7 +4289,10 @@ class ChatybotApp:
                 print("Usage: /prompt <file>")
                 return True
 
-            file_path = command.split(maxsplit=1)[1].strip(" \"'")
+            file_path = command.split(maxsplit=1)[1].strip()
+            # Strip a single matching pair of surrounding quotes only.
+            if len(file_path) >= 2 and file_path[0] in "\"'" and file_path[-1] == file_path[0]:
+                file_path = file_path[1:-1]
             expanded_path = os.path.expanduser(file_path)
             if not os.path.exists(expanded_path):
                 print(f"Error: Prompt file not found: {expanded_path}")

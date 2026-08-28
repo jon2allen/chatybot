@@ -363,3 +363,20 @@ class TestCommandVerbValidation:
         assert app.buffer_manager.prompt_buffer == long_text
         captured = capsys.readouterr()
         assert "... [100 more chars]" in captured.out
+
+    @pytest.mark.anyio
+    async def test_prompt_command_matched_quotes(self, app, tmp_path):
+        """Test /prompt unwraps matched single and double quotes around filepath."""
+        prompt_file = tmp_path / "quoted_prompt.txt"
+        prompt_file.write_text("Quoted prompt content", encoding="utf-8")
+
+        app.script_context = True
+        # Double quotes
+        res1 = await app.handle_escape_command(f'/prompt "{prompt_file}"')
+        assert res1 == "EXECUTE_PROMPT"
+        assert app.buffer_manager.prompt_buffer == "Quoted prompt content"
+
+        # Single quotes
+        res2 = await app.handle_escape_command(f"/prompt '{prompt_file}'")
+        assert res2 == "EXECUTE_PROMPT"
+        assert app.buffer_manager.prompt_buffer == "Quoted prompt content"
