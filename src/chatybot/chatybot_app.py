@@ -4338,24 +4338,33 @@ class ChatybotApp:
 
                 # Ask for confirmation only if not in script context
                 if not self.script_context:
-                    while True:
-                        confirm = (
-                            input("\nExecute this prompt? (Y/N): ").strip().lower()
-                        )
-                        if confirm in ["y", "yes"]:
-                            print("\nExecuting prompt...")
-                            # Set a flag to execute the prompt in the main loop
-                            return "EXECUTE_PROMPT"
-                        elif confirm in ["n", "no"]:
-                            self.buffer_manager.prompt_buffer = ""
-                            print("Prompt discarded.")
-                            return True
-                        else:
-                            print("Please enter Y or N.")
+                    try:
+                        while True:
+                            confirm = (
+                                input("\nExecute this prompt? (Y/N): ").strip().lower()
+                            )
+                            if confirm in ["y", "yes"]:
+                                print("\nExecuting prompt...")
+                                # Set a flag to execute the prompt in the main loop
+                                return "EXECUTE_PROMPT"
+                            elif confirm in ["n", "no"]:
+                                self.buffer_manager.prompt_buffer = ""
+                                print("Prompt discarded.")
+                                return True
+                            else:
+                                print("Please enter Y or N.")
+                    except (EOFError, KeyboardInterrupt):
+                        # P2/P3: Ctrl-D/Ctrl-C at the confirmation prompt must
+                        # not leak prompt_buffer into the next chat turn.
+                        self.buffer_manager.prompt_buffer = ""
+                        print("\nPrompt discarded.")
+                        return True
                 else:
                     # In script context, assume confirmation and return flag
                     return "EXECUTE_PROMPT"
             except Exception as e:
+                # P2: ensure no partial prompt_buffer survives a read/parse failure.
+                self.buffer_manager.prompt_buffer = ""
                 print(f"Error reading prompt file: {str(e)}")
             return True
 
