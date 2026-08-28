@@ -532,6 +532,8 @@ What are the key developments in ML in 2024?
 | `/multiline` | File | `/multiline` | Start multiline block |
 | `/save` | File | `/save path` | Save last LLM response |
 | `/prompt` | File | `/prompt file` | Load and execute prompt file |
+
+> **Note:** Interactively, `/prompt` shows the file content and asks for confirmation before executing. In script context, it auto-executes without confirmation.
 | `/imagesize` | File | `/imagesize WxH` | Set image resolution |
 | `/imagequality` | File | `/imagequality standard/hd` | Set image quality |
 | `/imagedir` | File | `/imagedir path` | Set image output folder |
