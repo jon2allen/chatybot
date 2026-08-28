@@ -813,8 +813,14 @@ chat --> Create a blog post outline about ${topic}
 
 ### Change log
 
-August 27th, 2026 (v0.7.8)
+August 28th, 2026 (v0.7.8)
 -------------------------
+- **`/prompt` Loading & Execution Security**:
+  - Strictly unwrapped matched outer quotation pairs (`"..."` or `'...'`) for prompt file paths while rejecting mismatched quotes and preventing inner character mangling.
+  - Added interactive confirmation and capped interactive prompt terminal previews to 500 characters with remaining character indicators to avoid terminal scrollback flooding on large files.
+  - Added tilde expansion (`~`), explicit file existence checks, UTF-8 decoding, and empty / whitespace-only file rejections.
+  - Hardened buffer lifecycle by preventing `prompt_buffer` leaks on read failures or user cancellations and cleaning up duplicate buffer clearing.
+  - Documented interactive confirmation vs non-interactive script context auto-execution across ChatDSL guides and logged sentinel review in `open_issues.md`.
 - **Pluggable Session Storage Architecture**:
   - Abstracted session persistence into pluggable storage engines (`BaseSessionStore`, `session_factory.py`) with configurable engines (`jsonl` vs `monolithic`).
   - Added high-performance JSONL engine (`meta.json` + `turns.jsonl`) eliminating quadratic write amplification on turn appends.
@@ -826,12 +832,13 @@ August 27th, 2026 (v0.7.8)
   - Documented `/source` command (Recipe 10.3) for dynamic in-session script execution, companion `macro.chatdsl` auto-loading, and environment state retention.
 - **Variable Scoping & Buffer Manager Hardening**:
   - Introduced `user_write()` context manager in `BufferManager` to permanently eliminate mutable `_is_user_write` flag leaks across `foreach`, `/script`, `/proc`, and `/setvar`.
+  - Hardened `/setvar` name validation, overwrite protections, and alternate quoting syntax.
   - Unified `${arr}` prompt text rendering across native lists and JSON array strings.
   - Guarded array subscript parsing (`var[idx]`) against invalid JSON fallback substring indexing.
   - Preserved internal whitespace formatting in prompt placeholder substitution.
   - Silenced internal `set_script_var` writes while keeping interactive `/setvar` user feedback.
 - **Localization (i18n) & Cross-Platform Fixes**:
-  - Expanded key-value argument translation (`k=v`) across all 6 locales (EN, ES, FR, ZH, IT, AR) in `localization.py` and `translations.json`.
+  - Expanded key-value argument translation (`k=v`), session keywords (`uncompress`, `compressed`, `days`, `limit`, etc.), and help descriptions across all 6 locales (EN, ES, FR, ZH, IT, AR) in `localization.py` and `translations.json`.
   - Fixed Windows tool dispatcher subprocessing using `sys.executable` fallback.
   - Added Windows path normalization (`normalize_path`) handling double-escaped backslashes across file tools.
   - Synchronized package version to **0.7.8** across `pyproject.toml`, `src/chatybot/__init__.py`, and startup banner.
