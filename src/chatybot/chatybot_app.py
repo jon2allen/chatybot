@@ -2296,9 +2296,6 @@ class ChatybotApp:
                 self.logging_manager.log_message(
                     f"User: {temp_prompt}\nAssistant: {response}\n"
                 )
-                self.buffer_manager.prompt_buffer = (
-                    ""  # Clear the buffer after execution
-                )
                 return True  # Handled
             return (
                 result if isinstance(result, bool) else False
@@ -2424,7 +2421,6 @@ class ChatybotApp:
                         self.logging_manager.log_message(
                             f"User: {temp_prompt}\nAssistant: {response}\n"
                         )
-                        self.buffer_manager.prompt_buffer = ""
                 else:
                     await self.chat_completion(cmd, stream=self.streaming_enabled)
         else:
