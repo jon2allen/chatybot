@@ -4336,7 +4336,11 @@ class ChatybotApp:
                 self.buffer_manager.prompt_buffer = content
                 print(f"\nPrompt loaded from '{expanded_path}':")
                 print("-" * 40)
-                print(self.buffer_manager.prompt_buffer)
+                preview_limit = 500
+                if len(content) > preview_limit:
+                    print(content[:preview_limit] + f"\n... [{len(content) - preview_limit} more chars]")
+                else:
+                    print(content)
                 print("-" * 40)
 
                 # Ask for confirmation only if not in script context

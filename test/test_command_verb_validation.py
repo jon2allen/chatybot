@@ -349,3 +349,17 @@ class TestCommandVerbValidation:
             assert app.buffer_manager.prompt_buffer == ""
             captured = capsys.readouterr()
             assert "Prompt discarded." in captured.out
+
+    @pytest.mark.anyio
+    async def test_prompt_command_long_preview_truncation(self, app, tmp_path, capsys):
+        """Test /prompt truncates preview output for long prompts (>500 chars)."""
+        prompt_file = tmp_path / "long_prompt.txt"
+        long_text = "A" * 600
+        prompt_file.write_text(long_text, encoding="utf-8")
+
+        app.script_context = True
+        res = await app.handle_escape_command(f"/prompt {prompt_file}")
+        assert res == "EXECUTE_PROMPT"
+        assert app.buffer_manager.prompt_buffer == long_text
+        captured = capsys.readouterr()
+        assert "... [100 more chars]" in captured.out
