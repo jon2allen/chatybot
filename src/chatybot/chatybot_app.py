@@ -2418,8 +2418,11 @@ class ChatybotApp:
                     if result == "EXECUTE_PROMPT":
                         temp_prompt = self.buffer_manager.prompt_buffer
                         self.buffer_manager.prompt_buffer = ""
-                        await self.chat_completion(
+                        response = await self.chat_completion(
                             temp_prompt, stream=self.streaming_enabled
+                        )
+                        self.logging_manager.log_message(
+                            f"User: {temp_prompt}\nAssistant: {response}\n"
                         )
                         self.buffer_manager.prompt_buffer = ""
                 else:
