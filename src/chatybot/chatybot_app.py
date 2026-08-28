@@ -750,13 +750,17 @@ class ChatybotApp:
             else:
                 elem = elem.replace("{LAST_RESPONSE}", "")
                 
-        # 4. Filebanks and script variables (via legacy replace)
+        # 4. Filebanks and script variables
         # Run up to 5 times to resolve nested/recursive placeholder references
         for _ in range(5):
-            new_elem = self.buffer_manager.replace_placeholders_legacy(elem)
+            new_elem, _ = self.buffer_manager.replace_placeholders(elem, include_images=False, clear_unresolved=False)
             if new_elem == elem:
                 break
             elem = new_elem
+        
+        # If the element was an uninitialized variable/subscript placeholder, clear it
+        if re.match(r'^\$?[{][a-zA-Z_]\w*(\[-?\d+\])?[}]$|^\$[a-zA-Z_]\w*(\[-?\d+\])?$', elem.strip()):
+            elem = ""
         
         return elem
 
@@ -7423,95 +7427,95 @@ class ChatybotApp:
                 return True
             
             with self.buffer_manager.script_vars.user_write():
-                var_name = setvar_parts[1].strip('"')
-                # Use full placeholder replacement to support image banks
-                value_with_images = setvar_parts[2]
-                
-                is_array = var_name.endswith("[]")
-                clean_var_name = var_name[:-2] if is_array else var_name
+                raw_var_name = setvar_parts[1].strip("\"'")
+                raw_value = setvar_parts[2].strip()
 
-                if not is_array:
-                    # Handle leading '=' if user typed `/setvar var = val`
-                    value_with_images = value_with_images.strip()
-                    if value_with_images.startswith('='):
-                        value_with_images = value_with_images[1:].strip()
-                    
-                    # Handle quoted values for scalar variables (matching script mode parsing)
-                    if value_with_images.startswith('"') or value_with_images.startswith("'"):
-                        q = value_with_images[0]
-                        closing_idx = -1
-                        for i in range(1, len(value_with_images)):
-                            if value_with_images[i] == "\\":
-                                print(f"Error: Escape character '\\' is not allowed in setvar command for '{clean_var_name}'.")
-                                return True
-                            if value_with_images[i] == q:
-                                closing_idx = i
-                                break
-                        if closing_idx != -1:
-                            value_with_images = value_with_images[1:closing_idx]
-                        else:
-                            print(f"Error: No closing quote found for variable '{clean_var_name}'.")
+                is_array = raw_var_name.endswith("[]")
+                var_name = raw_var_name[:-2] if is_array else raw_var_name
+
+                # S9/S2: Validate variable identifier
+                if not re.match(r'^[a-zA-Z_]\w*$', var_name):
+                    print(f"Error: Invalid variable name '{var_name}'. Variable names must start with a letter or underscore and contain only alphanumeric characters and underscores.")
+                    return True
+
+                # S3: Handle leading '=' if user typed `/setvar var = val`
+                if raw_value.startswith('='):
+                    raw_value = raw_value[1:].strip()
+
+                # S4: Global backslash check (strictly forbidden per escape rules)
+                if "\\" in raw_value:
+                    print(f"Error: Escape character '\\' is not allowed in setvar command for '{var_name}'.")
+                    return True
+
+                # S3: Handle outer surrounding quotes if present
+                if (raw_value.startswith('"') and raw_value.endswith('"')) or (raw_value.startswith("'") and raw_value.endswith("'")):
+                    if len(raw_value) >= 2:
+                        raw_value = raw_value[1:-1].strip()
+
+                # S1/S6/S7: Overwrite protection check for existing structured/multimodal types
+                if var_name in self.buffer_manager.script_vars:
+                    existing_type = self.buffer_manager.script_vars.get_type(var_name)
+                    if existing_type in ("image", "json", "audio"):
+                        raw_val_stripped = raw_value.strip()
+                        is_new_image = (
+                            raw_val_stripped.startswith("data:image/") or
+                            any(raw_val_stripped.startswith(p) for p in ["iVBOR", "/9j/", "UklGR"])
+                        )
+                        is_new_json = False
+                        if raw_val_stripped.startswith("{") or raw_val_stripped.startswith("["):
+                            try:
+                                json.loads(raw_val_stripped)
+                                is_new_json = True
+                            except Exception:
+                                is_new_json = False
+                        is_new_audio = (
+                            raw_val_stripped.startswith("data:audio/") or
+                            any(raw_val_stripped.startswith(p) for p in ["SUQz", "UklGR_audio"])
+                        )
+
+                        blocked = False
+                        if existing_type == "image" and not is_new_image:
+                            print(f"Warning: Variable '{var_name}' already contains image data. Not overwritten.")
+                            blocked = True
+                        elif existing_type == "json" and not is_new_json:
+                            print(f"Warning: Variable '{var_name}' already contains JSON. Not overwritten.")
+                            blocked = True
+                        elif existing_type == "audio" and not is_new_audio:
+                            print(f"Warning: Variable '{var_name}' already contains audio data. Not overwritten.")
+                            blocked = True
+
+                        if blocked:
                             return True
 
                 if is_array:
-                    raw_val_str = value_with_images.lstrip().lstrip('=').strip()
-                    val_str = raw_val_str
                     try:
-                        string_list = self.parse_array_value(val_str)
+                        string_list = self.parse_array_value(raw_value)
                     except Exception as e:
-                        print(f"Error: Invalid array format for '{clean_var_name}': {e}")
+                        print(f"Error: Invalid array format for '{var_name}': {e}")
                         return True
-                    
-                    try:
-                        self.buffer_manager.script_vars[clean_var_name] = string_list
-                        print(f"Variable '{clean_var_name}' set to array.")
-                    except ValueError as e:
-                        print(f"Error: {e}")
+
+                    success = self.buffer_manager.set_script_var(var_name, string_list)
+                    if not success:
+                        return True
+                    print(f"Variable '{var_name}' set.")
                     return True
 
-                # Check if value contains imagebank placeholders
+                # Replace imagebank placeholders in scalar value
                 for i in range(1, 6):
                     bank_name = f"imagebank{i}"
                     if bank_name in self.buffer_manager.image_banks:
                         image_data = self.buffer_manager.image_banks[bank_name]
                         if image_data:
-                            value_with_images = value_with_images.replace(f"{{{bank_name}}}", image_data)
-                            value_with_images = value_with_images.replace(f"${{{bank_name}}}", image_data)
-                        
-                var_value = self.buffer_manager.replace_placeholders_legacy(value_with_images)
-                
-                # Check if variable already exists and contains image data or JSON
-                if clean_var_name in self.buffer_manager.script_vars:
-                    existing_value = self.buffer_manager.script_vars[clean_var_name]
-                    if existing_value:
-                        # Check if existing value is image data (starts with data:image or is base64)
-                        is_existing_image = (
-                            existing_value.startswith("data:image/") or 
-                            (existing_value.strip().startswith("iVBOR") or  # PNG base64
-                             existing_value.strip().startswith("/9j/") or   # JPEG base64
-                             existing_value.strip().startswith("UklGR"))    # WebP base64
-                        )
-                        # Check if existing value is JSON
-                        is_existing_json = existing_value.strip().startswith("{") or existing_value.strip().startswith("[")
-                        
-                        if is_existing_image or is_existing_json:
-                            # Check if new value is also image/json - if both are, allow overwrite
-                            is_new_image = (
-                                var_value.startswith("data:image/") or 
-                                (var_value.strip().startswith("iVBOR") or
-                                 var_value.strip().startswith("/9j/") or
-                                 var_value.strip().startswith("UklGR"))
-                            )
-                            is_new_json = var_value.strip().startswith("{") or var_value.strip().startswith("[")
-                            
-                            if not (is_new_image or is_new_json):
-                                print(f"Warning: Variable '{clean_var_name}' already contains {'image data' if is_existing_image else 'JSON'}. Not overwritten.")
-                                return True
-                
-                success = self.buffer_manager.set_script_var(clean_var_name, var_value)
+                            raw_value = raw_value.replace(f"{{{bank_name}}}", image_data)
+                            raw_value = raw_value.replace(f"${{{bank_name}}}", image_data)
+
+                # S12: Replace placeholders without aggressively clearing unresolved braced words
+                var_value, _ = self.buffer_manager.replace_placeholders(raw_value, include_images=False, clear_unresolved=False)
+
+                success = self.buffer_manager.set_script_var(var_name, var_value)
                 if not success:
                     return True
-                print(f"Variable '{clean_var_name}' set.")
+                print(f"Variable '{var_name}' set.")
                 return True
 
         elif cmd == "/reloadmacros":
