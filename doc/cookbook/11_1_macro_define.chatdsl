@@ -1,0 +1,13 @@
+# Recipe 11.1 - Defining & invoking macros
+# Goal: def/% and the {param} vs ${param} distinction.
+# Run: /script doc/cookbook/11_1_macro_define.chatdsl
+
+def expert(topic) = "You are a world-class expert in {topic}. Answer with rigor and citations."
+def regen() = "Regenerate the previous answer with more detail."
+
+/model mistral_1
+%expert(transformer attention)
+Explain multi-head attention intuitively.
+/save 11_1_attention.txt
+%regen()
+/save 11_1_attention_v2.txt

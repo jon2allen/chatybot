@@ -1,0 +1,23 @@
+# Recipe 10.1 - Authoring a profile
+# Goal: show the profile file format with metadata and a configured environment.
+# Run: /profile use this file, or copy to ~/.config/chatybot/profiles/ and /profile use cookbook_demo
+# Generalizes sys_default.chatdsl
+
+# @name: Cookbook Demo Profile
+# @description: Minimal coding-focused profile for the cookbook
+# @version: 1.0
+
+/model devstral_1
+/temp 0.2
+/tool auto on
+/tool on
+/tool max_turns 50
+/trace tps on
+/reasoning on
+/effort medium
+/system You are a careful coding assistant. Prefer minimal diffs and verify before claiming.
+
+# ============================================================================
+# USER CUSTOM CONTENT / MESSAGES / VARIABLES BELOW THIS LINE
+# Note: Profile editor will not modify content below this line.
+# ============================================================================

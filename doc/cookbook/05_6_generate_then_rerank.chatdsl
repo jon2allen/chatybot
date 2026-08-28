@@ -1,0 +1,51 @@
+# Recipe 5.6 - Generate-then-rerank pipeline
+# Goal: LLM produces candidates -> rerank filters -> LLM assembles a menu.
+# Run: /script doc/cookbook/05_6_generate_then_rerank.chatdsl
+# Generalizes generate_and_rerank_menu.chatdsl
+
+# Step 1: generate a large candidate set
+/model mistral_1
+/clearfile
+/multiline
+Please list 20 popular traditional dishes from France, 20 from Germany, and 20 from Spain (60 dishes in total).
+Format the output as a simple list with one dish per line, including a brief description of its ingredients.
+Ensure the list includes a variety of items, specifically desserts, chicken dishes, and vegetable dishes.
+;;
+/multiline
+/save 05_6_dishes.txt
+
+# Step 2: set the generated file as the rerank source
+/filebank1 05_6_dishes.txt
+/documents filebank=1
+
+# Step 3: extract one dish per category via semantic search
+/model bge_reranker_f16
+/rerank "traditional vegetable dish or vegetarian stew" top_n=1 split=line items=1 return=text
+/setvar menu_vegetable {LAST_RESPONSE}
+
+/rerank "traditional chicken poultry dish" top_n=1 split=line items=1 return=text
+/setvar menu_chicken {LAST_RESPONSE}
+
+/rerank "sweet dessert cake pastry" top_n=1 split=line items=1 return=text
+/setvar menu_dessert {LAST_RESPONSE}
+
+# Step 4: assemble a final menu with a generative model
+/model mistral_1
+/clearfile
+/multiline
+You are the head chef of a prestigious European restaurant.
+I have selected the following three dishes from our expansive culinary database:
+
+Appetizer (Vegetable):
+${menu_vegetable}
+
+Main Course (Chicken):
+${menu_chicken}
+
+Dessert:
+${menu_dessert}
+
+Please write a highly elegant and creative menu description for this 3-course meal. Describe how the flavors progress from the appetizer to the main course and finish with the dessert.
+;;
+/multiline
+/save 05_6_menu.txt

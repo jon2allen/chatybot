@@ -1,0 +1,11 @@
+# Recipe 8.2 - Autonomous tool loop
+# Goal: run an agentic loop and inspect its prompt first.
+# Run: /script doc/cookbook/08_2_tool_loop.chatdsl
+
+/model devstral_1
+/tool on
+/tool enable all
+/tool auto on
+/tool max_turns 50
+/tool prompt
+/tool loop 50 force

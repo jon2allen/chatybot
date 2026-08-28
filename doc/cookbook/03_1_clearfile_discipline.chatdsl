@@ -1,0 +1,15 @@
+# Recipe 3.1 - The /clearfile discipline
+# Goal: show why /clearfile before re-loading prevents context pollution in long scripts.
+# Run: /script doc/cookbook/03_1_clearfile_discipline.chatdsl
+# Requires: a.txt and b.txt in the working directory
+
+/model mistral_1
+/file a.txt
+Summarize document A in two sentences.
+/save 03_1_sum_a.txt
+
+/clearfile
+/file b.txt
+Summarize document B in two sentences.
+/save 03_1_sum_b.txt
+/echo "Both summaries saved"

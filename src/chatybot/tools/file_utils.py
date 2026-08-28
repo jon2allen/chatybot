@@ -6,8 +6,15 @@ import datetime
 import math
 import json
 
+def normalize_path(path: str) -> str:
+    """Normalize path to handle double-escaped backslashes common in JSON serialization on Windows."""
+    if path and isinstance(path, str):
+        path = path.replace('\\\\', '\\')
+    return path
+
 def list_directory(path: str = ".", details: bool = False) -> List[Any]:
     """List contents of a directory."""
+    path = normalize_path(path)
     try:
         if not details:
             return os.listdir(path)
@@ -49,6 +56,7 @@ def list_directory(path: str = ".", details: bool = False) -> List[Any]:
 
 def read_file(path: str, start_line: int = None, end_line: int = None) -> str:
     """Read contents of a file with optional line range filtering."""
+    path = normalize_path(path)
     if os.name != 'nt':
         if path and not os.path.isabs(path) and '/' not in path and '\\' not in path:
             path = f"./{path}"
@@ -172,6 +180,7 @@ def enforce_list_payload_limits(results: List[Any], tool_name: str, max_items: i
 
 def find_files(path: str = ".", pattern: str = "*", search_term: str = None, details: bool = False) -> List[Any]:
     """Find files and directories matching pattern, optionally containing search_term and metadata."""
+    path = normalize_path(path)
     results = []
     try:
         for root, dirs, files in os.walk(path):
@@ -287,6 +296,7 @@ def run_command(command: str, shell: bool = True) -> str:
 
 def write_file(path: str, content: str, append: bool = False) -> str:
     """Write or append contents to a file."""
+    path = normalize_path(path)
     try:
         dir_name = os.path.dirname(path)
         if dir_name:
@@ -301,6 +311,7 @@ def write_file(path: str, content: str, append: bool = False) -> str:
 
 def change_dir(path: str) -> str:
     """Change the current working directory."""
+    path = normalize_path(path)
     try:
         os.chdir(path)
         return f"Success: Changed working directory to '{os.getcwd()}'"
@@ -320,6 +331,7 @@ def grep_search(
     Search for a literal string or regular expression in files.
     Returns a list of matches containing the filename, line number, and line content.
     """
+    path = normalize_path(path)
     results = []
     flags = re.IGNORECASE if case_insensitive else 0
 
@@ -380,6 +392,7 @@ def grep_search(
 
 def replace_file_content(path: str, target: str, replacement: str) -> str:
     """Replace target content with replacement content in the file at path."""
+    path = normalize_path(path)
     try:
         if not os.path.exists(path):
             return f"Error: File '{path}' does not exist."

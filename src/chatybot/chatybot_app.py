@@ -772,9 +772,9 @@ class ChatybotApp:
 
     def get_sessions_dir(self) -> str:
         """Get directory path for storing session files."""
-        import sys
-        if "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST"):
-            path = os.path.expanduser("~/.local/share/chatybot/test/sessions")
+        test_dir = os.environ.get("CHATYBOT_TEST_SESSIONS_DIR")
+        if test_dir:
+            path = os.path.expanduser(test_dir)
         else:
             path = self.session_dir
         os.makedirs(path, exist_ok=True)
@@ -835,7 +835,7 @@ class ChatybotApp:
             )
 
     def _acquire_session_lock(self, session_id: str) -> bool:
-        """Acquire a lock file for the session. Returns True if acquired or already held."""
+        """Acquire an advisory lock file for the session. Returns True if acquired or already held."""
         return self._get_session_store().acquire_lock(session_id)
 
     def _release_session_lock(self, session_id: Optional[str] = None) -> None:
@@ -866,7 +866,9 @@ class ChatybotApp:
             "turn_count": len(self.session_turns),
             "turns": self.session_turns,
         }
-        self._get_session_store().save_meta(self.active_session_id, meta)
+        store = self._get_session_store()
+        store.save_meta(self.active_session_id, meta)
+        store.replace_turns(self.active_session_id, self.session_turns)
 
     def append_session_turn(self, prompt: str, response: str, agentic_loop_data: Optional[List[Dict[str, Any]]] = None):
         """Append a completed exchange turn to active session and save to disk."""
@@ -2007,115 +2009,105 @@ class ChatybotApp:
 
         # Handle script-specific commands (supporting multiline set)
         if command.lstrip().startswith("set "):
-            old_user_write = getattr(self.buffer_manager.script_vars, '_is_user_write', False)
-            if hasattr(self.buffer_manager.script_vars, '_is_user_write'):
-                self.buffer_manager.script_vars._is_user_write = True
-            try:
-                set_stripped = self.buffer_manager.replace_placeholders_legacy(command.lstrip())
-                # Use regex to parse "set var = value" supporting multiline (. matches anything with re.S)
-                match = re.match(r"set\s+([a-zA-Z_]\w*(?:\[\])?)\s*=\s*(.*)", set_stripped, re.S)
-                if match:
-                    var_name = match.group(1)
-                    var_value = match.group(2).strip()
-                    
-                    # Handle quoted values
-                    if var_value.startswith('"') or var_value.startswith("'"):
-                        q = var_value[0]
-                        # Search for ending quote and error on escape characters as requested
-                        closing_idx = -1
-                        for i in range(1, len(var_value)):
-                            if var_value[i] == "\\":
-                                print(f"Error: Escape character '\' is not allowed in set command for '{var_name}'.")
-                                return True
-                            if var_value[i] == q:
-                                closing_idx = i
-                                break
-                        
-                        if closing_idx != -1:
-                            var_value = var_value[1:closing_idx]
-                        else:
-                            print(f"Error: No closing quote found for variable '{var_name}'.")
-                            return True
-                    else:
-                        # Non-quoted value
-                        var_value = var_value.strip()
+            with self.buffer_manager.script_vars.user_write():
+                try:
+                    set_stripped = self.buffer_manager.replace_placeholders_legacy(command.lstrip())
+                    # Use regex to parse "set var = value" supporting multiline (. matches anything with re.S)
+                    match = re.match(r"set\s+([a-zA-Z_]\w*(?:\[\])?)\s*=\s*(.*)", set_stripped, re.S)
+                    if match:
+                        var_name = match.group(1)
+                        var_value = match.group(2).strip()
 
-                    # Replace variables in the value before storing (supporting subscripts and unbraced names)
-                    processed_value = self.buffer_manager.replace_placeholders_legacy(var_value)
-                    
-                    # Check if it is an array
-                    if var_name.endswith("[]"):
-                        clean_var_name = var_name[:-2]
-                        val_str = var_value.lstrip().lstrip('=').strip()
-                        try:
-                            string_list = self.parse_array_value(val_str)
-                        except Exception as e:
-                            print(f"Error: Invalid array format for '{clean_var_name}': {e}")
+                        # Handle quoted values
+                        if var_value.startswith('"') or var_value.startswith("'"):
+                            q = var_value[0]
+                            # Search for ending quote and error on escape characters as requested
+                            closing_idx = -1
+                            for i in range(1, len(var_value)):
+                                if var_value[i] == "\\":
+                                    print(f"Error: Escape character '\' is not allowed in set command for '{var_name}'.")
+                                    return True
+                                if var_value[i] == q:
+                                    closing_idx = i
+                                    break
+
+                            if closing_idx != -1:
+                                var_value = var_value[1:closing_idx]
+                            else:
+                                print(f"Error: No closing quote found for variable '{var_name}'.")
+                                return True
+                        else:
+                            # Non-quoted value
+                            var_value = var_value.strip()
+
+                        # Replace variables in the value before storing (supporting subscripts and unbraced names)
+                        processed_value = self.buffer_manager.replace_placeholders_legacy(var_value)
+
+                        # Check if it is an array
+                        if var_name.endswith("[]"):
+                            clean_var_name = var_name[:-2]
+                            val_str = var_value.lstrip().lstrip('=').strip()
+                            try:
+                                string_list = self.parse_array_value(val_str)
+                            except Exception as e:
+                                print(f"Error: Invalid array format for '{clean_var_name}': {e}")
+                                return True
+
+                            try:
+                                self.buffer_manager.script_vars[clean_var_name] = string_list
+                                print(f"Variable '{clean_var_name}' set to array.")
+                            except ValueError as e:
+                                print(f"Error: {e}")
                             return True
-                        
-                        try:
-                            self.buffer_manager.script_vars[clean_var_name] = string_list
-                            print(f"Variable '{clean_var_name}' set to array.")
-                        except ValueError as e:
-                            print(f"Error: {e}")
-                        return True
+                        else:
+                            try:
+                                self.buffer_manager.script_vars[var_name.strip()] = processed_value
+                            except ValueError as e:
+                                print(f"Error: {e}")
+                            return True
                     else:
-                        try:
-                            self.buffer_manager.script_vars[var_name.strip()] = processed_value
-                        except ValueError as e:
-                            print(f"Error: {e}")
+                        print("Invalid set command format. Usage: set <name> = <value>")
                         return True
-                else:
-                    print("Invalid set command format. Usage: set <name> = <value>")
+                except Exception as e:
+                    print(f"Error parsing set command: {e}")
                     return True
-            except Exception as e:
-                print(f"Error parsing set command: {e}")
-                return True
-            finally:
-                if hasattr(self.buffer_manager.script_vars, '_is_user_write'):
-                    self.buffer_manager.script_vars._is_user_write = old_user_write
 
         # Handle local variable declarations
         if command.lstrip().startswith("local "):
-            old_user_write = getattr(self.buffer_manager.script_vars, '_is_user_write', False)
-            if hasattr(self.buffer_manager.script_vars, '_is_user_write'):
-                self.buffer_manager.script_vars._is_user_write = True
-            try:
-                local_stripped = command.lstrip()
-                match = re.match(r"local\s+([a-zA-Z_]\w*)\s*(?:=\s*(.*))?", local_stripped, re.S)
-                if match:
-                    var_name = match.group(1)
-                    raw_val = match.group(2)
-                    var_value = raw_val.strip() if raw_val is not None else ""
-                    
-                    if (var_value.startswith('"') and var_value.endswith('"')) or (var_value.startswith("'") and var_value.endswith("'")):
-                        var_value = var_value[1:-1]
-                    
-                    processed_value = self.buffer_manager.replace_placeholders_legacy(var_value) if var_value else ""
-                    
-                    if self.active_proc_stack:
-                        top_frame = self.active_proc_stack[-1]
-                        saved_vars = top_frame["saved_vars"]
-                        if var_name not in saved_vars:
-                            exists = var_name in self.buffer_manager.script_vars
-                            orig_val = self.buffer_manager.script_vars.get(var_name) if exists else None
-                            saved_vars[var_name] = (exists, orig_val)
-                        top_frame["local_vars"].add(var_name)
-                    
-                    try:
-                        self.buffer_manager.script_vars[var_name] = processed_value
-                    except ValueError as e:
-                        print(f"Error: {e}")
+            with self.buffer_manager.script_vars.user_write():
+                try:
+                    local_stripped = command.lstrip()
+                    match = re.match(r"local\s+([a-zA-Z_]\w*)\s*(?:=\s*(.*))?", local_stripped, re.S)
+                    if match:
+                        var_name = match.group(1)
+                        raw_val = match.group(2)
+                        var_value = raw_val.strip() if raw_val is not None else ""
+
+                        if (var_value.startswith('"') and var_value.endswith('"')) or (var_value.startswith("'") and var_value.endswith("'")):
+                            var_value = var_value[1:-1]
+
+                        processed_value = self.buffer_manager.replace_placeholders_legacy(var_value) if var_value else ""
+
+                        if self.active_proc_stack:
+                            top_frame = self.active_proc_stack[-1]
+                            saved_vars = top_frame["saved_vars"]
+                            if var_name not in saved_vars:
+                                exists = var_name in self.buffer_manager.script_vars
+                                orig_val = self.buffer_manager.script_vars.get(var_name) if exists else None
+                                saved_vars[var_name] = (exists, orig_val)
+                            top_frame["local_vars"].add(var_name)
+
+                        try:
+                            self.buffer_manager.script_vars[var_name] = processed_value
+                        except ValueError as e:
+                            print(f"Error: {e}")
+                        return True
+                    else:
+                        print("Invalid local command format. Usage: local <name> = <value>")
+                        return True
+                except Exception as e:
+                    print(f"Error parsing local command: {e}")
                     return True
-                else:
-                    print("Invalid local command format. Usage: local <name> = <value>")
-                    return True
-            except Exception as e:
-                print(f"Error parsing local command: {e}")
-                return True
-            finally:
-                if hasattr(self.buffer_manager.script_vars, '_is_user_write'):
-                    self.buffer_manager.script_vars._is_user_write = old_user_write
 
         # Handle macro definitions (supporting multiline def)
         if command.lstrip().startswith("def "):
@@ -2631,34 +2623,24 @@ class ChatybotApp:
 
         exists = item_var in self.buffer_manager.script_vars
         orig_val = self.buffer_manager.script_vars.get(item_var) if exists else None
-        
-        old_user_write = getattr(self.buffer_manager.script_vars, '_is_user_write', False)
-        if hasattr(self.buffer_manager.script_vars, '_is_user_write'):
-            self.buffer_manager.script_vars._is_user_write = True
 
-        try:
-            self.foreach_active += 1
-            for elem in iterable:
-                val_str = str(elem) if not isinstance(elem, (str, int, float, bool)) else elem
-                self.buffer_manager.set_script_var(item_var, val_str)
-                try:
-                    await self.execute_command_list(buffer)
-                except LoopBreak:
-                    break
-        finally:
-            self.foreach_active -= 1
-            old_user_write_inner = getattr(self.buffer_manager.script_vars, '_is_user_write', False)
-            if hasattr(self.buffer_manager.script_vars, '_is_user_write'):
-                self.buffer_manager.script_vars._is_user_write = True
+        with self.buffer_manager.script_vars.user_write():
             try:
+                self.foreach_active += 1
+                for elem in iterable:
+                    val_str = str(elem) if not isinstance(elem, (str, int, float, bool)) else elem
+                    self.buffer_manager.set_script_var(item_var, val_str)
+                    try:
+                        await self.execute_command_list(buffer)
+                    except LoopBreak:
+                        break
+            finally:
+                self.foreach_active -= 1
                 if exists:
                     self.buffer_manager.set_script_var(item_var, orig_val)
                 else:
                     if item_var in self.buffer_manager.script_vars:
                         del self.buffer_manager.script_vars[item_var]
-            finally:
-                if hasattr(self.buffer_manager.script_vars, '_is_user_write'):
-                    self.buffer_manager.script_vars._is_user_write = old_user_write_inner
 
     async def execute_command_list(self, commands_list: List[str]) -> None:
         """Execute a list of command lines with support for multiline blocks (foreach, defproc, multiline)."""
@@ -3281,7 +3263,10 @@ class ChatybotApp:
             # Run the dispatcher with overrides
             env = os.environ.copy()
             env["CHATYBOT_TOOL_OVERRIDES"] = json.dumps(self.tool_overrides)
-            cmd = ['python3', dispatcher_path, tmp_path, '--config', config_path]
+            python_cmd = sys.executable if sys.executable else (
+                'python' if sys.platform == 'win32' else ('python3' if shutil.which('python3') else 'python')
+            )
+            cmd = [python_cmd, dispatcher_path, tmp_path, '--config', config_path]
             result = subprocess.run(
                 cmd,
                 capture_output=True,
@@ -4093,6 +4078,14 @@ class ChatybotApp:
                 self.session_mode = "auto"
         if 'session_dir' in config_section:
             self.session_dir = os.path.expanduser(str(config_section.get('session_dir')))
+        if 'session_storage_engine' in config_section:
+            engine_val = str(config_section.get('session_storage_engine')).lower()
+            from .session_factory import _SESSION_ENGINES
+            if engine_val in _SESSION_ENGINES:
+                self.session_storage_engine = engine_val
+            else:
+                print(f"Warning: Unknown session_storage_engine '{engine_val}'. Defaulting to 'jsonl'.")
+                self.session_storage_engine = "jsonl"
         if 'session_strip_thinking' in config_section:
             val = str(config_section.get('session_strip_thinking')).lower()
             if val in ("separate", "true", "false"):
@@ -5112,13 +5105,15 @@ class ChatybotApp:
                             print("Invalid limit value. Using default limit of 10.")
                     elif param.startswith("range="):
                         try:
-                            range_parts = param[6:].split(":")
-                            if len(range_parts) == 2:
-                                offset, limit = map(int, range_parts)
+                            range_raw = param[6:]
+                            if ":" in range_raw:
+                                r_start, r_end = range_raw.split(":", 1)
+                                offset = int(r_start) if r_start != "" else 0
+                                limit = (int(r_end) - offset) if r_end != "" else None
                             else:
-                                offset = int(range_parts[0])
+                                offset = int(range_raw)
                         except ValueError:
-                            print("Invalid range format. Use range=start:end. Using default limit of 10.")
+                            print("Invalid range format. Use range=start:end, range=:end, or range=start:. Using default limit of 10.")
                     elif param.startswith("model="):
                         model_filter = param[6:].lower()
 
@@ -5159,8 +5154,9 @@ class ChatybotApp:
                     print(f"Error: Session '{target}' not found.")
                     return True
 
+                matched_sid = store.resolve_session(target) or target
                 self._release_session_lock()
-                self.active_session_id = sdata.get("session_id")
+                self.active_session_id = sdata.get("session_id") or matched_sid
                 self.active_session_name = sdata.get("custom_name")
                 self.session_model_alias = sdata.get("model_alias")
                 self.session_created_at = sdata.get("created_at")
@@ -5346,10 +5342,7 @@ class ChatybotApp:
 
                 deleted = store.delete_session(matched_sid)
                 if deleted:
-                    if self.active_session_id and (
-                        self.active_session_id == matched_sid
-                        or self.active_session_name == parts[2]
-                    ):
+                    if self.active_session_id and self.active_session_id == matched_sid:
                         self._release_session_lock()
                         self.active_session_id = None
                         self.active_session_name = None
@@ -5384,17 +5377,31 @@ class ChatybotApp:
                 target = None
 
                 args = parts[2].split() if len(parts) >= 3 else []
+                store = self._get_session_store()
                 for arg in args:
                     arg_l = arg.lower()
                     if arg_l == "all":
                         target = "all"
-                    else:
+                    elif arg_l.startswith("days="):
                         try:
-                            older_than_days = float(arg)
+                            older_than_days = float(arg_l.split("=", 1)[1])
                         except ValueError:
+                            pass
+                    elif arg_l.startswith("target="):
+                        target = arg[7:]
+                    else:
+                        is_number = False
+                        try:
+                            val = float(arg)
+                            is_number = True
+                        except ValueError:
+                            is_number = False
+
+                        if is_number and not store.resolve_session(arg):
+                            older_than_days = val
+                        else:
                             target = arg
 
-                store = self._get_session_store()
                 count, saved_bytes = store.compress_sessions(
                     older_than_days=older_than_days,
                     target=target,
@@ -5422,7 +5429,8 @@ class ChatybotApp:
                 max_days = None
                 max_size_mb = None
 
-                for arg in parts[2:]:
+                raw_prune_args = parts[2].split() if len(parts) >= 3 else []
+                for arg in raw_prune_args:
                     arg_l = arg.lower()
                     if arg_l.startswith("keep="):
                         try:
@@ -5444,6 +5452,16 @@ class ChatybotApp:
                     print("Usage: /session prune [keep=N] [days=D] [size=M]")
                     print("Example: /session prune keep=10 days=30 size=50")
                     return True
+
+                if keep_n == 0:
+                    try:
+                        confirm = input("Warning: keep=0 will prune ALL non-active sessions. Confirm? (y/N): ").strip().lower()
+                    except EOFError:
+                        print("Prune cancelled (non-interactive input).")
+                        return True
+                    if confirm not in ("y", "yes"):
+                        print("Prune cancelled.")
+                        return True
 
                 store = self._get_session_store()
                 deleted_count = store.prune_sessions(
@@ -6518,16 +6536,10 @@ class ChatybotApp:
                 print(f"Setting parameter {var_name} = {var_value}")
             
             # Set parameters as script variables
-            old_user_write = getattr(self.buffer_manager.script_vars, '_is_user_write', False)
-            if hasattr(self.buffer_manager.script_vars, '_is_user_write'):
-                self.buffer_manager.script_vars._is_user_write = True
-            try:
+            with self.buffer_manager.script_vars.user_write():
                 for var_name, var_value in params.items():
                     self.buffer_manager.set_script_var(var_name, var_value)
-            finally:
-                if hasattr(self.buffer_manager.script_vars, '_is_user_write'):
-                    self.buffer_manager.script_vars._is_user_write = old_user_write
-            
+
             print("command /script with ", actual_script_path)
             # Execute script asynchronously so it doesn't block the main loop
             await self.execute_script(actual_script_path)
@@ -6614,11 +6626,7 @@ class ChatybotApp:
                 if extra:
                     print(f"Warning: Procedure '{proc_name}' called with unknown parameter(s): {', '.join(sorted(extra))}.")
 
-            old_user_write = getattr(self.buffer_manager.script_vars, '_is_user_write', False)
-            if hasattr(self.buffer_manager.script_vars, '_is_user_write'):
-                self.buffer_manager.script_vars._is_user_write = True
-            
-            try:
+            with self.buffer_manager.script_vars.user_write():
                 for k, v in call_args.items():
                     if k not in frame["saved_vars"]:
                         exists = k in self.buffer_manager.script_vars
@@ -6626,9 +6634,6 @@ class ChatybotApp:
                         frame["saved_vars"][k] = (exists, orig_val)
                     processed_v = self.buffer_manager.replace_placeholders_legacy(v)
                     self.buffer_manager.set_script_var(k, processed_v)
-            finally:
-                if hasattr(self.buffer_manager.script_vars, '_is_user_write'):
-                    self.buffer_manager.script_vars._is_user_write = old_user_write
 
             self.proc_depth += 1
             old_script_context = self.script_context
@@ -6643,19 +6648,13 @@ class ChatybotApp:
                 self.script_context = old_script_context
                 self.proc_depth -= 1
                 popped_frame = self.active_proc_stack.pop()
-                old_user_write = getattr(self.buffer_manager.script_vars, '_is_user_write', False)
-                if hasattr(self.buffer_manager.script_vars, '_is_user_write'):
-                    self.buffer_manager.script_vars._is_user_write = True
-                try:
+                with self.buffer_manager.script_vars.user_write():
                     for var_name, (exists, orig_val) in popped_frame["saved_vars"].items():
                         if exists:
                             self.buffer_manager.set_script_var(var_name, orig_val)
                         else:
                             if var_name in self.buffer_manager.script_vars:
                                 del self.buffer_manager.script_vars[var_name]
-                finally:
-                    if hasattr(self.buffer_manager.script_vars, '_is_user_write'):
-                        self.buffer_manager.script_vars._is_user_write = old_user_write
 
             return True
 
@@ -7423,10 +7422,7 @@ class ChatybotApp:
                 print("Usage: /setvar <varname> <value>")
                 return True
             
-            old_user_write = getattr(self.buffer_manager.script_vars, '_is_user_write', False)
-            if hasattr(self.buffer_manager.script_vars, '_is_user_write'):
-                self.buffer_manager.script_vars._is_user_write = True
-            try:
+            with self.buffer_manager.script_vars.user_write():
                 var_name = setvar_parts[1].strip('"')
                 # Use full placeholder replacement to support image banks
                 value_with_images = setvar_parts[2]
@@ -7515,10 +7511,8 @@ class ChatybotApp:
                 success = self.buffer_manager.set_script_var(clean_var_name, var_value)
                 if not success:
                     return True
+                print(f"Variable '{clean_var_name}' set.")
                 return True
-            finally:
-                if hasattr(self.buffer_manager.script_vars, '_is_user_write'):
-                    self.buffer_manager.script_vars._is_user_write = old_user_write
 
         elif cmd == "/reloadmacros":
             # Support: /reloadmacros or /reloadmacros <filename>

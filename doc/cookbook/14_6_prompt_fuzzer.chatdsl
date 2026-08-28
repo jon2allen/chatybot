@@ -1,0 +1,17 @@
+# Recipe 14.6 - Prompt fuzz tester (novel)
+# Goal: inject edge-case payloads into a prompt template and check graceful degradation.
+# Run: /script doc/cookbook/14_6_prompt_fuzzer.chatdsl
+# Combines: array payloads + foreach + variable injection (ties to doc/conditiona_error_injection.md)
+
+/model mistral_1
+set cases[] = ["", "   ", "a]b{c}", "9999999999999999", "null", "undefined"]
+foreach payload in ${cases}
+  /setvar input ${payload}
+  /multiline
+  You are an API gateway. Parse the user payload and respond with {"ok":true} or {"ok":false,"reason":"..."}. Payload: ${input}
+  ;;
+  /multiline
+  /save 14_6_fuzz_${payload}.txt
+  /echo "tested payload='${input}' -> see 14_6_fuzz_${payload}.txt"
+endfor
+/echo "Fuzz pass complete; inspect outputs for graceful failures"
