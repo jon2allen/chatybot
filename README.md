@@ -811,6 +811,29 @@ chat --> Create a blog post outline about ${topic}
 
 ### Change log
 
+August 27th, 2026 (v0.7.8)
+-------------------------
+- **Pluggable Session Storage Architecture**:
+  - Abstracted session persistence into pluggable storage engines (`BaseSessionStore`, `session_factory.py`) with configurable engines (`jsonl` vs `monolithic`).
+  - Added high-performance JSONL engine (`meta.json` + `turns.jsonl`) eliminating quadratic write amplification on turn appends.
+  - Implemented standalone CLI migration utility `bin/migrate_sessions` (`chatybot-migrate-sessions`) with `--dry-run`, backups, and selective migration.
+  - Hardened session persistence with atomic `.tmp` merge operations, same-second collision loops (`_2`, `_3`), re-entrant thread locks (`RLock`), stale `.lock` auto-expiration (24h), and directory `mtime` metadata caching.
+  - Added wildcard globbing to `/session compress` and `/session uncompress`, compression status filters (`/session list compressed|uncompressed`), and multi-model composite provenance attribution.
+- **ChatDSL Cookbook & Recipe Suite**:
+  - Published comprehensive task-oriented `doc/chatdsl_cookbook.md` with 52 standalone runnable recipes in `doc/cookbook/`.
+  - Documented `/source` command (Recipe 10.3) for dynamic in-session script execution, companion `macro.chatdsl` auto-loading, and environment state retention.
+- **Variable Scoping & Buffer Manager Hardening**:
+  - Introduced `user_write()` context manager in `BufferManager` to permanently eliminate mutable `_is_user_write` flag leaks across `foreach`, `/script`, `/proc`, and `/setvar`.
+  - Unified `${arr}` prompt text rendering across native lists and JSON array strings.
+  - Guarded array subscript parsing (`var[idx]`) against invalid JSON fallback substring indexing.
+  - Preserved internal whitespace formatting in prompt placeholder substitution.
+  - Silenced internal `set_script_var` writes while keeping interactive `/setvar` user feedback.
+- **Localization (i18n) & Cross-Platform Fixes**:
+  - Expanded key-value argument translation (`k=v`) across all 6 locales (EN, ES, FR, ZH, IT, AR) in `localization.py` and `translations.json`.
+  - Fixed Windows tool dispatcher subprocessing using `sys.executable` fallback.
+  - Added Windows path normalization (`normalize_path`) handling double-escaped backslashes across file tools.
+  - Synchronized package version to **0.7.8** across `pyproject.toml`, `src/chatybot/__init__.py`, and startup banner.
+
 August 25th, 2026 (v0.7.7)
 -------------------------
 - **Windows Platform Compatibility**:
