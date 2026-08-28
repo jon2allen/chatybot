@@ -416,6 +416,7 @@ All predefined system and protected variables (such as `CHAT_HISTORY`, `LAST_RES
   # Stores: This is an 'inner' quote
   /setvar my_var "This is an 'inner' quote"
   ```
+* **Leading/Trailing Whitespace**: Unquoted values have leading and trailing whitespace trimmed. To preserve leading spaces in a value, wrap the value in quotes (e.g., `/setvar indented "  text"` stores `  text`).
 
 **Note:** Script variables (`/setvar`) are for **text substitution only**. For image analysis with vision models, use image banks instead. Load images with `/imagebank1 <file>` and reference them with `{imagebank1}` syntax in your prompts. The `{imagebank1}` placeholder sends the image as a proper multimodal attachment, while `${var}` substitution inserts text only.
 

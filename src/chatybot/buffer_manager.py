@@ -572,7 +572,7 @@ class BufferManager:
             text_prompt = re.sub(r'\$?\{[a-zA-Z_]\w*\}', "", text_prompt)
             # 4. Unbraced base: $var
             text_prompt = re.sub(r'\$[a-zA-Z_]\w*\b', "", text_prompt)
-            # Collapse whitespace gaps left by removed placeholders.
+            # Collapse whitespace gaps left by removed placeholders
             while "  " in text_prompt:
                 text_prompt = text_prompt.replace("  ", " ")
 

@@ -143,6 +143,64 @@ class TestArrayFeature:
         assert res_script is True
         assert app.buffer_manager.script_vars.get("RUN_COMPLETION") is None
 
+    def test_setvar_single_quoted_varname(self, app):
+        """Test that /setvar with single-quoted variable name strips quotes from the identifier."""
+        res = asyncio.run(app.handle_escape_command("/setvar 'quoted_id' 'my_val'"))
+        assert res is True
+        assert "quoted_id" in app.buffer_manager.script_vars
+        assert "'quoted_id'" not in app.buffer_manager.script_vars
+        assert app.buffer_manager.script_vars["quoted_id"] == "my_val"
+
+    def test_setvar_invalid_varname(self, app, capsys):
+        """Test that /setvar rejects invalid identifiers like numbers or punctuation."""
+        res = asyncio.run(app.handle_escape_command("/setvar 123bad 'val'"))
+        assert res is True
+        captured = capsys.readouterr()
+        assert "Error: Invalid variable name" in captured.out
+        assert "123bad" not in app.buffer_manager.script_vars
+
+    def test_setvar_backslash_rejection(self, app, capsys):
+        """Test that /setvar rejects backslashes across unquoted scalar and array values."""
+        # Unquoted scalar
+        res1 = asyncio.run(app.handle_escape_command(r"/setvar my_path C:\users\dir"))
+        assert res1 is True
+        cap1 = capsys.readouterr()
+        assert "Error: Escape character '\\' is not allowed" in cap1.out
+        assert "my_path" not in app.buffer_manager.script_vars
+
+        # Array value
+        res2 = asyncio.run(app.handle_escape_command(r"/setvar my_arr[] = [a\b, c]"))
+        assert res2 is True
+        cap2 = capsys.readouterr()
+        assert "Error: Escape character '\\' is not allowed" in cap2.out
+        assert "my_arr" not in app.buffer_manager.script_vars
+
+    def test_setvar_array_preserves_image_overwrite_guard(self, app, capsys):
+        """Test that /setvar arr[] does not overwrite an existing image variable (S1)."""
+        # Set an image variable directly
+        app.buffer_manager.script_vars["my_img"] = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+        assert app.buffer_manager.script_vars.get_type("my_img") == "image"
+
+        # Try to overwrite with an array
+        res = asyncio.run(app.handle_escape_command("/setvar my_img[] = ['a', 'b']"))
+        assert res is True
+        cap = capsys.readouterr()
+        assert "Warning: Variable 'my_img' already contains image data. Not overwritten." in cap.out
+        assert app.buffer_manager.script_vars.get_type("my_img") == "image"
+
+    def test_setvar_outer_quoted_array(self, app):
+        """Test that /setvar arr[] = \"['a', 'b']\" unquotes outer string before parsing (S3)."""
+        res = asyncio.run(app.handle_escape_command('/setvar quoted_arr[] = "[\'x\', \'y\']"'))
+        assert res is True
+        assert app.buffer_manager.script_vars.get("quoted_arr") == ["x", "y"]
+
+    def test_setvar_unresolved_braced_words(self, app):
+        """Test that /setvar preserves innocent braced words like {todo} (S12)."""
+        res = asyncio.run(app.handle_escape_command("/setvar note_var Note: {todo} item"))
+        assert res is True
+        assert app.buffer_manager.script_vars.get("note_var") == "Note: {todo} item"
+
+
     def test_macro_expansion_with_single_array(self, app):
         """Test that calling a macro with an array expands the macro once for each array element"""
         # Define macro
