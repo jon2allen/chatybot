@@ -4326,6 +4326,10 @@ class ChatybotApp:
                             f"({pct:.0f}% of context limit {ctx_limit:,})."
                         )
 
+                if not content.strip():
+                    print(f"Error: Prompt file '{expanded_path}' is empty or whitespace-only.")
+                    return True
+
                 self.buffer_manager.prompt_buffer = content
                 print(f"\nPrompt loaded from '{expanded_path}':")
                 print("-" * 40)

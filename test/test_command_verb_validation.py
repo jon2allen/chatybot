@@ -316,3 +316,15 @@ class TestCommandVerbValidation:
         res = await app.handle_escape_command(f"/prompt {prompt_file}")
         assert res == "EXECUTE_PROMPT"
         assert app.buffer_manager.prompt_buffer == "What is quantum computing?"
+
+    @pytest.mark.anyio
+    async def test_prompt_command_empty_file(self, app, tmp_path, capsys):
+        """Test /prompt rejects empty or whitespace-only prompt files."""
+        prompt_file = tmp_path / "empty_prompt.txt"
+        prompt_file.write_text("   \n\t  ", encoding="utf-8")
+
+        res = await app.handle_escape_command(f"/prompt {prompt_file}")
+        assert res is True
+        captured = capsys.readouterr()
+        assert "is empty or whitespace-only" in captured.out
+        assert app.buffer_manager.prompt_buffer == ""
