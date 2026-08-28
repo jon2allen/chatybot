@@ -328,3 +328,24 @@ class TestCommandVerbValidation:
         captured = capsys.readouterr()
         assert "is empty or whitespace-only" in captured.out
         assert app.buffer_manager.prompt_buffer == ""
+
+    @pytest.mark.anyio
+    async def test_prompt_command_interrupt_or_eof(self, app, tmp_path, capsys):
+        """Test /prompt discards buffer on KeyboardInterrupt or EOFError during confirmation."""
+        prompt_file = tmp_path / "valid_prompt.txt"
+        prompt_file.write_text("Explain binary trees", encoding="utf-8")
+
+        app.script_context = False
+        with patch("builtins.input", side_effect=KeyboardInterrupt):
+            res = await app.handle_escape_command(f"/prompt {prompt_file}")
+            assert res is True
+            assert app.buffer_manager.prompt_buffer == ""
+            captured = capsys.readouterr()
+            assert "Prompt discarded." in captured.out
+
+        with patch("builtins.input", side_effect=EOFError):
+            res = await app.handle_escape_command(f"/prompt {prompt_file}")
+            assert res is True
+            assert app.buffer_manager.prompt_buffer == ""
+            captured = capsys.readouterr()
+            assert "Prompt discarded." in captured.out
