@@ -1,0 +1,9 @@
+# Recipe 6.3 - Export a variable to a file
+# Goal: /savevar to file; round-trip into a rerank source.
+# Run: /script doc/cookbook/06_3_export.chatdsl
+
+/setdb research_log
+/searchdb "rate limiting"
+/loadvar rl ALL
+/savevar rl 06_3_rate_limiting.json
+/echo "Exported to 06_3_rate_limiting.json"

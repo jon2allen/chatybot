@@ -304,7 +304,7 @@ chat --> Hello!      # Start a conversation
 /system "Act as a tutor" # Set system message
 ```
 
-### **Scripting**
+### **Scripting & Dynamic Sourcing**
 Create a script file (`setup.chatdsl`):
 ```dsl
 set project = "chatbot"
@@ -313,10 +313,19 @@ wait 1
 chat --> Generate documentation for this project
 ```
 
-Execute the script:
-```bash
-/script setup.chatdsl
-```
+#### **Executing Scripts (`/script` vs `/source`)**
+* **`/script <file> [key="value"]...`** — Executes a script with optional runtime parameter bindings:
+  ```bash
+  /script setup.chatdsl project="my_app"
+  ```
+* **`/source <file>`** — Dynamically executes a script directly in the **current interactive session** (like Unix shell `source` / `.`):
+  ```bash
+  /source ~/.chatybot_profile
+  /source setup_env.chatdsl
+  ```
+  - **State Retention**: Defined variables (`${var}`), switched models (`/model`), toggled tools (`/tool`), and defined procedures (`defproc`) persist in your active REPL session.
+  - **Companion Macro Auto-Loading**: If a `macro.chatdsl` file exists in the same directory as the sourced script, its macros are compiled and loaded automatically.
+  - **Multilingual Support**: Automatically preprocessed through the localization engine (also callable as `/origen`, `/加载脚本`, `/sorgente`, `/مصدر`).
 
 #### **Multilingual ChatDSL Guides**
 To assist users in multiple languages, localized versions of the ChatDSL technical guide are available in the [doc](doc/) folder:
@@ -581,18 +590,42 @@ def compare(a, b) = "Compare {a} and {b} and discuss their differences."
 Macros can be called from the interactive prompt or within scripts. Inline variable substitution is supported in macro arguments: `%expert(${current_topic})`.
 
 ### **Session Management & Persistence (New!)**
-Chatybot supports full conversation session persistence across restarts, workspace inspection, notes annotations, gzip compression, and Markdown transcript exports.
+Chatybot supports high-performance conversation session persistence across restarts, workspace inspection, notes annotations, gzip compression, multi-model session merging, and Markdown transcript exports.
 
+#### **Pluggable Session Storage Architecture**
+Sessions are persisted by default using a high-performance **JSON Lines (`jsonl`)** directory structure with $O(1)$ turn appends, atomic metadata writes, and in-memory directory caching:
+* `~/.local/share/chatybot/sessions/<session_id>/meta.json` — Lightweight session metadata (timestamps, turn count, notes, custom names, model alias).
+* `~/.local/share/chatybot/sessions/<session_id>/turns.jsonl` — Append-only interaction exchanges (or `turns.jsonl.gz` when compressed).
+
+A legacy single-file flat JSON store (`monolithic`) is also supported via `session_storage_engine = "monolithic"` in `tools_config.toml` / `chat_config.toml`. A standalone CLI migration tool (`bin/migrate_sessions` or `chatybot-migrate-sessions`) seamlessly upgrades legacy workspaces.
+
+#### **Session Commands**
 ```bash
-/session start project_alpha    # Start and persist new session
-/session list limit=10          # List recent sessions
-/session use project_alpha      # Load prior session history
-/session note "Initial design"  # Add persistent metadata note
-/session export transcript.md   # Export conversation as Markdown
+/session start project_alpha               # Start and persist new named session
+/session list [limit=N] [range=A:B] [all]  # List recent sessions with pagination
+/session list [compressed|uncompressed]    # Filter sessions by compression state
+/session use project_alpha                 # Load prior session history into memory
+/session note "Initial design discussion"  # Add persistent metadata note (up to 1024 chars)
+/session show [--thinking|-t]              # Inspect full exchange history and tool logs
+/session export transcript.md [-t]         # Export conversation as GitHub-flavored Markdown
+/session compress [pattern|days|all]       # Compress inactive sessions (supports wildcards, e.g. 'mistral*')
+/session uncompress [pattern|all]          # Decompress sessions (supports wildcards)
+/session prune [keep=N] [days=D] [size=M]  # Prune workspace by retention count, age, or size quota
+/session info                              # Display aggregate workspace disk metrics and stats
+/session delete <name|id|--all>            # Delete a session or purge workspace
+/session merge <target> <s1> <s2> [s3...]  # Merge multiple sessions into a combined session
 ```
 
+#### **Merging Sessions from Different Models**
+When merging sessions that were generated with different AI models (for example, merging a `cohere_north` session with a `mistral_large` session via `/session merge comparison_report sess_1 sess_2`):
+* **Custom Name (`custom_name`)**: Set to the `<target_name>` provided as the first argument (`"comparison_report"`).
+* **Session ID (`session_id`)**: Automatically generated as `merged_<YYYYMMDD_HHMMSS>` with timestamp-collision resolution (e.g., `merged_20260826_220615`).
+* **Composite Model Alias (`model_alias`)**: Set in `meta.json` to the unique model aliases concatenated with underscores in order of appearance (e.g., `"cohere_north_mistral_large"`).
+* **Turn-Level Attribution**: Each individual turn in `turns.jsonl` preserves its original model provenance (`"model_alias": "cohere_north"`, `"model_alias": "mistral_large"`), ensuring accurate multi-model transcripts when viewing via `/session show` or exporting to Markdown.
+* **Consolidated Notes (`notes`)**: Any notes attached to the source sessions are automatically aggregated with source session labels and joined by pipe delimiters (e.g., `"[sess_1] Initial exploration | [sess_2] Followup benchmarks"`).
+
 > [!WARNING]
-> **Concurrent Session Access:** If two chatybot instances run under the same user and load the same session via `/session use`, their writes will interleave. Each instance keeps its own in-memory turn list and overwrites the other's turns on save (last-write-wins), producing a divergent or incoherent transcript. A `.lock` file sentinel warns when a session is already in use by a live process, but does not block the load. For separate conversations, use `/session start` to create independent sessions. See `session_concurrency.md` for details.
+> **Concurrent Session Access:** If two chatybot instances run under the same user and load the same session via `/session use`, their writes will interleave. Each instance keeps its own in-memory turn list and overwrites the other's turns on save (last-write-wins), producing a divergent or incoherent transcript. A timestamped `.lock` file sentinel warns when a session is already in use by an active process, and automatically expires stale locks older than 24 hours. For separate conversations, use `/session start` to create independent sessions. See `session_concurrency.md` for details.
 
 ---
 

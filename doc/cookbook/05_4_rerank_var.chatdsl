@@ -1,0 +1,10 @@
+# Recipe 5.4 - Rerank from a variable / CHAT_HISTORY
+# Goal: /documents var=CHAT_HISTORY reranks over the live chat history.
+# Run: /script doc/cookbook/05_4_rerank_var.chatdsl
+
+/model bge_reranker_f16
+/documents var=CHAT_HISTORY
+/rerank "image generation" top_n=3 split=sentence return=text
+/setvar recall {LAST_RESPONSE}
+/echo "Recalled:"
+/echo "${recall}"

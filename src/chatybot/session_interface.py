@@ -3,6 +3,7 @@ session_interface.py - Abstract Base Class for Chatybot session storage provider
 Defines the contract for all pluggable session store implementations.
 """
 
+import threading
 from abc import ABC, abstractmethod
 from typing import Dict, Any, List, Tuple, Optional
 
@@ -12,6 +13,7 @@ class BaseSessionStore(ABC):
 
     def __init__(self, sessions_dir: str):
         self.sessions_dir = sessions_dir
+        self._thread_lock = threading.RLock()
 
     @abstractmethod
     def create_session(
@@ -28,6 +30,11 @@ class BaseSessionStore(ABC):
     @abstractmethod
     def append_turn(self, session_id: str, turn_data: Dict[str, Any]) -> None:
         """Append a completed interaction turn to session storage."""
+        pass
+
+    @abstractmethod
+    def replace_turns(self, session_id: str, turns: List[Dict[str, Any]]) -> None:
+        """Atomically overwrite or replace all turns in the session storage."""
         pass
 
     @abstractmethod
@@ -140,10 +147,13 @@ class BaseSessionStore(ABC):
 
     @abstractmethod
     def acquire_lock(self, session_id: str) -> bool:
-        """Acquire a concurrency lock file for the session."""
+        """
+        Attempt to acquire an advisory concurrency lock file for the session.
+        Returns True if lock acquired or already owned, False if held by another active process.
+        """
         pass
 
     @abstractmethod
     def release_lock(self, session_id: Optional[str] = None) -> None:
-        """Release the concurrency lock file for the session."""
+        """Release the advisory concurrency lock file for the session."""
         pass

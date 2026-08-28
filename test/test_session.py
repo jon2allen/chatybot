@@ -124,6 +124,15 @@ async def test_session_list_and_status(app, capsys):
     assert "list_test" in captured.out
     assert "Prompt: \"test_prompt_for_slug_generation\"" in captured.out
 
+    # Test open-ended range parsing
+    await app.handle_escape_command("/session list range=:5")
+    captured_range = capsys.readouterr()
+    assert "list_test" in captured_range.out
+
+    await app.handle_escape_command("/session list range=0:")
+    captured_range_2 = capsys.readouterr()
+    assert "list_test" in captured_range_2.out
+
     await app.handle_escape_command("/session status")
     captured_status = capsys.readouterr()
     assert "Active Session ID:" in captured_status.out

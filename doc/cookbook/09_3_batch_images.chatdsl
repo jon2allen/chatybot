@@ -1,0 +1,10 @@
+# Recipe 9.3 - Batch image generation
+# Goal: foreach over prompts -> /imagine -> /saveimage each.
+# Run: /script doc/cookbook/09_3_batch_images.chatdsl
+
+/imagedir images/
+foreach num in range(1:4:1)
+  /imagine abstract wallpaper ${num}, geometric, 4k
+  /saveimage images/09_3_wp_${num}.jpg
+endfor
+/listimages

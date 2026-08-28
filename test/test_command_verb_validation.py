@@ -33,6 +33,7 @@ class TestCommandVerbValidation:
             cfg_instance.system_message = ""
             
             application = ChatybotApp()
+            application.streaming_enabled = False
             application.config_manager = cfg_instance
             application.buffer_manager = MagicMock()
             application.buffer_manager.replace_placeholders.side_effect = lambda p: (p, [])

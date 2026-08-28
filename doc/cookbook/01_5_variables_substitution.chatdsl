@@ -1,0 +1,13 @@
+# Recipe 1.5 - Variables and substitution
+# Goal: define variables, interpolate them, inspect with /dump.
+# Run: /script doc/cookbook/01_5_variables_substitution.chatdsl
+
+set topic = "transformer attention"
+set count = 3
+set prompt_intro = "You are a patient tutor. Explain in plain language."
+
+/dump topic
+/echo "Asking for ${count} points on ${topic}"
+${prompt_intro}
+List ${count} key ideas behind ${topic}.
+/save 01_5_explainer.txt

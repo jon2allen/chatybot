@@ -7,6 +7,7 @@ Manages file buffers, file banks, script variables, and image banks
 import base64
 import re
 import json
+import contextlib
 from pathlib import Path
 from collections import UserDict
 from typing import Dict, List, Tuple, Any, Optional
@@ -41,6 +42,18 @@ class ScriptVars(UserDict):
         }
         super().__init__(*args, **kwargs)
 
+    @contextlib.contextmanager
+    def user_write(self):
+        """Context manager that sets _is_user_write True for the duration,
+        restoring the prior value on exit (including on exceptions). Replaces
+        the error-prone manual save/restore idiom scattered across callers."""
+        old = self._is_user_write
+        self._is_user_write = True
+        try:
+            yield
+        finally:
+            self._is_user_write = old
+
     def _resolve_key(self, key: str) -> str:
         if not isinstance(key, str):
             return key
@@ -62,6 +75,9 @@ class ScriptVars(UserDict):
         return self.types.get(self._resolve_key(key), "text")
 
     def __setitem__(self, key: str, value: Any):
+        # Canonicalize protected var names to uppercase so reads and writes converge.
+        if isinstance(key, str) and key.upper() in self.protected_vars:
+            key = key.upper()
         if self._is_user_write and key in self.protected_vars:
             raise ValueError(f"'{key}' is a protected variable and cannot be modified.")
         # 1. Native Python Array / Dict / JSON Detection
@@ -234,7 +250,7 @@ class BufferManager:
         """Check if a variable is protected and cannot be modified via /setvar."""
         protected = getattr(self.script_vars, 'protected_vars', None)
         if protected is not None:
-            return var_name in protected
+            return isinstance(var_name, str) and var_name.upper() in protected
         return False
 
     def set_script_var(self, var_name: str, var_value: Any, allow_protected: bool = False) -> bool:
@@ -253,7 +269,6 @@ class BufferManager:
             self.script_vars._is_user_write = False
         try:
             self.script_vars[var_name] = var_value
-            print(f"Variable '{var_name}' set.")
             return True
         except ValueError as e:
             print(f"Error: {e}")
@@ -375,7 +390,9 @@ class BufferManager:
                     try:
                         parsed = json.loads(var_value)
                     except Exception:
-                        pass
+                        parsed = None
+                if not isinstance(parsed, list):
+                    raise ValueError(f"Variable '{var_name}' is marked as array but contents could not be parsed")
                 try:
                     return str(parsed[index])
                 except IndexError:
@@ -395,7 +412,9 @@ class BufferManager:
                     try:
                         parsed = json.loads(var_value)
                     except Exception:
-                        pass
+                        parsed = None
+                if not isinstance(parsed, list):
+                    return str(var_value)
                 return "\n".join(map(str, parsed))
             return str(var_value)
 
@@ -436,6 +455,14 @@ class BufferManager:
             val = self.script_vars[var_name]
             if isinstance(val, list):
                 return "\n".join(map(str, val))
+            # Array stored as a JSON string: parse and join for consistent rendering.
+            if self.script_vars.get_type(var_name) == "array" and isinstance(val, str):
+                try:
+                    parsed = json.loads(val)
+                    if isinstance(parsed, list):
+                        return "\n".join(map(str, parsed))
+                except Exception:
+                    pass
             return str(val)
             
         return None
@@ -545,12 +572,15 @@ class BufferManager:
             text_prompt = re.sub(r'\$?\{[a-zA-Z_]\w*\}', "", text_prompt)
             # 4. Unbraced base: $var
             text_prompt = re.sub(r'\$[a-zA-Z_]\w*\b', "", text_prompt)
+            # Collapse whitespace gaps left by removed placeholders.
+            while "  " in text_prompt:
+                text_prompt = text_prompt.replace("  ", " ")
 
-        # Clean up any remaining whitespace
+        # Strip leading/trailing whitespace only; do not collapse internal
+        # whitespace runs in the normal path, which would mutate legitimate
+        # user content (e.g. double spaces inside substituted filebank text).
         text_prompt = text_prompt.strip()
-        while "  " in text_prompt:
-            text_prompt = text_prompt.replace("  ", " ")
-        
+
         return text_prompt, multimodal_parts
     
     def replace_placeholders_legacy(self, prompt: str, clear_unresolved: bool = True) -> str:

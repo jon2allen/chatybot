@@ -1,0 +1,9 @@
+# Recipe 9.2 - Image banks in prompts (vision)
+# Goal: load an image and describe it in a prompt.
+# Run: /script doc/cookbook/09_2_image_vision.chatdsl
+# Requires: images/09_1_lake.jpg (run recipe 9.1 first)
+
+/loadimage images/09_1_lake.jpg imagebank1
+/model mistral_1
+Describe the mood, lighting, and composition of {imagebank1}. Suggest three caption variants.
+/save 09_2_captions.txt

@@ -1,0 +1,15 @@
+# Recipe 1.3 - Two file banks, parameterized compare
+# Goal: load two files into persistent banks and reference both in one prompt.
+# Run: /script doc/cookbook/01_3_two_filebanks.chatdsl x=original_v1.py y=refactored_v2.py
+
+if ${x} != "" then set f1 = ${x}
+if ${f1} == "" then set f1 = "original_v1.py"
+if ${y} != "" then set f2 = ${y}
+if ${f2} == "" then set f2 = "refactored_v2.py"
+
+/filebank1 ${f1}
+/filebank2 ${f2}
+
+Analyze the differences between {filebank1} and {filebank2}.
+List every performance optimization introduced in the second version.
+/save 01_3_refactor_analysis.txt

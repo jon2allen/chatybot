@@ -1,0 +1,17 @@
+# Recipe 5.2 - Rerank a filebank
+# Goal: generate content, then rerank it (the generate_and_rerank_menu extract step).
+# Run: /script doc/cookbook/05_2_rerank_filebank.chatdsl
+
+/model mistral_1
+/multiline
+List 30 European dishes, one per line with a short description.
+;;
+/multiline
+/save 05_2_dishes.txt
+
+/filebank1 05_2_dishes.txt
+/model bge_reranker_f16
+/documents filebank=1
+/rerank "chicken dish" top_n=1 split=line items=1 return=text
+/setvar chicken {LAST_RESPONSE}
+/echo "Chicken pick: ${chicken}"

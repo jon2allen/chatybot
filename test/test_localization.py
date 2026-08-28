@@ -306,3 +306,35 @@ def test_v077_history_keyword_localization():
             assert rev.get(kw.lower()) == "history", f"Failed for {loc} keyword {kw}"
 
 
+def test_session_extended_localization():
+    """Verify session subcommands and key=value parameter translations across languages."""
+    # Spanish
+    mgr_es = LocalizationManager("es")
+    assert mgr_es.translate_command_string("/sesion descomprimir todo") == "/session uncompress all"
+    assert mgr_es.translate_command_string("/sesion listar estado=comprimido") == "/session list status=compressed"
+    assert mgr_es.translate_command_string("/sesion depurar mantener=5 dias=30") == "/session prune keep=5 days=30"
+
+    # French
+    mgr_fr = LocalizationManager("fr")
+    assert mgr_fr.translate_command_string("/session decompresser tous") == "/session uncompress all"
+    assert mgr_fr.translate_command_string("/session purger garder=10 jours=60") == "/session prune keep=10 days=60"
+
+    # Chinese
+    mgr_zh = LocalizationManager("zh")
+    assert mgr_zh.translate_command_string("/会话 解压 全部") == "/session uncompress all"
+    assert mgr_zh.translate_command_string("/会话 列表 状态=已压缩") == "/session list status=compressed"
+    assert mgr_zh.translate_command_string("/会话 清理 保留=5 天数=14") == "/session prune keep=5 days=14"
+
+    # Italian
+    mgr_it = LocalizationManager("it")
+    assert mgr_it.translate_command_string("/sessione decomprimi tutti") == "/session uncompress all"
+    assert mgr_it.translate_command_string("/sessione pulisci mantieni=3 giorni=7") == "/session prune keep=3 days=7"
+
+    # Arabic
+    mgr_ar = LocalizationManager("ar")
+    assert mgr_ar.translate_command_string("/جلسة فك_الضغط الكل") == "/session uncompress all"
+    assert mgr_ar.translate_command_string("/جلسة عرض وضع=مضغوط") == "/session list status=compressed"
+    assert mgr_ar.translate_command_string("/جلسة تنظيف ابقاء=5 ايام=30") == "/session prune keep=5 days=30"
+
+
+

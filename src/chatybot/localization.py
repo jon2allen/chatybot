@@ -164,6 +164,13 @@ class LocalizationManager:
                     token_lower = token.lower()
                     if token_lower in keywords_map:
                         translated_tokens.append(keywords_map[token_lower])
+                    elif "=" in token:
+                        k_part, v_part = token.split("=", 1)
+                        k_lower = k_part.lower()
+                        v_lower = v_part.lower()
+                        k_trans = keywords_map.get(k_lower, k_part)
+                        v_trans = keywords_map.get(v_lower, v_part)
+                        translated_tokens.append(f"{k_trans}={v_trans}")
                     else:
                         translated_tokens.append(token)
             

@@ -1,0 +1,11 @@
+# Recipe 5.3 - Rerank a directory
+# Goal: /documents dir= with batched limits; large-corpus scaling.
+# Run: /script doc/cookbook/05_3_rerank_directory.chatdsl
+# Requires: a directory of text files at the working directory (.)
+
+/model bge_reranker_f16
+/documents dir="."
+/rerank "macro definition grammar" top_n=2 limit_top_n=3 max_limit=10 return=summ
+/setvar found {LAST_RESPONSE}
+/echo "Found:"
+/echo "${found}"

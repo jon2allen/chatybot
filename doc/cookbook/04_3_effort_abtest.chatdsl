@@ -1,0 +1,28 @@
+# Recipe 4.3 - Reasoning-effort A/B
+# Goal: same prompt under different /effort levels, compare quality.
+# Run: /script doc/cookbook/04_3_effort_abtest.chatdsl
+
+/model devstral_1
+/reasoning on
+/effort low
+/multiline
+Design a rate-limiter for a public API. Explain trade-offs.
+;;
+/multiline
+/save 04_3_low.txt
+/filebank1 04_3_low.txt
+
+/effort high
+/multiline
+Design a rate-limiter for a public API. Explain trade-offs.
+;;
+/multiline
+/save 04_3_high.txt
+/filebank2 04_3_high.txt
+
+/model gemini_flash
+/multiline
+Compare {filebank1} (effort=low) and {filebank2} (effort=high). Which design is more robust and why?
+;;
+/multiline
+/save 04_3_verdict.txt

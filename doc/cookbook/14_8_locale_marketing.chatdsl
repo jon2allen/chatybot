@@ -1,0 +1,16 @@
+# Recipe 14.8 - Multi-locale marketing copy pipeline (novel)
+# Goal: produce a localized asset for each supported locale in one run.
+# Run: /script doc/cookbook/14_8_locale_marketing.chatdsl x="a solar-powered portable charger"
+# Combines: /language + foreach over locales + content gen (no repo example generates a locale bundle)
+# Note: only EN/ES/FR/ZH/IT aliases are verified in doc/multilingual_cross_reference.md.
+
+if ${x} != "" then set product = ${x}
+if ${product} == "" then set product = "a solar-powered portable charger"
+set locales[] = ["en", "es", "fr", "zh", "it"]
+foreach loc in ${locales}
+  /language ${loc}
+  /model mistral_1
+  Write a 3-line launch tagline and a short product description for: ${product}. Target a consumer audience.
+  /save 14_8_copy_${loc}.txt
+endfor
+/echo "Localized assets written for: ${locales}"

@@ -1,0 +1,36 @@
+# Recipe 4.1 - The comparison pattern, step by step
+# Goal: canonical multi-model comparison shape with a judge and scoring.
+# Run: /script doc/cookbook/04_1_comparison_pattern.chatdsl
+# Generalizes the dufu_poetry_analysis.chatdsl pattern.
+
+set model1 = "mistral_1"
+set model2 = "gemma_3"
+set judge = "gemini_flash"
+set out = "04_1_compare"
+
+# Phase A: run model 1
+/model ${model1}
+/multiline
+Generate 5 quiz questions about photosynthesis with answers.
+;;
+/multiline
+/save ${out}_m1.txt
+/filebank1 ${out}_m1.txt
+
+# Phase B: run model 2 with an identical prompt
+/model ${model2}
+/multiline
+Generate 5 quiz questions about photosynthesis with answers.
+;;
+/multiline
+/save ${out}_m2.txt
+/filebank2 ${out}_m2.txt
+
+# Phase C: judge compares the two banks
+/model ${judge}
+/multiline
+Compare {filebank1} vs {filebank2} for scientific accuracy. Score each 0-10 per question and pick an overall winner.
+;;
+/multiline
+/save ${out}_verdict.txt
+/echo "Comparison complete: ${out}_verdict.txt"

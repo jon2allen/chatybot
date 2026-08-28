@@ -1,0 +1,10 @@
+# Recipe 13.2 - Inspecting state
+# Goal: /dump all, /mem detail, /showfile all, /debug response.
+# Run: /script doc/cookbook/13_2_inspect.chatdsl
+
+set a = "hello"
+/file some.txt
+/dump all
+/mem detail
+/showfile all
+/debug response

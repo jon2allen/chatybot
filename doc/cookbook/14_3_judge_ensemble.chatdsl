@@ -1,0 +1,30 @@
+# Recipe 14.3 - LLM-as-judge ensemble vote (novel)
+# Goal: N models answer; the reranker votes over the answers as a corpus.
+# Run: /script doc/cookbook/14_3_judge_ensemble.chatdsl
+# Combines: multi-model generation + /documents var= + /rerank (repo uses LLM judges, never the reranker)
+
+set q = "Explain why the sky is blue, concisely."
+
+/model mistral_1
+${q}
+/save 14_3_a.txt
+
+/model gemma_3
+${q}
+/save 14_3_b.txt
+
+/model gemini_flash
+${q}
+/save 14_3_c.txt
+
+/filebank1 14_3_a.txt
+/filebank2 14_3_b.txt
+/filebank3 14_3_c.txt
+# Concatenate the three answers into one variable, then rerank over it
+/setvar answers "${filebank1} --- ${filebank2} --- ${filebank3}"
+/model bge_reranker_f16
+/documents var=answers
+/rerank "${q}" top_n=1 split=paragraph return=text
+/setvar best {LAST_RESPONSE}
+/echo "Best answer (rerank-voted):"
+/echo "${best}"

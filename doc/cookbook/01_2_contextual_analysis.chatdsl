@@ -1,0 +1,13 @@
+# Recipe 1.2 - Contextual analysis
+# Goal: load a file into the main buffer and ask the LLM to analyze it.
+# Run: /script doc/cookbook/01_2_contextual_analysis.chatdsl x=api_specs.json
+# Requires: a text/json file at the path given by x (defaults to api_specs.json)
+
+if ${x} != "" then set file_path = ${x}
+if ${file_path} == "" then set file_path = "api_specs.json"
+set report = "01_2_report.txt"
+
+/file ${file_path}
+Identify all endpoint security vulnerabilities in this file. Summarize each with severity and a fix.
+/save ${report}
+/echo "Report written to ${report}"

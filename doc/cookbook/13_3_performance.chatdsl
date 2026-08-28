@@ -1,0 +1,15 @@
+# Recipe 13.3 - Performance & rate limits
+# Goal: wait pacing, /context_limit, /auto_truncate, /maxtokens budgeting.
+# Run: /script doc/cookbook/13_3_performance.chatdsl
+
+/context_limit 8000
+/auto_truncate on
+/maxtokens 1500
+/model mistral_1
+wait 1
+Write a detailed overview of HTTP caching headers.
+/save 13_3_out.txt
+wait 2
+/model gemini_flash
+Summarize the previous overview in three bullets.
+/save 13_3_out2.txt

@@ -1,0 +1,9 @@
+# Recipe 1.1 - First automation
+# Goal: switch model, set a system role, ask one question, save the answer.
+# Run: /script doc/cookbook/01_1_first_automation.chatdsl
+
+/model mistral_1
+/system "You are a concise technical writer."
+What are the three tiers of a modern web application? Answer in three bullet points.
+/save 01_1_web_tiers.txt
+/echo "Saved to 01_1_web_tiers.txt"

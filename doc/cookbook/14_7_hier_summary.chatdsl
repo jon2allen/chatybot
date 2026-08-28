@@ -1,0 +1,32 @@
+# Recipe 14.7 - Hierarchical document summarization (novel)
+# Goal: large doc -> rerank into thematic chunks -> summarize -> rerank the summaries -> exec overview.
+# Run: /script doc/cookbook/14_7_hier_summary.chatdsl
+# Combines: multi-pass rerank reduction (no repo example does this)
+# Requires: big_report.txt in the working directory
+
+/model bge_reranker_f16
+/filebank1 big_report.txt
+/documents filebank=1
+
+/rerank "key findings and recommendations" top_n=5 split=paragraph return=text
+/setvar chunk1 {LAST_RESPONSE}
+/rerank "risks and mitigations" top_n=5 split=paragraph return=text
+/setvar chunk2 {LAST_RESPONSE}
+
+/model mistral_1
+/multiline
+Summarize each passage in 2 sentences:
+Findings: ${chunk1}
+Risks: ${chunk2}
+;;
+/multiline
+/save 14_7_summary.txt
+/filebank2 14_7_summary.txt
+
+/model bge_reranker_f16
+/documents filebank=2
+/rerank "executive overview" top_n=1 split=paragraph return=summ
+/setvar exec {LAST_RESPONSE}
+/echo "Executive summary:"
+/echo "${exec}"
+/save 14_7_exec.txt

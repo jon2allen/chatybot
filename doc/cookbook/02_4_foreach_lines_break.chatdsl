@@ -1,0 +1,13 @@
+# Recipe 2.4 - foreach over lines() with break
+# Goal: process a buffer line-by-line and stop at a sentinel.
+# Run: /script doc/cookbook/02_4_foreach_lines_break.chatdsl x=config.env
+# Requires: a file whose lines look like key=value, ending with a line "END"
+
+if ${x} != "" then set src = ${x}
+if ${src} == "" then set src = "config.env"
+/filebank1 ${src}
+foreach line in lines({filebank1})
+  if ${line} == "END" then break
+  /echo "Processing: ${line}"
+endfor
+/echo "Stopped at sentinel"

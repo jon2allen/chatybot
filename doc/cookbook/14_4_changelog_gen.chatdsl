@@ -1,0 +1,22 @@
+# Recipe 14.4 - CI/CD changelog generator (novel)
+# Goal: capture git log/diff via /run, have the LLM draft a changelog.
+# Run: /script doc/cookbook/14_4_changelog_gen.chatdsl
+# Combines: /run capture + LLM synthesis + /save (/run is undocumented in any repo example)
+
+/run git log --oneline -30
+/setvar log {LAST_COMPLETION}
+/run git diff --stat HEAD~10
+/setvar diffstat {LAST_COMPLETION}
+/model mistral_1
+/multiline
+You are a release engineer. From this git log and diffstat, draft a CHANGELOG.md entry for the next release. Group changes into Added/Changed/Fixed. Omit cosmetic commits.
+
+Log:
+${log}
+
+Diffstat:
+${diffstat}
+;;
+/multiline
+/save CHANGELOG_draft.md
+/echo "Draft changelog written to CHANGELOG_draft.md"

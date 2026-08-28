@@ -1,0 +1,24 @@
+# Recipe 3.3 - Sparse-context retrieval
+# Goal: multiple /rerank queries -> /setvar {LAST_RESPONSE} -> stitch into final prompt.
+# Run: /script doc/cookbook/03_3_sparse_context.chatdsl
+# Requires: 10_foods.txt in the working directory
+
+/model bge_reranker_f16
+/filebank1 10_foods.txt
+/documents filebank=1
+
+/rerank "German cake dessert with cherries" top_n=1 split=line items=2 return=text
+/setvar german_dessert {LAST_RESPONSE}
+
+/rerank "Spanish seafood rice dish" top_n=1 split=line items=2 return=text
+/setvar spanish_dish {LAST_RESPONSE}
+
+/model mistral_1
+/clearfile
+/multiline
+Plan a fusion menu using:
+German: ${german_dessert}
+Spanish: ${spanish_dish}
+;;
+/multiline
+/save 03_3_fusion_menu.txt

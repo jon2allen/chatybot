@@ -1,0 +1,14 @@
+# 10.3 Dynamic Sourcing with /source
+# Goal: Configure and inject active session state without exiting.
+# Usage: /source doc/cookbook/10_3_source_setup.chatdsl
+
+set project_name = "antigravity_core"
+set api_env = "staging"
+
+/model mistral_1
+/temp 0.3
+/tool auto on
+/tool on
+/system "You are an assistant for project ${project_name} in ${api_env} environment."
+
+/echo "Environment '${project_name}' (${api_env}) sourced successfully."

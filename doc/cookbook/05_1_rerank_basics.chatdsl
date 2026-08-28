@@ -1,0 +1,18 @@
+# Recipe 5.1 - rerank basics
+# Goal: tour top_n, split, and return modes.
+# Run: /script doc/cookbook/05_1_rerank_basics.chatdsl
+# Requires: 10_foods.txt in the working directory
+
+/model bge_reranker_f16
+/filebank1 10_foods.txt
+/documents filebank=1
+
+/rerank "dessert" top_n=3 split=line return=text
+/setvar hits {LAST_RESPONSE}
+/echo "Top 3 lines:"
+/echo "${hits}"
+
+/rerank "seafood" top_n=2 split=sentence return=summ
+/setvar summ {LAST_RESPONSE}
+/echo "Summary:"
+/echo "${summ}"

@@ -1,0 +1,17 @@
+# Recipe 3.2 - Five file banks in parallel
+# Goal: load spec + two refs + two prior outputs, reference all five in one prompt.
+# Run: /script doc/cookbook/03_2_five_filebanks.chatdsl
+# Requires: spec.md, ref_a.md, ref_b.md, prior_run_1.txt, prior_run_2.txt
+
+/filebank1 spec.md
+/filebank2 ref_a.md
+/filebank3 ref_b.md
+/filebank4 prior_run_1.txt
+/filebank5 prior_run_2.txt
+
+/model mistral_1
+/multiline
+Using {filebank1} as the spec, cross-check {filebank2} and {filebank3}, and reconcile the discrepancies between {filebank4} and {filebank5}. Produce a unified report.
+;;
+/multiline
+/save 03_2_unified_report.txt

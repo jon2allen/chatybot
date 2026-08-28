@@ -80,6 +80,25 @@ def convert_single_session(
     target_dir = os.path.join(sessions_dir, session_id)
     temp_dir = os.path.join(sessions_dir, f".{session_id}.migrate_tmp")
 
+    # Fix 20: Check if target_dir is already a valid migrated JSONL session with equal or newer timestamp
+    if os.path.exists(target_dir):
+        existing_meta_file = os.path.join(target_dir, "meta.json")
+        if os.path.exists(existing_meta_file):
+            try:
+                with open(existing_meta_file, "r", encoding="utf-8") as f:
+                    emeta = json.load(f)
+                if emeta.get("format") == "jsonl-v1":
+                    legacy_upd = meta.get("updated_at") or meta.get("created_at") or ""
+                    existing_upd = emeta.get("updated_at") or emeta.get("created_at") or ""
+                    if existing_upd >= legacy_upd:
+                        # Existing JSONL session is current or newer; safely archive legacy backup
+                        os.makedirs(backup_dir, exist_ok=True)
+                        dest_backup = os.path.join(backup_dir, os.path.basename(legacy_file))
+                        shutil.move(legacy_file, dest_backup)
+                        return True, session_id, emeta.get("turn_count", turn_count), "Already migrated (archived legacy backup)"
+            except Exception:
+                pass
+
     try:
         os.makedirs(temp_dir, exist_ok=True)
         meta_file = os.path.join(temp_dir, "meta.json")
