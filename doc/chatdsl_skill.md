@@ -767,7 +767,7 @@ process this...
 | `/showfile` | [all] | Show buffer content |
 | `/clearfile` | - | Clear buffer |
 | `/filebank1-5` | path/clear/show | Manage file banks |
-| `/prompt` | file | Load and execute prompt file |
+| `/prompt` | file | Load and execute prompt file. Auto-executes in script context without confirmation. |
 | `/save` | path | Save last response |
 | `/codeonly` | - | Code-only mode on |
 | `/codeoff` | - | Code-only mode off |

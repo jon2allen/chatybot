@@ -791,6 +791,8 @@ src/chatybot/profiles/          # Preset profiles
 | `/save` | File | `/save file [all] [nothink\|withthink]` | Save last LLM response |
 | `/prompt` | File | `/prompt file` | Load and execute prompt file |
 
+> **Note:** Interactively, `/prompt` shows the file content and asks for confirmation before executing. In script context, it auto-executes without confirmation.
+
 ### Image Generation Commands
 
 | Keyword | Category | Syntax | Description |

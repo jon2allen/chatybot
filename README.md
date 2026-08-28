@@ -303,6 +303,7 @@ chat --> Hello!      # Start a conversation
 /prompt template.txt    # Load a prompt template
 /system "Act as a tutor" # Set system message
 ```
+When used interactively, `/prompt` displays the file content (truncated to 500 chars) and asks for confirmation before executing. In script context (inside a `.chatdsl` script), `/prompt` auto-executes without confirmation — the prompt is sent to the model immediately.
 
 ### **Scripting & Dynamic Sourcing**
 Create a script file (`setup.chatdsl`):

@@ -207,7 +207,7 @@ What is the recommended transition plan for RSA-2048?
 | `/filebankN`| Load a file into Bank 1-5. |
 | `/clearfile`| Clear the main context buffer. |
 | `/showfile` | Print the current buffer (first 100 chars or 'all'). |
-| `/prompt` | Load a prompt from a file and execute it. |
+| `/prompt` | Load a prompt from a file and execute it. In script context, auto-executes without confirmation. |
 | `/save` | Write the last LLM response to a file (supports spaces). |
 | `/codeonly` | Tell the LLM to skip conversational filler. |
 | `/notemode` | Automatically extract code blocks to separate files on save. |
