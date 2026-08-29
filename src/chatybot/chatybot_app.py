@@ -3561,12 +3561,20 @@ class ChatybotApp:
 
             return clean_json_string("".join(out))
 
+        def sanitize_json_types(obj: Any) -> Any:
+            """Recursively normalize non-JSON types (e.g. Python set/frozenset to list, tuples to lists)."""
+            if isinstance(obj, dict):
+                return {k: sanitize_json_types(v) for k, v in obj.items()}
+            elif isinstance(obj, (list, tuple, set, frozenset)):
+                return [sanitize_json_types(item) for item in obj]
+            return obj
+
         def parse_json_or_dict(s: str) -> Optional[Dict[str, Any]]:
             try:
                 cleaned = clean_json_string(s)
                 data = json.loads(cleaned)
                 if isinstance(data, dict):
-                    return data
+                    return sanitize_json_types(data)
             except Exception:
                 pass
 
@@ -3574,7 +3582,7 @@ class ChatybotApp:
                 fixed = fix_unquoted_json(s)
                 data = json.loads(fixed)
                 if isinstance(data, dict):
-                    return data
+                    return sanitize_json_types(data)
             except Exception:
                 pass
 
@@ -3582,7 +3590,7 @@ class ChatybotApp:
                 import ast
                 data = ast.literal_eval(s)
                 if isinstance(data, dict):
-                    return data
+                    return sanitize_json_types(data)
             except Exception:
                 pass
 
@@ -3590,6 +3598,7 @@ class ChatybotApp:
 
         def normalize_tool_call(data: Any) -> Optional[Dict[str, Any]]:
             if isinstance(data, dict):
+                data = sanitize_json_types(data)
                 if "tool" in data:
                     tool_name = str(data["tool"])
                     if "." in tool_name:
@@ -3718,6 +3727,17 @@ class ChatybotApp:
         """
         import json
         
+        def safe_json_dumps(obj: Any, **kwargs) -> str:
+            """Safely serialize an object to JSON, converting set/frozenset to list and fallback types to str."""
+            def _default(o):
+                if isinstance(o, (set, frozenset)):
+                    return list(o)
+                return str(o)
+            try:
+                return json.dumps(obj, default=_default, **kwargs)
+            except Exception:
+                return str(obj)
+
         # Initialize or reset the AGENTIC_LOOP script variable
         self.buffer_manager.set_script_var('AGENTIC_LOOP', [], allow_protected=True)
 
@@ -3797,16 +3817,16 @@ class ChatybotApp:
                 tool_name = tc.get("tool")
                 tool_args = tc.get("arguments", {})
                 print(f"[Turn {turn_count+1}/{max_turns}] LLM requested tool: {tool_name}")
-                print(f"   Arguments: {json.dumps(tool_args)}")
+                print(f"   Arguments: {safe_json_dumps(tool_args)}")
                 
                 # Execute the tool and capture result
                 self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
                 self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '0')
                 try:
                     # dispatch_tool writes result to TOOL_DISPATCH_RESULT and returns the stdout string
-                    result_str = await self.dispatch_tool(json.dumps(tc))
+                    result_str = await self.dispatch_tool(safe_json_dumps(tc))
                 except Exception as e:
-                    result_str = json.dumps({"status": "error", "message": f"Dispatch execution error: {str(e)}"})
+                    result_str = safe_json_dumps({"status": "error", "message": f"Dispatch execution error: {str(e)}"})
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', result_str)
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
 
@@ -3814,7 +3834,7 @@ class ChatybotApp:
                     result_str = self._format_capability_error(tool_name, result_str)
                     
                 print(f"Tool Result: {result_str}")
-                results.append(f"Tool: {tool_name}\nArguments: {json.dumps(tool_args)}\nResult: {result_str}")
+                results.append(f"Tool: {tool_name}\nArguments: {safe_json_dumps(tool_args)}\nResult: {result_str}")
 
                 # Monitor tool output size and issue warnings in the loop
                 result_bytes = len(result_str.encode('utf-8'))
@@ -3854,7 +3874,7 @@ class ChatybotApp:
                     self.logging_manager.log_message(
                         f"[Turn {turn_count+1}] Tool Loop Execution:\n"
                         f"  Tool: {tool_name}\n"
-                        f"  Arguments: {json.dumps(tool_args)}\n"
+                        f"  Arguments: {safe_json_dumps(tool_args)}\n"
                         f"  Result: {result_str}"
                     )
             
@@ -3863,7 +3883,7 @@ class ChatybotApp:
                 tool_args = tc.get("arguments", {})
                 err_msg = f"Error: Only max {self.max_tool_calls_per_turn} tool calls are allowed per turn. This tool call was not executed."
                 print(f"[Turn {turn_count+1}/{max_turns}] Skipping tool: {tool_name} (exceeded parallel limit)")
-                results.append(f"Tool: {tool_name}\nArguments: {json.dumps(tool_args)}\nResult: {err_msg}")
+                results.append(f"Tool: {tool_name}\nArguments: {safe_json_dumps(tool_args)}\nResult: {err_msg}")
                 
                 # Extract exit code and determine status
                 tool_record = {
@@ -3885,7 +3905,7 @@ class ChatybotApp:
                     self.logging_manager.log_message(
                         f"[Turn {turn_count+1}] Tool Loop Execution (SKIPPED - EXCEEDED LIMIT):\n"
                         f"  Tool: {tool_name}\n"
-                        f"  Arguments: {json.dumps(tool_args)}\n"
+                        f"  Arguments: {safe_json_dumps(tool_args)}\n"
                         f"  Result: {err_msg}"
                     )
 
