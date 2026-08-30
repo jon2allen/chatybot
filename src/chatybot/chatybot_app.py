@@ -24,6 +24,7 @@ import random
 import json
 import copy
 import signal
+import shutil
 from datetime import datetime
 from typing import Dict, Any, List, Tuple, Optional, Callable, Union
 import logging
@@ -71,6 +72,9 @@ from .chatydb import (
     dbprint,
     SEARCHBUFFER,
 )
+from .commands import registry as _command_registry
+from .commands.registry import CommandResult, CommandAction
+from .commands.context import CommandContext
 
 # Global variables needed for database functionality
 app = None  # Global app instance for database functions to access
@@ -612,6 +616,8 @@ class ChatybotApp:
             # Regular line, check for variable substitution
             result = line
             for var_name, var_value in self.buffer_manager.script_vars.items():
+                if not isinstance(var_value, str):
+                    continue
                 result = result.replace(f'${{{var_name}}}', var_value)
             return result
 
@@ -2287,12 +2293,16 @@ class ChatybotApp:
                 # This means a /prompt command was executed and confirmed.
                 # The prompt buffer is already set by handle_escape_command.
                 # We need to trigger the chat completion here.
-                # Use the prompt buffer directly, then clear it to avoid duplication
                 temp_prompt = self.buffer_manager.prompt_buffer
+                try:
+                    response = await self.chat_completion(
+                        temp_prompt, stream=self.streaming_enabled
+                    )
+                except Exception:
+                    # P11: restore the buffer so the user can retry.
+                    self.buffer_manager.prompt_buffer = temp_prompt
+                    raise
                 self.buffer_manager.prompt_buffer = ""
-                response = await self.chat_completion(
-                    temp_prompt, stream=self.streaming_enabled
-                )
                 self.logging_manager.log_message(
                     f"User: {temp_prompt}\nAssistant: {response}\n"
                 )
@@ -2414,10 +2424,15 @@ class ChatybotApp:
                     result = await self.handle_escape_command(cmd)
                     if result == "EXECUTE_PROMPT":
                         temp_prompt = self.buffer_manager.prompt_buffer
+                        try:
+                            response = await self.chat_completion(
+                                temp_prompt, stream=self.streaming_enabled
+                            )
+                        except Exception:
+                            # P11: restore the buffer so the user can retry.
+                            self.buffer_manager.prompt_buffer = temp_prompt
+                            raise
                         self.buffer_manager.prompt_buffer = ""
-                        response = await self.chat_completion(
-                            temp_prompt, stream=self.streaming_enabled
-                        )
                         self.logging_manager.log_message(
                             f"User: {temp_prompt}\nAssistant: {response}\n"
                         )
@@ -4178,6 +4193,19 @@ class ChatybotApp:
         self.tool_context = context
         return context
 
+    def _adapt_command_result(self, result: CommandResult) -> Union[bool, str]:
+        """Translate a typed CommandResult back to the legacy Union[bool, str]
+        contract used by handle_escape_command callers.
+
+        - HANDLED -> True
+        - EXECUTE_PROMPT -> "EXECUTE_PROMPT" (handler already set prompt_buffer)
+        - ERROR -> True (handler already printed the error)
+        - EXIT -> True (exit handled by the caller's main loop)
+        """
+        if result.action == CommandAction.EXECUTE_PROMPT:
+            return "EXECUTE_PROMPT"
+        return True
+
     async def handle_escape_command(self, command: str) -> Union[bool, str]:
         """
         Handle escape commands.
@@ -4194,6 +4222,23 @@ class ChatybotApp:
             self.logging_manager.log_message(f"Escape command: {command}")
         raw_cmd = parts[0]
         cmd = self.i18n.resolve_command(raw_cmd.lower())
+
+        # Phased migration: consult the modular command registry first.
+        # Migrated commands are handled here; unmigrated commands fall
+        # through to the legacy elif chain below. i18n resolution happens
+        # before lookup so localized aliases (e.g. /repetir -> /echo)
+        # dispatch to the canonical handler.
+        spec = _command_registry.registry.get(cmd)
+        if spec is not None:
+            ctx = CommandContext(
+                buffer_manager=self.buffer_manager,
+                config_manager=self.config_manager,
+                i18n=self.i18n,
+                session_store=getattr(self, "session_store", None),
+                app=self,
+            )
+            result = await spec.handler(ctx, parts, command)
+            return self._adapt_command_result(result)
 
         if cmd == "/help":
             # Handle /help with optional query argument
@@ -5949,26 +5994,6 @@ class ChatybotApp:
                     print(
                         "Invalid seed. Use an integer, 'time', or 'random <min>, <max>'."
                     )
-            return True
-
-        elif cmd == "/echo":
-            if len(parts) < 2:
-                print()
-                return True
-            
-            try:
-                text = command.split(maxsplit=1)[1]
-            except IndexError:
-                print()
-                return True
-            
-            processed_text, _ = self.buffer_manager.replace_placeholders(text, include_images=False)
-            
-            if (processed_text.startswith('"') and processed_text.endswith('"')) or \
-               (processed_text.startswith("'") and processed_text.endswith("'")):
-                processed_text = processed_text[1:-1]
-            
-            print(processed_text)
             return True
 
         elif cmd == "/run":
