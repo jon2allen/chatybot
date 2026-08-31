@@ -20,7 +20,7 @@ Ensure the list includes a variety of items, specifically desserts, chicken dish
 
 # Step 3: Extract the specific dishes using semantic search
 # Switch to the reranker model
-/model bge_reranker_f16
+/model nvidia_reranker
 
 # Extract a vegetable dish
 /rerank "traditional vegetable dish or vegetarian stew" top_n=1 split=line items=1 return=text
