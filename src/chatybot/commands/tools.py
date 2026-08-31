@@ -419,11 +419,16 @@ async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandRes
             try:
                 config = app._load_tools_config()
                 config_editor = config.get("config", {}).get("editor")
-                default_editor = "notepad.exe" if os.name == "nt" else "nano"
-                editor = config_editor or os.environ.get("EDITOR") or default_editor
+                default_editor = "notepad.exe" if os.name == "nt" else "vi"
+                editor = config_editor or os.environ.get("VISUAL") or os.environ.get("EDITOR") or default_editor
 
                 print(f"Opening live prompt editor using '{editor}'...")
-                subprocess.run([editor, temp_path], check=True)
+                # Split editor string to support editors with arguments (e.g. "code --wait")
+                if os.name == "nt":
+                    cmd = shlex.split(editor, posix=False) + [temp_path]
+                else:
+                    cmd = shlex.split(editor) + [temp_path]
+                subprocess.run(cmd)
 
                 with open(temp_path, "r", encoding="utf-8") as f:
                     saved_content = f.read()
