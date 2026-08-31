@@ -164,6 +164,7 @@ class ChatybotApp:
         self.max_tool_calls_per_turn: int = 10
         self.agentic_instructions: str = ""
         self.live_agentic_instructions: str = ""
+        self.live_tool_context: str = ""
         self.tool_timeout: int = 30
         self.rate_limit_delay: float = 0.0
         self._cached_rate_limit_delay: Optional[float] = None
@@ -1114,8 +1115,9 @@ class ChatybotApp:
                 full_prompt = f"File:\n{self.buffer_manager.file_buffer}\n\n{full_prompt}"
 
             # Inject tool context if tool mode is enabled
-            if self.tool_mode and self.tool_context:
-                full_prompt = self.tool_context + "\n\n" + full_prompt
+            effective_tool_context = self.live_tool_context or self.tool_context
+            if self.tool_mode and effective_tool_context:
+                full_prompt = effective_tool_context + "\n\n" + full_prompt
 
             # Add code-only instruction if flag is set
             if self.code_only_flag:
@@ -1150,12 +1152,13 @@ class ChatybotApp:
         is_reasoning_model = is_nvidia or "qwen" in model_name.lower() or "glm" in model_name.lower()
 
         current_system_message = self.config_manager.system_message
-        if self.tool_mode and self.tool_context:
+        effective_tool_context = self.live_tool_context or self.tool_context
+        if self.tool_mode and effective_tool_context:
             if isinstance(prompt, list):
                 if current_system_message:
-                    current_system_message = self.tool_context + "\n\n" + current_system_message
+                    current_system_message = effective_tool_context + "\n\n" + current_system_message
                 else:
-                    current_system_message = self.tool_context
+                    current_system_message = effective_tool_context
 
             # Append agentic prompt instruction whenever tool_mode is enabled
             instr = self.live_agentic_instructions or self.agentic_instructions or self.default_agentic_instructions
@@ -6401,11 +6404,23 @@ class ChatybotApp:
                         
                         # Extract the instructions below the header boundary
                         marker = "=== AGENTIC LOOP SYSTEM INSTRUCTIONS ==="
+                        context_header = "=== TOOL CONTEXT INJECTED INTO PROMPT ==="
+                        new_context = ""
+                        new_instr = ""
+
                         if marker in saved_content:
                             parts_split = saved_content.split(marker, 1)
+                            context_block = parts_split[0]
                             instr_block = parts_split[1]
-                            
-                            # Filter out helper comment lines starting with '#'
+
+                            # Extract tool context: strip header if present
+                            if context_header in context_block:
+                                context_lines = context_block.split(context_header, 1)[1]
+                            else:
+                                context_lines = context_block
+                            new_context = context_lines.strip()
+
+                            # Extract instructions: filter out helper comment lines starting with '#'
                             lines = instr_block.splitlines()
                             filtered_lines = []
                             for line in lines:
@@ -6416,7 +6431,10 @@ class ChatybotApp:
                         else:
                             # Fallback if marker was accidentally deleted
                             new_instr = saved_content.strip()
-                        
+
+                        # Save tool context override
+                        self.live_tool_context = new_context
+
                         if not new_instr:
                             self.live_agentic_instructions = ""
                             print("Live prompt override cleared. Reset to tools_config.toml settings.")
@@ -6431,11 +6449,23 @@ class ChatybotApp:
                         except Exception:
                             pass
                     return True
-                
+
+                if sub_arg == "restore":
+                    had_override = bool(self.live_tool_context or self.live_agentic_instructions)
+                    self.live_tool_context = ""
+                    self.live_agentic_instructions = ""
+                    if had_override:
+                        print("Live prompt overrides restored to tools_config.toml defaults.")
+                    else:
+                        print("No live prompt overrides active.")
+                    return True
+
                 # Show the prompt injected during tool operation
-                context = self.tool_context or self.generate_tool_context()
+                context = self.live_tool_context or self.tool_context or self.generate_tool_context()
                 if context:
                     print("\n=== TOOL CONTEXT INJECTED INTO PROMPT ===")
+                    if self.live_tool_context:
+                        print(" [Live Edit Override Active]")
                     print(context)
                     print("\n=== AGENTIC LOOP SYSTEM INSTRUCTIONS ===")
                     active_instr = self.live_agentic_instructions or self.agentic_instructions or self.default_agentic_instructions
