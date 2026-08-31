@@ -3,7 +3,7 @@
 # from a document (10_foods.txt), capturing them, and injecting them into a final prompt.
 
 # We need a rerank-capable model for the extraction phase
-/model bge_reranker_f16
+/model nvidia_reranker
 
 # Load the document into a filebank and set it as the active document source
 /filebank1 10_foods.txt
