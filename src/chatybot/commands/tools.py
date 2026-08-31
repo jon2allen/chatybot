@@ -158,7 +158,7 @@ async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandRes
                             param_desc = param_rules.get('description', '')
                             optional = param_rules.get('optional', False)
                             required = " (optional)" if optional else " (required)"
-                            print(f"  - {param_name}: {param_type}{required} - {param_desc}")
+                            print(f"   {param_name}: {param_type}{required} - {param_desc}")
 
             # Print MCP Tools if active
             if filtered_mcp:
@@ -199,7 +199,7 @@ async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandRes
 
                                 is_optional = param_name not in required_list
                                 required_str = " (optional)" if is_optional else " (required)"
-                                print(f"  - {param_name}: {param_type}{required_str} - {param_desc}")
+                                print(f"   {param_name}: {param_type}{required_str} - {param_desc}")
             elif app.mcp_manager and app.mcp_manager.cached_schemas:
                 print("\nModel Context Protocol (MCP) Tools:")
                 print("  No MCP tools match pattern.")
