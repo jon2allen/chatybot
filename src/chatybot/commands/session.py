@@ -352,10 +352,11 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
         if len(parts) < 3:
             print("Usage: /session delete <name|id|--all>")
             return CommandResult.ok()
-        target = parts[2].lower()
+        raw_target = parts[2].strip(" \"'")
+        target_lower = raw_target.lower()
 
         store = app._get_session_store()
-        if target == "--all":
+        if target_lower == "--all":
             try:
                 confirm = input("Are you sure you want to delete ALL saved sessions? (y/N): ").strip().lower()
             except EOFError:
@@ -373,9 +374,9 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
                 print("Delete all cancelled.")
             return CommandResult.ok()
 
-        matched_sid = store.resolve_session(parts[2])
+        matched_sid = store.resolve_session(raw_target)
         if not matched_sid:
-            print(f"Error: Session '{parts[2]}' not found.")
+            print(f"Error: Session '{raw_target}' not found.")
             return CommandResult.ok()
 
         deleted = store.delete_session(matched_sid)
@@ -388,7 +389,7 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
                 app.chat_history.clear()
             print(f"Deleted session '{matched_sid}'.")
         else:
-            print(f"Error deleting session '{parts[2]}'.")
+            print(f"Error deleting session '{raw_target}'.")
         return CommandResult.ok()
 
     elif subcmd == "merge":

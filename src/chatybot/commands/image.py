@@ -14,7 +14,7 @@ import os
 import traceback
 from datetime import datetime
 
-from chatybot.commands.registry import command, CommandResult, registry
+from chatybot.commands.registry import command, CommandResult
 from chatybot.commands.context import CommandContext
 
 

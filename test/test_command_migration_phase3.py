@@ -98,6 +98,24 @@ async def test_session_history_status(capsys):
 
 
 @pytest.mark.anyio
+async def test_session_delete_usage(capsys):
+    app = _make_app(capsys)
+    result = await app.handle_escape_command("/session delete")
+    assert result is True
+    out = capsys.readouterr().out
+    assert "Usage: /session delete" in out
+
+
+@pytest.mark.anyio
+async def test_session_delete_not_found(capsys):
+    app = _make_app(capsys)
+    result = await app.handle_escape_command('/session delete "non_existent_session"')
+    assert result is True
+    out = capsys.readouterr().out
+    assert "Error: Session 'non_existent_session' not found." in out
+
+
+@pytest.mark.anyio
 async def test_session_unknown_subcmd(capsys):
     app = _make_app(capsys)
     result = await app.handle_escape_command("/session bogus")
@@ -577,7 +595,18 @@ async def test_reloadmacros(capsys):
     result = await app.handle_escape_command("/reloadmacros")
     assert result is True
     out = capsys.readouterr().out
-    assert "Reloaded macros" in out
+    assert "Reloaded macros from default file" in out
+
+
+@pytest.mark.anyio
+async def test_reloadmacros_custom_file(capsys, tmp_path):
+    macro_file = tmp_path / "custom.chatdsl"
+    macro_file.write_text("def test_m = /echo from_macro\n", encoding="utf-8")
+    app = _make_app(capsys)
+    result = await app.handle_escape_command(f'/reloadmacros "{macro_file}"')
+    assert result is True
+    out = capsys.readouterr().out
+    assert f"Reloaded macros from '{macro_file}'" in out
 
 
 @pytest.mark.anyio

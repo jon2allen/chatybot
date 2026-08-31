@@ -4198,12 +4198,18 @@ class ChatybotApp:
         contract used by handle_escape_command callers.
 
         - HANDLED -> True
-        - EXECUTE_PROMPT -> "EXECUTE_PROMPT" (handler already set prompt_buffer)
+        - EXECUTE_PROMPT -> "EXECUTE_PROMPT" (sets prompt_buffer if prompt_to_execute provided)
         - ERROR -> True (handler already printed the error)
-        - EXIT -> True (exit handled by the caller's main loop)
+        - EXIT -> True (triggers application exit if requested)
         """
         if result.action == CommandAction.EXECUTE_PROMPT:
+            if result.prompt_to_execute is not None:
+                self.buffer_manager.prompt_buffer = result.prompt_to_execute
             return "EXECUTE_PROMPT"
+        elif result.action == CommandAction.EXIT:
+            self.logging_manager.stop_logging()
+            self.save_input_history()
+            exit(0)
         return True
 
     async def handle_escape_command(self, command: str) -> Union[bool, str]:
