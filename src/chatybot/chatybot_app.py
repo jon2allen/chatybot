@@ -6383,12 +6383,17 @@ class ChatybotApp:
                         # Determine editor
                         config = self._load_tools_config()
                         config_editor = config.get("config", {}).get("editor")
-                        default_editor = "notepad.exe" if os.name == "nt" else "nano"
-                        editor = config_editor or os.environ.get("EDITOR") or default_editor
+                        default_editor = "notepad.exe" if os.name == "nt" else "vi"
+                        editor = config_editor or os.environ.get("VISUAL") or os.environ.get("EDITOR") or default_editor
                         
                         # Open the editor
                         print(f"Opening live prompt editor using '{editor}'...")
-                        subprocess.run([editor, temp_path], check=True)
+                        import shlex
+                        if os.name == "nt":
+                            cmd = shlex.split(editor, posix=False) + [temp_path]
+                        else:
+                            cmd = shlex.split(editor) + [temp_path]
+                        subprocess.run(cmd)
                         
                         # Read and parse the modified content back
                         with open(temp_path, "r", encoding="utf-8") as f:
