@@ -337,4 +337,26 @@ def test_session_extended_localization():
     assert mgr_ar.translate_command_string("/جلسة تنظيف ابقاء=5 ايام=30") == "/session prune keep=5 days=30"
 
 
+def test_tool_prompt_localization():
+    """Verify /tool prompt live_edit and restore translations across all supported languages."""
+    test_cases = [
+        ("es", "/herramienta prompt restaurar", "/tool prompt restore"),
+        ("es", "/herramienta prompt edicion_en_vivo", "/tool prompt live_edit"),
+        ("fr", "/outil prompt restaurer", "/tool prompt restore"),
+        ("fr", "/outil prompt edition_direct", "/tool prompt live_edit"),
+        ("zh", "/工具 prompt 恢复", "/tool prompt restore"),
+        ("zh", "/工具 prompt 实时编辑", "/tool prompt live_edit"),
+        ("it", "/strumento prompt ripristina", "/tool prompt restore"),
+        ("it", "/strumento prompt modifica_live", "/tool prompt live_edit"),
+        ("ar", "/أداة prompt استعادة", "/tool prompt restore"),
+        ("ar", "/أداة prompt تعديل_مباشر", "/tool prompt live_edit"),
+    ]
+
+    for loc, localized_input, expected_cmd in test_cases:
+        mgr = LocalizationManager(loc)
+        translated = mgr.translate_command_string(localized_input)
+        assert translated == expected_cmd, f"Failed for {loc}: '{localized_input}' -> '{translated}', expected '{expected_cmd}'"
+
+
+
 
