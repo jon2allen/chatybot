@@ -4140,7 +4140,7 @@ class ChatybotApp:
                     param_desc = param_rules.get('description', '')
                     optional = param_rules.get('optional', False)
                     required = " (optional)" if optional else " (required)"
-                    lines.append(f"   {param_name}: {param_type}{required} - {param_desc}")
+                    lines.append(f"   {param_name}: {param_type}{required} {param_desc}")
         
         # Append MCP tools to prompt context
         if self.mcp_manager and self.mcp_manager.cached_schemas:
@@ -4182,7 +4182,7 @@ class ChatybotApp:
                                 
                             is_optional = param_name not in required_list
                             required_str = " (optional)" if is_optional else " (required)"
-                            lines.append(f"   {param_name}: {param_type}{required_str} - {param_desc}")
+                            lines.append(f"   {param_name}: {param_type}{required_str} {param_desc}")
         
         lines.append("\n=== END TOOLS ===\n")
         if hasattr(self, "context_limiter") and self.context_limiter.context_limit:
