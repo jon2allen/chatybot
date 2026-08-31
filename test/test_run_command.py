@@ -447,6 +447,19 @@ class TestRunCommandBehavior:
             mock_print.assert_any_call("\n=== AGENTIC LOOP SYSTEM INSTRUCTIONS ===")
 
     @pytest.mark.anyio
+    async def test_tool_prompt_live_edit_overrides(self, app):
+        """Verifies live_tool_context and live_agentic_instructions take precedence and show override banner."""
+        app.live_tool_context = "=== CUSTOM TOOLS ===\ntool: custom_search"
+        app.live_agentic_instructions = "CUSTOM AGENTIC LOOP RULES"
+
+        with patch('builtins.print') as mock_print:
+            res = await app.handle_escape_command("/tool prompt")
+            assert res is True
+            mock_print.assert_any_call(" [Live Edit Override Active]")
+            mock_print.assert_any_call("=== CUSTOM TOOLS ===\ntool: custom_search")
+            mock_print.assert_any_call(" [Live Edit Override Active]\nCUSTOM AGENTIC LOOP RULES")
+
+    @pytest.mark.anyio
     async def test_custom_agentic_instructions(self, app):
         """Verifies custom agentic instructions override the default and are printed/injected correctly"""
         app.agentic_instructions = "CUSTOM INSTRUCTIONS"

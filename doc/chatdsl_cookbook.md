@@ -890,8 +890,9 @@ ${log}
 
 **Variations:** `/tool disable run_command` to remove shell access for a read-only session.
 
-### 8.2 Autonomous tool loop
-- **Goal:** run an agentic loop and inspect its prompt first.
+### 8.2 Autonomous tool loop & live prompt editing
+- **Goal:** run an agentic loop, inspect prompt context, and live-tune system instructions or tool definitions mid-session.
+- **Commands:** `/tool on`, `/tool enable`, `/tool auto`, `/tool max_turns`, `/tool prompt`, `/tool prompt live_edit`, `/tool loop`.
 - **Script:** `cookbook/08_2_tool_loop.chatdsl`
 - **Run:** `/script doc/cookbook/08_2_tool_loop.chatdsl`
 
@@ -906,11 +907,15 @@ ${log}
 ```
 
 **Walkthrough**
-1. `/tool prompt` prints the active agentic instructions before you launch — review them here.
-2. `/tool loop 50 force` runs up to 50 autonomous turns; `force` skips per-turn confirmation.
-3. Interrupt safely with the session's interrupt key if it goes off track.
+1. `/tool prompt` prints the active tool context and agentic instructions before you launch — review them here.
+2. `/tool prompt live_edit` (or `/tool prompt edit_live`) opens your configured text editor (using `$VISUAL`, `$EDITOR`, or `tools_config.toml` setting). You can edit tool schemas above the marker and custom system instructions below the marker; changes take effect immediately for the active session.
+3. `/tool loop 50 force` runs up to 50 autonomous turns; `force` skips per-turn confirmation.
+4. Interrupt safely with the session's interrupt key if it goes off track.
 
-**Variations:** `/tool prompt edit_live` to adjust the agentic instructions mid-session.
+**Variations:**
+- `/tool prompt live_edit` — Open live editor to customize injected tool descriptions or agentic behavior on the fly.
+- `/tool prompt` — Verify active overrides with the `[Live Edit Override Active]` banner.
+- To revert overrides and restore `tools_config.toml` defaults, clear the text in the live editor or reset the session.
 
 ---
 
@@ -1619,7 +1624,7 @@ Summarize the consensus algorithms mentioned and who discussed them.
 | 7.2 | Safe vs unsafe | `/run_safe` `/run_unsafe` | new |
 | 7.3 | Data pipeline | `/run` + prompt | new |
 | 8.1 | Enabling tools | `/tool on/enable/auto/max_turns` | new |
-| 8.2 | Autonomous loop | `/tool loop` `/tool prompt` | new |
+| 8.2 | Autonomous loop & live edit | `/tool loop` `/tool prompt [live_edit]` | new |
 | 9.1 | Generate & save image | `/imagine` `/saveimage` | new |
 | 9.2 | Image banks (vision) | `/loadimage` `{imagebankN}` | new |
 | 9.3 | Batch images | `foreach` + `/imagine` | new |
