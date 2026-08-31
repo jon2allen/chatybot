@@ -75,7 +75,19 @@ async def test_adapt_command_result_handled():
 async def test_adapt_command_result_execute_prompt():
     app = ChatybotApp()
     app.initialize()
-    assert app._adapt_command_result(CommandResult.execute_prompt("x")) == "EXECUTE_PROMPT"
+    app.buffer_manager.prompt_buffer = ""
+    res = app._adapt_command_result(CommandResult.execute_prompt("custom prompt"))
+    assert res == "EXECUTE_PROMPT"
+    assert app.buffer_manager.prompt_buffer == "custom prompt"
+
+
+@pytest.mark.anyio
+async def test_adapt_command_result_exit():
+    app = ChatybotApp()
+    app.initialize()
+    with pytest.raises(SystemExit) as excinfo:
+        app._adapt_command_result(CommandResult.exit())
+    assert excinfo.value.code == 0
 
 
 # ---------------------------------------------------------------------------

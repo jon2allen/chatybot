@@ -11,7 +11,7 @@ import os
 import re
 import shlex
 
-from chatybot.commands.registry import command, CommandResult, registry
+from chatybot.commands.registry import command, CommandResult
 from chatybot.commands.context import CommandContext
 from chatybot.extract_code import process_file
 
@@ -689,12 +689,9 @@ async def cmd_setvar(ctx: CommandContext, parts: list, command: str) -> CommandR
 @command("/reloadmacros", help="Reload macros from file", args="[filename]", category="debug")
 async def cmd_reloadmacros(ctx: CommandContext, parts: list, command: str) -> CommandResult:
     app = ctx.app
-    # Preserve legacy behavior: the original code re-split `cmd` (the command
-    # name only, e.g. "/reloadmacros"), so parts[1] never existed and the
-    # default-file path was always taken. We replicate that here.
-    legacy_parts = parts[0].split()
-    if len(legacy_parts) > 1:
-        macro_file = legacy_parts[1]
+    cmd_parts = command.split(maxsplit=1)
+    if len(cmd_parts) > 1 and cmd_parts[1].strip():
+        macro_file = cmd_parts[1].strip().strip("\"'")
         app.load_macros(macro_file)
         print(f"Reloaded macros from '{macro_file}'. {len(app.macros)} macros available.")
     else:
