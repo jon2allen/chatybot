@@ -162,6 +162,7 @@ class ChatybotApp:
         self.mcp_manager = None
         self.tool_mode: bool = False
         self.tool_context: str = ""
+        self.live_tool_context: str = ""
         self.in_tool_loop: bool = False
         self.tool_auto: bool = False
         self.max_turns: int = 25
@@ -1120,8 +1121,9 @@ class ChatybotApp:
                 full_prompt = f"File:\n{self.buffer_manager.file_buffer}\n\n{full_prompt}"
 
             # Inject tool context if tool mode is enabled
-            if self.tool_mode and self.tool_context:
-                full_prompt = self.tool_context + "\n\n" + full_prompt
+            effective_tool_context = self.live_tool_context or self.tool_context
+            if self.tool_mode and effective_tool_context:
+                full_prompt = effective_tool_context + "\n\n" + full_prompt
 
             # Add code-only instruction if flag is set
             if self.code_only_flag:
@@ -1156,12 +1158,13 @@ class ChatybotApp:
         is_reasoning_model = is_nvidia or "qwen" in model_name.lower() or "glm" in model_name.lower()
 
         current_system_message = self.config_manager.system_message
-        if self.tool_mode and self.tool_context:
+        effective_tool_context = self.live_tool_context or self.tool_context
+        if self.tool_mode and effective_tool_context:
             if isinstance(prompt, list):
                 if current_system_message:
-                    current_system_message = self.tool_context + "\n\n" + current_system_message
+                    current_system_message = effective_tool_context + "\n\n" + current_system_message
                 else:
-                    current_system_message = self.tool_context
+                    current_system_message = effective_tool_context
 
             # Append agentic prompt instruction whenever tool_mode is enabled
             instr = self.live_agentic_instructions or self.agentic_instructions or self.default_agentic_instructions

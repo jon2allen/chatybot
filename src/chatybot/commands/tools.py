@@ -434,10 +434,23 @@ async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandRes
                     saved_content = f.read()
 
                 marker = "=== AGENTIC LOOP SYSTEM INSTRUCTIONS ==="
+                context_header = "=== TOOL CONTEXT INJECTED INTO PROMPT ==="
+                new_context = ""
+                new_instr = ""
+
                 if marker in saved_content:
                     parts_split = saved_content.split(marker, 1)
+                    context_block = parts_split[0]
                     instr_block = parts_split[1]
 
+                    # Extract tool context: strip the header line if present
+                    if context_header in context_block:
+                        context_lines = context_block.split(context_header, 1)[1]
+                    else:
+                        context_lines = context_block
+                    new_context = context_lines.strip()
+
+                    # Extract instructions: strip comment lines
                     lines = instr_block.splitlines()
                     filtered_lines = []
                     for line in lines:
@@ -447,6 +460,9 @@ async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandRes
                     new_instr = "\n".join(filtered_lines).strip()
                 else:
                     new_instr = saved_content.strip()
+
+                # Save tool context override (empty means revert to tools_config.toml)
+                app.live_tool_context = new_context
 
                 if not new_instr:
                     app.live_agentic_instructions = ""
@@ -464,9 +480,11 @@ async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandRes
             return CommandResult.ok()
 
         # Show the prompt injected during tool operation
-        context = app.tool_context or app.generate_tool_context()
+        context = app.live_tool_context or app.tool_context or app.generate_tool_context()
         if context:
             print("\n=== TOOL CONTEXT INJECTED INTO PROMPT ===")
+            if app.live_tool_context:
+                print(" [Live Edit Override Active]")
             print(context)
             print("\n=== AGENTIC LOOP SYSTEM INSTRUCTIONS ===")
             active_instr = app.live_agentic_instructions or app.agentic_instructions or app.default_agentic_instructions
