@@ -813,6 +813,23 @@ chat --> Create a blog post outline about ${topic}
 
 ### Change log
 
+August 31st, 2026 (v0.7.9)
+-------------------------
+- **Live Tool Prompt Editing & Restoration**:
+  - Added `/tool prompt live_edit` (or `/tool prompt edit_live`) to open an interactive editor (`notepad`, `vi`, `$VISUAL`, `$EDITOR`) and live-customize tool context and agentic system instructions for the active session.
+  - Added `/tool prompt restore` to instantly restore live system prompt overrides back to `tools_config.toml` defaults.
+  - Added `restore` and `live_edit` keyword translations across all supported languages (EN, ES, FR, ZH, IT, AR) in `translations.json`.
+  - Added `/tool max_turns <int>` command and documentation for configuring default maximum turns in automated tool loops (`/tool auto on`).
+- **Tool Loop Robustness & Type Sanitization**:
+  - Implemented recursive `sanitize_json_types` in `extract_tool_calls` normalizing Python `set`, `frozenset`, and `tuple` instances into JSON-compliant lists.
+  - Replaced raw JSON serializers across `execute_tool_loop` with `safe_json_dumps` to prevent serialization crashes during logging, dispatching, and turn tracking.
+  - Added unit test suite in `test/test_tool_loop_serialization.py`.
+- **Rerank Evaluation Datasets**:
+  - Added 30-dish culinary dataset in `10_foods.txt` and updated sparse context / reranking demonstration workflows.
+- **Documentation & Localization Updates**:
+  - Updated Command Reference, `/help` command metadata, and multi-language documentation guides in `doc/` to **v0.7.9+**.
+  - Synchronized package version to **0.7.9** across `pyproject.toml`, `src/chatybot/__init__.py`, and startup banner.
+
 August 28th, 2026 (v0.7.8)
 -------------------------
 - **`/prompt` Loading & Execution Security**:
