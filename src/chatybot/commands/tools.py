@@ -479,6 +479,16 @@ async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandRes
                     pass
             return CommandResult.ok()
 
+        if sub_arg == "restore":
+            had_override = bool(app.live_tool_context or app.live_agentic_instructions)
+            app.live_tool_context = ""
+            app.live_agentic_instructions = ""
+            if had_override:
+                print("Live prompt overrides restored to tools_config.toml defaults.")
+            else:
+                print("No live prompt overrides active.")
+            return CommandResult.ok()
+
         # Show the prompt injected during tool operation
         context = app.live_tool_context or app.tool_context or app.generate_tool_context()
         if context:
