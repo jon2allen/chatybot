@@ -7963,7 +7963,7 @@ class ChatybotApp:
         print("  /run <command> - Execute a shell command and store output in RUN_COMPLETION (and LAST_COMPLETION).")
         print("  /run_safe - Enable safe mode (block dangerous commands).")
         print("  /run_unsafe - Disable safe mode (allow dangerous commands).")
-        print("  /tool [on|off|list|enable <tool>|disable <tool>|rate_limit <seconds>|prompt [live_edit|restore]|loop|auto] - Manage tool mode and dispatch tool loops/invocations.")
+        print("  /tool [on|off|list|enable <tool>|disable <tool>|max_turns <int>|rate_limit <seconds>|prompt [live_edit|restore]|loop|auto] - Manage tool mode and dispatch tool loops/invocations.")
         print("  /proc <name> [key=\"value\"]... - Execute a named procedure block.")
         print("\nScript-specific features:")
         print("  set <name> = <value> - Define a variable")
