@@ -33,6 +33,7 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
         app._release_session_lock()
         app.chat_history.clear()
         app.session_turns.clear()
+        app.session_activity.clear()
         now = datetime.now()
         model_alias = getattr(app.config_manager, "active_model_alias", None) or "default"
         app.session_model_alias = model_alias

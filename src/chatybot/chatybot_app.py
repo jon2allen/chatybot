@@ -195,6 +195,7 @@ class ChatybotApp:
         self.active_session_name: Optional[str] = None
         self.session_model_alias: Optional[str] = None
         self.session_turns: List[Dict[str, Any]] = []
+        self.session_activity: List[Dict[str, Any]] = []  # Chronological log of action verbs and prompts (reference only)
         self.session_created_at: Optional[str] = None
         self.session_first_prompt_slug: Optional[str] = None
         self.session_notes: Optional[str] = None
@@ -1938,6 +1939,15 @@ class ChatybotApp:
                 self.logging_manager.log_message(f"Datetime: {current_time}")
                 self.logging_manager.log_message(f"Model: {model_alias} ({model_name})")
                 self.logging_manager.log_message(f"User: {prompt}")
+
+            # Record prompt in chronological session activity for reference/codification
+            if not self.in_tool_loop:
+                self.session_activity.append({
+                    "type": "prompt",
+                    "text": prompt,
+                    "model": model_alias,
+                    "timestamp": datetime.now().isoformat()
+                })
 
             if not self.in_tool_loop and self.enable_chat_history:
                 self.chat_history.append((prompt, full_response))
@@ -4231,6 +4241,16 @@ class ChatybotApp:
             self.logging_manager.log_message(f"Escape command: {command}")
         raw_cmd = parts[0]
         cmd = self.i18n.resolve_command(raw_cmd.lower())
+
+        # Record action verbs in chronological session activity for reference/codification
+        # Exclude meta/export inspection commands to avoid polluting activity history
+        if cmd not in ("/chatdsl", "/help", "/exit", "/quit", "/dump", "/mem"):
+            self.session_activity.append({
+                "type": "command",
+                "text": command,
+                "verb": cmd,
+                "timestamp": datetime.now().isoformat()
+            })
 
         # Phased migration: consult the modular command registry first.
         # Migrated commands are handled here; unmigrated commands fall

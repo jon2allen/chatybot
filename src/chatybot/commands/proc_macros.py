@@ -176,3 +176,202 @@ async def cmd_script(ctx: CommandContext, parts: list, command: str) -> CommandR
     print("command /script with ", actual_script_path)
     await app.execute_script(actual_script_path)
     return CommandResult.ok()
+
+
+def _parse_selection_indices(selection_str: str, total_count: int) -> list:
+    """Parse comma/hyphen separated selection string (e.g. '1,3,5-7', 'all', 'last 5')."""
+    selected_indices = set()
+    cleaned = selection_str.strip().lower()
+
+    if cleaned == "all" or cleaned == "*":
+        return list(range(total_count))
+
+    if cleaned.startswith("last"):
+        parts = cleaned.split()
+        if len(parts) >= 2 and parts[1].isdigit():
+            n = int(parts[1])
+            start_idx = max(0, total_count - n)
+            return list(range(start_idx, total_count))
+        return list(range(max(0, total_count - 5), total_count))
+
+    for chunk in cleaned.split(","):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        if "-" in chunk:
+            bounds = chunk.split("-", 1)
+            if bounds[0].strip().isdigit() and bounds[1].strip().isdigit():
+                start = int(bounds[0].strip())
+                end = int(bounds[1].strip())
+                for i in range(min(start, end), max(start, end) + 1):
+                    if 1 <= i <= total_count:
+                        selected_indices.add(i - 1)
+        elif chunk.isdigit():
+            val = int(chunk)
+            if 1 <= val <= total_count:
+                selected_indices.add(val - 1)
+
+    return sorted(list(selected_indices))
+
+
+def _extract_session_items(app) -> list:
+    """Extract list of historical commands and prompts from active session activity, session turns, or chat history."""
+    items = []
+    # 1. If chronological session_activity exists (captures slash commands and prompts), use it
+    if getattr(app, "session_activity", None):
+        for idx, act in enumerate(app.session_activity, 1):
+            text = act.get("text", "").strip()
+            act_type = act.get("type", "prompt")
+            model = act.get("model", getattr(app.config_manager, "active_model_alias", "default"))
+            items.append({
+                "index": idx,
+                "prompt": text,
+                "model": model,
+                "type": act_type
+            })
+    # 2. Fallback to session_turns if session_activity is empty
+    elif getattr(app, "session_turns", None):
+        for idx, turn in enumerate(app.session_turns, 1):
+            p = turn.get("prompt", "").strip()
+            model = turn.get("model_alias", "")
+            items.append({
+                "index": idx,
+                "prompt": p,
+                "model": model,
+                "type": "turn"
+            })
+    # 3. Fallback to chat_history
+    elif getattr(app, "chat_history", None):
+        for idx, (p, _) in enumerate(app.chat_history, 1):
+            items.append({
+                "index": idx,
+                "prompt": p.strip(),
+                "model": getattr(app.config_manager, "active_model_alias", "default"),
+                "type": "history"
+            })
+    return items
+
+
+def _generate_chatdsl_script(selected_items: list, output_filename: str) -> str:
+    """Generate ChatDSL script content from selected items."""
+    lines = [
+        f"# Generated ChatDSL workflow: {output_filename}",
+        f"# Codified from active session ({len(selected_items)} steps)",
+        ""
+    ]
+
+    for item in selected_items:
+        prompt_text = item["prompt"]
+        if not prompt_text:
+            continue
+        # If it's already a slash command, write directly
+        if prompt_text.startswith("/"):
+            lines.append(prompt_text)
+        else:
+            # Check if multiline
+            if "\n" in prompt_text:
+                lines.append("/multiline")
+                lines.append(prompt_text)
+                lines.append(";;")
+                lines.append("/multiline")
+            else:
+                lines.append(prompt_text)
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+@command("/chatdsl", help="Create or manage ChatDSL scripts from session history", args="history [range|last N] [filename.chatdsl]", category="proc_macros")
+async def cmd_chatdsl(ctx: CommandContext, parts: list, command: str) -> CommandResult:
+    app = ctx.app
+    tokens = command.strip().split()
+    if len(tokens) < 2:
+        print("Usage: /chatdsl history [range|last N] [output.chatdsl]")
+        print("Examples:")
+        print("  /chatdsl history                     (interactive picklist from session)")
+        print("  /chatdsl history 1-3 workflow.chatdsl (export steps 1 to 3)")
+        print("  /chatdsl history last 5 quick.chatdsl (export last 5 steps)")
+        return CommandResult.ok()
+
+    subcmd = tokens[1].lower()
+    if subcmd != "history":
+        print(f"Unknown /chatdsl subcommand: '{tokens[1]}'. Did you mean '/chatdsl history'?")
+        print("Usage: /chatdsl history [range|last N] [output.chatdsl]")
+        return CommandResult.ok()
+
+    items = _extract_session_items(app)
+    if not items:
+        print("No exchanges or commands found in the active session history to export.")
+        return CommandResult.ok()
+
+    target_file = None
+    selection_str = None
+
+    # Parse remaining arguments: e.g. /chatdsl history 1-3 script.chatdsl or /chatdsl history last 5 script.chatdsl
+    rem_tokens = tokens[2:]
+    if len(rem_tokens) == 1:
+        if rem_tokens[0].endswith(".chatdsl") or ("." in rem_tokens[0] and not any(c.isdigit() for c in rem_tokens[0])):
+            target_file = rem_tokens[0]
+        else:
+            selection_str = rem_tokens[0]
+    elif len(rem_tokens) == 2:
+        selection_str = rem_tokens[0]
+        target_file = rem_tokens[1]
+    elif len(rem_tokens) >= 3 and rem_tokens[0].lower() == "last":
+        selection_str = f"last {rem_tokens[1]}"
+        target_file = rem_tokens[2]
+
+    # If no selection provided, display interactive picklist
+    if selection_str is None:
+        print("\n" + "=" * 60)
+        print("  Active Session History (Codify to ChatDSL)")
+        print("=" * 60)
+        for itm in items:
+            idx = itm["index"]
+            prompt_preview = itm["prompt"].replace("\n", " ")
+            if len(prompt_preview) > 65:
+                prompt_preview = prompt_preview[:62] + "..."
+            print(f"  [{idx:>2}] {prompt_preview}")
+        print("-" * 60)
+        print("Select items (e.g. '1,3,5-7', 'last 3', 'all', or 'q' to cancel):")
+        try:
+            user_sel = input("Selection> ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\nOperation cancelled.")
+            return CommandResult.ok()
+
+        if not user_sel or user_sel.lower() in ("q", "quit", "cancel"):
+            print("Operation cancelled.")
+            return CommandResult.ok()
+        selection_str = user_sel
+
+    indices = _parse_selection_indices(selection_str, len(items))
+    if not indices:
+        print(f"No valid items matched selection '{selection_str}'.")
+        return CommandResult.ok()
+
+    if not target_file:
+        try:
+            default_name = "session_workflow.chatdsl"
+            user_fname = input(f"Output script filename [{default_name}]: ").strip()
+            target_file = user_fname if user_fname else default_name
+        except (EOFError, KeyboardInterrupt):
+            print("\nOperation cancelled.")
+            return CommandResult.ok()
+
+    if not target_file.endswith(".chatdsl"):
+        target_file += ".chatdsl"
+
+    selected_items = [items[i] for i in indices]
+    script_content = _generate_chatdsl_script(selected_items, target_file)
+
+    try:
+        with open(target_file, "w", encoding="utf-8") as f:
+            f.write(script_content)
+        print(f"Successfully generated ChatDSL script '{target_file}' with {len(selected_items)} steps.")
+        print(f"To run this script: /script {target_file}")
+    except Exception as e:
+        print(f"Error writing ChatDSL script to '{target_file}': {e}")
+
+    return CommandResult.ok()
+
