@@ -1075,12 +1075,16 @@ set api_env = "staging"
 # Generated ChatDSL workflow: release_flow.chatdsl
 # Codified from active session (4 steps)
 
+# Step 1
 /model devstral_1
 
+# Step 2
 /tool auto on
 
+# Step 3
 /run git log -n 5 --oneline
 
+# Step 4
 Summarize the recent 5 git commits above and create release notes for version 1.2.0.
 ```
 

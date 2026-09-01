@@ -260,10 +260,11 @@ def _generate_chatdsl_script(selected_items: list, output_filename: str) -> str:
         ""
     ]
 
-    for item in selected_items:
+    for step_num, item in enumerate(selected_items, 1):
         prompt_text = item["prompt"]
         if not prompt_text:
             continue
+        lines.append(f"# Step {step_num}")
         # If it's already a slash command, write directly
         if prompt_text.startswith("/"):
             lines.append(prompt_text)

@@ -352,11 +352,11 @@ async def test_chatdsl_history_command_export(app, capsys):
         with open(out_file, "r", encoding="utf-8") as f:
             content = f.read()
 
-        assert "/tool auto on" in content
-        assert '/setvar project "core"' in content
-        assert '/echo "Testing export"' in content
-        assert "What is the capital of France?" in content
-        assert "/multiline\nLine 1\nLine 2\nLine 3\n;;\n/multiline" in content
+        assert "# Step 1\n/tool auto on" in content
+        assert '# Step 2\n/setvar project "core"' in content
+        assert '# Step 3\n/echo "Testing export"' in content
+        assert "# Step 4\nWhat is the capital of France?" in content
+        assert "# Step 5\n/multiline\nLine 1\nLine 2\nLine 3\n;;\n/multiline" in content
 
         # Verify chatdsl_parse successfully parses the generated file
         toks = Tokenizer().tokenize(content)
