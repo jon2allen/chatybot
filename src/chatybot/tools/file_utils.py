@@ -7,9 +7,29 @@ import math
 import json
 
 def normalize_path(path: str) -> str:
-    """Normalize path to handle double-escaped backslashes common in JSON serialization on Windows."""
-    if path and isinstance(path, str):
-        path = path.replace('\\\\', '\\')
+    """
+    Normalize path to handle double-escaped backslashes and literal unicode escapes.
+
+    Architecture & Encoding Note (ensure_ascii / UTF-8):
+    1. Modern LLMs emit raw UTF-8 characters when tool output is formatted with ensure_ascii=False.
+    2. However, some models or legacy clients may emit literal \\uXXXX strings in JSON payloads.
+    3. Normalizing both raw backslashes and unicode escape sequences ensures path resolution
+       remains robust across all locales without breaking Windows path structures.
+    """
+    if not path or not isinstance(path, str):
+        return path
+
+    # Handle standard Windows double-backslash escaping
+    path = path.replace('\\\\', '\\')
+
+    # If the path contains literal unicode escape sequences (e.g. \u8273 or \\u8273), decode them safely
+    if '\\u' in path or r'\u' in path:
+        try:
+            # Decode unicode-escaped representations while preserving standard path slashes
+            path = path.encode('utf-8').decode('unicode-escape')
+        except Exception:
+            pass
+
     return path
 
 def list_directory(path: str = ".", details: bool = False) -> List[Any]:
