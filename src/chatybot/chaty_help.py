@@ -480,7 +480,26 @@ class HelpSystem:
             usage="/script <file> [x=value y=value ...]",
             long_desc="Execute a script file containing multiple commands. Optionally pass parameters that can be referenced in the script.",
             examples=["/script workflow.chatdsl", "/script generate.chatdsl x=5 y=10"],
-            see_also=["set", "if", "wait"]
+            see_also=["set", "if", "wait", "/chatdsl"]
+        ))
+
+        # ChatDSL workflow generation
+        self.register_command(CommandHelp(
+            name="/chatdsl",
+            category="script",
+            short_desc="Create and codify ChatDSL scripts from session history",
+            usage="/chatdsl history [range|last N] [output.chatdsl]",
+            long_desc="Codify active session turns or command history into a reusable ChatDSL script file.\n\n"
+                      "Modes:\n"
+                      "  /chatdsl history                     - Open interactive picklist to select session turns\n"
+                      "  /chatdsl history 1-5 workflow.chatdsl - Export turns 1 to 5 to workflow.chatdsl\n"
+                      "  /chatdsl history last 3 quick.chatdsl - Export last 3 turns to quick.chatdsl",
+            examples=[
+                "/chatdsl history",
+                "/chatdsl history 1-3 my_flow.chatdsl",
+                "/chatdsl history last 5 test.chatdsl"
+            ],
+            see_also=["/script", "/profile"]
         ))
 
         # Source command

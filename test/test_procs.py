@@ -317,3 +317,51 @@ endproc
     finally:
         os.unlink(temp_path)
 
+
+@pytest.mark.anyio
+async def test_chatdsl_history_command_export(app, capsys):
+    """Verify /chatdsl history exports action verbs and prompts into a valid chatdsl script."""
+    from chatybot.chatdsl_parse import Tokenizer, TParser
+
+    # Execute slash commands (action verbs) and simulate prompt activity
+    await app.handle_escape_command("/tool auto on")
+    await app.handle_escape_command('/setvar project "core"')
+    await app.handle_escape_command('/echo "Testing export"')
+
+    # Record a prompt in session_activity
+    app.session_activity.append({
+        "type": "prompt",
+        "text": "What is the capital of France?",
+        "model": "devstral_1",
+        "timestamp": "2026-08-31T23:30:00"
+    })
+    app.session_activity.append({
+        "type": "prompt",
+        "text": "Line 1\nLine 2\nLine 3",
+        "model": "devstral_1",
+        "timestamp": "2026-08-31T23:30:01"
+    })
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        out_file = os.path.join(tmpdir, "exported_flow.chatdsl")
+        cmd = f"/chatdsl history 1-5 {out_file}"
+        res = await app.handle_escape_command(cmd)
+        assert res is True
+        assert os.path.exists(out_file)
+
+        with open(out_file, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        assert "/tool auto on" in content
+        assert '/setvar project "core"' in content
+        assert '/echo "Testing export"' in content
+        assert "What is the capital of France?" in content
+        assert "/multiline\nLine 1\nLine 2\nLine 3\n;;\n/multiline" in content
+
+        # Verify chatdsl_parse successfully parses the generated file
+        toks = Tokenizer().tokenize(content)
+        parser = TParser(toks)
+        ast = parser.parse()
+        assert len(ast) >= 5
+
+
