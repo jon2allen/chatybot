@@ -69,8 +69,22 @@ class DecimalJSONEncoder(json.JSONEncoder):
 
 
 def write_json_response(data: Dict[str, Any], status_code: int = 0):
-    """Prints a consistent JSON string to stdout and terminates."""
-    print(json.dumps(data, indent=2, cls=DecimalJSONEncoder))
+    r"""
+    Prints a consistent JSON string to stdout and terminates.
+
+    Architecture & Encoding Note on `ensure_ascii=False`:
+    - Why ensure_ascii=False is used:
+      When tool outputs (e.g. file listings, file contents, DB rows) contain multilingual text
+      (Chinese, Arabic, emoji, etc.), Python's default `ensure_ascii=True` serializes them as
+      `\uXXXX` escape sequences. This drastically inflates token count (~6x tokens per char) and
+      often causes LLMs to emit malformed double-escaped `\\uXXXX` strings when referencing filenames.
+    - Risk Mitigation:
+      1. Terminal output: Modern Python on stdout handles UTF-8 natively.
+      2. LLM Context: LLMs receive raw UTF-8 glyphs seamlessly.
+      3. Process boundaries: Subprocess environment variables (os.environ) should keep standard ASCII
+         to avoid Windows CP1252/ANSI environment block issues.
+    """
+    print(json.dumps(data, indent=2, cls=DecimalJSONEncoder, ensure_ascii=False))
     sys.exit(status_code)
 
 
