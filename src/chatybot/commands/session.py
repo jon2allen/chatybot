@@ -121,10 +121,11 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
         print(f"Session notes updated ({len(note_text)} chars).")
         return CommandResult.ok()
 
-    elif subcmd == "save":
+    elif subcmd in ("save", "name"):
         if len(parts) >= 3:
             custom_name = " ".join(parts[2:]).strip(" \"'")
             app.active_session_name = custom_name
+            app.buffer_manager.set_script_var('SESSION_NAME', custom_name, allow_protected=True)
         app._ensure_active_session()
         app.save_active_session()
         print(f"Session '{app.active_session_name or app.active_session_id}' saved to disk.")
