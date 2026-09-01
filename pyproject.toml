@@ -27,8 +27,8 @@ dependencies = [
 
 [project.urls]
 "Homepage" = "https://github.com/jon2allen/chatybot"
-"Documentation" = "https://github.com/jon2allen/chatybot/tree/main/doc"
-"Cookbook" = "https://github.com/jon2allen/chatybot/blob/main/doc/chatdsl_cookbook.md"
+"Documentation" = "https://github.com/jon2allen/chatybot/tree/master/doc"
+"Cookbook" = "https://github.com/jon2allen/chatybot/blob/master/doc/chatdsl_cookbook.md"
 "Repository" = "https://github.com/jon2allen/chatybot"
 "Bug Tracker" = "https://github.com/jon2allen/chatybot/issues"
 
