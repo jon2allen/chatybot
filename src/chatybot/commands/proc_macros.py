@@ -277,7 +277,6 @@ def _generate_chatdsl_script(selected_items: list, output_filename: str) -> str:
                 lines.append("/multiline")
             else:
                 lines.append(prompt_text)
-        lines.append("")
 
     return "\n".join(lines)
 
