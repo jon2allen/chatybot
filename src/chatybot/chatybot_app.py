@@ -906,6 +906,19 @@ class ChatybotApp:
         self._get_session_store().append_turn(self.active_session_id, turn_data)
         self.buffer_manager.set_script_var('SESSION_NAME', self.active_session_name or self.active_session_id, allow_protected=True)
 
+    def append_session_command(self, command: str, verb: str):
+        """Append a lightweight command action verb entry to active session and save to disk if active."""
+        if self.session_mode == "off" or not self.active_session_id:
+            return
+
+        cmd_data = {
+            "type": "command",
+            "text": command,
+            "verb": verb,
+            "timestamp": datetime.now().isoformat()
+        }
+        self._get_session_store().append_turn(self.active_session_id, cmd_data)
+
     def get_history_path(self) -> str:
         """
         Get the path to the chat history file.
@@ -4243,14 +4256,15 @@ class ChatybotApp:
         cmd = self.i18n.resolve_command(raw_cmd.lower())
 
         # Record action verbs in chronological session activity for reference/codification
-        # Exclude meta/export inspection commands to avoid polluting activity history
-        if cmd not in ("/chatdsl", "/help", "/exit", "/quit", "/dump", "/mem"):
+        # Exclude meta/export/session lifecycle commands to avoid polluting activity history
+        if cmd not in ("/chatdsl", "/help", "/exit", "/quit", "/dump", "/mem", "/session"):
             self.session_activity.append({
                 "type": "command",
                 "text": command,
                 "verb": cmd,
                 "timestamp": datetime.now().isoformat()
             })
+            self.append_session_command(command, cmd)
 
         # Phased migration: consult the modular command registry first.
         # Migrated commands are handled here; unmigrated commands fall
@@ -4263,7 +4277,7 @@ class ChatybotApp:
                 buffer_manager=self.buffer_manager,
                 config_manager=self.config_manager,
                 i18n=self.i18n,
-                session_store=getattr(self, "session_store", None),
+                session_store=self._get_session_store(),
                 app=self,
             )
             result = await spec.handler(ctx, parts, command)

@@ -6,10 +6,13 @@ import asyncio
 from chatybot.chatybot_app import ChatybotApp
 
 @pytest.fixture
-def app():
+def app(monkeypatch):
+    tmp_dir = tempfile.mkdtemp()
+    monkeypatch.setenv("CHATYBOT_TEST_SESSIONS_DIR", tmp_dir)
     app_instance = ChatybotApp()
-    app_instance.session_dir = tempfile.mkdtemp()
     app_instance.initialize()
+    app_instance.session_dir = tmp_dir
+    app_instance.session_store = None
     return app_instance
 
 @pytest.mark.anyio
@@ -221,3 +224,57 @@ async def test_session_note(app, capsys):
     await app.handle_escape_command("/session list")
     captured_list = capsys.readouterr()
     assert "Notes: \"Benchmark test run for version 2.0\"" in captured_list.out
+
+
+@pytest.mark.anyio
+async def test_session_command_persistence_and_reload(app):
+    """Verify lightweight command events are saved in turns.jsonl and restored on /session use."""
+    await app.handle_escape_command("/session start persist_commands_test")
+    await app.handle_escape_command("/tool auto on")
+    await app.handle_escape_command('/setvar target "linux"')
+    app.append_session_turn("How do I list files?", "Use ls command.")
+
+    session_id = app.active_session_id
+
+    # Check turns.jsonl on disk contains both command events and LLM turns
+    session_dir = os.path.join(app.get_sessions_dir(), session_id)
+    turns_file = os.path.join(session_dir, "turns.jsonl")
+    assert os.path.exists(turns_file)
+
+    with open(turns_file, "r", encoding="utf-8") as f:
+        stored_items = [json.loads(line) for line in f if line.strip()]
+
+    # We expect: /tool auto on (cmd), /setvar target "linux" (cmd), and "How do I list files?" (prompt)
+    assert len(stored_items) == 3
+    assert stored_items[0]["type"] == "command"
+    assert stored_items[0]["text"] == "/tool auto on"
+    assert stored_items[1]["type"] == "command"
+    assert stored_items[1]["text"] == '/setvar target "linux"'
+    assert stored_items[2]["prompt"] == "How do I list files?"
+
+    # Reset in-memory session state
+    app.chat_history.clear()
+    app.session_turns.clear()
+    app.session_activity.clear()
+    app.active_session_id = None
+
+    # Load session back with /session use
+    await app.handle_escape_command(f"/session use {session_id}")
+    assert app.active_session_id == session_id
+    assert len(app.session_turns) == 1  # only 1 LLM turn
+    assert len(app.chat_history) == 1   # only 1 LLM turn in chat_history
+    assert len(app.session_activity) == 3  # all 3 actions in chronological activity
+
+    # Now verify /chatdsl history exports the reloaded session with command verbs intact
+    with tempfile.TemporaryDirectory() as tmpdir:
+        out_script = os.path.join(tmpdir, "restored_flow.chatdsl")
+        await app.handle_escape_command(f"/chatdsl history 1-3 {out_script}")
+        assert os.path.exists(out_script)
+
+        with open(out_script, "r", encoding="utf-8") as f:
+            script_text = f.read()
+
+        assert "# Step 1\n/tool auto on" in script_text
+        assert '# Step 2\n/setvar target "linux"' in script_text
+        assert "# Step 3\nHow do I list files?" in script_text
+

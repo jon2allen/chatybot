@@ -44,7 +44,14 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
         app.session_notes = None
         app.session_mode = "on" if app.session_mode == "off" else app.session_mode
         app._acquire_session_lock(app.active_session_id)
-        app.save_active_session()
+        store = app._get_session_store()
+        store.create_session(
+            session_id=app.active_session_id,
+            model_alias=model_alias,
+            custom_name=session_name,
+            initial_prompt="",
+            notes=None
+        )
         app.buffer_manager.set_script_var('SESSION_NAME', session_name, allow_protected=True)
         print(f"Started new session '{session_name}' (ID: {app.active_session_id})")
         return CommandResult.ok()
@@ -201,8 +208,27 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
         app.session_model_alias = sdata.get("model_alias")
         app.session_created_at = sdata.get("created_at")
         app.session_first_prompt_slug = sdata.get("first_prompt_slug")
-        app.session_notes = sdata.get("notes")
-        app.session_turns = turns
+        # Separate LLM turns from command action verb events
+        llm_turns = [t for t in turns if t.get("type") != "command" and "prompt" in t]
+        app.session_turns = llm_turns
+        app.session_activity = []
+
+        # Populate chronological session_activity from turns file
+        for item in turns:
+            if item.get("type") == "command":
+                app.session_activity.append({
+                    "type": "command",
+                    "text": item.get("text", ""),
+                    "verb": item.get("verb", ""),
+                    "timestamp": item.get("timestamp")
+                })
+            elif "prompt" in item:
+                app.session_activity.append({
+                    "type": "prompt",
+                    "text": item.get("prompt", ""),
+                    "model": item.get("model_alias", app.session_model_alias or "default"),
+                    "timestamp": item.get("timestamp")
+                })
 
         app.chat_history.clear()
         if app.enable_chat_history:
@@ -212,7 +238,7 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
         app.session_mode = "on" if app.session_mode == "off" else app.session_mode
         app._acquire_session_lock(app.active_session_id)
         app.buffer_manager.set_script_var('SESSION_NAME', app.active_session_name or app.active_session_id, allow_protected=True)
-        print(f"Loaded session '{app.active_session_name or app.active_session_id}' ({len(app.session_turns)} exchanges).")
+        print(f"Loaded session '{app.active_session_name or app.active_session_id}' ({len(app.session_turns)} exchanges, {len(app.session_activity)} total actions).")
         return CommandResult.ok()
 
     elif subcmd == "show":
