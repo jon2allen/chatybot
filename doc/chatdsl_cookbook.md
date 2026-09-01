@@ -1065,6 +1065,32 @@ set api_env = "staging"
 3. If a companion `macro.chatdsl` is present in the same directory, Chatybot automatically discovers, compiles, and registers its macros.
 4. Preprocessing: localized commands (e.g. `/origen`, `/sorgente`, `/加载脚本`, `/مصدر`) are translated on the fly.
 
+### 10.4 Codifying Live Sessions into Scripts with `/chatdsl history`
+- **Goal:** Convert an active interactive exploration session or series of model prompts into an executable, repeatable `.chatdsl` workflow script.
+- **Commands:** `/chatdsl history [range|last N] [filename.chatdsl]`, `/script`.
+- **Script:** `cookbook/10_4_export_session.chatdsl`
+- **Run:** `/chatdsl history` or `/chatdsl history 1-4 release_flow.chatdsl`
+
+```dsl
+# Generated ChatDSL workflow: release_flow.chatdsl
+# Codified from active session (4 steps)
+
+# Step 1
+/model devstral_1
+# Step 2
+/tool auto on
+# Step 3
+/run git log -n 5 --oneline
+# Step 4
+Summarize the recent 5 git commits above and create release notes for version 1.2.0.
+```
+
+**Walkthrough**
+1. **Interactive Picklist:** Running `/chatdsl history` without parameters displays a numbered menu of all turns and slash commands run in the active session.
+2. **Selective Export:** Enter selections such as `1-3,5`, `last 3`, or `all` to extract exactly the winning prompts and settings from your exploratory chat.
+3. **Multiline Formatting:** Multiline user prompts are automatically wrapped inside `/multiline` ... `;;` ... `/multiline` blocks.
+4. **Execution:** The generated script can be executed immediately or shared with team members using `/script release_flow.chatdsl`.
+
 ---
 
 ## Chapter 11 — Macros & Reusable Prompts
@@ -1631,6 +1657,7 @@ Summarize the consensus algorithms mentioned and who discussed them.
 | 10.1 | Authoring a profile | `@name` metadata | sys_default.chatdsl |
 | 10.2 | Built-in profiles | `/profile use` | general/coding/explorer |
 | 10.3 | Dynamic sourcing with /source | `/source` state retention | new |
+| 10.4 | Codifying session history | `/chatdsl history` | new |
 | 11.1 | Defining & invoking macros | `def` `%name()` | macro.chatdsl |
 | 11.2 | Bundled macro library | (narrative) | macro.chatdsl, menu.chatdsl |
 | 11.3 | Custom macro file | `/reloadmacros` | new |

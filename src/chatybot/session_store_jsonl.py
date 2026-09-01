@@ -217,7 +217,8 @@ class JsonlSessionStore(BaseSessionStore):
             now = datetime.now().isoformat()
             meta["session_id"] = session_id
             meta["updated_at"] = now
-            meta["turn_count"] = meta.get("turn_count", 0) + 1
+            if turn_data.get("type") != "command" and "prompt" in turn_data:
+                meta["turn_count"] = meta.get("turn_count", 0) + 1
             if not meta.get("first_prompt_slug") or meta.get("first_prompt_slug") == "untitled_session":
                 prompt = turn_data.get("prompt", "")
                 if prompt:

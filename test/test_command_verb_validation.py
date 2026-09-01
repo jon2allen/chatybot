@@ -380,3 +380,19 @@ class TestCommandVerbValidation:
         res2 = await app.handle_escape_command(f"/prompt '{prompt_file}'")
         assert res2 == "EXECUTE_PROMPT"
         assert app.buffer_manager.prompt_buffer == "Quoted prompt content"
+
+    @pytest.mark.anyio
+    async def test_prompt_command_buffer_restored_on_completion_error(self, app, tmp_path):
+        """Test prompt_buffer is restored if chat_completion raises an exception."""
+        prompt_file = tmp_path / "test_prompt.txt"
+        prompt_file.write_text("Retryable prompt text", encoding="utf-8")
+
+        app.script_context = True
+        app.buffer_manager.replace_placeholders_legacy.side_effect = lambda p, **kw: p
+        app.chat_completion = MagicMock(side_effect=RuntimeError("API Connection Failed"))
+
+        with pytest.raises(RuntimeError, match="API Connection Failed"):
+            await app.execute_line(f"/prompt {prompt_file}")
+
+        # Buffer must be restored so user does not lose prompt
+        assert app.buffer_manager.prompt_buffer == "Retryable prompt text"
