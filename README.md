@@ -2,8 +2,8 @@
 # chatybot - Interactive AI Chatbot Interface
 
 [![PyPI Version](https://img.shields.io/pypi/v/chatybot.svg)](https://pypi.org/project/chatybot/)
-[![Documentation](https://img.shields.io/badge/docs-GitHub%20Doc%20Tree-blue.svg)](https://github.com/jon2allen/chatybot/tree/main/doc)
-[![ChatDSL Cookbook](https://img.shields.io/badge/ChatDSL-Cookbook-orange.svg)](https://github.com/jon2allen/chatybot/blob/main/doc/chatdsl_cookbook.md)
+[![Documentation](https://img.shields.io/badge/docs-GitHub%20Doc%20Tree-blue.svg)](https://github.com/jon2allen/chatybot/tree/master/doc)
+[![ChatDSL Cookbook](https://img.shields.io/badge/ChatDSL-Cookbook-orange.svg)](https://github.com/jon2allen/chatybot/blob/master/doc/chatdsl_cookbook.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
 **chatybot** is a powerful command-line interface for interacting with language models, featuring a custom domain-specific language (DSL) for advanced prompt engineering, scripting, and automation.
