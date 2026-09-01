@@ -555,6 +555,20 @@ The following tools are packaged by default and can be enabled/disabled dynamica
 | `replace_file_content` | Replaces a specific block of text in a file with new content. | `path` (required), `target` (required), `replacement` (required) |
 | `run_command` | Executes shell commands on the host machine using safe subprocess tokenization. | `command` (required) |
 
+#### **Supported Tool Calling Formats**
+Chatybot's extraction engine automatically recognizes, parses, and normalizes all major LLM tool-calling output syntaxes without requiring provider-specific adapter layers:
+
+| Format Style | Example Syntax | Supported Models |
+| :--- | :--- | :--- |
+| **1. Single-Key Tool Dictionary** | `{"list_directory": {"path": "src/project", "details": true}}` | Devstral, Mistral, Command-R |
+| **2. Standard Tool Object** | `{"tool": "list_directory", "arguments": {"path": "src/project"}}` | Cohere, OpenAI, Anthropic, Custom |
+| **3. Named Function Object** | `{"name": "list_directory", "arguments": {"path": "src/project"}}` | OpenAI Function Calling, Qwen |
+| **4. Function Call Object** | `{"function": "list_directory", "arguments": {"path": "src/project"}}` | Llama-3-Groq-ToolUse, Hermes |
+| **5. Header-Prefixed Tool Call** | `<\|tool_call\|>call:list_directory{"path": "src/project"}<\|tool_call\|>` | Gemma 4, FunctionGemma, Granite |
+| **6. XML / Function Tag Syntax** | `<tool_call><function name="list_directory"><parameter name="path">src/project</parameter></function></tool_call>` | Anthropic XML, DeepSeek, Command-R+ |
+| **7. Python-style / Single-Quoted Dicts** | `{'tool': 'list_directory', 'arguments': {'path': 'src/project'}}` | Python literal output (auto-repaired via AST / JSON repair) |
+| **8. Unquoted Key JSON** | `{tool: list_directory, arguments: {path: "src/project"}}` | Auto-repaired and normalized |
+
 #### **3. Tool Configuration (`tools_config.toml`)**
 All agentic tools and execution configurations are managed in `src/chatybot/tools_config.toml` (which is copied to `~/.config/chatybot/tools_config.toml` upon initialization).
 
