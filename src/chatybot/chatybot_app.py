@@ -3234,7 +3234,7 @@ class ChatybotApp:
                     scope = args.get("scope", "all")
                     target_var = args.get("target_variable")
                     res = get_context_metrics(scope=scope, target_variable=target_var, app=self)
-                    result_str = json.dumps({"status": "success", "tool": tool_name, "result": res}, indent=2)
+                    result_str = json.dumps({"status": "success", "tool": tool_name, "result": res}, indent=2, ensure_ascii=False)
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', result_str)
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', '')
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '0')
@@ -3820,16 +3820,16 @@ class ChatybotApp:
                 tool_name = tc.get("tool")
                 tool_args = tc.get("arguments", {})
                 print(f"[Turn {turn_count+1}/{max_turns}] LLM requested tool: {tool_name}")
-                print(f"   Arguments: {safe_json_dumps(tool_args)}")
+                print(f"   Arguments: {safe_json_dumps(tool_args, ensure_ascii=False)}")
                 
                 # Execute the tool and capture result
                 self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
                 self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '0')
                 try:
                     # dispatch_tool writes result to TOOL_DISPATCH_RESULT and returns the stdout string
-                    result_str = await self.dispatch_tool(safe_json_dumps(tc))
+                    result_str = await self.dispatch_tool(safe_json_dumps(tc, ensure_ascii=False))
                 except Exception as e:
-                    result_str = safe_json_dumps({"status": "error", "message": f"Dispatch execution error: {str(e)}"})
+                    result_str = safe_json_dumps({"status": "error", "message": f"Dispatch execution error: {str(e)}"}, ensure_ascii=False)
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', result_str)
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
 
@@ -3837,7 +3837,7 @@ class ChatybotApp:
                     result_str = self._format_capability_error(tool_name, result_str)
                     
                 print(f"Tool Result: {result_str}")
-                results.append(f"Tool: {tool_name}\nArguments: {safe_json_dumps(tool_args)}\nResult: {result_str}")
+                results.append(f"Tool: {tool_name}\nArguments: {safe_json_dumps(tool_args, ensure_ascii=False)}\nResult: {result_str}")
 
                 # Monitor tool output size and issue warnings in the loop
                 result_bytes = len(result_str.encode('utf-8'))
