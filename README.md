@@ -817,8 +817,10 @@ chat --> Create a blog post outline about ${topic}
 
 ### Change log
 
-September 1st, 2026 (v0.8.0)
+September 1st, 2026 (v0.8.1)
 ---------------------------
+- **PyPI Project URLs & Documentation Links**:
+  - Pointed PyPI project metadata and README badges directly to the active `master` branch URLs, resolving 404 links.
 - **Modular Command Registry Architecture**:
   - Decoupled monolithic command dispatcher in `chatybot_app.py` into dedicated domain modules under `src/chatybot/commands/` (`registry.py`, `context.py`, `tools.py`, `session.py`, `models.py`, `buffer.py`, `db.py`, `image.py`, `proc_macros.py`, `rerank.py`, `debug_misc.py`, `debug.py`).
   - Added structured command execution lifecycle (`CommandResult`, `CommandContext`) with domain routing, aliases, and isolated error handling.
@@ -829,8 +831,6 @@ September 1st, 2026 (v0.8.0)
   - Added `/session name <alias>` subcommand and automatic startup command preservation during session creation.
 - **Tool Handling & Unicode Output Normalization**:
   - Configured `ensure_ascii=False` for all tool execution payloads, file utilities, and model communication to cleanly render native Unicode characters and file paths.
-- **Project Packaging & Badges**:
-  - Added PyPI project URLs (Homepage, Documentation, Repository, Changelog, Issues) and documentation badges.
 
 August 31st, 2026 (v0.7.9)
 -------------------------
