@@ -3706,6 +3706,13 @@ class ChatybotApp:
                         tool_name = tool_name.split(".")[-1]
                     args = data.get("arguments") if "arguments" in data else data.get("args") if "args" in data else {k: v for k, v in data.items() if k != "function"}
                     return {"tool": tool_name, "arguments": args}
+                elif len(data) == 1:
+                    k, v = next(iter(data.items()))
+                    if isinstance(v, dict) and str(k) not in ("tool", "name", "function", "arguments", "parameters", "properties", "options", "type", "error", "status", "result"):
+                        tool_name = str(k)
+                        if "." in tool_name:
+                            tool_name = tool_name.split(".")[-1]
+                        return {"tool": tool_name, "arguments": v}
             return None
 
         # Parse to find all tool calls in the text
