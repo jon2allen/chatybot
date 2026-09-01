@@ -817,6 +817,21 @@ chat --> Create a blog post outline about ${topic}
 
 ### Change log
 
+September 1st, 2026 (v0.8.0)
+---------------------------
+- **Modular Command Registry Architecture**:
+  - Decoupled monolithic command dispatcher in `chatybot_app.py` into dedicated domain modules under `src/chatybot/commands/` (`registry.py`, `context.py`, `tools.py`, `session.py`, `models.py`, `buffer.py`, `db.py`, `image.py`, `proc_macros.py`, `rerank.py`, `debug_misc.py`, `debug.py`).
+  - Added structured command execution lifecycle (`CommandResult`, `CommandContext`) with domain routing, aliases, and isolated error handling.
+  - Added comprehensive migration test suites (`test_command_registry.py`, `test_command_migration_phase2.py`, `test_command_migration_phase3.py`).
+- **Session & Workflow Enhancements**:
+  - Added `/chatdsl history` command to export, format, and codify active interactive session history directly into runnable ChatDSL automation scripts.
+  - Persisted lightweight command execution verbs directly in `turns.jsonl` for full session replay fidelity and clean multi-turn provenance.
+  - Added `/session name <alias>` subcommand and automatic startup command preservation during session creation.
+- **Tool Handling & Unicode Output Normalization**:
+  - Configured `ensure_ascii=False` for all tool execution payloads, file utilities, and model communication to cleanly render native Unicode characters and file paths.
+- **Project Packaging & Badges**:
+  - Added PyPI project URLs (Homepage, Documentation, Repository, Changelog, Issues) and documentation badges.
+
 August 31st, 2026 (v0.7.9)
 -------------------------
 - **Live Tool Prompt Editing & Restoration**:

@@ -4743,7 +4743,7 @@ class ChatybotApp:
         print("===========================")
         print("Chatybot.py                ")
         print("Created by Jon Allen - 2026")
-        print("Version: 0.7.9             ")
+        print("Version: 0.8.0             ")
         lang_display = self.i18n.get_ui_string("native_lang_display", "Language: English")
         print(f"{lang_display:<27}")
         print("===========================")
