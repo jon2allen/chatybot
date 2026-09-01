@@ -845,6 +845,17 @@ class ChatybotApp:
                 initial_prompt=initial_prompt,
                 notes=self.session_notes,
             )
+            # Flush any commands executed prior to session creation
+            if self.session_activity:
+                for act in self.session_activity:
+                    if act.get("type") == "command":
+                        cmd_data = {
+                            "type": "command",
+                            "text": act.get("text"),
+                            "verb": act.get("verb"),
+                            "timestamp": act.get("timestamp")
+                        }
+                        self._get_session_store().append_turn(self.active_session_id, cmd_data)
 
     def _acquire_session_lock(self, session_id: str) -> bool:
         """Acquire an advisory lock file for the session. Returns True if acquired or already held."""
@@ -880,7 +891,32 @@ class ChatybotApp:
         }
         store = self._get_session_store()
         store.save_meta(self.active_session_id, meta)
-        store.replace_turns(self.active_session_id, self.session_turns)
+        if self.session_activity:
+            # Reconstruct turns list preserving command events and exchange turns
+            combined_items = []
+            turn_map = {t.get("prompt"): t for t in self.session_turns if "prompt" in t}
+            for act in self.session_activity:
+                if act.get("type") == "command":
+                    combined_items.append({
+                        "type": "command",
+                        "text": act.get("text"),
+                        "verb": act.get("verb"),
+                        "timestamp": act.get("timestamp")
+                    })
+                elif act.get("type") == "prompt":
+                    p_text = act.get("text")
+                    if p_text in turn_map:
+                        combined_items.append(turn_map[p_text])
+                    else:
+                        combined_items.append({
+                            "turn_id": len(combined_items) + 1,
+                            "prompt": p_text,
+                            "response": "",
+                            "model_alias": act.get("model", model_alias)
+                        })
+            store.replace_turns(self.active_session_id, combined_items)
+        else:
+            store.replace_turns(self.active_session_id, self.session_turns)
 
     def append_session_turn(self, prompt: str, response: str, agentic_loop_data: Optional[List[Dict[str, Any]]] = None):
         """Append a completed exchange turn to active session and save to disk."""
@@ -888,6 +924,15 @@ class ChatybotApp:
             return
 
         self._ensure_active_session(prompt)
+
+        # Ensure prompt is in session_activity if not already recorded
+        if not self.session_activity or self.session_activity[-1].get("text") != prompt:
+            self.session_activity.append({
+                "type": "prompt",
+                "text": prompt,
+                "model": getattr(self.config_manager, "active_model_alias", None) or "default",
+                "timestamp": datetime.now().isoformat()
+            })
         
         thinking_text, clean_resp = self._extract_thinking_tokens(response)
         
