@@ -180,7 +180,7 @@ class TParser:
         # Semantic reranking commands
         "documents", "rerank",
         # Shell execution commands
-        "run", "run_safe", "run_unsafe", "tool", "profile",
+        "run", "run_safe", "run_unsafe", "tool", "profile", "chatdsl",
         # Procedures & Local Scoping
         "proc", "defproc", "endproc", "local",
         # Multiline Foreach Loop

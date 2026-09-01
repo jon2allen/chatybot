@@ -25,6 +25,13 @@ dependencies = [
     "windows-curses; sys_platform == 'win32'"
 ]
 
+[project.urls]
+"Homepage" = "https://github.com/jon2allen/chatybot"
+"Documentation" = "https://github.com/jon2allen/chatybot/tree/main/doc"
+"Cookbook" = "https://github.com/jon2allen/chatybot/blob/main/doc/chatdsl_cookbook.md"
+"Repository" = "https://github.com/jon2allen/chatybot"
+"Bug Tracker" = "https://github.com/jon2allen/chatybot/issues"
+
 [project.scripts]
 chatybot = "chatybot.main:run"
 chatdsl_parse = "chatybot.chatdsl_parse:main"

@@ -23,7 +23,8 @@
       "/auto_truncate": "/auto_truncate",
       "/env": "/env",
       "/max_tokens": "/maxtokens",
-      "/effort": "/effort"
+      "/effort": "/effort",
+      "/chatdsl": "/chatdsl"
     },
     "keywords": {
       "set": "set",
@@ -191,7 +192,8 @@
       "/context_limit": "/context_limit",
       "/auto_truncar": "/auto_truncate",
       "/autotruncar": "/auto_truncate",
-      "/auto_truncate": "/auto_truncate"
+      "/auto_truncate": "/auto_truncate",
+      "/chatdsl": "/chatdsl"
     },
     "keywords": {
       "informacion": "info",
@@ -632,7 +634,8 @@
       "/context_limit": "/context_limit",
       "/auto_tronquer": "/auto_truncate",
       "/autotronquer": "/auto_truncate",
-      "/auto_truncate": "/auto_truncate"
+      "/auto_truncate": "/auto_truncate",
+      "/chatdsl": "/chatdsl"
     },
     "keywords": {
       "informations": "info",
@@ -1073,7 +1076,8 @@
       "/上下文限制": "/context_limit",
       "/context_limit": "/context_limit",
       "/自动截断": "/auto_truncate",
-      "/auto_truncate": "/auto_truncate"
+      "/auto_truncate": "/auto_truncate",
+      "/chatdsl": "/chatdsl"
     },
     "keywords": {
       "信息": "info",
@@ -1503,7 +1507,8 @@
       "/context_limit": "/context_limit",
       "/auto_tronca": "/auto_truncate",
       "/autotronca": "/auto_truncate",
-      "/auto_truncate": "/auto_truncate"
+      "/auto_truncate": "/auto_truncate",
+      "/chatdsl": "/chatdsl"
     },
     "keywords": {
       "informazioni": "info",
@@ -1935,7 +1940,8 @@
       "/حد_السياق": "/context_limit",
       "/context_limit": "/context_limit",
       "/اقتطاع_تلقائي": "/auto_truncate",
-      "/auto_truncate": "/auto_truncate"
+      "/auto_truncate": "/auto_truncate",
+      "/chatdsl": "/chatdsl"
     },
     "keywords": {
       "معلومات": "info",
