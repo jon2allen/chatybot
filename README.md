@@ -108,8 +108,6 @@ cd chatybot
 
 # Install in editable mode
 pip install -e .
-
-nano src/chatybot/chat_config.toml  # Add your API keys and model configurations
 ```
 
 ### **Troubleshooting**
@@ -141,75 +139,128 @@ On Windows, Microsoft includes "App Execution Aliases" by default that redirect 
 
 ## **Quick Start**
 
+Get started with Chatybot in 3 simple steps:
+
+### **1. Install Chatybot**
+
 ```bash
-# Start the chat interface
-python3 chatybot.py
-
-
-Created by Jon Allen - 2026
-===========================
-Active model: mistral-large-2512 (alias: mistral_1)
-chat --> /help
-Active escape commands:
-  /help - Show this help message.
-  /prompt <file> - Load a prompt from a file.
-  /file <path> - Read a text file into the buffer.
-  /showfile [all] - Show the first 100 characters of the file buffer or the entire file if 'all' is specified.
-  /clearfile - Clear the file buffer.
-  /filebank{1..5} <file> - Load a text file into filebank1 through filebank5.
-  /filebank{1..5} clear - Clear the specified filebank.
-  /filebank{1..5} show [all] - Show the first 100 characters of the filebank or all if 'all' is specified.
-  /model [alias] - Switch to a different model or show current model.
-  /listmodels - List available models from toml.
-  /env [filter] - Display defined API keys and environment variables (set | grep -i api).
-  /logging <start [hex]|end|hex [on|off]> - Start (with optional hex mode) or stop logging.
-  /save <file> [all] [nothink|withthink] - Save last completion or all history to a file (respects /thinking state by default).
-  /notemode <on|off> - Toggle note mode for /save command.
-  /codeonly - Set flag to generate code only without explanations.
-  /codeoff - Reverse the code-only flag.
-  /multiline - Enter multi-line input mode (use ';;' to automatically end/exit multiline mode).
-  /system <message> - Set a custom system message.
-  /temp <value> - Set temperature for the current model (0.0-2.0).
-  /maxtokens <value> - Set max tokens for the current model.
-  /top_p <value> - Set top_p for the current model (0.0-1.0).
-  /top_k <value> - Set top_k for the current model.
-  /freq_penalty <value> - Set frequency penalty (-2.0-2.0).
-  /pres_penalty <value> - Set presence penalty (-2.0-2.0).
-  /reasoning <on|off> - Toggle reasoning (thinking) for NVIDIA, Qwen, and GLM models.
-  /effort <low|medium|high|none> - Set reasoning effort for OpenAI (o1, o3), Mistral (mistral-small-latest, mistral-medium-3.5), and GLM (GLM-5.2) models.
-  /thinking <on|off> - Toggle display of <think> and <thought> blocks and reasoning text.
-  /thoughtstyle <none|gemma4|nanbeige|nanbeige_code> - Set prompting format for negative prompt to disable reasoning - auto.
-  /seed <value> - Set seed (int, 'time', or 'random <min>,<max>').
-  /stream - Toggle streaming responses.
-  /trace <rawpayload|tps|tpsperf> <on|off> - Debugging options
-  /script <file> - Execute a script file containing multiple commands.
-  /source <file> - Execute a script file dynamically in the current session.
-  /profile [list|use|clone|delete|export|import|show|edit] - Manage session profiles dynamically.
-  /quit | /exit - Exit the program.
-  /setdb <dbname> - Create or select a TinyDB database. Use 'Null' to deactivate.
-  /dblist - List all TinyDB databases in the db directory.
-  /searchdb <query> - Search all docs in the current database.
-  /dblog - Log the last chat completion to the database.
-  /dbprint - Print the entire database contents in a formatted report.
-  /loadvar <varname> [ALL|id|range] - Load search buffer, all docs, a doc ID, or a range (e.g. 1-5) into a variable.
-  /savevar <varname> <filename> - Save a variable's contents to a file.
-  /setvar <varname> <value> - Set a script variable to a string.
-  /mem - Show size of buffers and script variables.
-  /dump [varname|varname[index]|all] - Print content of buffers, script variables, or specific array elements.
-
-Script-specific features:
-  set <name> = <value> - Define a variable
-  ${name} - Reference a variable
-  if <condition> then <command> - Conditional execution
-  wait <seconds> - Pause execution
-  # comment - Comments in script files
-
-
-# Basic usage
-/model gpt4          # Switch to GPT-4 model
-/file context.txt    # Load a context file
-chat --> Hello!      # Start a conversation
+pip install chatybot
 ```
+*(Or install from source with `git clone https://github.com/jon2allen/chatybot.git && cd chatybot && pip install -e .`)*
+
+---
+
+### **2. Set Your API Key(s)**
+
+> [!IMPORTANT]
+> **How Chatybot handles API keys**: In `chat_config.toml`, model definitions reference the **name of the environment variable** (for example, `api_key = "MISTRAL_API_KEY"`), NOT the raw secret string. This keeps your secrets safely out of configuration files and Git commits.
+
+Choose any of the following methods to set your keys:
+
+#### **Method A: Interactive Setup Wizard (Fastest & Easiest)**
+Chatybot provides an interactive wizard that securely prompts for keys, masks credentials, and saves them to `.env` or your system environment:
+
+* **Cross-Platform (Linux, macOS, Windows)**:
+  ```bash
+  # Run directly from the chatybot command:
+  chatybot --setup-keys
+
+  # Or via the standalone tool:
+  chatybot-setup-keys
+  ```
+* **Linux / macOS / WSL (From git clone)**:
+  ```bash
+  ./bin/setup_keys.sh
+  ```
+* **Windows (From git clone - CMD, PowerShell, or Double-Click)**:
+  ```cmd
+  bin\setup_keys.bat
+  ```
+
+#### **Method B: Shell / System Environment Variables**
+
+* **Linux & macOS (`bash` / `zsh`)**:
+  ```bash
+  # Mistral AI (Default preset in chat_config.toml)
+  export MISTRAL_API_KEY="your-mistral-api-key"
+
+  # Optional additional providers:
+  export OPENAI_API_KEY="your-openai-api-key"
+  export OPENROUTER_API_KEY="your-openrouter-api-key"
+  export GEMINI_API_KEY="your-gemini-api-key"
+  export ANTHROPIC_API_KEY="your-anthropic-api-key"
+  export NVIDIA_API="your-nvidia-api-key"
+  ```
+  > **Tip**: Persist across sessions by appending to `~/.zshrc` (macOS) or `~/.bashrc` (Linux):
+  > ```bash
+  > echo 'export MISTRAL_API_KEY="your-key"' >> ~/.zshrc && source ~/.zshrc
+  > ```
+
+* **Windows Command Prompt (`cmd.exe`)**:
+  ```cmd
+  rem Permanent user environment variable (active in all new terminal windows):
+  setx MISTRAL_API_KEY "your-mistral-api-key"
+
+  rem Current session only:
+  set MISTRAL_API_KEY=your-mistral-api-key
+  ```
+
+* **Windows PowerShell**:
+  ```powershell
+  # Permanent user environment variable:
+  [System.Environment]::SetEnvironmentVariable('MISTRAL_API_KEY', 'your-mistral-api-key', 'User')
+
+  # Current session only:
+  $env:MISTRAL_API_KEY = "your-mistral-api-key"
+  ```
+
+#### **Method C: Using a `.env` File (All Platforms)**
+Copy the included template and fill in your keys:
+```bash
+# Linux / macOS:
+cp .env.example .env
+
+# Windows (Command Prompt):
+copy .env.example .env
+```
+Open `.env` in any text editor and paste your keys. Chatybot automatically detects and loads `.env` on startup from your current working directory or `~/.config/chatybot/.env`.
+
+#### **Supported API Key Reference**
+
+| Provider | Environment Variable | Default Preset in Chatybot? | Where to get key |
+|:---|:---|:---|:---|
+| **Mistral AI** | `MISTRAL_API_KEY` | **Yes** (`mistral_1`) | [console.mistral.ai](https://console.mistral.ai/) |
+| **OpenAI** | `OPENAI_API_KEY` | Optional (`gpt_4o`, `o1`, `o3`) | [platform.openai.com](https://platform.openai.com/api-keys) |
+| **OpenRouter** | `OPENROUTER_API_KEY` | Optional (`mistral_pixtral`, `claude`, etc.) | [openrouter.ai](https://openrouter.ai/keys) |
+| **Google Gemini** | `GEMINI_API_KEY` | Optional (`gemini_flash`, `gemini_pro`) | [aistudio.google.com](https://aistudio.google.com/app/apikey) |
+| **Anthropic** | `ANTHROPIC_API_KEY` | Optional (Claude models) | [console.anthropic.com](https://console.anthropic.com/) |
+| **NVIDIA NIM** | `NVIDIA_API` | Optional (`nvidia_llama3`) | [build.nvidia.com](https://build.nvidia.com/) |
+| **Groq** | `GROQ_API_KEY` | Optional (Llama 3, Mixtral) | [console.groq.com](https://console.groq.com/keys) |
+| **DeepSeek** | `DEEPSEEK_API_KEY` | Optional | [platform.deepseek.com](https://platform.deepseek.com/) |
+| **Cohere** | `COHERE_API_KEY` | Optional | [dashboard.cohere.com](https://dashboard.cohere.com/api-keys) |
+| **Hugging Face** | `HF_API_KEY` | Optional (`hf_preset`) | [huggingface.co](https://huggingface.co/settings/tokens) |
+| **Jina AI** | `JINA_API_KEY` | Optional (Search & Reranking) | [jina.ai](https://jina.ai/) |
+| **Ollama** | *(None required)* | Local models (`ollama_llama3`) | Localhost (`http://localhost:11434/v1`) |
+
+---
+
+### **3. Start Chatybot & Verify**
+
+Launch Chatybot from anywhere:
+```bash
+chatybot
+```
+
+Once inside the interactive prompt, you can verify and manage your setup:
+
+```text
+chat --> /env             # Inspect detected API keys and active environment variables
+chat --> /listmodels      # View all available models and their endpoints
+chat --> /model mistral_1 # Switch active model (or e.g. /model gemini_flash)
+chat --> /help            # View all available escape commands
+chat --> Hello!           # Start chatting!
+```
+
 
 ---
 
