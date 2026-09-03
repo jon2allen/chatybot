@@ -792,6 +792,8 @@ src/chatybot/profiles/          # Perfiles preestablecidos
 | `/herramienta max_turnos` | Herramientas | `/herramienta max_turnos [N]` | Obtener/establecer límite máximo de seguridad de turnos |
 | `/herramienta limite_tasa` | Herramientas | `/herramienta limite_tasa [segundos]` | Establecer pausa de retraso entre turnos (segundos) |
 | `/herramienta prompt` | Herramientas | `/herramienta prompt` | Ver prompt activo |
+| `/herramienta borrador` | Herramientas | `/herramienta borrador [on\|off\|limpiar\|status]` | Alternar/gestionar área temporal de borrador (scratchpad) |
+
 
 ### Comandos de Diagnóstico
 

@@ -26,6 +26,7 @@ import copy
 import signal
 import shutil
 from datetime import datetime
+from pathlib import Path
 from typing import Dict, Any, List, Tuple, Optional, Callable, Union
 import logging
 import atexit
@@ -165,6 +166,8 @@ class ChatybotApp:
         self.live_tool_context: str = ""
         self.in_tool_loop: bool = False
         self.tool_auto: bool = False
+        self.tool_scratch: bool = False
+        self._tool_scratch_user_set: bool = False
         self.max_turns: int = 25
         self.max_tool_calls_per_turn: int = 10
         self.agentic_instructions: str = ""
@@ -243,21 +246,9 @@ class ChatybotApp:
 
     def initialize(self) -> None:
         """Initialize the application by loading configuration and setting up history."""
-        # Load environment variables from .env file if it exists
-        for path in [".env", "../.env", "../../.env"]:
-            if os.path.exists(path):
-                try:
-                    with open(path, "r") as f:
-                        for line in f:
-                            line = line.strip()
-                            if line and not line.startswith("#") and "=" in line:
-                                k, v = line.split("=", 1)
-                                k = k.strip()
-                                v = v.strip().strip('"\'')
-                                os.environ[k] = v
-                    break
-                except Exception:
-                    pass
+        # Load environment variables from project and global .env files
+        from .env_utils import load_project_env_files
+        load_project_env_files()
 
         # Also load from jina_api_key.txt as fallback
         for key_file in ["jina_api_key.txt", "jina_ai_key.txt", "../jina_api_key.txt", "../jina_ai_key.txt"]:
@@ -797,6 +788,25 @@ class ChatybotApp:
         """Resolve a session identifier or custom name using session store."""
         return self._get_session_store().resolve_session(target)
 
+    def get_scratch_dir(self, create: bool = True) -> Optional[str]:
+        """
+        Get the current active scratchpad directory path.
+        If an active session exists, returns ~/.local/share/chatybot/sessions/<session_id>/scratch/
+        Otherwise, returns ~/.local/share/chatybot/scratch/ (as a sibling of the sessions directory).
+        """
+        session_dir_path = Path(self.session_dir).expanduser().resolve()
+        if getattr(self, "active_session_id", None):
+            scratch_path = str(session_dir_path / self.active_session_id / "scratch")
+        else:
+            scratch_path = str(session_dir_path.parent / "scratch")
+        if create:
+            try:
+                os.makedirs(scratch_path, exist_ok=True)
+            except OSError as e:
+                print(f"Warning: Could not create scratch directory '{scratch_path}': {e}")
+                return None
+        return scratch_path
+
     def _slugify_text(self, text: str, max_words: int = 6) -> str:
         """Convert text prompt into a clean filename slug."""
         clean = re.sub(r"[^\w\s-]", "", text.strip())
@@ -1113,8 +1123,9 @@ class ChatybotApp:
         """
         model_config = self.config_manager.get_model_config(model_alias)
 
+        from .env_utils import resolve_api_key
         api_key_env = model_config.get("api_key", "")
-        api_key = os.environ.get(api_key_env)
+        api_key = resolve_api_key(api_key_env)
 
         # Bypass strict API key requirement for local models/Ollama
         if not api_key:
@@ -1128,7 +1139,7 @@ class ChatybotApp:
             else:
                 raise ValueError(
                     f"API key not found for model alias '{model_alias}'. "
-                    f"Please set the '{api_key_env}' environment variable."
+                    f"Please set the '{api_key_env}' environment variable (e.g. export {api_key_env}=\"...\" or run 'chatybot --setup-keys')."
                 )
 
         base_url = model_config.get("base_url")
@@ -3706,6 +3717,13 @@ class ChatybotApp:
                         tool_name = tool_name.split(".")[-1]
                     args = data.get("arguments") if "arguments" in data else data.get("args") if "args" in data else {k: v for k, v in data.items() if k != "function"}
                     return {"tool": tool_name, "arguments": args}
+                elif len(data) == 1:
+                    k, v = next(iter(data.items()))
+                    if isinstance(v, dict) and str(k) not in ("tool", "name", "function", "arguments", "parameters", "properties", "options", "type", "error", "status", "result"):
+                        tool_name = str(k)
+                        if "." in tool_name:
+                            tool_name = tool_name.split(".")[-1]
+                        return {"tool": tool_name, "arguments": v}
             return None
 
         # Parse to find all tool calls in the text
@@ -4204,6 +4222,15 @@ class ChatybotApp:
                 print(f"Warning: Invalid session_strip_thinking '{val}'. Using default 'separate'.")
                 self.session_strip_thinking = "separate"
 
+        if 'tool_scratch' in config_section and not getattr(self, '_tool_scratch_user_set', False):
+            val = config_section.get('tool_scratch')
+            if isinstance(val, bool):
+                self.tool_scratch = val
+            elif str(val).lower() in ('true', '1', 'yes', 'on'):
+                self.tool_scratch = True
+            elif str(val).lower() in ('false', '0', 'no', 'off'):
+                self.tool_scratch = False
+
         tools = config.get('tools', {})
         
         # Build tool context string
@@ -4276,6 +4303,21 @@ class ChatybotApp:
                             required_str = " (optional)" if is_optional else " (required)"
                             lines.append(f"   {param_name}: {param_type}{required_str} {param_desc}")
         
+        if self.tool_scratch:
+            scratch_dir = self.get_scratch_dir(create=True)
+            if scratch_dir:
+                lines.append("\n=== SCRATCHPAD AREA ===")
+                lines.append("Scratchpad mode is ACTIVE. You have a dedicated temporary scratch directory at:")
+                lines.append(f"{scratch_dir}")
+                lines.append("")
+                lines.append("When creating, testing, or executing disposable scripts (Python or Bash) or temporary data:")
+                lines.append(f'- Save temporary scripts in this folder (e.g., using write_file with path="{scratch_dir}/<filename>").')
+                lines.append(f'- Execute them using run_command (e.g., python3 "{scratch_dir}/<filename>" or bash "{scratch_dir}/<filename>").')
+                lines.append("- Output/print all results to STDOUT.")
+                lines.append("- Confine disposable code and temporary artifacts to this directory to avoid altering project files.")
+                lines.append("- If a scratch script fails with an error, overwrite the corrected script directly using write_file rather than doing multi-step search and replace.")
+                lines.append("=======================")
+
         lines.append("\n=== END TOOLS ===\n")
         if hasattr(self, "context_limiter") and self.context_limiter.context_limit:
             lim = self.context_limiter.context_limit
@@ -4926,7 +4968,17 @@ def run():
         action="store_true",
         help="Disable tools on startup and bypass all MCP server loading via stdio"
     )
+    parser.add_argument(
+        "--setup-keys",
+        action="store_true",
+        help="Launch interactive wizard to configure and save API keys"
+    )
     args, unknown = parser.parse_known_args()
+
+    if args.setup_keys:
+        from .setup_keys import main as setup_keys_main
+        setup_keys_main()
+        sys.exit(0)
 
     if args.config_edit:
         from .config_tui import main as tui_main

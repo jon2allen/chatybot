@@ -792,6 +792,8 @@ src/chatybot/profiles/          # Profils prédéfinis
 | `/outil tours_max` | Outils | `/outil tours_max [N]` | Définir/obtenir la limite de tours maximale |
 | `/outil limite_taux` | Outils | `/outil limite_taux [secondes]` | Définir la pause de délai entre les tours (secondes) |
 | `/outil prompt` | Outils | `/outil prompt` | Afficher l'invite active |
+| `/outil brouillon` | Outils | `/outil brouillon [on\|off\|nettoyer\|status]` | Basculer/gérer la zone de brouillon temporaire (scratchpad) |
+
 
 ### Commandes de Diagnostic
 

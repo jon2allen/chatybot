@@ -499,6 +499,15 @@ Analyze ${file}
 /tool prompt
 ```
 
+### Scratchpad Management
+Enable a dedicated disposable workspace for models to create and execute temporary Python/Bash scripts without polluting project directories:
+```dsl
+/tool scratch on       # Enable scratchpad mode and prompt injection
+/tool scratch status   # Inspect scratchpad directory and list contents
+/tool scratch clean    # Purge disposable files and temporary artifacts
+/tool scratch off      # Disable scratchpad mode
+```
+
 ### Available Tools
 
 | Tool | Description |
@@ -829,6 +838,7 @@ src/chatybot/profiles/          # Preset profiles
 | `/tool rate_limit` | Tools | `/tool rate_limit [seconds]` | Inter-turn delay pause (seconds) |
 | `/tool prompt` | Tools | `/tool prompt` | View active prompt |
 | `/tool prompt edit_live` | Tools | `/tool prompt edit_live` | Live-edit agentic instructions |
+| `/tool scratch` | Tools | `/tool scratch [on\|off\|clean\|status]` | Toggle/manage disposable scratchpad area |
 
 ### Diagnostics Commands
 

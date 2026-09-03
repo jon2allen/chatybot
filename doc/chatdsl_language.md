@@ -129,6 +129,7 @@ ChatDSL currently supports the following languages:
 | `/tool loop` | `/herramienta bucle` | `/outil boucle` | `/工具循环` | `/strumento ciclo` | Run loop with limit (e.g. `max=50` `force`) |
 | `/tool max_turns` | `/herramienta max_turnos` | `/outil tours_max` | `/最大工具轮次` | `/strumento max_turni` | Set/Get default maximum turn safety cap |
 | `/tool prompt` | `/herramienta prompt` | `/outil prompt` | `/工具提示语` | `/strumento prompt` | View active prompt; use `live_edit` for TUI |
+| `/tool scratch` | `/herramienta borrador` | `/outil brouillon` | `/工具 草稿` | `/strumento bozza` | Toggle/manage dedicated temporary scratchpad area |
 
 ### Diagnostics & Logging
 

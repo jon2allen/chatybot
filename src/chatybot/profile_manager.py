@@ -523,6 +523,11 @@ class ProfileManager:
         else:
             app.tool_mode = False
 
+        # Tool scratch
+        if hasattr(config.tool_settings, "scratch"):
+            app.tool_scratch = config.tool_settings.scratch
+            app._tool_scratch_user_set = True
+
         # Max turns
         if config.tool_settings.max_turns is not None:
             app.max_tool_turns = config.tool_settings.max_turns

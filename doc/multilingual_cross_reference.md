@@ -108,6 +108,7 @@ This table lists all available slash commands in ChatyBot, providing localized c
 | `/tool max_turns`| `/herramienta max_turnos`| `/outil tours_max`| `/最大工具轮次`| `/strumento max_turni`| Set/Get default maximum turn safety cap |
 | `/tool rate_limit`| `/herramienta limite_tasa`| `/outil limite_taux`| `/工具 速率限制`| `/strumento limite_frequenza`| Set pause delay (seconds) between turns |
 | `/tool prompt` | `/herramienta prompt`| `/outil prompt` | `/工具提示语` | `/strumento prompt` | View active prompt; use `live_edit` for TUI |
+| `/tool scratch`| `/herramienta borrador`| `/outil brouillon`| `/工具 草稿` | `/strumento bozza` | Toggle/manage dedicated temporary scratchpad area |
 
 ### H. Diagnostics & Logging
 | Canonical (EN) | Spanish (ES) | French (FR) | Chinese (ZH) | Italian (IT) | Purpose / Description |
