@@ -84,15 +84,8 @@ class BaseModelConfig(BaseModel):
 
     def resolve_api_key(self) -> Optional[str]:
         """Return the actual API key by reading the named environment variable or raw key string."""
-        if not self.api_key:
-            return None
-        val = os.getenv(self.api_key)
-        if val:
-            return val
-        # Failsafe: if the user directly pasted a secret key into the config
-        if self.api_key.startswith(("sk-", "nvapi-", "AIza", "gsk_", "hf_")) or (len(self.api_key) > 24 and not self.api_key.isupper()):
-            return self.api_key
-        return None
+        from .env_utils import resolve_api_key
+        return resolve_api_key(self.api_key)
 
     @property
     def detected_vendor(self) -> str:

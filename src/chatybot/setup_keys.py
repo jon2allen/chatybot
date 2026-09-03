@@ -26,28 +26,14 @@ KEYS: List[Tuple[str, str, str, str]] = [
 ]
 
 
+from .env_utils import load_env_file
+
+
 def mask_key(val: str) -> str:
     """Mask sensitive key string for display."""
     if len(val) <= 8:
         return "********"
     return f"{val[:4]}...{val[-4:]}"
-
-
-def load_existing_env_file(filepath: Path) -> Dict[str, str]:
-    """Parse key-value pairs from an existing .env file."""
-    keys: Dict[str, str] = {}
-    if not filepath.exists():
-        return keys
-    try:
-        with open(filepath, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if line and not line.startswith("#") and "=" in line:
-                    k, v = line.split("=", 1)
-                    keys[k.strip()] = v.strip().strip("\"'")
-    except Exception:
-        pass
-    return keys
 
 
 def main():
@@ -58,8 +44,8 @@ def main():
     print("In chat_config.toml, model definitions reference the name of these")
     print("variables (e.g. api_key = \"MISTRAL_API_KEY\"), keeping secrets secure.\n")
 
-    # Load existing .env in current working directory if present
-    env_file_keys = load_existing_env_file(Path(".env"))
+    # Load existing .env in current working directory if present (without modifying os.environ)
+    env_file_keys = load_env_file(Path(".env"), override=False)
 
     collected: Dict[str, str] = {}
 
