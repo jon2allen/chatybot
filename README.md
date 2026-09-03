@@ -887,7 +887,7 @@ chat --> Create a blog post outline about ${topic}
 
 ### Change log
 
-September 3rd, 2026 (v0.8.1)
+September 3rd, 2026 (v0.8.2)
 ---------------------------
 - **Agentic Scratchpad Area (`/tool scratch`)**:
   - Added dedicated temporary scratchpad area for models to create, test, and execute disposable Python/Bash scripts and scratch files without modifying project files.
