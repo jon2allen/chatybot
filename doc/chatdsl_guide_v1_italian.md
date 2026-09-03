@@ -792,6 +792,8 @@ src/chatybot/profiles/          # Profili predefiniti
 | `/strumento max_turni`| Strumenti | `/strumento max_turni [N]` | Ottiene/imposta il limite massimo di turni |
 | `/strumento limite_frequenza`| Strumenti | `/strumento limite_frequenza [secondi]` | Imposta pausa ritardo tra i turni (secondi) |
 | `/strumento prompt` | Strumenti | `/strumento prompt` | Mostra il prompt attivo |
+| `/strumento bozza` | Strumenti | `/strumento bozza [on\|off\|pulire\|status]` | Attiva/gestisce l'area temporanea di bozza (scratchpad) |
+
 
 ### Comandi di Diagnostica
 

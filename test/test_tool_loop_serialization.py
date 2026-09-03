@@ -36,3 +36,19 @@ async def test_execute_tool_loop_handles_non_serializable_args(app):
     
     assert app.dispatch_tool.called
 
+
+def test_extract_tool_calls_single_key_format(app):
+    """Verify that models generating single-key tool dictionaries like devstral are correctly extracted."""
+    text = '{"list_directory": {"path": "Downloads/fsa", "details": true}}'
+    calls = app.extract_tool_calls(text)
+    assert len(calls) == 1
+    assert calls[0]["tool"] == "list_directory"
+    assert calls[0]["arguments"] == {"path": "Downloads/fsa", "details": True}
+
+    text_find = '```json\n{"find_files": {"path": "Downloads/fsa", "pattern": "*.pdf"}}\n```'
+    calls_find = app.extract_tool_calls(text_find)
+    assert len(calls_find) == 1
+    assert calls_find[0]["tool"] == "find_files"
+    assert calls_find[0]["arguments"] == {"path": "Downloads/fsa", "pattern": "*.pdf"}
+
+

@@ -71,7 +71,9 @@
       "keep": "keep",
       "days": "days",
       "size": "size",
-      "limit": "limit"
+      "limit": "limit",
+      "scratch": "scratch",
+      "clean": "clean"
     },
     "ui": {
       "language_changed": "Language set to: {lang}",
@@ -290,7 +292,10 @@
       "tamano": "size",
       "tamaño": "size",
       "limite": "limit",
-      "límite": "limit"
+      "límite": "limit",
+      "scratch": "scratch",
+      "borrador": "scratch",
+      "limpiar": "clean"
     },
     "ui": {
       "language_changed": "Idioma establecido en: {lang}",
@@ -731,7 +736,10 @@
       "conserver": "keep",
       "jours": "days",
       "taille": "size",
-      "limite": "limit"
+      "limite": "limit",
+      "scratch": "scratch",
+      "brouillon": "scratch",
+      "nettoyer": "clean"
     },
     "ui": {
       "language_changed": "Langue définie sur : {lang}",
@@ -1163,7 +1171,12 @@
       "天数": "days",
       "天": "days",
       "大小": "size",
-      "限制": "limit"
+      "限制": "limit",
+      "scratch": "scratch",
+      "草稿": "scratch",
+      "暂存": "scratch",
+      "清空": "clean",
+      "清除": "clean"
     },
     "ui": {
       "language_changed": "语言设置为: {lang}",
@@ -1597,7 +1610,10 @@
       "giorni": "days",
       "dimensione": "size",
       "misura": "size",
-      "limite": "limit"
+      "limite": "limit",
+      "scratch": "scratch",
+      "bozza": "scratch",
+      "pulire": "clean"
     },
     "ui": {
       "language_changed": "Lingua impostata su: {lang}",
@@ -2029,7 +2045,10 @@
       "ايام": "days",
       "أيام": "days",
       "حجم": "size",
-      "حد": "limit"
+      "حد": "limit",
+      "scratch": "scratch",
+      "مسودة": "scratch",
+      "مسح": "clean"
     },
     "ui": {
       "language_changed": "تغيرت اللغة لـ: {lang}",

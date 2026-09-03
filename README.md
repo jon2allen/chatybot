@@ -108,8 +108,6 @@ cd chatybot
 
 # Install in editable mode
 pip install -e .
-
-nano src/chatybot/chat_config.toml  # Add your API keys and model configurations
 ```
 
 ### **Troubleshooting**
@@ -141,75 +139,128 @@ On Windows, Microsoft includes "App Execution Aliases" by default that redirect 
 
 ## **Quick Start**
 
+Get started with Chatybot in 3 simple steps:
+
+### **1. Install Chatybot**
+
 ```bash
-# Start the chat interface
-python3 chatybot.py
-
-
-Created by Jon Allen - 2026
-===========================
-Active model: mistral-large-2512 (alias: mistral_1)
-chat --> /help
-Active escape commands:
-  /help - Show this help message.
-  /prompt <file> - Load a prompt from a file.
-  /file <path> - Read a text file into the buffer.
-  /showfile [all] - Show the first 100 characters of the file buffer or the entire file if 'all' is specified.
-  /clearfile - Clear the file buffer.
-  /filebank{1..5} <file> - Load a text file into filebank1 through filebank5.
-  /filebank{1..5} clear - Clear the specified filebank.
-  /filebank{1..5} show [all] - Show the first 100 characters of the filebank or all if 'all' is specified.
-  /model [alias] - Switch to a different model or show current model.
-  /listmodels - List available models from toml.
-  /env [filter] - Display defined API keys and environment variables (set | grep -i api).
-  /logging <start [hex]|end|hex [on|off]> - Start (with optional hex mode) or stop logging.
-  /save <file> [all] [nothink|withthink] - Save last completion or all history to a file (respects /thinking state by default).
-  /notemode <on|off> - Toggle note mode for /save command.
-  /codeonly - Set flag to generate code only without explanations.
-  /codeoff - Reverse the code-only flag.
-  /multiline - Enter multi-line input mode (use ';;' to automatically end/exit multiline mode).
-  /system <message> - Set a custom system message.
-  /temp <value> - Set temperature for the current model (0.0-2.0).
-  /maxtokens <value> - Set max tokens for the current model.
-  /top_p <value> - Set top_p for the current model (0.0-1.0).
-  /top_k <value> - Set top_k for the current model.
-  /freq_penalty <value> - Set frequency penalty (-2.0-2.0).
-  /pres_penalty <value> - Set presence penalty (-2.0-2.0).
-  /reasoning <on|off> - Toggle reasoning (thinking) for NVIDIA, Qwen, and GLM models.
-  /effort <low|medium|high|none> - Set reasoning effort for OpenAI (o1, o3), Mistral (mistral-small-latest, mistral-medium-3.5), and GLM (GLM-5.2) models.
-  /thinking <on|off> - Toggle display of <think> and <thought> blocks and reasoning text.
-  /thoughtstyle <none|gemma4|nanbeige|nanbeige_code> - Set prompting format for negative prompt to disable reasoning - auto.
-  /seed <value> - Set seed (int, 'time', or 'random <min>,<max>').
-  /stream - Toggle streaming responses.
-  /trace <rawpayload|tps|tpsperf> <on|off> - Debugging options
-  /script <file> - Execute a script file containing multiple commands.
-  /source <file> - Execute a script file dynamically in the current session.
-  /profile [list|use|clone|delete|export|import|show|edit] - Manage session profiles dynamically.
-  /quit | /exit - Exit the program.
-  /setdb <dbname> - Create or select a TinyDB database. Use 'Null' to deactivate.
-  /dblist - List all TinyDB databases in the db directory.
-  /searchdb <query> - Search all docs in the current database.
-  /dblog - Log the last chat completion to the database.
-  /dbprint - Print the entire database contents in a formatted report.
-  /loadvar <varname> [ALL|id|range] - Load search buffer, all docs, a doc ID, or a range (e.g. 1-5) into a variable.
-  /savevar <varname> <filename> - Save a variable's contents to a file.
-  /setvar <varname> <value> - Set a script variable to a string.
-  /mem - Show size of buffers and script variables.
-  /dump [varname|varname[index]|all] - Print content of buffers, script variables, or specific array elements.
-
-Script-specific features:
-  set <name> = <value> - Define a variable
-  ${name} - Reference a variable
-  if <condition> then <command> - Conditional execution
-  wait <seconds> - Pause execution
-  # comment - Comments in script files
-
-
-# Basic usage
-/model gpt4          # Switch to GPT-4 model
-/file context.txt    # Load a context file
-chat --> Hello!      # Start a conversation
+pip install chatybot
 ```
+*(Or install from source with `git clone https://github.com/jon2allen/chatybot.git && cd chatybot && pip install -e .`)*
+
+---
+
+### **2. Set Your API Key(s)**
+
+> [!IMPORTANT]
+> **How Chatybot handles API keys**: In `chat_config.toml`, model definitions reference the **name of the environment variable** (for example, `api_key = "MISTRAL_API_KEY"`), NOT the raw secret string. This keeps your secrets safely out of configuration files and Git commits.
+
+Choose any of the following methods to set your keys:
+
+#### **Method A: Interactive Setup Wizard (Fastest & Easiest)**
+Chatybot provides an interactive wizard that securely prompts for keys, masks credentials, and saves them to `.env` or your system environment:
+
+* **Cross-Platform (Linux, macOS, Windows)**:
+  ```bash
+  # Run directly from the chatybot command:
+  chatybot --setup-keys
+
+  # Or via the standalone tool:
+  chatybot-setup-keys
+  ```
+* **Linux / macOS / WSL (From git clone)**:
+  ```bash
+  ./bin/setup_keys.sh
+  ```
+* **Windows (From git clone - CMD, PowerShell, or Double-Click)**:
+  ```cmd
+  bin\setup_keys.bat
+  ```
+
+#### **Method B: Shell / System Environment Variables**
+
+* **Linux & macOS (`bash` / `zsh`)**:
+  ```bash
+  # Mistral AI (Default preset in chat_config.toml)
+  export MISTRAL_API_KEY="your-mistral-api-key"
+
+  # Optional additional providers:
+  export OPENAI_API_KEY="your-openai-api-key"
+  export OPENROUTER_API_KEY="your-openrouter-api-key"
+  export GEMINI_API_KEY="your-gemini-api-key"
+  export ANTHROPIC_API_KEY="your-anthropic-api-key"
+  export NVIDIA_API="your-nvidia-api-key"
+  ```
+  > **Tip**: Persist across sessions by appending to `~/.zshrc` (macOS) or `~/.bashrc` (Linux):
+  > ```bash
+  > echo 'export MISTRAL_API_KEY="your-key"' >> ~/.zshrc && source ~/.zshrc
+  > ```
+
+* **Windows Command Prompt (`cmd.exe`)**:
+  ```cmd
+  rem Permanent user environment variable (active in all new terminal windows):
+  setx MISTRAL_API_KEY "your-mistral-api-key"
+
+  rem Current session only:
+  set MISTRAL_API_KEY=your-mistral-api-key
+  ```
+
+* **Windows PowerShell**:
+  ```powershell
+  # Permanent user environment variable:
+  [System.Environment]::SetEnvironmentVariable('MISTRAL_API_KEY', 'your-mistral-api-key', 'User')
+
+  # Current session only:
+  $env:MISTRAL_API_KEY = "your-mistral-api-key"
+  ```
+
+#### **Method C: Using a `.env` File (All Platforms)**
+Copy the included template and fill in your keys:
+```bash
+# Linux / macOS:
+cp .env.example .env
+
+# Windows (Command Prompt):
+copy .env.example .env
+```
+Open `.env` in any text editor and paste your keys. Chatybot automatically detects and loads `.env` on startup from your current working directory or `~/.config/chatybot/.env`.
+
+#### **Supported API Key Reference**
+
+| Provider | Environment Variable | Default Preset in Chatybot? | Where to get key |
+|:---|:---|:---|:---|
+| **Mistral AI** | `MISTRAL_API_KEY` | **Yes** (`mistral_1`) | [console.mistral.ai](https://console.mistral.ai/) |
+| **OpenAI** | `OPENAI_API_KEY` | Optional (`gpt_4o`, `o1`, `o3`) | [platform.openai.com](https://platform.openai.com/api-keys) |
+| **OpenRouter** | `OPENROUTER_API_KEY` | Optional (`mistral_pixtral`, `claude`, etc.) | [openrouter.ai](https://openrouter.ai/keys) |
+| **Google Gemini** | `GEMINI_API_KEY` | Optional (`gemini_flash`, `gemini_pro`) | [aistudio.google.com](https://aistudio.google.com/app/apikey) |
+| **Anthropic** | `ANTHROPIC_API_KEY` | Optional (Claude models) | [console.anthropic.com](https://console.anthropic.com/) |
+| **NVIDIA NIM** | `NVIDIA_API` | Optional (`nvidia_llama3`) | [build.nvidia.com](https://build.nvidia.com/) |
+| **Groq** | `GROQ_API_KEY` | Optional (Llama 3, Mixtral) | [console.groq.com](https://console.groq.com/keys) |
+| **DeepSeek** | `DEEPSEEK_API_KEY` | Optional | [platform.deepseek.com](https://platform.deepseek.com/) |
+| **Cohere** | `COHERE_API_KEY` | Optional | [dashboard.cohere.com](https://dashboard.cohere.com/api-keys) |
+| **Hugging Face** | `HF_API_KEY` | Optional (`hf_preset`) | [huggingface.co](https://huggingface.co/settings/tokens) |
+| **Jina AI** | `JINA_API_KEY` | Optional (Search & Reranking) | [jina.ai](https://jina.ai/) |
+| **Ollama** | *(None required)* | Local models (`ollama_llama3`) | Localhost (`http://localhost:11434/v1`) |
+
+---
+
+### **3. Start Chatybot & Verify**
+
+Launch Chatybot from anywhere:
+```bash
+chatybot
+```
+
+Once inside the interactive prompt, you can verify and manage your setup:
+
+```text
+chat --> /env             # Inspect detected API keys and active environment variables
+chat --> /listmodels      # View all available models and their endpoints
+chat --> /model mistral_1 # Switch active model (or e.g. /model gemini_flash)
+chat --> /help            # View all available escape commands
+chat --> Hello!           # Start chatting!
+```
+
 
 ---
 
@@ -254,7 +305,7 @@ chat --> Hello!      # Start a conversation
 | `/run <command>` | Execute a shell command and capture stdout/stderr/exit code | `/run ls -la` |
 | `/run_safe` | Enable safe mode for shell execution (blocks dangerous commands) | `/run_safe` |
 | `/run_unsafe [askfirst]` | Disable safe mode (runs directly; optional `askfirst` prompts Y/N) | `/run_unsafe` |
-| `/tool <subcommand>` | Manage native tool loop mode, inspect prompt context, or dispatch invocations | `/tool loop max=5` |
+| `/tool <subcommand>` | Manage native tool loop mode, scratchpad directory, inspect prompt context, or dispatch invocations | `/tool scratch on` |
 | `/setdb <name>` | Select TinyDB database. Use `Null` to deactivate. | `/setdb knowledge` |
 | `/dblist` | List all TinyDB databases | `/dblist` |
 | `/searchdb <q>` | Search current database | `/searchdb "python"` |
@@ -527,6 +578,11 @@ You can enable native-like tool usage for LLMs, allowing them to autonomously se
 *   **`/tool enable <tool>|all`**: Dynamically enables a specific tool or all tools for the current session.
 *   **`/tool disable <tool>|all`**: Dynamically disables a specific tool or all tools, forcing an immediate prompt context refresh and runtime block in the dispatcher.
 *   **`/tool prompt`**: Displays the active tool injection context and system instructions.
+*   **`/tool scratch [on|off|clean|status|show]`**: Toggle or manage the dedicated agentic scratchpad directory:
+    *   `on`: Enables scratchpad mode and injects dedicated instructions directing the LLM to write, test, and execute disposable Python/Bash scripts within a dedicated temporary folder (`~/.local/share/chatybot/sessions/<session_id>/scratch/` for active sessions, or `~/.local/share/chatybot/scratch/` as a global fallback) without altering project files.
+    *   `off`: Disables scratchpad mode and removes scratchpad instructions from the system prompt.
+    *   `clean`: Purges all temporary scripts, outputs, and subdirectories from the active scratchpad folder.
+    *   `status` (or `show`/`info`): Displays current scratchpad state, directory path, and lists all files currently in the scratchpad.
 *   **`/tool loop [turns|max|max=val] [force]`**: Starts the autonomous execution loop. Chatybot will feed the model's requests to local tools, execute them, and feed results back to the model until:
     *   The model returns a conversational natural-language answer (terminal state).
     *   The maximum number of turns is reached (default 25; configurable via `max_turns` in `tools_config.toml`; use `max` or `max=100` to increase). Loop counts greater than 100 require the `force` flag.
@@ -554,6 +610,20 @@ The following tools are packaged by default and can be enabled/disabled dynamica
 | `grep_search` | Searches for exact pattern matches or regular expressions within files or directories. | `query` (required), `path` (optional), `pattern` (optional), `case_insensitive` (optional), `is_regex` (optional), `max_matches` (optional) |
 | `replace_file_content` | Replaces a specific block of text in a file with new content. | `path` (required), `target` (required), `replacement` (required) |
 | `run_command` | Executes shell commands on the host machine using safe subprocess tokenization. | `command` (required) |
+
+#### **Supported Tool Calling Formats**
+Chatybot's extraction engine automatically recognizes, parses, and normalizes all major LLM tool-calling output syntaxes without requiring provider-specific adapter layers:
+
+| Format Style | Example Syntax | Supported Models |
+| :--- | :--- | :--- |
+| **1. Single-Key Tool Dictionary** | `{"list_directory": {"path": "src/project", "details": true}}` | Devstral, Mistral, Command-R |
+| **2. Standard Tool Object** | `{"tool": "list_directory", "arguments": {"path": "src/project"}}` | Cohere, OpenAI, Anthropic, Custom |
+| **3. Named Function Object** | `{"name": "list_directory", "arguments": {"path": "src/project"}}` | OpenAI Function Calling, Qwen |
+| **4. Function Call Object** | `{"function": "list_directory", "arguments": {"path": "src/project"}}` | Llama-3-Groq-ToolUse, Hermes |
+| **5. Header-Prefixed Tool Call** | `<\|tool_call\|>call:list_directory{"path": "src/project"}<\|tool_call\|>` | Gemma 4, FunctionGemma, Granite |
+| **6. XML / Function Tag Syntax** | `<tool_call><function name="list_directory"><parameter name="path">src/project</parameter></function></tool_call>` | Anthropic XML, DeepSeek, Command-R+ |
+| **7. Python-style / Single-Quoted Dicts** | `{'tool': 'list_directory', 'arguments': {'path': 'src/project'}}` | Python literal output (auto-repaired via AST / JSON repair) |
+| **8. Unquoted Key JSON** | `{tool: list_directory, arguments: {path: "src/project"}}` | Auto-repaired and normalized |
 
 #### **3. Tool Configuration (`tools_config.toml`)**
 All agentic tools and execution configurations are managed in `src/chatybot/tools_config.toml` (which is copied to `~/.config/chatybot/tools_config.toml` upon initialization).
@@ -817,7 +887,25 @@ chat --> Create a blog post outline about ${topic}
 
 ### Change log
 
-September 1st, 2026 (v0.8.1)
+September 3rd, 2026 (v0.8.1)
+---------------------------
+- **Agentic Scratchpad Area (`/tool scratch`)**:
+  - Added dedicated temporary scratchpad area for models to create, test, and execute disposable Python/Bash scripts and scratch files without modifying project files.
+  - Implemented `/tool scratch [on|off|clean|status|show]` commands with real-time prompt injection, clean purging, and file inventory.
+  - Integrated session-scoped scratchpads (`~/.local/share/chatybot/sessions/<session_id>/scratch/`) with global fallback (`~/.local/share/chatybot/scratch/`).
+  - Added ChatDSL profile integration (`/tool scratch on|off`) with persistence across session reloads.
+  - Hardened path resolution against trailing slashes, relative paths, and wrapped prompt execution paths in quotes for safety with space-containing paths.
+  - Added multi-language keywords for `scratch` and `clean` across all supported languages (ES, FR, ZH, IT, AR).
+- **Environment & Multi-Platform Key Setup**:
+  - Added interactive cross-platform API key setup wizard `chatybot-setup-keys` and CLI flag `chatybot --setup-keys`.
+  - Added native setup scripts `bin/setup_keys.sh` (POSIX/macOS/Linux) and `bin/setup_keys.bat` (Windows with `setx` user registry persistence and double-click Explorer support).
+  - Added `.env.example` template and updated `.gitignore` for security.
+  - Centralized `.env` file loading and API key resolution in `src/chatybot/env_utils.py`, supporting `export ` prefixes, comments, quotes, nearest-project boundaries, and non-destructive global defaults (`~/.config/chatybot/.env`).
+  - Hardened API key resolution against false positives for custom lowercase environment variable names.
+- **Quick Start Documentation Revamp**:
+  - Rewrote the Quick Start guide with a clear 3-step setup walkthrough, supported provider key reference table, and `/env` inspection verification.
+
+September 1st, 2026 (v0.8.0)
 ---------------------------
 - **PyPI Project URLs & Documentation Links**:
   - Pointed PyPI project metadata and README badges directly to the active `master` branch URLs, resolving 404 links.

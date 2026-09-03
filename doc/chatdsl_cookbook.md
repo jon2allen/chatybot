@@ -917,7 +917,35 @@ ${log}
 - `/tool prompt` — Verify active overrides with the `[Live Edit Override Active]` banner.
 - To revert overrides and restore `tools_config.toml` defaults, clear the text in the live editor or reset the session.
 
+### 8.3 Agentic scratchpad & disposable script execution (/tool scratch)
+- **Goal:** provide a safe, isolated directory where models can write, test, and run disposable scripts (Python/Bash) without cluttering or altering project repository files.
+- **Commands:** `/tool on`, `/tool auto on`, `/tool scratch on`, `/tool scratch status`, `/tool scratch clean`, `/tool scratch off`.
+- **Script:** `cookbook/08_3_tool_scratch.chatdsl`
+
+```dsl
+/model devstral_1
+/tool on
+/tool auto on
+/tool scratch on
+
+# Ask the model to generate and execute a scratch script
+chat --> Write a quick python script in scratch to compute first 15 fibonacci numbers and print them
+
+# Check files written in the scratchpad area
+/tool scratch status
+
+# Clean up all disposable artifacts when finished
+/tool scratch clean
+```
+
+**Walkthrough**
+1. `/tool scratch on` creates a dedicated temporary directory (`~/.local/share/chatybot/sessions/<id>/scratch/` or global fallback `~/.local/share/chatybot/scratch/`) and injects its path and usage instructions into the system prompt.
+2. The model writes its scripts using `write_file` and runs them via `run_command` (e.g. `python3 "<scratch_dir>/<file>"`).
+3. `/tool scratch status` lists the generated scripts and file counts.
+4. `/tool scratch clean` deletes disposable artifacts from the scratch directory.
+
 ---
+
 
 ## Chapter 9 — Image Generation & Vision
 

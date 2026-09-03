@@ -67,6 +67,9 @@ class ToolSettings(BaseModel):
     auto_execute: bool = True
     """Whether to auto-execute tools when detected."""
 
+    scratch: bool = False
+    """Whether scratch mode is enabled for the profile."""
+
     @field_validator("mode")
     @classmethod
     def validate_mode(cls, v: str) -> str:
@@ -437,6 +440,8 @@ class Profile(BaseModel):
                         pass
                 elif len(parts) >= 3 and parts[1].lower() == "disable":
                     config.tool_settings.disabled_tools.append(parts[2])
+                elif len(parts) >= 3 and parts[1].lower() == "scratch":
+                    config.tool_settings.scratch = (parts[2].lower() == "on")
                 elif len(parts) >= 2:
                     subcmd = parts[1].lower()
                     if subcmd == "off":
@@ -544,6 +549,9 @@ class Profile(BaseModel):
             lines.append("/tool on")
         else:
             lines.append("/tool off")
+
+        if self.config.tool_settings.scratch:
+            lines.append("/tool scratch on")
 
         for disabled in self.config.tool_settings.disabled_tools:
             lines.append(f"/tool disable {disabled}")

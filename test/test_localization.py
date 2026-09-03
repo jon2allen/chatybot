@@ -358,5 +358,22 @@ def test_tool_prompt_localization():
         assert translated == expected_cmd, f"Failed for {loc}: '{localized_input}' -> '{translated}', expected '{expected_cmd}'"
 
 
+def test_tool_scratch_localization():
+    """Verify /tool scratch on/off/clean translations across all supported languages."""
+    test_cases = [
+        ("es", "/herramienta borrador activar", "/tool scratch on"),
+        ("es", "/herramienta borrador limpiar", "/tool scratch clean"),
+        ("fr", "/outil brouillon on", "/tool scratch on"),
+        ("fr", "/outil brouillon nettoyer", "/tool scratch clean"),
+        ("zh", "/工具 草稿 on", "/tool scratch on"),
+        ("zh", "/工具 草稿 清空", "/tool scratch clean"),
+        ("it", "/strumento bozza on", "/tool scratch on"),
+        ("it", "/strumento bozza pulire", "/tool scratch clean"),
+        ("ar", "/أداة مسودة on", "/tool scratch on"),
+        ("ar", "/أداة مسودة مسح", "/tool scratch clean"),
+    ]
 
-
+    for loc, localized_input, expected_cmd in test_cases:
+        mgr = LocalizationManager(loc)
+        translated = mgr.translate_command_string(localized_input)
+        assert translated == expected_cmd, f"Failed for {loc}: '{localized_input}' -> '{translated}', expected '{expected_cmd}'"
