@@ -165,6 +165,8 @@ class ChatybotApp:
         self.live_tool_context: str = ""
         self.in_tool_loop: bool = False
         self.tool_auto: bool = False
+        self.tool_scratch: bool = False
+        self._tool_scratch_user_set: bool = False
         self.max_turns: int = 25
         self.max_tool_calls_per_turn: int = 10
         self.agentic_instructions: str = ""
@@ -796,6 +798,23 @@ class ChatybotApp:
     def _resolve_session_file(self, target: str) -> Optional[str]:
         """Resolve a session identifier or custom name using session store."""
         return self._get_session_store().resolve_session(target)
+
+    def get_scratch_dir(self, create: bool = True) -> str:
+        """
+        Get the current active scratchpad directory path.
+        If an active session exists, returns ~/.local/share/chatybot/sessions/<session_id>/scratch/
+        Otherwise, returns ~/.local/share/chatybot/scratch/
+        """
+        if getattr(self, "active_session_id", None):
+            scratch_path = os.path.join(self.session_dir, self.active_session_id, "scratch")
+        else:
+            scratch_path = os.path.join(os.path.dirname(self.session_dir), "scratch")
+        if create:
+            try:
+                os.makedirs(scratch_path, exist_ok=True)
+            except OSError as e:
+                print(f"Warning: Could not create scratch directory '{scratch_path}': {e}")
+        return scratch_path
 
     def _slugify_text(self, text: str, max_words: int = 6) -> str:
         """Convert text prompt into a clean filename slug."""
@@ -4211,6 +4230,15 @@ class ChatybotApp:
                 print(f"Warning: Invalid session_strip_thinking '{val}'. Using default 'separate'.")
                 self.session_strip_thinking = "separate"
 
+        if 'tool_scratch' in config_section and not getattr(self, '_tool_scratch_user_set', False):
+            val = config_section.get('tool_scratch')
+            if isinstance(val, bool):
+                self.tool_scratch = val
+            elif str(val).lower() in ('true', '1', 'yes', 'on'):
+                self.tool_scratch = True
+            elif str(val).lower() in ('false', '0', 'no', 'off'):
+                self.tool_scratch = False
+
         tools = config.get('tools', {})
         
         # Build tool context string
@@ -4283,6 +4311,19 @@ class ChatybotApp:
                             required_str = " (optional)" if is_optional else " (required)"
                             lines.append(f"   {param_name}: {param_type}{required_str} {param_desc}")
         
+        if self.tool_scratch:
+            scratch_dir = self.get_scratch_dir(create=True)
+            lines.append("\n=== SCRATCHPAD AREA ===")
+            lines.append("Scratchpad mode is ACTIVE. You have a dedicated temporary scratch directory at:")
+            lines.append(f"{scratch_dir}")
+            lines.append("")
+            lines.append("When creating, testing, or executing disposable scripts (Python or Bash) or temporary data:")
+            lines.append(f"- Save temporary scripts in this folder (e.g., using write_file with path=\"{scratch_dir}/<filename>\").")
+            lines.append(f"- Execute them using run_command (e.g., python3 {scratch_dir}/<filename> or bash {scratch_dir}/<filename>).")
+            lines.append("- Output/print all results to STDOUT.")
+            lines.append("- Confine disposable code and temporary artifacts to this directory to avoid altering project files.")
+            lines.append("=======================")
+
         lines.append("\n=== END TOOLS ===\n")
         if hasattr(self, "context_limiter") and self.context_limiter.context_limit:
             lim = self.context_limiter.context_limit
