@@ -1,5 +1,6 @@
 import os
 import tempfile
+from pathlib import Path
 import pytest
 from unittest.mock import patch
 
@@ -122,3 +123,58 @@ class TestToolScratch:
         profile_off = Profile.from_chatdsl_string(content_off)
         assert profile_off.config.tool_settings.scratch is False
         assert "/tool scratch on" not in profile_off.to_chatdsl()
+
+    def test_get_scratch_dir_trailing_slash_and_relative(self, app):
+        app.active_session_id = None
+        # Trailing slash
+        app.session_dir = "/tmp/test_chatybot/sessions/"
+        scratch_dir = app.get_scratch_dir(create=False)
+        expected = str(Path("/tmp/test_chatybot/scratch").resolve())
+        assert scratch_dir == expected
+        assert not scratch_dir.endswith("sessions/scratch")
+
+        # Relative path
+        app.session_dir = "my_sessions/"
+        rel_scratch = app.get_scratch_dir(create=False)
+        assert rel_scratch.endswith("scratch")
+        assert not rel_scratch.endswith("my_sessions/scratch")
+
+    def test_get_scratch_dir_mkdir_failure(self, app):
+        with patch("os.makedirs", side_effect=OSError("Permission denied")):
+            scratch = app.get_scratch_dir(create=True)
+            assert scratch is None
+
+            app.tool_scratch = True
+            app._tool_scratch_user_set = True
+            context = app.generate_tool_context()
+            # If scratch_dir creation fails, scratchpad area should be omitted
+            assert "=== SCRATCHPAD AREA ===" not in context
+
+    def test_scratch_path_quoted_in_prompt_context(self, app):
+        app.tool_scratch = True
+        app._tool_scratch_user_set = True
+        app.active_session_id = "test_alias 20260903"
+        context = app.generate_tool_context()
+        assert 'python3 "' in context
+        assert 'bash "' in context
+
+    def test_profile_manager_sets_tool_scratch_user_set(self, app):
+        from chatybot.profile_manager import ProfileManager
+        from chatybot.profile_model import Profile, ProfileConfig, ToolSettings
+
+        pm = ProfileManager(os.path.join(tempfile.gettempdir(), "profiles"))
+        cfg = ProfileConfig(model_alias="test_model", tool_settings=ToolSettings(scratch=True))
+        profile = Profile(name="test_prof", config=cfg)
+
+        app._tool_scratch_user_set = False
+        pm.apply_profile_commands(profile, app)
+        assert app.tool_scratch is True
+        assert app._tool_scratch_user_set is True
+
+    @pytest.mark.anyio
+    async def test_tool_scratch_on_notice_when_tool_mode_off(self, app, capsys):
+        app.tool_mode = False
+        await app.handle_escape_command("/tool scratch on")
+        captured = capsys.readouterr().out
+        assert "Tool mode is currently OFF" in captured
+

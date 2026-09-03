@@ -26,6 +26,7 @@ import copy
 import signal
 import shutil
 from datetime import datetime
+from pathlib import Path
 from typing import Dict, Any, List, Tuple, Optional, Callable, Union
 import logging
 import atexit
@@ -787,21 +788,23 @@ class ChatybotApp:
         """Resolve a session identifier or custom name using session store."""
         return self._get_session_store().resolve_session(target)
 
-    def get_scratch_dir(self, create: bool = True) -> str:
+    def get_scratch_dir(self, create: bool = True) -> Optional[str]:
         """
         Get the current active scratchpad directory path.
         If an active session exists, returns ~/.local/share/chatybot/sessions/<session_id>/scratch/
-        Otherwise, returns ~/.local/share/chatybot/scratch/
+        Otherwise, returns ~/.local/share/chatybot/scratch/ (as a sibling of the sessions directory).
         """
+        session_dir_path = Path(self.session_dir).expanduser().resolve()
         if getattr(self, "active_session_id", None):
-            scratch_path = os.path.join(self.session_dir, self.active_session_id, "scratch")
+            scratch_path = str(session_dir_path / self.active_session_id / "scratch")
         else:
-            scratch_path = os.path.join(os.path.dirname(self.session_dir), "scratch")
+            scratch_path = str(session_dir_path.parent / "scratch")
         if create:
             try:
                 os.makedirs(scratch_path, exist_ok=True)
             except OSError as e:
                 print(f"Warning: Could not create scratch directory '{scratch_path}': {e}")
+                return None
         return scratch_path
 
     def _slugify_text(self, text: str, max_words: int = 6) -> str:
@@ -4302,16 +4305,18 @@ class ChatybotApp:
         
         if self.tool_scratch:
             scratch_dir = self.get_scratch_dir(create=True)
-            lines.append("\n=== SCRATCHPAD AREA ===")
-            lines.append("Scratchpad mode is ACTIVE. You have a dedicated temporary scratch directory at:")
-            lines.append(f"{scratch_dir}")
-            lines.append("")
-            lines.append("When creating, testing, or executing disposable scripts (Python or Bash) or temporary data:")
-            lines.append(f"- Save temporary scripts in this folder (e.g., using write_file with path=\"{scratch_dir}/<filename>\").")
-            lines.append(f"- Execute them using run_command (e.g., python3 {scratch_dir}/<filename> or bash {scratch_dir}/<filename>).")
-            lines.append("- Output/print all results to STDOUT.")
-            lines.append("- Confine disposable code and temporary artifacts to this directory to avoid altering project files.")
-            lines.append("=======================")
+            if scratch_dir:
+                lines.append("\n=== SCRATCHPAD AREA ===")
+                lines.append("Scratchpad mode is ACTIVE. You have a dedicated temporary scratch directory at:")
+                lines.append(f"{scratch_dir}")
+                lines.append("")
+                lines.append("When creating, testing, or executing disposable scripts (Python or Bash) or temporary data:")
+                lines.append(f'- Save temporary scripts in this folder (e.g., using write_file with path="{scratch_dir}/<filename>").')
+                lines.append(f'- Execute them using run_command (e.g., python3 "{scratch_dir}/<filename>" or bash "{scratch_dir}/<filename>").')
+                lines.append("- Output/print all results to STDOUT.")
+                lines.append("- Confine disposable code and temporary artifacts to this directory to avoid altering project files.")
+                lines.append("- If a scratch script fails with an error, overwrite the corrected script directly using write_file rather than doing multi-step search and replace.")
+                lines.append("=======================")
 
         lines.append("\n=== END TOOLS ===\n")
         if hasattr(self, "context_limiter") and self.context_limiter.context_limit:
