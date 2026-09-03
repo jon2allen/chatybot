@@ -339,7 +339,10 @@ async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandRes
                 context = app.generate_tool_context()
                 if app.tool_mode and context:
                     app.buffer_manager.set_script_var('TOOL_CONTEXT', context)
-                print(f"Tool scratch mode enabled. Scratch directory: {scratch_dir}")
+                msg = f"Tool scratch mode enabled. Scratch directory: {scratch_dir}"
+                if not getattr(app, "tool_mode", False):
+                    msg += " (Note: Tool mode is currently OFF. Run '/tool auto' or '/tool on' to enable agentic tool execution)."
+                print(msg)
             elif scratch_arg == "off":
                 app.tool_scratch = False
                 app._tool_scratch_user_set = True
@@ -349,7 +352,7 @@ async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandRes
                 print("Tool scratch mode disabled")
             elif scratch_arg == "clean":
                 scratch_dir = app.get_scratch_dir(create=False)
-                if os.path.exists(scratch_dir):
+                if scratch_dir and os.path.exists(scratch_dir):
                     count = 0
                     for item in os.listdir(scratch_dir):
                         item_path = os.path.join(scratch_dir, item)
@@ -371,7 +374,7 @@ async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandRes
                 scratch_dir = app.get_scratch_dir(create=False)
                 print(f"Tool scratch mode is currently {state_str}")
                 print(f"Scratch directory: {scratch_dir}")
-                if os.path.exists(scratch_dir):
+                if scratch_dir and os.path.exists(scratch_dir):
                     files = [f for f in os.listdir(scratch_dir) if not f.startswith('.')]
                     if files:
                         print(f"Files ({len(files)}):")
