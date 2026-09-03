@@ -10,6 +10,7 @@ enable_profile_edit = true
 session_mode = "auto"
 session_dir = "~/.local/share/chatybot/sessions"
 session_strip_thinking = "separate"
+tool_scratch = false
 # editor = "nano"
 agentic_instructions = """
 IMPORTANT: You are executing in an autonomous, multi-turn tool-calling loop.

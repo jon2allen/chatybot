@@ -87,7 +87,7 @@ async def cmd_run_unsafe(ctx: CommandContext, parts: list, command: str) -> Comm
     return CommandResult.ok()
 
 
-@command("/tool", help="Manage tools and tool mode", args="[list|enable|disable|on|off|auto|loop|max_turns|rate_limit|prompt|translate] ...", category="tools")
+@command("/tool", help="Manage tools and tool mode", args="[list|enable|disable|on|off|auto|scratch|loop|max_turns|rate_limit|prompt|translate] ...", category="tools")
 async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandResult:
     app = ctx.app
     # Handle /tool subcommands: on, off, or dispatch
@@ -327,6 +327,77 @@ async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandRes
         else:
             state_str = "enabled" if app.tool_auto else "disabled"
             print(f"Tool auto mode is currently {state_str}")
+        return CommandResult.ok()
+
+    elif subcmd == "scratch":
+        if len(parts) > 2:
+            scratch_arg = parts[2].strip().lower()
+            if scratch_arg == "on":
+                app.tool_scratch = True
+                app._tool_scratch_user_set = True
+                scratch_dir = app.get_scratch_dir(create=True)
+                context = app.generate_tool_context()
+                if app.tool_mode and context:
+                    app.buffer_manager.set_script_var('TOOL_CONTEXT', context)
+                print(f"Tool scratch mode enabled. Scratch directory: {scratch_dir}")
+            elif scratch_arg == "off":
+                app.tool_scratch = False
+                app._tool_scratch_user_set = True
+                context = app.generate_tool_context()
+                if app.tool_mode and context:
+                    app.buffer_manager.set_script_var('TOOL_CONTEXT', context)
+                print("Tool scratch mode disabled")
+            elif scratch_arg == "clean":
+                scratch_dir = app.get_scratch_dir(create=False)
+                if os.path.exists(scratch_dir):
+                    count = 0
+                    for item in os.listdir(scratch_dir):
+                        item_path = os.path.join(scratch_dir, item)
+                        try:
+                            if os.path.isfile(item_path) or os.path.islink(item_path):
+                                os.unlink(item_path)
+                                count += 1
+                            elif os.path.isdir(item_path):
+                                import shutil
+                                shutil.rmtree(item_path)
+                                count += 1
+                        except Exception as e:
+                            print(f"Warning: Could not remove '{item}': {e}")
+                    print(f"Cleaned scratch directory: removed {count} item(s) from {scratch_dir}")
+                else:
+                    print(f"Scratch directory does not exist or is already empty: {scratch_dir}")
+            elif scratch_arg in ("status", "show", "info"):
+                state_str = "enabled" if app.tool_scratch else "disabled"
+                scratch_dir = app.get_scratch_dir(create=False)
+                print(f"Tool scratch mode is currently {state_str}")
+                print(f"Scratch directory: {scratch_dir}")
+                if os.path.exists(scratch_dir):
+                    files = [f for f in os.listdir(scratch_dir) if not f.startswith('.')]
+                    if files:
+                        print(f"Files ({len(files)}):")
+                        for f in sorted(files):
+                            print(f"  - {f}")
+                    else:
+                        print("Scratch directory is currently empty.")
+                else:
+                    print("Scratch directory has not been created yet.")
+            else:
+                print("Invalid option. Usage: /tool scratch [on|off|clean|status]")
+        else:
+            state_str = "enabled" if app.tool_scratch else "disabled"
+            scratch_dir = app.get_scratch_dir(create=False)
+            print(f"Tool scratch mode is currently {state_str}")
+            print(f"Scratch directory: {scratch_dir}")
+            if os.path.exists(scratch_dir):
+                files = [f for f in os.listdir(scratch_dir) if not f.startswith('.')]
+                if files:
+                    print(f"Files ({len(files)}):")
+                    for f in sorted(files):
+                        print(f"  - {f}")
+                else:
+                    print("Scratch directory is currently empty.")
+            else:
+                print("Scratch directory has not been created yet.")
         return CommandResult.ok()
 
     elif subcmd == "loop":
