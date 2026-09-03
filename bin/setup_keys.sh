@@ -40,7 +40,7 @@ KEYS=(
 # Load existing .env if present in current directory to prepopulate defaults
 if [ -f ".env" ]; then
     while IFS='=' read -r key val || [ -n "$key" ]; do
-        key=$(echo "$key" | tr -d '[:space:]')
+        key=$(echo "$key" | sed -e 's/^[[:space:]]*export[[:space:]]\+//' | tr -d '[:space:]')
         val=$(echo "$val" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^["'"'"']//' -e 's/["'"'"']$//')
         if [[ ! "$key" =~ ^# && -n "$key" && -n "$val" ]]; then
             eval "val_existing=\"\${$key}\""

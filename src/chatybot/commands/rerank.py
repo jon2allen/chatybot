@@ -69,20 +69,8 @@ async def cmd_documents(ctx: CommandContext, parts: list, command: str) -> Comma
 @command("/rerank", help="Rerank documents against a query", args='"<query>" [, top_n=N] [, items=N] [, split=sentence|line|paragraph] [, return=summ|text] [, full_doc=true|false]', category="rerank")
 async def cmd_rerank(ctx: CommandContext, parts: list, command: str) -> CommandResult:
     app = ctx.app
-    # Dynamically load env keys in case of persistent process startup without them
-    for path in [os.path.expanduser("~/.config/chatybot/.env"), "../../.env", "../.env", ".env"]:
-        if os.path.exists(path):
-            try:
-                with open(path, "r") as f:
-                    for line in f:
-                        line = line.strip()
-                        if line and not line.startswith("#") and "=" in line:
-                            k, v = line.split("=", 1)
-                            k = k.strip()
-                            v = v.strip().strip('"\'')
-                            os.environ[k] = v
-            except Exception:
-                pass
+    from ..env_utils import load_project_env_files
+    load_project_env_files()
 
     # Dynamic fallback to jina_api_key.txt
     for key_file in ["jina_api_key.txt", "jina_ai_key.txt", "../jina_api_key.txt", "../jina_ai_key.txt"]:

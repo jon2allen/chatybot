@@ -39,8 +39,5 @@ chatybot-config = "chatybot.config_tui:main"
 chatybot-migrate-sessions = "chatybot.migrate_sessions:main"
 chatybot-setup-keys = "chatybot.setup_keys:main"
 
-[tool.setuptools]
-script-files = ["bin/setup_keys.sh", "bin/setup_keys.bat"]
-
 [tool.setuptools.package-data]
 chatybot = ["*.toml", "*.chatdsl", "profiles/*.chatdsl", "translations.json"]

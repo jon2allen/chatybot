@@ -245,20 +245,9 @@ class ChatybotApp:
 
     def initialize(self) -> None:
         """Initialize the application by loading configuration and setting up history."""
-        # Load environment variables from global and local .env files
-        for path in [os.path.expanduser("~/.config/chatybot/.env"), "../../.env", "../.env", ".env"]:
-            if os.path.exists(path):
-                try:
-                    with open(path, "r") as f:
-                        for line in f:
-                            line = line.strip()
-                            if line and not line.startswith("#") and "=" in line:
-                                k, v = line.split("=", 1)
-                                k = k.strip()
-                                v = v.strip().strip('"\'')
-                                os.environ[k] = v
-                except Exception:
-                    pass
+        # Load environment variables from project and global .env files
+        from .env_utils import load_project_env_files
+        load_project_env_files()
 
         # Also load from jina_api_key.txt as fallback
         for key_file in ["jina_api_key.txt", "jina_ai_key.txt", "../jina_api_key.txt", "../jina_ai_key.txt"]:
@@ -1131,12 +1120,9 @@ class ChatybotApp:
         """
         model_config = self.config_manager.get_model_config(model_alias)
 
+        from .env_utils import resolve_api_key
         api_key_env = model_config.get("api_key", "")
-        api_key = os.environ.get(api_key_env)
-        if not api_key and api_key_env:
-            # Failsafe: check if user directly pasted key into config
-            if api_key_env.startswith(("sk-", "nvapi-", "AIza", "gsk_", "hf_")) or (len(api_key_env) > 24 and not api_key_env.isupper()):
-                api_key = api_key_env
+        api_key = resolve_api_key(api_key_env)
 
         # Bypass strict API key requirement for local models/Ollama
         if not api_key:
@@ -1150,7 +1136,7 @@ class ChatybotApp:
             else:
                 raise ValueError(
                     f"API key not found for model alias '{model_alias}'. "
-                    f"Please set the '{api_key_env}' environment variable (e.g. export {api_key_env}=\"...\" or run ./bin/setup_keys.sh)."
+                    f"Please set the '{api_key_env}' environment variable (e.g. export {api_key_env}=\"...\" or run 'chatybot --setup-keys')."
                 )
 
         base_url = model_config.get("base_url")
