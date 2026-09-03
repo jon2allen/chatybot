@@ -305,7 +305,7 @@ chat --> Hello!           # Start chatting!
 | `/run <command>` | Execute a shell command and capture stdout/stderr/exit code | `/run ls -la` |
 | `/run_safe` | Enable safe mode for shell execution (blocks dangerous commands) | `/run_safe` |
 | `/run_unsafe [askfirst]` | Disable safe mode (runs directly; optional `askfirst` prompts Y/N) | `/run_unsafe` |
-| `/tool <subcommand>` | Manage native tool loop mode, inspect prompt context, or dispatch invocations | `/tool loop max=5` |
+| `/tool <subcommand>` | Manage native tool loop mode, scratchpad directory, inspect prompt context, or dispatch invocations | `/tool scratch on` |
 | `/setdb <name>` | Select TinyDB database. Use `Null` to deactivate. | `/setdb knowledge` |
 | `/dblist` | List all TinyDB databases | `/dblist` |
 | `/searchdb <q>` | Search current database | `/searchdb "python"` |
@@ -578,6 +578,11 @@ You can enable native-like tool usage for LLMs, allowing them to autonomously se
 *   **`/tool enable <tool>|all`**: Dynamically enables a specific tool or all tools for the current session.
 *   **`/tool disable <tool>|all`**: Dynamically disables a specific tool or all tools, forcing an immediate prompt context refresh and runtime block in the dispatcher.
 *   **`/tool prompt`**: Displays the active tool injection context and system instructions.
+*   **`/tool scratch [on|off|clean|status|show]`**: Toggle or manage the dedicated agentic scratchpad directory:
+    *   `on`: Enables scratchpad mode and injects dedicated instructions directing the LLM to write, test, and execute disposable Python/Bash scripts within a dedicated temporary folder (`~/.local/share/chatybot/sessions/<session_id>/scratch/` for active sessions, or `~/.local/share/chatybot/scratch/` as a global fallback) without altering project files.
+    *   `off`: Disables scratchpad mode and removes scratchpad instructions from the system prompt.
+    *   `clean`: Purges all temporary scripts, outputs, and subdirectories from the active scratchpad folder.
+    *   `status` (or `show`/`info`): Displays current scratchpad state, directory path, and lists all files currently in the scratchpad.
 *   **`/tool loop [turns|max|max=val] [force]`**: Starts the autonomous execution loop. Chatybot will feed the model's requests to local tools, execute them, and feed results back to the model until:
     *   The model returns a conversational natural-language answer (terminal state).
     *   The maximum number of turns is reached (default 25; configurable via `max_turns` in `tools_config.toml`; use `max` or `max=100` to increase). Loop counts greater than 100 require the `force` flag.
@@ -881,6 +886,24 @@ chat --> Create a blog post outline about ${topic}
 ```
 
 ### Change log
+
+September 3rd, 2026 (v0.8.1)
+---------------------------
+- **Agentic Scratchpad Area (`/tool scratch`)**:
+  - Added dedicated temporary scratchpad area for models to create, test, and execute disposable Python/Bash scripts and scratch files without modifying project files.
+  - Implemented `/tool scratch [on|off|clean|status|show]` commands with real-time prompt injection, clean purging, and file inventory.
+  - Integrated session-scoped scratchpads (`~/.local/share/chatybot/sessions/<session_id>/scratch/`) with global fallback (`~/.local/share/chatybot/scratch/`).
+  - Added ChatDSL profile integration (`/tool scratch on|off`) with persistence across session reloads.
+  - Hardened path resolution against trailing slashes, relative paths, and wrapped prompt execution paths in quotes for safety with space-containing paths.
+  - Added multi-language keywords for `scratch` and `clean` across all supported languages (ES, FR, ZH, IT, AR).
+- **Environment & Multi-Platform Key Setup**:
+  - Added interactive cross-platform API key setup wizard `chatybot-setup-keys` and CLI flag `chatybot --setup-keys`.
+  - Added native setup scripts `bin/setup_keys.sh` (POSIX/macOS/Linux) and `bin/setup_keys.bat` (Windows with `setx` user registry persistence and double-click Explorer support).
+  - Added `.env.example` template and updated `.gitignore` for security.
+  - Centralized `.env` file loading and API key resolution in `src/chatybot/env_utils.py`, supporting `export ` prefixes, comments, quotes, nearest-project boundaries, and non-destructive global defaults (`~/.config/chatybot/.env`).
+  - Hardened API key resolution against false positives for custom lowercase environment variable names.
+- **Quick Start Documentation Revamp**:
+  - Rewrote the Quick Start guide with a clear 3-step setup walkthrough, supported provider key reference table, and `/env` inspection verification.
 
 September 1st, 2026 (v0.8.0)
 ---------------------------
