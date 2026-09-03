@@ -83,10 +83,16 @@ class BaseModelConfig(BaseModel):
     """Hard token limit for input context."""
 
     def resolve_api_key(self) -> Optional[str]:
-        """Return the actual API key by reading the named environment variable."""
+        """Return the actual API key by reading the named environment variable or raw key string."""
         if not self.api_key:
             return None
-        return os.getenv(self.api_key)
+        val = os.getenv(self.api_key)
+        if val:
+            return val
+        # Failsafe: if the user directly pasted a secret key into the config
+        if self.api_key.startswith(("sk-", "nvapi-", "AIza", "gsk_", "hf_")) or (len(self.api_key) > 24 and not self.api_key.isupper()):
+            return self.api_key
+        return None
 
     @property
     def detected_vendor(self) -> str:

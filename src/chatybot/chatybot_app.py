@@ -245,8 +245,8 @@ class ChatybotApp:
 
     def initialize(self) -> None:
         """Initialize the application by loading configuration and setting up history."""
-        # Load environment variables from .env file if it exists
-        for path in [".env", "../.env", "../../.env"]:
+        # Load environment variables from global and local .env files
+        for path in [os.path.expanduser("~/.config/chatybot/.env"), "../../.env", "../.env", ".env"]:
             if os.path.exists(path):
                 try:
                     with open(path, "r") as f:
@@ -257,7 +257,6 @@ class ChatybotApp:
                                 k = k.strip()
                                 v = v.strip().strip('"\'')
                                 os.environ[k] = v
-                    break
                 except Exception:
                     pass
 
@@ -1134,6 +1133,10 @@ class ChatybotApp:
 
         api_key_env = model_config.get("api_key", "")
         api_key = os.environ.get(api_key_env)
+        if not api_key and api_key_env:
+            # Failsafe: check if user directly pasted key into config
+            if api_key_env.startswith(("sk-", "nvapi-", "AIza", "gsk_", "hf_")) or (len(api_key_env) > 24 and not api_key_env.isupper()):
+                api_key = api_key_env
 
         # Bypass strict API key requirement for local models/Ollama
         if not api_key:
@@ -1147,7 +1150,7 @@ class ChatybotApp:
             else:
                 raise ValueError(
                     f"API key not found for model alias '{model_alias}'. "
-                    f"Please set the '{api_key_env}' environment variable."
+                    f"Please set the '{api_key_env}' environment variable (e.g. export {api_key_env}=\"...\" or run ./bin/setup_keys.sh)."
                 )
 
         base_url = model_config.get("base_url")
@@ -4974,7 +4977,17 @@ def run():
         action="store_true",
         help="Disable tools on startup and bypass all MCP server loading via stdio"
     )
+    parser.add_argument(
+        "--setup-keys",
+        action="store_true",
+        help="Launch interactive wizard to configure and save API keys"
+    )
     args, unknown = parser.parse_known_args()
+
+    if args.setup_keys:
+        from .setup_keys import main as setup_keys_main
+        setup_keys_main()
+        sys.exit(0)
 
     if args.config_edit:
         from .config_tui import main as tui_main

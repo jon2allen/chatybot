@@ -70,7 +70,7 @@ async def cmd_documents(ctx: CommandContext, parts: list, command: str) -> Comma
 async def cmd_rerank(ctx: CommandContext, parts: list, command: str) -> CommandResult:
     app = ctx.app
     # Dynamically load env keys in case of persistent process startup without them
-    for path in [".env", "../.env", "../../.env"]:
+    for path in [os.path.expanduser("~/.config/chatybot/.env"), "../../.env", "../.env", ".env"]:
         if os.path.exists(path):
             try:
                 with open(path, "r") as f:
@@ -81,7 +81,6 @@ async def cmd_rerank(ctx: CommandContext, parts: list, command: str) -> CommandR
                             k = k.strip()
                             v = v.strip().strip('"\'')
                             os.environ[k] = v
-                break
             except Exception:
                 pass
 
