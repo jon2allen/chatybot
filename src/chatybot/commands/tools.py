@@ -631,7 +631,10 @@ async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandRes
                 tools_str = ", ".join(tool_names)
                 if len(tools_str) > 80:
                     tools_str = tools_str[:77] + "..."
-                print(f"  Turn {t_id}: {count} calls ({successes} ok, {failures} fail) — {tools_str}")
+                # Aggregate tool call durations if available
+                loop_duration = sum(r.get("duration_ms", 0) for r in al if isinstance(r, dict))
+                duration_str = f" [{loop_duration:.0f}ms]" if loop_duration else ""
+                print(f"  Turn {t_id}: {count} calls ({successes} ok, {failures} fail){duration_str} — {tools_str}")
 
             print("-" * 60)
             print(f"Total: {len(loops)} loop(s), {total_calls} tool calls ({total_success} success, {total_failed} failed)")
@@ -688,7 +691,14 @@ async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandRes
             turn = rec.get("turn", "?")
             status = rec.get("status", "error")
             status_label = "SUCCESS" if status == "success" else "FAILED"
-            print(f"[{i}] Turn {turn} · {tool_name} — {status_label}")
+            duration_ms = rec.get("duration_ms")
+            duration_str = f" ({duration_ms}ms)" if duration_ms is not None else ""
+            print(f"[{i}] Turn {turn} · {tool_name} — {status_label}{duration_str}")
+
+            # Show timestamp if available
+            ts = rec.get("timestamp")
+            if ts:
+                print(f"      time: {ts}")
 
             # Show arguments on detail view
             args = rec.get("arguments", {})

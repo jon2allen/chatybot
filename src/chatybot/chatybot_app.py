@@ -929,7 +929,7 @@ class ChatybotApp:
         else:
             store.replace_turns(self.active_session_id, self.session_turns)
 
-    def append_session_turn(self, prompt: str, response: str, agentic_loop_data: Optional[List[Dict[str, Any]]] = None):
+    def append_session_turn(self, prompt: str, response: str, agentic_loop_data: Optional[List[Dict[str, Any]]] = None, timing: Optional[Dict[str, Any]] = None):
         """Append a completed exchange turn to active session and save to disk."""
         if self.session_mode == "off":
             return
@@ -957,6 +957,8 @@ class ChatybotApp:
             turn_data["thinking"] = thinking_text
         if agentic_loop_data:
             turn_data["agentic_loop"] = agentic_loop_data
+        if timing:
+            turn_data.update(timing)
 
         self.session_turns.append(turn_data)
         self._get_session_store().append_turn(self.active_session_id, turn_data)
@@ -2022,7 +2024,17 @@ class ChatybotApp:
             if not self.in_tool_loop and self.enable_chat_history:
                 self.chat_history.append((prompt, full_response))
                 if self.session_mode != "off":
-                    self.append_session_turn(prompt, full_response)
+                    _completion_timing = {
+                        "timestamp": datetime.now().isoformat(),
+                        "elapsed_ms": round(elapsed_time * 1000, 1),
+                    }
+                    if self.trace_tps:
+                        _completion_timing["tps"] = {
+                            "total": round(tps_total, 2),
+                            "think": round(tps_think, 2),
+                            "regular": round(tps_reg, 2),
+                        }
+                    self.append_session_turn(prompt, full_response, timing=_completion_timing)
                 if self.tool_auto and self.extract_tool_calls(full_response):
                     print("Tool call detected in response. Auto-launching agentic tool loop...")
                     await self.execute_tool_loop(max_turns=self.max_turns)
@@ -3927,6 +3939,8 @@ class ChatybotApp:
                 # Execute the tool and capture result
                 self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
                 self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '0')
+                _tool_t0 = time.perf_counter()
+                _tool_ts = datetime.now().isoformat()
                 try:
                     # dispatch_tool writes result to TOOL_DISPATCH_RESULT and returns the stdout string
                     result_str = await self.dispatch_tool(safe_json_dumps(tc, ensure_ascii=False))
@@ -3934,6 +3948,7 @@ class ChatybotApp:
                     result_str = safe_json_dumps({"status": "error", "message": f"Dispatch execution error: {str(e)}"}, ensure_ascii=False)
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', result_str)
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
+                _tool_duration_ms = round((time.perf_counter() - _tool_t0) * 1000, 1)
 
                 if self._is_permanent_capability_error(result_str) and "[PERMANENT CAPABILITY ERROR]" not in result_str:
                     result_str = self._format_capability_error(tool_name, result_str)
@@ -3965,7 +3980,9 @@ class ChatybotApp:
                     "arguments": tool_args,
                     "result": result_str,
                     "exit_code": exit_code_val,
-                    "status": "success" if exit_code_val == 0 else "error"
+                    "status": "success" if exit_code_val == 0 else "error",
+                    "timestamp": _tool_ts,
+                    "duration_ms": _tool_duration_ms,
                 }
 
                 current_loop = self.buffer_manager.get_script_var('AGENTIC_LOOP') or []
@@ -3997,7 +4014,9 @@ class ChatybotApp:
                     "arguments": tool_args,
                     "result": err_msg,
                     "exit_code": 1,
-                    "status": "error"
+                    "status": "error",
+                    "timestamp": datetime.now().isoformat(),
+                    "duration_ms": 0,
                 }
                 current_loop = self.buffer_manager.get_script_var('AGENTIC_LOOP') or []
                 if not isinstance(current_loop, list):
@@ -4110,7 +4129,9 @@ class ChatybotApp:
             turn = rec.get("turn", "?")
             status = rec.get("status", "error")
             status_label = "SUCCESS" if status == "success" else "FAILED"
-            print(f"[{i}] Turn {turn} · {tool_name} — {status_label}")
+            duration_ms = rec.get("duration_ms")
+            duration_str = f" ({duration_ms}ms)" if duration_ms is not None else ""
+            print(f"[{i}] Turn {turn} · {tool_name} — {status_label}{duration_str}")
 
             if status != "success":
                 result = rec.get("result", "")
