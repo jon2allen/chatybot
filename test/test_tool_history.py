@@ -44,6 +44,8 @@ def _make_loop(records):
             "result": r.get("result", ""),
             "exit_code": r.get("exit_code", 0),
             "status": r.get("status", "success"),
+            "timestamp": r.get("timestamp", "2026-09-03T12:00:00.000000"),
+            "duration_ms": r.get("duration_ms", 50.0),
         }
         for r in records
     ]
@@ -96,6 +98,8 @@ class TestToolHistory:
         assert "list_directory" in out
         assert "grep_search" in out
         assert "Total: 2 loop(s)" in out
+        # Timing: each loop has 2 calls x 50ms = 100ms
+        assert "100ms" in out
 
     @pytest.mark.anyio
     async def test_history_detail_for_specific_turn(self, app, capsys):
@@ -119,6 +123,9 @@ class TestToolHistory:
         assert "FAILED" in out
         assert "No matches found" in out
         assert '"path": "test.py"' in out
+        # Detail view should show per-call duration and timestamp
+        assert "50.0ms" in out
+        assert "time:" in out
 
     @pytest.mark.anyio
     async def test_history_detail_turn_not_found(self, app, capsys):
@@ -159,3 +166,96 @@ class TestToolHistory:
         await app.handle_escape_command("/tool history foobar")
         out = capsys.readouterr().out
         assert "Invalid argument 'foobar'" in out
+
+    @pytest.mark.anyio
+    async def test_history_backwards_compatible_no_timing(self, app, capsys):
+        """Old session turns without timing fields should still display correctly."""
+        app.session_turns = [
+            {
+                "turn_id": 1,
+                "prompt": "old turn",
+                "response": "done",
+                "agentic_loop": [
+                    {"turn": 1, "tool": "list_directory", "arguments": {}, "result": "", "exit_code": 0, "status": "success"},
+                ],
+            },
+        ]
+        # Summary should not crash and should not show duration
+        await app.handle_escape_command("/tool history")
+        out = capsys.readouterr().out
+        assert "Turn 1" in out
+        assert "1 calls" in out
+        # No duration bracket since old records lack duration_ms
+        assert "ms]" not in out
+
+        # Detail should not crash either
+        await app.handle_escape_command("/tool history 1")
+        out = capsys.readouterr().out
+        assert "list_directory" in out
+        assert "SUCCESS" in out
+        # No duration or time line for old records
+        assert "ms)" not in out
+        assert "time:" not in out
+
+    @pytest.mark.anyio
+    async def test_append_session_turn_stores_completion_timing(self, app):
+        """append_session_turn should persist timestamp and elapsed_ms in turn_data."""
+        app.session_mode = "on"
+        store = app._get_session_store()
+        store.create_session("test_timing_session", model_alias="test_model", custom_name="timing_test", initial_prompt="", notes=None)
+        app.active_session_id = "test_timing_session"
+        app.active_session_name = "timing_test"
+        app.session_first_prompt_slug = "test"
+        app.session_created_at = "2026-09-03T12:00:00.000000"
+
+        timing = {
+            "timestamp": "2026-09-03T12:00:01.500000",
+            "elapsed_ms": 1500.0,
+        }
+        app.append_session_turn("test prompt", "test response", timing=timing)
+
+        assert len(app.session_turns) == 1
+        turn = app.session_turns[0]
+        assert turn["timestamp"] == "2026-09-03T12:00:01.500000"
+        assert turn["elapsed_ms"] == 1500.0
+
+    @pytest.mark.anyio
+    async def test_append_session_turn_stores_tps_when_provided(self, app):
+        """append_session_turn should persist TPS data when included in timing dict."""
+        app.session_mode = "on"
+        store = app._get_session_store()
+        store.create_session("test_tps_session", model_alias="test_model", custom_name="tps_test", initial_prompt="", notes=None)
+        app.active_session_id = "test_tps_session"
+        app.active_session_name = "tps_test"
+        app.session_first_prompt_slug = "test"
+        app.session_created_at = "2026-09-03T12:00:00.000000"
+
+        timing = {
+            "timestamp": "2026-09-03T12:00:01.500000",
+            "elapsed_ms": 1500.0,
+            "tps": {"total": 42.5, "think": 20.0, "regular": 22.5},
+        }
+        app.append_session_turn("test prompt", "test response", timing=timing)
+
+        turn = app.session_turns[0]
+        assert turn["tps"]["total"] == 42.5
+        assert turn["tps"]["think"] == 20.0
+        assert turn["tps"]["regular"] == 22.5
+
+    @pytest.mark.anyio
+    async def test_append_session_turn_without_timing(self, app):
+        """append_session_turn without timing should not add timing keys (backwards compat)."""
+        app.session_mode = "on"
+        store = app._get_session_store()
+        store.create_session("test_no_timing", model_alias="test_model", custom_name="no_timing", initial_prompt="", notes=None)
+        app.active_session_id = "test_no_timing"
+        app.active_session_name = "no_timing"
+        app.session_first_prompt_slug = "test"
+        app.session_created_at = "2026-09-03T12:00:00.000000"
+
+        app.append_session_turn("test prompt", "test response")
+
+        turn = app.session_turns[0]
+        assert "timestamp" not in turn
+        assert "elapsed_ms" not in turn
+        assert "tps" not in turn
