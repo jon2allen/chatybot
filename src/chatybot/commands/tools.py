@@ -87,7 +87,7 @@ async def cmd_run_unsafe(ctx: CommandContext, parts: list, command: str) -> Comm
     return CommandResult.ok()
 
 
-@command("/tool", help="Manage tools and tool mode", args="[list|enable|disable|on|off|auto|scratch|loop|max_turns|rate_limit|prompt|translate] ...", category="tools")
+@command("/tool", help="Manage tools and tool mode", args="[list|enable|disable|on|off|auto|scratch|loop|max_turns|rate_limit|prompt|history|translate] ...", category="tools")
 async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandResult:
     app = ctx.app
     # Handle /tool subcommands: on, off, or dispatch
@@ -579,6 +579,137 @@ async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandRes
             print("=========================================\n")
         else:
             print("No tools available or tool context could not be generated.")
+        return CommandResult.ok()
+
+    elif subcmd == "history":
+        # /tool history          — list all agentic loops recorded in the active session
+        # /tool history <turn_id> — show detailed tool calls for a specific session turn
+        # /tool history current  — show the most recent in-memory AGENTIC_LOOP trace
+        detail_arg = parts[2].strip().lower() if len(parts) > 2 else ""
+
+        if detail_arg in ("current", "last"):
+            app.show_agentic_loop_trace()
+            return CommandResult.ok()
+
+        if detail_arg == "":
+            # Summarize every turn in the active session that has an agentic_loop
+            if not app.session_turns:
+                print("No active session or no turns recorded.")
+                return CommandResult.ok()
+
+            loops = []
+            for turn in app.session_turns:
+                al = turn.get("agentic_loop")
+                if isinstance(al, list) and al:
+                    loops.append(turn)
+
+            if not loops:
+                print("No agentic tool loops found in the active session.")
+                print("Tip: Run '/tool loop' or enable '/tool auto on' to execute agentic loops, then use '/tool history' to review them.")
+                return CommandResult.ok()
+
+            session_label = app.active_session_name or app.active_session_id or "unsaved"
+            print(f"\n=== AGENTIC LOOP HISTORY (Session: {session_label}) ===")
+            total_calls = 0
+            total_success = 0
+            total_failed = 0
+            for turn in loops:
+                al = turn["agentic_loop"]
+                t_id = turn.get("turn_id", "?")
+                count = len(al)
+                successes = sum(1 for r in al if isinstance(r, dict) and r.get("status") == "success")
+                failures = count - successes
+                total_calls += count
+                total_success += successes
+                total_failed += failures
+                tool_names = []
+                for rec in al:
+                    if isinstance(rec, dict):
+                        tn = rec.get("tool", "unknown")
+                        if tn not in tool_names:
+                            tool_names.append(tn)
+                tools_str = ", ".join(tool_names)
+                if len(tools_str) > 80:
+                    tools_str = tools_str[:77] + "..."
+                print(f"  Turn {t_id}: {count} calls ({successes} ok, {failures} fail) — {tools_str}")
+
+            print("-" * 60)
+            print(f"Total: {len(loops)} loop(s), {total_calls} tool calls ({total_success} success, {total_failed} failed)")
+            print("Use '/tool history <turn_id>' for per-call details, '/tool history current' for the latest in-memory loop.")
+            print("=" * 60)
+            return CommandResult.ok()
+
+        # Specific turn_id requested — show detailed tool calls
+        try:
+            target_id = int(detail_arg)
+        except ValueError:
+            print(f"Invalid argument '{detail_arg}'. Usage: /tool history [<turn_id>|current]")
+            return CommandResult.ok()
+
+        matched_turn = None
+        for turn in app.session_turns:
+            if turn.get("turn_id") == target_id:
+                matched_turn = turn
+                break
+
+        if matched_turn is None:
+            print(f"No turn {target_id} found in the active session.")
+            available = [t.get("turn_id") for t in app.session_turns if t.get("agentic_loop")]
+            if available:
+                print(f"Turns with agentic loops: {', '.join(str(t) for t in available)}")
+            else:
+                print("No turns with agentic loops in this session.")
+            return CommandResult.ok()
+
+        al = matched_turn.get("agentic_loop")
+        if not isinstance(al, list) or not al:
+            print(f"Turn {target_id} has no recorded agentic loop data.")
+            return CommandResult.ok()
+
+        total = len(al)
+        successes = sum(1 for r in al if isinstance(r, dict) and r.get("status") == "success")
+        failures = total - successes
+
+        print(f"\n=== AGENTIC LOOP — Turn {target_id} ===")
+        prompt_text = matched_turn.get("prompt", "")
+        if prompt_text:
+            snippet = prompt_text.replace("\n", " ").strip()
+            if len(snippet) > 100:
+                snippet = snippet[:97] + "..."
+            print(f"Prompt: {snippet}")
+        print(f"Total tool calls: {total}  ({successes} success, {failures} failed)")
+        print("-" * 60)
+
+        for i, rec in enumerate(al, 1):
+            if not isinstance(rec, dict):
+                print(f"[{i}] (invalid record: {type(rec).__name__}) — SKIPPED")
+                continue
+            tool_name = rec.get("tool", "unknown")
+            turn = rec.get("turn", "?")
+            status = rec.get("status", "error")
+            status_label = "SUCCESS" if status == "success" else "FAILED"
+            print(f"[{i}] Turn {turn} · {tool_name} — {status_label}")
+
+            # Show arguments on detail view
+            args = rec.get("arguments", {})
+            if args:
+                args_str = json.dumps(args, ensure_ascii=False)
+                if len(args_str) > 200:
+                    args_str = args_str[:197] + "..."
+                print(f"      args: {args_str}")
+
+            if status != "success":
+                result = rec.get("result", "")
+                if isinstance(result, str):
+                    snippet = result.replace("\n", " ").strip()
+                    if len(snippet) > 120:
+                        snippet = snippet[:117] + "..."
+                else:
+                    snippet = str(result)
+                if snippet:
+                    print(f"      reason: {snippet}")
+
+        print("=" * 60)
         return CommandResult.ok()
 
     elif subcmd in ("translate", "convert", "parse"):
