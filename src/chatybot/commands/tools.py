@@ -11,6 +11,7 @@ import shlex
 
 from chatybot.commands.registry import command, CommandResult
 from chatybot.commands.context import CommandContext
+from chatybot.commands.replay import _preview as _replay_preview
 
 
 @command("/run", help="Execute a shell command", args="<command>", category="tools")
@@ -87,7 +88,7 @@ async def cmd_run_unsafe(ctx: CommandContext, parts: list, command: str) -> Comm
     return CommandResult.ok()
 
 
-@command("/tool", help="Manage tools and tool mode", args="[list|enable|disable|on|off|auto|scratch|loop|max_turns|rate_limit|prompt|history|translate] ...", category="tools")
+@command("/tool", help="Manage tools and tool mode", args="[list|enable|disable|on|off|auto|scratch|loop|max_turns|rate_limit|prompt|history|replay|translate] ...", category="tools")
 async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandResult:
     app = ctx.app
     # Handle /tool subcommands: on, off, or dispatch
@@ -730,6 +731,9 @@ async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandRes
         print("=" * 60)
         return CommandResult.ok()
 
+    elif subcmd == "replay":
+        return await _handle_tool_replay(ctx, parts)
+
     elif subcmd in ("translate", "convert", "parse"):
         raw_text = command.split(maxsplit=2)[2].strip() if len(parts) > 2 else (app.buffer_manager.get_script_var('LAST_COMPLETION') or "")
         if not raw_text:
@@ -764,3 +768,246 @@ async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandRes
             # Provide JSON directly - dispatch it
             await app.dispatch_tool(arg)
         return CommandResult.ok()
+
+
+# ---------------------------------------------------------------------------
+# /tool replay — time-travel agentic loop replay
+# ---------------------------------------------------------------------------
+
+_TOOL_REPLAY_KEYWORDS = {"at", "diff", "step"}
+
+
+def _parse_tool_replay_tokens(tokens, ctx):
+    """Parse /tool replay tokens into (turn_id, mode, mode_args, limit).
+
+    turn_id is the session turn whose agentic_loop we replay (None = most
+    recent turn with an agentic loop). mode is one of summary/at/diff/step.
+    """
+    app = ctx.app
+    limit = None
+    turn_id = None
+    mode = "summary"
+    mode_args = []
+
+    filtered = []
+    for tok in tokens:
+        if tok.lower().startswith("limit="):
+            try:
+                limit = int(tok.split("=", 1)[1])
+            except ValueError:
+                pass
+        else:
+            filtered.append(tok)
+
+    if filtered:
+        first = filtered[0]
+        if first.lower() not in _TOOL_REPLAY_KEYWORDS:
+            # First token is a turn id
+            try:
+                turn_id = int(first)
+            except ValueError:
+                turn_id = None
+            rest = filtered[1:]
+        else:
+            rest = filtered
+    else:
+        rest = []
+
+    if rest:
+        head = rest[0].lower()
+        if head == "at":
+            mode = "at"
+            mode_args = rest[1:]
+        elif head == "diff":
+            mode = "diff"
+            mode_args = rest[1:]
+        elif head == "step":
+            mode = "step"
+            mode_args = rest[1:]
+
+    return turn_id, mode, mode_args, limit
+
+
+def _render_tool_replay_summary(snapshots, turn_id):
+    if not snapshots:
+        print("No agentic loop found to replay.")
+        return
+    print("\n" + "=" * 78)
+    print(f"AGENTIC LOOP REPLAY — SUMMARY (turn {turn_id})")
+    print("=" * 78)
+    header = f"{'Step':<6}{'Tool':<20}{'Msgs':<6}{'Uncut Tok':<12}{'Trunc Tok':<12}{'Evicted':<9}{'AnchorWarn':<11}"
+    print(header)
+    print("-" * 78)
+    for s in snapshots:
+        warn = "YES" if s.anchors_alone_exceed_limit else "-"
+        tool_disp = s.tool or "(baseline)"
+        print(
+            f"{s.step:<6}{tool_disp:<20.18}{s.message_count:<6}{s.total_tokens:<12}"
+            f"{s.truncated_tokens:<12}{len(s.evicted_indices):<9}{warn:<11}"
+        )
+    print("=" * 78 + "\n")
+
+
+def _render_tool_replay_at(snapshot, system_prompt):
+    print("\n" + "=" * 78)
+    label = f"STEP {snapshot.step}" if snapshot.step else "STEP 0 (pre-loop baseline)"
+    print(f"AGENTIC LOOP — {label} (turn {snapshot.turn_id})")
+    print("=" * 78)
+    print(f"Tool: {snapshot.tool or '-'}  |  Status: {snapshot.status or '-'}  "
+          f"|  Duration: {snapshot.duration_ms:.0f}ms" if snapshot.step else
+          f"Tool: -  |  Status: -  |  Duration: -")
+    print(f"Messages: {snapshot.message_count}  |  Uncut tokens: {snapshot.total_tokens}  "
+          f"|  Truncated tokens: {snapshot.truncated_tokens}")
+    print(f"Evicted indices: {snapshot.evicted_indices if snapshot.evicted_indices else 'none'}")
+    print(f"Anchor overflow: {'YES (anchors alone exceed limit)' if snapshot.anchors_alone_exceed_limit else 'no'}")
+    print(f"System prompt (approximate): {_replay_preview(system_prompt, 70)}")
+    print("-" * 78)
+
+    surviving_keys = {(m.get("role"), m.get("content")) for m in snapshot.truncated_messages}
+    evicted_set = set(snapshot.evicted_indices)
+    anchor_idxs = set()
+    if snapshot.messages:
+        anchor_idxs.add(0)
+        if len(snapshot.messages) > 1 and snapshot.messages[1].get("role") == "user":
+            anchor_idxs.add(1)
+
+    for i, m in enumerate(snapshot.messages):
+        role = m.get("role", "?")
+        content = m.get("content", "")
+        clen = len(content) if isinstance(content, str) else 0
+        tags = []
+        if i in anchor_idxs:
+            tags.append("ANCHOR")
+        if i in evicted_set:
+            tags.append("EVICTED")
+        elif (m.get("role"), m.get("content")) not in surviving_keys and snapshot.did_truncate:
+            tags.append("EVICTED")
+        tag_str = f" [{', '.join(tags)}]" if tags else ""
+        print(f"  [{i}] {role:<10} ({clen} chars){tag_str}")
+        print(f"      {_replay_preview(content, 72)}")
+    print("=" * 78 + "\n")
+
+
+def _render_tool_replay_diff(diff):
+    print("\n" + "=" * 78)
+    print(f"AGENTIC LOOP DIFF: STEP {diff.step_a} -> STEP {diff.step_b}")
+    print("=" * 78)
+    print(f"Token delta (pre-truncation): {diff.token_delta:+d}")
+    print(f"Evicted-count delta: {diff.truncation_evicted_delta:+d}")
+    print(f"Anchor overflow changed: {'yes' if diff.anchor_overflow_changed else 'no'}")
+    print("-" * 78)
+
+    print(f"Added messages ({len(diff.added_messages)}):")
+    if diff.added_messages:
+        for m in diff.added_messages:
+            print(f"  + {m.get('role', '?'):<10} {_replay_preview(m.get('content', ''), 64)}")
+    else:
+        print("  (none)")
+
+    print(f"Newly evicted messages ({len(diff.newly_evicted)}):")
+    if diff.newly_evicted:
+        for m in diff.newly_evicted:
+            print(f"  - {m.get('role', '?'):<10} {_replay_preview(m.get('content', ''), 64)}")
+    else:
+        print("  (none)")
+    print("=" * 78 + "\n")
+
+
+async def _handle_tool_replay(ctx: CommandContext, parts: list) -> CommandResult:
+    """Handle /tool replay [<turn_id>] [at <N> | diff <A> <B> | step] [limit=<N>]."""
+    from chatybot.agentic_replayer import AgenticReplayer
+
+    app = ctx.app
+    # Tokens after "/tool replay"
+    raw_tokens = parts[2].strip().split() if len(parts) > 2 else []
+    turn_id, mode, mode_args, limit = _parse_tool_replay_tokens(raw_tokens, ctx)
+
+    target = app.active_session_id or app.active_session_name
+    if not target:
+        print("No active session. Usage: /tool replay [<turn_id>] [at <N> | diff <A> <B> | step] [limit=<N>]")
+        return CommandResult.ok()
+
+    replayer = AgenticReplayer(app)
+    try:
+        meta, turns = replayer._load_turns(target)
+    except Exception as e:
+        print(f"Error: could not load session '{target}': {e}")
+        return CommandResult.ok()
+
+    system_prompt = replayer._session_replayer.reconstruct_system_prompt(meta, turns)
+    agentic_turn = replayer._find_agentic_turn(turns, turn_id)
+    if agentic_turn is None:
+        if turn_id is not None:
+            print(f"No agentic loop found on turn {turn_id}.")
+        else:
+            print("No agentic tool loops found in the active session.")
+            print("Tip: Run '/tool loop' or enable '/tool auto on' to execute agentic loops, then use '/tool replay' to review them.")
+        return CommandResult.ok()
+
+    resolved_turn_id = agentic_turn.get("turn_id")
+    loop = agentic_turn.get("agentic_loop") or []
+    n_steps = len(loop) if isinstance(loop, list) else 0
+
+    if mode == "summary":
+        snapshots = replayer.replay_loop(target, turn_id=resolved_turn_id, limit=limit)
+        _render_tool_replay_summary(snapshots, resolved_turn_id)
+        return CommandResult.ok()
+
+    if mode == "at":
+        if not mode_args:
+            print("Usage: /tool replay [<turn_id>] at <N>")
+            return CommandResult.ok()
+        try:
+            step_n = int(mode_args[0])
+        except ValueError:
+            print(f"Invalid step number: {mode_args[0]}")
+            return CommandResult.ok()
+        snap = replayer.snapshot_at_step(turns, resolved_turn_id, system_prompt, step_n, limit=limit)
+        if snap is None:
+            print(f"Step {step_n} not found. Valid steps: 0..{n_steps}")
+            return CommandResult.ok()
+        _render_tool_replay_at(snap, system_prompt)
+        return CommandResult.ok()
+
+    if mode == "diff":
+        if len(mode_args) < 2:
+            print("Usage: /tool replay [<turn_id>] diff <A> <B>")
+            return CommandResult.ok()
+        try:
+            step_a = int(mode_args[0])
+            step_b = int(mode_args[1])
+        except ValueError:
+            print(f"Invalid step numbers: {mode_args[:2]}")
+            return CommandResult.ok()
+        diff = replayer.diff_steps(target, resolved_turn_id, step_a, step_b, limit=limit)
+        if diff is None:
+            print(f"Could not build diff for steps {step_a} / {step_b}. Valid steps: 0..{n_steps}")
+            return CommandResult.ok()
+        _render_tool_replay_diff(diff)
+        return CommandResult.ok()
+
+    if mode == "step":
+        snapshots = replayer.replay_loop(target, turn_id=resolved_turn_id, limit=limit)
+        if not snapshots:
+            print("No steps to step through.")
+            return CommandResult.ok()
+        print("\nInteractive agentic loop stepper. Press Enter to advance, 'q' to quit, 'show' for full dump.")
+        for s in snapshots:
+            print("\n" + "-" * 78)
+            tool_disp = s.tool or "(baseline)"
+            print(f"Step {s.step} | {tool_disp} | msgs={s.message_count} uncut={s.total_tokens} "
+                  f"trunc={s.truncated_tokens} evicted={len(s.evicted_indices)} "
+                  f"anchor_warn={'YES' if s.anchors_alone_exceed_limit else '-'}")
+            try:
+                cmd = input("[Enter]=next q=quit show=full> ").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                print("\nStepper exited.")
+                break
+            if cmd in ("q", "quit", "exit"):
+                break
+            if cmd in ("show", "s", "full"):
+                _render_tool_replay_at(s, system_prompt)
+        print("\nStepper finished.")
+        return CommandResult.ok()
+
+    return CommandResult.ok()
