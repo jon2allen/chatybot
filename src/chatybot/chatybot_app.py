@@ -969,6 +969,17 @@ class ChatybotApp:
         self._get_session_store().append_turn(self.active_session_id, turn_data)
         self.buffer_manager.set_script_var('SESSION_NAME', self.active_session_name or self.active_session_id, allow_protected=True)
 
+    def attach_agentic_loop_to_current_turn(self, agentic_trace: List[Dict[str, Any]], final_response: Optional[str] = None) -> None:
+        """Attach or update agentic loop execution trace and final response on the latest active session turn."""
+        if self.session_mode == "off" or not self.session_turns:
+            return
+
+        if final_response is not None:
+            self.session_turns[-1]["response"] = final_response
+        if agentic_trace:
+            self.session_turns[-1]["agentic_loop"] = agentic_trace
+        self.save_active_session()
+
     def append_session_command(self, command: str, verb: str):
         """Append a lightweight command action verb entry to active session and save to disk if active."""
         if self.session_mode == "off" or not self.active_session_id:
@@ -4087,10 +4098,7 @@ class ChatybotApp:
         # Update active session turn record with agentic loop outcome
         if self.session_mode != "off" and self.session_turns:
             agentic_trace = self.buffer_manager.script_vars.get('AGENTIC_LOOP', [])
-            self.session_turns[-1]["response"] = final_natural_language_response
-            if agentic_trace:
-                self.session_turns[-1]["agentic_loop"] = agentic_trace
-            self.save_active_session()
+            self.attach_agentic_loop_to_current_turn(agentic_trace, final_response=final_natural_language_response)
         
         # Log final response from inside the tool loop if logging is active
         if self.logging_manager.logging_active:
@@ -4103,7 +4111,7 @@ class ChatybotApp:
         if self.trace_agentic_loop:
             self.show_agentic_loop_trace()
 
-    def show_agentic_loop_trace(self) -> None:
+    def show_agentic_loop_trace(self, verbose: bool = False) -> None:
         """
         Print a summary of the most recent agentic tool loop run.
 
@@ -4111,7 +4119,7 @@ class ChatybotApp:
         recorded by execute_tool_loop) and prints:
           - total number of tool calls
           - count of successes vs failures
-          - a numbered list of calls with status (SUCCESS/FAILED) beside each
+          - a numbered list of calls with status (SUCCESS/FAILED), duration, timestamp, and optional args
         """
         loop_data = self.buffer_manager.get_script_var('AGENTIC_LOOP')
         if not isinstance(loop_data, list) or not loop_data:
@@ -4131,12 +4139,30 @@ class ChatybotApp:
                 print(f"[{i}] (invalid record: {type(rec).__name__}) — SKIPPED")
                 continue
             tool_name = rec.get("tool", "unknown")
-            turn = rec.get("turn", "?")
+            step = rec.get("turn", i)
             status = rec.get("status", "error")
             status_label = "SUCCESS" if status == "success" else "FAILED"
             duration_ms = rec.get("duration_ms")
-            duration_str = f" ({duration_ms}ms)" if duration_ms is not None else ""
-            print(f"[{i}] Turn {turn} · {tool_name} — {status_label}{duration_str}")
+            duration_str = ""
+            if duration_ms is not None:
+                try:
+                    duration_str = f" ({float(duration_ms):.0f}ms)"
+                except (ValueError, TypeError):
+                    duration_str = f" ({duration_ms}ms)"
+            print(f"[{i}] Step {step} · {tool_name} — {status_label}{duration_str}")
+
+            ts = rec.get("timestamp")
+            if ts:
+                print(f"      time: {ts}")
+
+            if verbose:
+                args = rec.get("arguments", {})
+                if args:
+                    import json
+                    args_str = json.dumps(args, ensure_ascii=False)
+                    if len(args_str) > 200:
+                        args_str = args_str[:197] + "..."
+                    print(f"      args: {args_str}")
 
             if status != "success":
                 result = rec.get("result", "")

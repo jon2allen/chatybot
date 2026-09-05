@@ -118,13 +118,15 @@ class TestToolHistory:
         out = capsys.readouterr().out
         assert "AGENTIC LOOP — Turn 3" in out
         assert "read and search" in out
+        assert "Step 1" in out
         assert "read_file" in out
+        assert "Step 2" in out
         assert "grep_search" in out
         assert "FAILED" in out
         assert "No matches found" in out
         assert '"path": "test.py"' in out
         # Detail view should show per-call duration and timestamp
-        assert "50.0ms" in out
+        assert "50ms" in out
         assert "time:" in out
 
     @pytest.mark.anyio
@@ -153,7 +155,23 @@ class TestToolHistory:
         await app.handle_escape_command("/tool history current")
         out = capsys.readouterr().out
         assert "AGENTIC LOOP TRACE" in out
+        assert "Step 1" in out
         assert "list_directory" in out
+        assert "time:" in out
+
+    @pytest.mark.anyio
+    async def test_history_current_verbose(self, app, capsys):
+        app.buffer_manager.set_script_var(
+            "AGENTIC_LOOP",
+            _make_loop([{"tool": "read_file", "arguments": {"path": "main.py"}, "turn": 1}]),
+            allow_protected=True,
+        )
+        await app.handle_escape_command("/tool history current --verbose")
+        out = capsys.readouterr().out
+        assert "AGENTIC LOOP TRACE" in out
+        assert "Step 1" in out
+        assert "args:" in out
+        assert '"path": "main.py"' in out
 
     @pytest.mark.anyio
     async def test_history_current_empty(self, app, capsys):
@@ -191,11 +209,33 @@ class TestToolHistory:
         # Detail should not crash either
         await app.handle_escape_command("/tool history 1")
         out = capsys.readouterr().out
+        assert "Step 1" in out
         assert "list_directory" in out
         assert "SUCCESS" in out
         # No duration or time line for old records
         assert "ms)" not in out
         assert "time:" not in out
+
+    @pytest.mark.anyio
+    async def test_attach_agentic_loop_to_current_turn(self, app):
+        """attach_agentic_loop_to_current_turn should enrich the last turn and save."""
+        app.session_mode = "on"
+        store = app._get_session_store()
+        store.create_session("test_loop_attach", model_alias="test_model", custom_name="loop_attach", initial_prompt="", notes=None)
+        app.active_session_id = "test_loop_attach"
+        app.active_session_name = "loop_attach"
+        app.session_first_prompt_slug = "test"
+        app.session_created_at = "2026-09-03T12:00:00.000000"
+
+        app.append_session_turn("test prompt", "interim response")
+        assert len(app.session_turns) == 1
+        assert app.session_turns[0]["response"] == "interim response"
+
+        trace = _make_loop([{"tool": "test_tool", "turn": 1}])
+        app.attach_agentic_loop_to_current_turn(trace, final_response="final outcome")
+
+        assert app.session_turns[0]["response"] == "final outcome"
+        assert app.session_turns[0]["agentic_loop"] == trace
 
     @pytest.mark.anyio
     async def test_append_session_turn_stores_completion_timing(self, app):
