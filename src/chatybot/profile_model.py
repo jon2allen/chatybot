@@ -166,6 +166,13 @@ class ProfileConfig(BaseModel):
     # Reasoning settings
     reasoning_settings: ReasoningSettings = Field(default_factory=ReasoningSettings)
 
+    # Context limit & auto-truncate settings
+    auto_truncate: bool = False
+    """Whether auto-truncation is enabled when context limit is reached."""
+
+    truncate_pct: float = 100.0
+    """Target percentage of context limit to truncate down to (10.0 to 100.0)."""
+
     # Additional settings
     system_message: Optional[str] = None
     """Custom system message. None means use global default."""
@@ -487,6 +494,23 @@ class Profile(BaseModel):
             elif cmd == "/effort" and len(parts) >= 2:
                 config.reasoning_settings.effort = parts[1].lower()
 
+            # Auto-truncate
+            elif cmd == "/auto_truncate" and len(parts) >= 2:
+                sub = parts[1].lower()
+                if sub in ("off", "0", "false"):
+                    config.auto_truncate = False
+                elif sub in ("on", "1", "true"):
+                    config.auto_truncate = True
+                    config.truncate_pct = 100.0
+                else:
+                    try:
+                        pct_val = float(sub)
+                        if 10.0 <= pct_val <= 100.0:
+                            config.auto_truncate = True
+                            config.truncate_pct = pct_val
+                    except ValueError:
+                        pass
+
         return config
 
     # ------------------------------------------------------------------
@@ -580,6 +604,15 @@ class Profile(BaseModel):
         lines.append(f"/thinking {'on' if reasoning.show_thinking else 'off'}")
         if reasoning.effort != "none":
             lines.append(f"/effort {reasoning.effort}")
+
+        # Auto-truncate settings
+        if self.config.auto_truncate:
+            if self.config.truncate_pct != 100.0:
+                lines.append(f"/auto_truncate {self.config.truncate_pct:g}")
+            else:
+                lines.append("/auto_truncate on")
+        else:
+            lines.append("/auto_truncate off")
 
         lines.append("")
         path_str = self.meta.source_path or "<profile_file_path>"

@@ -22,6 +22,11 @@ default_quality = "standard"
 # Enable or disable in-memory conversation history collection (default: true)
 # enable_chat_history = true
 #
+# Enable or disable automatic message history truncation at context limit (default: false)
+# auto_truncate = false
+# Target/trigger percentage for auto truncation (10.0 to 100.0, default: 100.0)
+# auto_truncate_pct = 90.0
+#
 # Example:
 #   [default]
 #   model = "mistral_1"

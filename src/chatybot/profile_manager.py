@@ -558,3 +558,7 @@ class ProfileManager:
             app.reasoning_effort = config.reasoning_settings.effort
         else:
             app.reasoning_effort = None
+
+        # Context limit & auto-truncate settings
+        if hasattr(app, "context_limiter") and app.context_limiter:
+            app.context_limiter.set_auto_truncate(config.auto_truncate, config.truncate_pct)
