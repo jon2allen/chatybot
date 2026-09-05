@@ -146,37 +146,41 @@ class ContextLimiter:
             evictable.pop(0)
             did_truncate = True
 
-        # If evictable has 1 item and total still exceeds target_limit, drop it if needed to save anchors
+        # If evictable has 1 item and total still exceeds target_limit, drop it if anchors alone fit better
         if len(evictable) == 1 and self.count_tokens_messages(anchors + evictable) > target_limit:
-            # Check if anchors alone fit; if evictable is not strictly required, drop it or slice it
+            evictable.pop(0)
             did_truncate = True
 
         # Step 2: If total tokens still exceed target_limit (single large message or remaining large turns),
         # truncate individual message content down to fit the available token budget
-        active_list = evictable if evictable else anchors
-        while active_list and self.count_tokens_messages(anchors + evictable) > target_limit:
-            did_truncate = True
+        while self.count_tokens_messages(anchors + evictable) > target_limit:
             # Find the largest message among evictable (or non-system anchors if evictable is empty)
             candidate_list = evictable if evictable else [m for m in anchors if m.get("role") != "system"]
             if not candidate_list:
                 candidate_list = anchors
 
-            largest_msg = max(candidate_list, key=lambda m: len(m.get("content", "")) if isinstance(m.get("content"), str) else 0)
+            largest_msg = max(
+                candidate_list,
+                key=lambda m: len(m.get("content", "")) if isinstance(m.get("content"), str) else 0
+            )
             content = largest_msg.get("content", "")
-            if isinstance(content, str) and len(content) > 100:
+            if isinstance(content, str) and len(content) > 60:
                 current_total = self.count_tokens_messages(anchors + evictable)
                 excess_tokens = current_total - target_limit
-                excess_chars = int(excess_tokens * 4) + 120  # Include safety buffer for notices
-                new_length = max(100, len(content) - excess_chars)
+                excess_chars = int(excess_tokens * 4) + 60
+                new_length = max(40, len(content) - excess_chars)
                 if new_length < len(content):
-                    head_len = int(new_length * 0.7)
-                    tail_len = new_length - head_len
+                    did_truncate = True
+                    head_len = max(20, int(new_length * 0.6))
+                    tail_len = max(0, new_length - head_len)
                     head = content[:head_len]
                     tail = content[-tail_len:] if tail_len > 0 else ""
                     largest_msg["content"] = f"{head}\n\n[... content truncated to fit context limit ...]\n\n{tail}"
                 else:
+                    # Cannot shrink further
                     break
             else:
+                # Content too small or cannot shrink further
                 break
 
         if did_truncate:

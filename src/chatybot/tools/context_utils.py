@@ -42,7 +42,7 @@ def get_context_metrics(
     Returns:
         Dict containing status, scope, detailed size metrics, and formatted summary.
     """
-    valid_scopes = ("all", "session", "agentic_loop")
+    valid_scopes = ("all", "session", "agentic_loop", "buffers")
     norm_scope = scope.lower().strip() if scope else "all"
     if norm_scope not in valid_scopes:
         norm_scope = "all"
@@ -164,6 +164,13 @@ def get_context_metrics(
         response["summary"] = (
             f"Agentic Loop: {loop_metrics['characters']} chars, "
             f"{loop_metrics['kb']} KB, ~{loop_metrics['estimated_tokens']} tokens ({loop_turns} turns){limit_suffix}"
+        )
+    elif norm_scope == "buffers":
+        buffer_metrics = calculate_metrics(buffer_full_text)
+        response["buffers"] = buffer_metrics
+        response["summary"] = (
+            f"Buffers & System: {buffer_metrics['characters']} chars, "
+            f"{buffer_metrics['kb']} KB, ~{buffer_metrics['estimated_tokens']} tokens{limit_suffix}"
         )
     else:  # 'all'
         response["session"] = session_metrics
