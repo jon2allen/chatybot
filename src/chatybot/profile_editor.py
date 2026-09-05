@@ -164,8 +164,18 @@ class ProfileEditor:
                         self.auto_truncate = True
                         self.truncate_pct = "100"
                     else:
-                        self.auto_truncate = True
-                        self.truncate_pct = sub
+                        try:
+                            pct_val = float(sub)
+                            if pct_val < 10.0:
+                                self.auto_truncate = False
+                            elif pct_val > 100.0:
+                                self.auto_truncate = True
+                                self.truncate_pct = "100"
+                            else:
+                                self.auto_truncate = True
+                                self.truncate_pct = str(int(pct_val) if pct_val.is_integer() else pct_val)
+                        except ValueError:
+                            pass
 
     def generate_chatdsl(self) -> str:
         lines = []

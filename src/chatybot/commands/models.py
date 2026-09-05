@@ -258,29 +258,45 @@ async def cmd_context(ctx: CommandContext, parts: list, command: str) -> Command
         print(f"  • Buffers / System: ~{b['estimated_tokens']:,} tokens ({b['kb']:.2f} KB)")
 
     print("  " + "─" * 46)
-    tot = data.get("total", data.get("session", data.get("agentic_loop", data.get("buffers", {}))))
-    tot_tokens = tot.get("estimated_tokens", 0)
-    
     limit_info = data.get("context_limit")
-    if limit_info:
-        limit_tokens = limit_info["limit_tokens"]
-        usage_pct = min(100.0, limit_info["usage_percent"])
-        rem_tokens = limit_info["remaining_tokens"]
-        auto_tr = limit_info["auto_truncate"]
-        tr_pct = limit_info.get("truncate_percent")
-
-        # 20-character progress bar
-        bar_len = 20
-        filled = int((usage_pct / 100.0) * bar_len)
-        bar_str = "█" * filled + "░" * (bar_len - filled)
-
-        print(f"  Total:              ~{tot_tokens:,} / {limit_tokens:,} tokens [{bar_str}] {usage_pct:.1f}%")
-        print(f"  Remaining:          ~{rem_tokens:,} tokens")
-        trunc_str = f"ON ({int(tr_pct)}%)" if auto_tr and tr_pct else ("ON" if auto_tr else "OFF")
-        print(f"  Auto-Truncate:      {trunc_str}")
+    
+    if scope != "all":
+        scoped_data = data.get(scope, {})
+        scoped_tokens = scoped_data.get("estimated_tokens", 0)
+        scope_label = "Session" if scope == "session" else ("Agentic Loop" if scope == "agentic_loop" else "Buffers")
+        print(f"  {scope_label} Usage:    ~{scoped_tokens:,} tokens ({scoped_data.get('kb', 0.0):.2f} KB)")
+        if limit_info:
+            eff_lim = limit_info["limit_tokens"]
+            scoped_pct = min(100.0, (scoped_tokens / eff_lim) * 100.0) if eff_lim > 0 else 0.0
+            print(f"  Context Limit:      {eff_lim:,} tokens ({scoped_pct:.1f}% of limit used by this scope)")
+            auto_tr = limit_info["auto_truncate"]
+            tr_pct = limit_info.get("truncate_percent")
+            trunc_str = f"ON ({int(tr_pct)}%)" if auto_tr and tr_pct else ("ON" if auto_tr else "OFF")
+            print(f"  Auto-Truncate:      {trunc_str}")
+        else:
+            print("  Context Limit:      Disabled (no limit configured)")
     else:
-        print(f"  Total Usage:        ~{tot_tokens:,} tokens ({tot.get('kb', 0.0):.2f} KB)")
-        print("  Context Limit:      Disabled (no limit configured)")
+        tot = data.get("total", {})
+        tot_tokens = tot.get("estimated_tokens", 0)
+        if limit_info:
+            limit_tokens = limit_info["limit_tokens"]
+            usage_pct = min(100.0, limit_info["usage_percent"])
+            rem_tokens = limit_info["remaining_tokens"]
+            auto_tr = limit_info["auto_truncate"]
+            tr_pct = limit_info.get("truncate_percent")
+
+            # 20-character progress bar
+            bar_len = 20
+            filled = int((usage_pct / 100.0) * bar_len)
+            bar_str = "█" * filled + "░" * (bar_len - filled)
+
+            print(f"  Total:              ~{tot_tokens:,} / {limit_tokens:,} tokens [{bar_str}] {usage_pct:.1f}%")
+            print(f"  Remaining:          ~{rem_tokens:,} tokens")
+            trunc_str = f"ON ({int(tr_pct)}%)" if auto_tr and tr_pct else ("ON" if auto_tr else "OFF")
+            print(f"  Auto-Truncate:      {trunc_str}")
+        else:
+            print(f"  Total Usage:        ~{tot_tokens:,} tokens ({tot.get('kb', 0.0):.2f} KB)")
+            print("  Context Limit:      Disabled (no limit configured)")
     print("")
     return CommandResult.ok()
 

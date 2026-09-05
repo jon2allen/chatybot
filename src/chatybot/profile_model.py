@@ -505,7 +505,12 @@ class Profile(BaseModel):
                 else:
                     try:
                         pct_val = float(sub)
-                        if 10.0 <= pct_val <= 100.0:
+                        if pct_val < 10.0:
+                            config.auto_truncate = False
+                        elif pct_val > 100.0:
+                            config.auto_truncate = True
+                            config.truncate_pct = 100.0
+                        else:
                             config.auto_truncate = True
                             config.truncate_pct = pct_val
                     except ValueError:
