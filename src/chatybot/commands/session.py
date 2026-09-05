@@ -9,9 +9,10 @@ from datetime import datetime
 
 from chatybot.commands.registry import command, CommandResult
 from chatybot.commands.context import CommandContext
+from chatybot.commands.replay import handle_replay_command
 
 
-@command("/session", help="Manage sessions", args="<start|auto|stop|status|history|note|save|list|use|show|export|info|delete|merge|compress|prune> ...", category="session")
+@command("/session", help="Manage sessions", args="<start|auto|stop|status|history|note|save|list|use|show|export|info|delete|merge|compress|prune|replay> ...", category="session")
 async def cmd_session(ctx: CommandContext, parts: list, command: str) -> CommandResult:
     app = ctx.app
     if len(parts) < 2:
@@ -540,6 +541,10 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
         print(f"Pruned {deleted_count} session file(s).")
         return CommandResult.ok()
 
+    elif subcmd == "replay":
+        raw_tokens = parts[2].strip().split() if len(parts) > 2 else []
+        return await handle_replay_command(ctx, raw_tokens)
+
     else:
-        print(f"Unknown session subcommand: {subcmd}. Use start, auto, stop, status, save, list, use, show, export, info, delete, merge, compress, prune.")
+        print(f"Unknown session subcommand: {subcmd}. Use start, auto, stop, status, save, list, use, show, export, info, delete, merge, compress, prune, replay.")
         return CommandResult.ok()

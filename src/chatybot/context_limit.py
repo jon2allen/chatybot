@@ -6,7 +6,25 @@ and automatic conversation history truncation.
 """
 
 import math
+from dataclasses import dataclass, field
 from typing import Dict, Any, List, Optional, Tuple, Union
+
+
+@dataclass
+class TruncationDiagnostic:
+    """Comprehensive diagnostic struct produced by truncate_messages_verbose."""
+    original_messages: List[Dict[str, Any]]
+    truncated_messages: List[Dict[str, Any]]
+    did_truncate: bool
+    original_tokens: int
+    truncated_tokens: int
+    effective_limit: int           # raw limit (before pct adjustment)
+    target_limit: int             # pct-adjusted limit actually enforced
+    anchor_count: int
+    evicted_count: int             # how many messages were dropped
+    evicted_indices: List[int]     # original 0-based indices that were removed
+    content_truncated: bool        # True if string truncation fired on a message
+    anchors_alone_exceed_limit: bool  # infinite-loop warning condition
 
 
 class ContextLimiter:
@@ -196,3 +214,84 @@ class ContextLimiter:
 
         result = anchors + evictable
         return result, did_truncate
+
+    def truncate_messages_verbose(
+        self,
+        messages: List[Dict[str, Any]],
+        limit: Optional[int] = None,
+        target_pct: Optional[float] = None,
+    ) -> "TruncationDiagnostic":
+        """Run truncate_messages and return a comprehensive diagnostic struct.
+
+        Non-breaking diagnostic wrapper around truncate_messages with monotonic
+        index tracking (_orig_idx) so callers can see exactly which original
+        messages were evicted. The _orig_idx tags survive because
+        truncate_messages performs shallow dict copies (dict(m)) that preserve
+        extra keys; if truncate_messages is ever refactored to reconstruct
+        dicts with only role/content, this tracking silently breaks — add a
+        regression test.
+        """
+        if not messages:
+            return TruncationDiagnostic(
+                original_messages=[], truncated_messages=[], did_truncate=False,
+                original_tokens=0, truncated_tokens=0, effective_limit=0,
+                target_limit=0, anchor_count=0, evicted_count=0,
+                evicted_indices=[], content_truncated=False,
+                anchors_alone_exceed_limit=False,
+            )
+
+        # Attach monotonic tracking tags to avoid content collision
+        tagged_messages: List[Dict[str, Any]] = [
+            {"_orig_idx": i, **m} for i, m in enumerate(messages)
+        ]
+        orig_tokens = self.count_tokens_messages(messages)
+
+        # Variable names aligned with truncate_messages (context_limit.py:113-118):
+        #   effective_limit = the raw limit (before pct adjustment)
+        #   target_limit    = the pct-adjusted limit actually enforced
+        effective_limit = limit or self.context_limit or 0
+        pct = (target_pct if target_pct is not None else self.truncate_pct) / 100.0
+        target_limit = int(effective_limit * pct) if effective_limit else 0
+
+        # Anchor partition overflow detection (mirrors truncate_messages anchoring)
+        anchors: List[Dict[str, Any]] = []
+        if tagged_messages:
+            anchors.append(tagged_messages[0])
+            if len(tagged_messages) > 1 and tagged_messages[1].get("role") == "user":
+                anchors.append(tagged_messages[1])
+        anchor_tokens = self.count_tokens_messages(anchors)
+        anchors_alone_overflow = bool(target_limit and anchor_tokens > target_limit)
+
+        # Run core truncation on a copy. _orig_idx tags survive the shallow
+        # dict copy performed inside truncate_messages.
+        clean_copy = [dict(m) for m in tagged_messages]
+        truncated_tagged, did_truncate_ret = self.truncate_messages(
+            clean_copy, limit=limit, target_pct=target_pct
+        )
+
+        surviving_indices = {m["_orig_idx"] for m in truncated_tagged if "_orig_idx" in m}
+        evicted_indices = [i for i in range(len(messages)) if i not in surviving_indices]
+        content_truncated = any(
+            "[... content truncated" in str(m.get("content", "")) for m in truncated_tagged
+        )
+
+        # Clean tags from the final output
+        final_truncated = [
+            {k: v for k, v in m.items() if k != "_orig_idx"} for m in truncated_tagged
+        ]
+        trunc_tokens = self.count_tokens_messages(final_truncated)
+
+        return TruncationDiagnostic(
+            original_messages=messages,
+            truncated_messages=final_truncated,
+            did_truncate=did_truncate_ret or content_truncated,
+            original_tokens=orig_tokens,
+            truncated_tokens=trunc_tokens,
+            effective_limit=effective_limit,
+            target_limit=target_limit,
+            anchor_count=len(anchors),
+            evicted_count=len(evicted_indices),
+            evicted_indices=evicted_indices,
+            content_truncated=content_truncated,
+            anchors_alone_exceed_limit=anchors_alone_overflow,
+        )
