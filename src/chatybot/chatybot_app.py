@@ -271,16 +271,21 @@ class ChatybotApp:
         # Load configuration
         self.config_manager.load_config()
 
-        # Initialize context limit from active model if configured
-        if hasattr(self, "context_limiter") and not self.context_limiter._user_set_limit:
-            active_model = self.config_manager.active_model_alias
-            if active_model:
-                try:
-                    m_cfg = self.config_manager.get_model_config(active_model)
-                    if m_cfg and m_cfg.get("context_limit"):
-                        self.context_limiter.set_limit(m_cfg.get("context_limit"), from_user=False)
-                except Exception:
-                    pass
+        # Initialize context limit and auto_truncate from config
+        if hasattr(self, "context_limiter"):
+            self.context_limiter.set_auto_truncate(
+                getattr(self.config_manager, "auto_truncate", False),
+                getattr(self.config_manager, "auto_truncate_pct", 100.0)
+            )
+            if not self.context_limiter._user_set_limit:
+                active_model = self.config_manager.active_model_alias
+                if active_model:
+                    try:
+                        m_cfg = self.config_manager.get_model_config(active_model)
+                        if m_cfg and m_cfg.get("context_limit"):
+                            self.context_limiter.set_limit(m_cfg.get("context_limit"), from_user=False)
+                    except Exception:
+                        pass
 
         # Initialize MCP Client Manager unless disabled via --no-tools
         if self.no_tools:

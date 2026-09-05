@@ -24,6 +24,8 @@ class ConfigManager:
         self.freq_penalty: Optional[float] = None
         self.pres_penalty: Optional[float] = None
         self.enable_chat_history: bool = True
+        self.auto_truncate: bool = False
+        self.auto_truncate_pct: float = 100.0
     
     def load_config(self) -> None:
         """
@@ -75,6 +77,10 @@ class ConfigManager:
             self.pres_penalty = self.config["presence_penalty"]
         if "enable_chat_history" in self.config:
             self.enable_chat_history = bool(self.config["enable_chat_history"])
+        if "auto_truncate" in self.config:
+            self.auto_truncate = bool(self.config["auto_truncate"])
+        if "auto_truncate_pct" in self.config:
+            self.auto_truncate_pct = float(self.config["auto_truncate_pct"])
         
         # Image generation settings
         self.image_dir = os.path.expanduser("~/chatybot_images")

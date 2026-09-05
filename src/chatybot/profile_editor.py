@@ -37,6 +37,8 @@ class ProfileEditor:
         self.reasoning_effort = "none"  # none, low, medium, high
         self.temperature = "0.7"
         self.max_turns = "25"
+        self.auto_truncate = False
+        self.truncate_pct = "100"
         self.disabled_tools = []
         
         self.is_new = True
@@ -154,6 +156,16 @@ class ProfileEditor:
                         self.trace_tps_perf = state
                     elif sub == "imagedbg":
                         self.trace_imagedbg = state
+                elif cmd == "/auto_truncate" and len(parts) >= 2:
+                    sub = parts[1].lower()
+                    if sub in ("off", "0", "false"):
+                        self.auto_truncate = False
+                    elif sub in ("on", "1", "true"):
+                        self.auto_truncate = True
+                        self.truncate_pct = "100"
+                    else:
+                        self.auto_truncate = True
+                        self.truncate_pct = sub
 
     def generate_chatdsl(self) -> str:
         lines = []
@@ -202,6 +214,14 @@ class ProfileEditor:
             
         if self.max_turns:
             lines.append(f"/tool max_turns {self.max_turns}")
+            
+        if self.auto_truncate:
+            if self.truncate_pct and str(self.truncate_pct) != "100":
+                lines.append(f"/auto_truncate {self.truncate_pct}")
+            else:
+                lines.append("/auto_truncate on")
+        else:
+            lines.append("/auto_truncate off")
             
         return "\n".join(lines) + "\n"
 

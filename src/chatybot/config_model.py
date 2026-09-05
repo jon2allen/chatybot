@@ -27,7 +27,7 @@ import tomllib
 from pathlib import Path
 from typing import Annotated, Literal, Optional, Union
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 # ============================================================================
@@ -269,6 +269,19 @@ class ChatConfig(BaseModel):
 
     enable_chat_history: bool = True
     """Global default for in-memory chat history collection."""
+
+    auto_truncate: bool = False
+    """Global default for auto-truncating message history when context limit is reached."""
+
+    auto_truncate_pct: float = 100.0
+    """Global default trigger/target percentage for auto-truncation (10.0 to 100.0)."""
+
+    @field_validator("auto_truncate_pct")
+    @classmethod
+    def validate_auto_truncate_pct(cls, v: float) -> float:
+        if not (10.0 <= v <= 100.0):
+            raise ValueError(f"auto_truncate_pct must be between 10.0 and 100.0, got {v}")
+        return v
 
     # ------------------------------------------------------------------
     # Constructors
