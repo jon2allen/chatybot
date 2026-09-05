@@ -78,29 +78,35 @@ def test_context_limiter_warnings():
 
 
 def test_context_limiter_truncation():
-    """Test truncation of oldest messages while preserving system message and note."""
-    limiter = ContextLimiter(default_limit=30, auto_truncate=True)
+    """Test truncation of intermediate messages while preserving system message and initial goal."""
+    limiter = ContextLimiter(default_limit=45, auto_truncate=True)
 
     long_chunk = "A" * 60  # ~15 tokens per message
     messages = [
         {"role": "system", "content": "System prompt"},
-        {"role": "user", "content": f"Message 1: {long_chunk}"},
-        {"role": "assistant", "content": f"Message 2: {long_chunk}"},
-        {"role": "user", "content": f"Message 3: {long_chunk}"},
+        {"role": "user", "content": "Initial Goal: Translate poem"},
+        {"role": "assistant", "content": f"Intermediate Tool 1: {long_chunk}"},
+        {"role": "user", "content": f"Intermediate Tool Result 1: {long_chunk}"},
+        {"role": "assistant", "content": f"Intermediate Tool 2: {long_chunk}"},
     ]
 
-    truncated, did_trunc = limiter.truncate_messages(messages, limit=40)
+    truncated, did_trunc = limiter.truncate_messages(messages, limit=55)
     assert did_trunc is True
     # System message preserved at index 0
     assert truncated[0]["role"] == "system"
-    # Oldest message was dropped, and truncation note attached
-    assert "[Note: Earlier messages were truncated to fit the context limit.]" in truncated[1]["content"]
+    # Initial goal preserved at index 1
+    assert truncated[1]["role"] == "user"
+    assert "Initial Goal: Translate poem" in truncated[1]["content"]
+    # Intermediate tool messages were dropped
+    assert len(truncated) < len(messages)
 
     # Test with target_pct (e.g. 50% of 100 limit -> target 50)
     limiter_pct = ContextLimiter(default_limit=100, auto_truncate=True, truncate_pct=50.0)
     truncated_pct, did_trunc_pct = limiter_pct.truncate_messages(messages, limit=100)
     assert did_trunc_pct is True
     assert len(truncated_pct) < len(messages)
+    assert truncated_pct[0]["role"] == "system"
+    assert "Initial Goal" in truncated_pct[1]["content"]
 
 
 def test_context_limiter_single_large_message_truncation():
