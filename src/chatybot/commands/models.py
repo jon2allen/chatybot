@@ -232,6 +232,61 @@ registry.register("/maxtokens", _cmd_maxtokens, help="Set max output tokens", ar
 registry.register("/max_tokens", _cmd_maxtokens, help="Set max output tokens", args="[<n>]", category="models")
 
 
+@command("/context", help="Show context and token usage metrics", args="[session|loop|buffers|all]", category="models")
+async def cmd_context(ctx: CommandContext, parts: list, command: str) -> CommandResult:
+    app = ctx.app
+    from chatybot.tools.context_utils import get_context_metrics
+    scope = parts[1].strip().lower() if len(parts) > 1 else "all"
+    if scope in ("loop", "agentic", "tool", "tools"):
+        scope = "agentic_loop"
+    elif scope in ("buffer", "prompt"):
+        scope = "buffers"
+
+    data = get_context_metrics(scope=scope, app=app)
+    
+    print("\nContext Usage Breakdown:")
+    if "session" in data:
+        s = data["session"]
+        turns = s.get("turns", 0)
+        print(f"  • Session History:  ~{s['estimated_tokens']:,} tokens ({turns} turn{'s' if turns != 1 else ''}, {s['kb']:.2f} KB)")
+    if "agentic_loop" in data:
+        l = data["agentic_loop"]
+        recs = l.get("records", 0)
+        print(f"  • Agentic Loop:     ~{l['estimated_tokens']:,} tokens ({recs} tool call{'s' if recs != 1 else ''}, {l['kb']:.2f} KB)")
+    if "buffers" in data:
+        b = data["buffers"]
+        print(f"  • Buffers / System: ~{b['estimated_tokens']:,} tokens ({b['kb']:.2f} KB)")
+
+    print("  " + "─" * 46)
+    tot = data.get("total", data.get("session", data.get("agentic_loop", data.get("buffers", {}))))
+    tot_tokens = tot.get("estimated_tokens", 0)
+    
+    limit_info = data.get("context_limit")
+    if limit_info:
+        limit_tokens = limit_info["limit_tokens"]
+        usage_pct = min(100.0, limit_info["usage_percent"])
+        rem_tokens = limit_info["remaining_tokens"]
+        auto_tr = limit_info["auto_truncate"]
+        tr_pct = limit_info.get("truncate_percent")
+
+        # 20-character progress bar
+        bar_len = 20
+        filled = int((usage_pct / 100.0) * bar_len)
+        bar_str = "█" * filled + "░" * (bar_len - filled)
+
+        print(f"  Total:              ~{tot_tokens:,} / {limit_tokens:,} tokens [{bar_str}] {usage_pct:.1f}%")
+        print(f"  Remaining:          ~{rem_tokens:,} tokens")
+        trunc_str = f"ON ({int(tr_pct)}%)" if auto_tr and tr_pct else ("ON" if auto_tr else "OFF")
+        print(f"  Auto-Truncate:      {trunc_str}")
+    else:
+        print(f"  Total Usage:        ~{tot_tokens:,} tokens ({tot.get('kb', 0.0):.2f} KB)")
+        print("  Context Limit:      Disabled (no limit configured)")
+    print("")
+    return CommandResult.ok()
+
+registry.register("/ctx", cmd_context, help="Show context and token usage metrics", args="[session|loop|buffers|all]", category="models")
+
+
 @command("/context_limit", help="Set or view the context token limit", args="[<tokens>|off]", category="models")
 async def cmd_context_limit(ctx: CommandContext, parts: list, command: str) -> CommandResult:
     app = ctx.app

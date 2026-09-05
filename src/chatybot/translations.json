@@ -19,6 +19,8 @@
       "/str_search": "/str_search",
       "/proc": "/proc",
       "/session": "/session",
+      "/context": "/context",
+      "/ctx": "/context",
       "/context_limit": "/context_limit",
       "/auto_truncate": "/auto_truncate",
       "/env": "/env",
