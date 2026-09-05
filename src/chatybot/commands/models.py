@@ -145,18 +145,14 @@ async def cmd_model(ctx: CommandContext, parts: list, command: str) -> CommandRe
     model_alias = parts[1]
     app.config_manager.set_active_model(model_alias)
     model_config = app.config_manager.get_model_config(model_alias)
-    model_limit = model_config.get("context_limit")
     if hasattr(app, "context_limiter"):
-        if model_limit:
-            if not app.context_limiter._user_set_limit:
-                app.context_limiter.set_limit(model_limit, from_user=False)
-        else:
-            # Model has no context_limit defined in config.
-            # Retain any active context_limit (from user or previous model)
-            if app.context_limiter.context_limit:
-                print(
-                    f"[Warning: Context limit is set to {app.context_limiter.context_limit:,} tokens, and that will be used because none is defined in configuration for model '{model_alias}'.]"
-                )
+        model_limit = model_config.get("context_limit")
+        if model_limit and not app.context_limiter._user_set_limit:
+            app.context_limiter.set_limit(model_limit, from_user=False)
+        elif not model_limit and app.context_limiter.context_limit:
+            print(
+                f"[Warning: Context limit is set to {app.context_limiter.context_limit:,} tokens, and that will be used because none is defined in configuration for model '{model_alias}'.]"
+            )
     print(f"Switched to model: {model_config['name']} (alias: {model_alias})")
     return CommandResult.ok()
 
