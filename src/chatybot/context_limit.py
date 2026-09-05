@@ -106,8 +106,8 @@ class ContextLimiter:
         target_pct: Optional[float] = None
     ) -> Tuple[List[Dict[str, Any]], bool]:
         """
-        Truncate oldest non-system messages and/or oversized message content until total tokens fit within target limit.
-        Preserves the system message (if index 0) and the latest user message.
+        Truncate oldest intermediate messages and/or oversized message content until total tokens fit within target limit.
+        Preserves the system prompt (if index 0) and the initial user goal/prompt, dropping intermediate turns first.
         Returns: (truncated_messages, did_truncate)
         """
         effective_limit = limit or self.context_limit
@@ -123,35 +123,48 @@ class ContextLimiter:
 
         # Make copy of messages list
         result = [dict(m) for m in messages]
-        has_system = len(result) > 0 and result[0].get("role") == "system"
-        sys_msg = [result[0]] if has_system else []
-        non_sys = result[1:] if has_system else result
+        
+        # Partition into anchors (system prompt + initial user prompt) and evictable intermediate turns
+        anchors: List[Dict[str, Any]] = []
+        if len(result) > 0 and result[0].get("role") == "system":
+            anchors.append(result[0])
+            remaining = result[1:]
+        else:
+            remaining = result
+
+        # Anchor initial user prompt if present
+        if remaining and remaining[0].get("role") == "user":
+            anchors.append(remaining[0])
+            evictable = remaining[1:]
+        else:
+            evictable = remaining
 
         did_truncate = False
 
-        # Step 1: Drop older message turns if multiple turns exist
-        while len(non_sys) > 1 and self.count_tokens_messages(sys_msg + non_sys) > target_limit:
-            non_sys.pop(0)
+        # Step 1: Drop older intermediate turns (keeping the latest turn if possible)
+        while len(evictable) > 1 and self.count_tokens_messages(anchors + evictable) > target_limit:
+            evictable.pop(0)
+            did_truncate = True
+
+        # If evictable has 1 item and total still exceeds target_limit, drop it if needed to save anchors
+        if len(evictable) == 1 and self.count_tokens_messages(anchors + evictable) > target_limit:
+            # Check if anchors alone fit; if evictable is not strictly required, drop it or slice it
             did_truncate = True
 
         # Step 2: If total tokens still exceed target_limit (single large message or remaining large turns),
         # truncate individual message content down to fit the available token budget
-        while non_sys and self.count_tokens_messages(sys_msg + non_sys) > target_limit:
+        active_list = evictable if evictable else anchors
+        while active_list and self.count_tokens_messages(anchors + evictable) > target_limit:
             did_truncate = True
-            # Find the largest non-system message
-            largest_idx = 0
-            largest_size = 0
-            for idx, msg in enumerate(non_sys):
-                content = msg.get("content", "")
-                size = len(content) if isinstance(content, str) else 0
-                if size > largest_size:
-                    largest_size = size
-                    largest_idx = idx
+            # Find the largest message among evictable (or non-system anchors if evictable is empty)
+            candidate_list = evictable if evictable else [m for m in anchors if m.get("role") != "system"]
+            if not candidate_list:
+                candidate_list = anchors
 
-            target_msg = non_sys[largest_idx]
-            content = target_msg.get("content", "")
+            largest_msg = max(candidate_list, key=lambda m: len(m.get("content", "")) if isinstance(m.get("content"), str) else 0)
+            content = largest_msg.get("content", "")
             if isinstance(content, str) and len(content) > 100:
-                current_total = self.count_tokens_messages(sys_msg + non_sys)
+                current_total = self.count_tokens_messages(anchors + evictable)
                 excess_tokens = current_total - target_limit
                 excess_chars = int(excess_tokens * 4) + 120  # Include safety buffer for notices
                 new_length = max(100, len(content) - excess_chars)
@@ -160,7 +173,7 @@ class ContextLimiter:
                     tail_len = new_length - head_len
                     head = content[:head_len]
                     tail = content[-tail_len:] if tail_len > 0 else ""
-                    target_msg["content"] = f"{head}\n\n[... content truncated to fit context limit ...]\n\n{tail}"
+                    largest_msg["content"] = f"{head}\n\n[... content truncated to fit context limit ...]\n\n{tail}"
                 else:
                     break
             else:
@@ -168,10 +181,11 @@ class ContextLimiter:
 
         if did_truncate:
             trunc_notice = "[Note: Earlier messages were truncated to fit the context limit.]"
-            if non_sys and isinstance(non_sys[0].get("content"), str):
-                if not non_sys[0]["content"].startswith(trunc_notice) and not non_sys[0]["content"].startswith("[Note:"):
-                    non_sys[0] = dict(non_sys[0])
-                    non_sys[0]["content"] = f"{trunc_notice}\n\n{non_sys[0]['content']}"
-            result = sys_msg + non_sys
+            target_notice_list = evictable if evictable else anchors
+            if target_notice_list and isinstance(target_notice_list[0].get("content"), str):
+                if not target_notice_list[0]["content"].startswith(trunc_notice) and not target_notice_list[0]["content"].startswith("[Note:"):
+                    target_notice_list[0] = dict(target_notice_list[0])
+                    target_notice_list[0]["content"] = f"{trunc_notice}\n\n{target_notice_list[0]['content']}"
 
+        result = anchors + evictable
         return result, did_truncate
