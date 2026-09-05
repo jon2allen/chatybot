@@ -582,13 +582,16 @@ async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandRes
         return CommandResult.ok()
 
     elif subcmd == "history":
-        # /tool history          — list all agentic loops recorded in the active session
-        # /tool history <turn_id> — show detailed tool calls for a specific session turn
-        # /tool history current  — show the most recent in-memory AGENTIC_LOOP trace
-        detail_arg = parts[2].strip().lower() if len(parts) > 2 else ""
+        # /tool history                  — list all agentic loops recorded in the active session
+        # /tool history <turn_id>         — show detailed tool calls for a specific session turn
+        # /tool history current [--verbose] — show the most recent in-memory AGENTIC_LOOP trace
+        tokens = parts[2].strip().split() if len(parts) > 2 else []
+        verbose = any(t.lower() in ("--verbose", "-v", "verbose") for t in tokens)
+        remaining_tokens = [t for t in tokens if t.lower() not in ("--verbose", "-v", "verbose")]
+        detail_arg = remaining_tokens[0].strip().lower() if remaining_tokens else ""
 
         if detail_arg in ("current", "last"):
-            app.show_agentic_loop_trace()
+            app.show_agentic_loop_trace(verbose=verbose)
             return CommandResult.ok()
 
         if detail_arg == "":
@@ -646,7 +649,7 @@ async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandRes
         try:
             target_id = int(detail_arg)
         except ValueError:
-            print(f"Invalid argument '{detail_arg}'. Usage: /tool history [<turn_id>|current]")
+            print(f"Invalid argument '{detail_arg}'. Usage: /tool history [<turn_id>|current] [--verbose]")
             return CommandResult.ok()
 
         matched_turn = None
@@ -688,12 +691,17 @@ async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandRes
                 print(f"[{i}] (invalid record: {type(rec).__name__}) — SKIPPED")
                 continue
             tool_name = rec.get("tool", "unknown")
-            turn = rec.get("turn", "?")
+            step = rec.get("turn", i)
             status = rec.get("status", "error")
             status_label = "SUCCESS" if status == "success" else "FAILED"
             duration_ms = rec.get("duration_ms")
-            duration_str = f" ({duration_ms}ms)" if duration_ms is not None else ""
-            print(f"[{i}] Turn {turn} · {tool_name} — {status_label}{duration_str}")
+            duration_str = ""
+            if duration_ms is not None:
+                try:
+                    duration_str = f" ({float(duration_ms):.0f}ms)"
+                except (ValueError, TypeError):
+                    duration_str = f" ({duration_ms}ms)"
+            print(f"[{i}] Step {step} · {tool_name} — {status_label}{duration_str}")
 
             # Show timestamp if available
             ts = rec.get("timestamp")
