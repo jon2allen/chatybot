@@ -227,6 +227,17 @@ class HelpSystem:
             ))
 
         self.register_command(CommandHelp(
+            name="/context",
+            category="model",
+            short_desc="Show context and token usage metrics",
+            usage="/context [session|loop|buffers|all]",
+            long_desc="Display real-time context token usage, history/loop breakdown, and capacity progress against the configured context limit.",
+            examples=["/context", "/context session", "/context loop", "/ctx"],
+            aliases=["/ctx"],
+            see_also=["/context_limit", "/auto_truncate", "/mem"]
+        ))
+
+        self.register_command(CommandHelp(
             name="/context_limit",
             category="model",
             short_desc="Set or show input context token limit",
