@@ -232,7 +232,7 @@ registry.register("/maxtokens", _cmd_maxtokens, help="Set max output tokens", ar
 registry.register("/max_tokens", _cmd_maxtokens, help="Set max output tokens", args="[<n>]", category="models")
 
 
-@command("/context", help="Show context and token usage metrics", args="[session|loop|buffers|all]", category="models")
+@command("/context", help="Show context and token usage metrics", args="[session|loop|buffers|all] [var]", category="models")
 async def cmd_context(ctx: CommandContext, parts: list, command: str) -> CommandResult:
     app = ctx.app
     from chatybot.tools.context_utils import get_context_metrics
@@ -242,7 +242,10 @@ async def cmd_context(ctx: CommandContext, parts: list, command: str) -> Command
     elif scope in ("buffer", "prompt"):
         scope = "buffers"
 
-    data = get_context_metrics(scope=scope, app=app)
+    var_target = parts[2].strip() if len(parts) > 2 else None
+    data = get_context_metrics(scope=scope, app=app, target_variable=var_target)
+    if var_target:
+        print(f"{var_target} = {data}")
     
     print("\nContext Usage Breakdown:")
     if "session" in data:

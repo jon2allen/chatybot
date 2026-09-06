@@ -757,7 +757,10 @@ src/chatybot/profiles/          # Preset profiles
 | `/calc` | General | `/calc <expr>` | Evaluate math expression |
 | `/str_search` | General | `/str_search <needle> [haystack]` | Search for substring in text |
 | `/proc` | General | `/proc <name> [args]` | Execute defined procedure |
-| `/session` | General | `/session <subcmd> [args]` | Manage chat sessions (list/show/save/merge/prune/etc.) |
+| `/session` | General | `/session <subcmd> [args]` | Manage sessions (start/list/show/export [csv]/merge/compress/prune/replay) |
+| `/session export` | General | `/session export [csv] <file> [-t]` | Export session transcript to Markdown (.md) or structured data to CSV (.csv) |
+| `/replay` | General | `/replay [<id>] [at <N>\|diff <A> <B>\|step] [limit=<N>]` | Time-travel context replay: inspect message arrays & truncation state |
+| `/context` | General | `/context [all\|session\|loop\|buffers] [var]` | View context token breakdown and budget utilization (alias: `/ctx`) |
 | `/reloadmacros` | General | `/reloadmacros [file]` | Reload macro definitions |
 
 ### Model & LLM Commands
@@ -834,6 +837,9 @@ src/chatybot/profiles/          # Preset profiles
 | `/tool disable` | Tools | `/tool disable <tool\|all>` | Disable specific tool or all |
 | `/tool auto` | Tools | `/tool auto` | Toggle automated loop on tool outputs |
 | `/tool loop` | Tools | `/tool loop [turns] [force]` | Run loop with turn limit |
+| `/tool history` | Tools | `/tool history [current\|<turn>] [csv [file]]` | Inspect agentic tool history & step timings (or export to CSV) |
+| `/tool export` | Tools | `/tool export csv [file.csv]` | Export session-wide agentic tool traces to CSV |
+| `/tool replay` | Tools | `/tool replay [<turn>]` | Replay tool execution steps |
 | `/tool max_turns` | Tools | `/tool max_turns [N]` | Get/set max turn safety cap |
 | `/tool rate_limit` | Tools | `/tool rate_limit [seconds]` | Inter-turn delay pause (seconds) |
 | `/tool prompt` | Tools | `/tool prompt` | View active prompt |

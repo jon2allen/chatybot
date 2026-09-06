@@ -1330,6 +1330,37 @@ Summarize the previous overview in three bullets.
 
 **Variations:** set `/auto_truncate 50` to keep only 50% of context above the limit.
 
+### 13.4 Context budget inspection & CSV trace exports
+- **Goal:** inspect context utilization with `/context` and export structured session/tool metrics via `/session export csv`.
+- **Script:** `cookbook/13_4_context_and_csv_export.chatdsl`
+- **Run:** `/script doc/cookbook/13_4_context_and_csv_export.chatdsl`
+
+```dsl
+/context_limit 12000
+/auto_truncate on
+/session start context_trace_demo
+
+/model mistral_1
+Explain the architecture of LSM trees in database storage engines.
+
+# Inspect context utilization breakdown (session history vs buffers)
+/context
+/context session
+
+/model gemini_flash
+What are the trade-offs of LSM trees compared to B-Trees?
+
+# Export session metrics and conversation turns to CSV
+/session export csv 13_4_session_turns.csv -t
+/echo "Exported session conversation turns to 13_4_session_turns.csv"
+```
+
+**Walkthrough**
+1. `/context` displays token counts, buffer sizes, and percentage of active context limit used.
+2. `/context session` isolates the token count from session history.
+3. `/session export csv <file> -t` produces a `QUOTE_ALL` CSV containing timestamps, TPS, timing, prompts, responses, and reasoning traces for spreadsheet or database ingestion.
+4. For agentic tool loops, `/tool export csv <file>` or `/tool history csv <file>` exports step-by-step tool execution traces and timings.
+
 ---
 
 ## Chapter 14 — Novel Use Cases
