@@ -137,6 +137,7 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
         offset = 0
         model_filter = None
         compressed_filter = None
+        target_var = None
 
         args = parts[2].split() if len(parts) >= 3 else []
         for arg in args:
@@ -165,6 +166,10 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
                     print("Invalid range format. Use range=start:end, range=:end, or range=start:. Using default limit of 10.")
             elif param.startswith("model="):
                 model_filter = param[6:].lower()
+            elif param.startswith("var="):
+                target_var = arg[4:].strip().lstrip("$")
+            elif param.startswith("target="):
+                target_var = arg[7:].strip().lstrip("$")
 
         store = app._get_session_store()
         parsed_sessions = store.list_sessions(
@@ -173,6 +178,12 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
             model_filter=model_filter,
             compressed_filter=compressed_filter,
         )
+
+        if hasattr(app, "buffer_manager") and app.buffer_manager:
+            app.buffer_manager.set_script_var('SESSION_LIST', parsed_sessions, allow_protected=True)
+            if target_var:
+                app.buffer_manager.set_script_var(target_var, parsed_sessions, allow_protected=True)
+
         if not parsed_sessions:
             print("No saved sessions found.")
             return CommandResult.ok()

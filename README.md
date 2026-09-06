@@ -678,10 +678,11 @@ A legacy single-file flat JSON store (`monolithic`) is also supported via `sessi
 
 #### **Session Commands**
 ```bash
-/session start project_alpha               # Start and persist new named session
-/session list [limit=N] [range=A:B] [all]  # List recent sessions with pagination
+/session start project_alpha               # Start and persist new named session (sets ${SESSION_NAME})
+/session list [limit=N] [range=A:B] [all]  # List recent sessions with pagination (sets protected ${SESSION_LIST})
+/session list model=test_model var=my_var  # Filter by model alias and save session objects to custom variable
 /session list [compressed|uncompressed]    # Filter sessions by compression state
-/session use project_alpha                 # Load prior session history into memory
+/session use project_alpha                 # Load prior session history into memory (sets ${SESSION_NAME})
 /session note "Initial design discussion"  # Add persistent metadata note (up to 1024 chars)
 /session show [--thinking|-t]              # Inspect full exchange history and tool logs
 /session export transcript.md [-t]         # Export conversation as GitHub-flavored Markdown
