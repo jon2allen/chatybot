@@ -83,6 +83,16 @@ def get_context_metrics(
                 buffer_text_parts.append(str(app.buffer_manager.prompt_buffer))
             if hasattr(app.buffer_manager, "file_buffer") and app.buffer_manager.file_buffer:
                 buffer_text_parts.append(str(app.buffer_manager.file_buffer))
+            if hasattr(app.buffer_manager, "file_banks") and app.buffer_manager.file_banks:
+                for bank_name, bank_content in app.buffer_manager.file_banks.items():
+                    if bank_content:
+                        buffer_text_parts.append(str(bank_content))
+
+        # Include System prompt if configured
+        if hasattr(app, "config_manager") and app.config_manager:
+            sys_msg = getattr(app.config_manager, "system_message", "")
+            if sys_msg:
+                buffer_text_parts.append(str(sys_msg))
 
     session_full_text = "\n".join(session_text_parts)
     loop_full_text = "\n".join(loop_text_parts)
