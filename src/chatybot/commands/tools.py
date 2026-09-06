@@ -1014,11 +1014,14 @@ def _render_tool_replay_at(snapshot, system_prompt):
 
     surviving_keys = {(m.get("role"), m.get("content")) for m in snapshot.truncated_messages}
     evicted_set = set(snapshot.evicted_indices)
+    # Determine anchor indices (system at 0 if present, first user after it)
     anchor_idxs = set()
-    if snapshot.messages:
+    rem_idx = 0
+    if len(snapshot.messages) > 0 and snapshot.messages[0].get("role") == "system":
         anchor_idxs.add(0)
-        if len(snapshot.messages) > 1 and snapshot.messages[1].get("role") == "user":
-            anchor_idxs.add(1)
+        rem_idx = 1
+    if len(snapshot.messages) > rem_idx and snapshot.messages[rem_idx].get("role") == "user":
+        anchor_idxs.add(rem_idx)
 
     for i, m in enumerate(snapshot.messages):
         role = m.get("role", "?")

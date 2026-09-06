@@ -290,3 +290,47 @@ def test_get_context_metrics_with_context_limit(app):
     assert "Context Limit: 10,000 tokens" in metrics["summary"]
     assert "auto-truncate: ON (85%)" in metrics["summary"]
 
+
+def test_partition_anchors_and_verbose_diagnostic_consistency():
+    """Verify that partition_anchors correctly handles system+user, user-only, and non-anchor starts."""
+    limiter = ContextLimiter(default_limit=1000)
+
+    # Case 1: System + User -> 2 anchors
+    m1 = [
+        {"role": "system", "content": "System instructions"},
+        {"role": "user", "content": "First user goal"},
+        {"role": "assistant", "content": "Response 1"},
+        {"role": "user", "content": "Followup"}
+    ]
+    anchors1, evictable1 = ContextLimiter.partition_anchors(m1)
+    assert len(anchors1) == 2
+    assert len(evictable1) == 2
+    diag1 = limiter.truncate_messages_verbose(m1, limit=50)
+    assert diag1.anchor_count == 2
+
+    # Case 2: User only (no system prompt) -> 1 anchor (user)
+    m2 = [
+        {"role": "user", "content": "First user goal without system"},
+        {"role": "assistant", "content": "Response 1"},
+        {"role": "user", "content": "Followup"}
+    ]
+    anchors2, evictable2 = ContextLimiter.partition_anchors(m2)
+    assert len(anchors2) == 1
+    assert anchors2[0]["role"] == "user"
+    assert len(evictable2) == 2
+    diag2 = limiter.truncate_messages_verbose(m2, limit=50)
+    assert diag2.anchor_count == 1
+
+    # Case 3: Starts with assistant or tool call -> 0 anchors
+    m3 = [
+        {"role": "assistant", "content": "Tool call invocation"},
+        {"role": "user", "content": "Tool output"}
+    ]
+    anchors3, evictable3 = ContextLimiter.partition_anchors(m3)
+    assert len(anchors3) == 0
+    assert len(evictable3) == 2
+    diag3 = limiter.truncate_messages_verbose(m3, limit=50)
+    assert diag3.anchor_count == 0
+    assert diag3.anchors_alone_exceed_limit is False
+
+
