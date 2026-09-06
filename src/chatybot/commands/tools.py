@@ -583,19 +583,57 @@ async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandRes
         return CommandResult.ok()
 
     elif subcmd == "history":
-        # /tool history                  — list all agentic loops recorded in the active session
-        # /tool history <turn_id>         — show detailed tool calls for a specific session turn
-        # /tool history current [--verbose] — show the most recent in-memory AGENTIC_LOOP trace
+        # /tool history [csv [file]]     — list all agentic loops recorded in the active session
+        # /tool history <turn_id> [csv [file]] — show detailed tool calls for a specific session turn
+        # /tool history current [csv [file]] [--verbose] — show the most recent in-memory AGENTIC_LOOP trace
         tokens = parts[2].strip().split() if len(parts) > 2 else []
         verbose = any(t.lower() in ("--verbose", "-v", "verbose") for t in tokens)
+        is_csv = any(t.lower() == "csv" or t.lower().endswith(".csv") for t in tokens)
         remaining_tokens = [t for t in tokens if t.lower() not in ("--verbose", "-v", "verbose")]
+
+        csv_filename = None
+        if is_csv:
+            csv_candidates = [t for t in remaining_tokens if t.lower().endswith(".csv") or (t.lower() != "csv" and t.lower() not in ("current", "last") and not t.isdigit())]
+            if csv_candidates:
+                csv_filename = csv_candidates[0].strip(" \"'")
+            remaining_tokens = [t for t in remaining_tokens if t.lower() != "csv" and t != csv_filename]
+
         detail_arg = remaining_tokens[0].strip().lower() if remaining_tokens else ""
 
         if detail_arg in ("current", "last"):
+            if is_csv:
+                loop_data = app.buffer_manager.get_script_var('AGENTIC_LOOP')
+                if not isinstance(loop_data, list) or not loop_data:
+                    print("No agentic loop has been run yet.")
+                    return CommandResult.ok()
+                out_path = csv_filename or "agentic_loop_current.csv"
+                import csv
+                try:
+                    with open(out_path, "w", newline="", encoding="utf-8") as f:
+                        writer = csv.writer(f, quoting=csv.QUOTE_ALL)
+                        writer.writerow(["step", "tool", "status", "duration_ms", "timestamp", "arguments", "result", "exit_code"])
+                        for i, rec in enumerate(loop_data, 1):
+                            if not isinstance(rec, dict):
+                                continue
+                            writer.writerow([
+                                rec.get("turn", i),
+                                rec.get("tool", "unknown"),
+                                rec.get("status", "error"),
+                                rec.get("duration_ms", ""),
+                                rec.get("timestamp", ""),
+                                json.dumps(rec.get("arguments", {}), ensure_ascii=False),
+                                rec.get("result", ""),
+                                rec.get("exit_code", 0),
+                            ])
+                    print(f"Exported current agentic loop trace to CSV '{out_path}'.")
+                except Exception as e:
+                    print(f"Error exporting agentic loop to CSV: {e}")
+                return CommandResult.ok()
+
             app.show_agentic_loop_trace(verbose=verbose)
             return CommandResult.ok()
 
-        if detail_arg == "":
+        if detail_arg == "" or (is_csv and not detail_arg.isdigit()):
             # Summarize every turn in the active session that has an agentic_loop
             if not app.session_turns:
                 print("No active session or no turns recorded.")
@@ -610,6 +648,35 @@ async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandRes
             if not loops:
                 print("No agentic tool loops found in the active session.")
                 print("Tip: Run '/tool loop' or enable '/tool auto on' to execute agentic loops, then use '/tool history' to review them.")
+                return CommandResult.ok()
+
+            if is_csv:
+                s_name = app.active_session_name or app.active_session_id or "session"
+                out_path = csv_filename or f"{s_name}_tool_history.csv"
+                import csv
+                try:
+                    with open(out_path, "w", newline="", encoding="utf-8") as f:
+                        writer = csv.writer(f, quoting=csv.QUOTE_ALL)
+                        writer.writerow(["turn_id", "step", "tool", "status", "duration_ms", "timestamp", "arguments", "result", "exit_code"])
+                        for turn in loops:
+                            t_id = turn.get("turn_id", 1)
+                            for i, rec in enumerate(turn.get("agentic_loop", []), 1):
+                                if not isinstance(rec, dict):
+                                    continue
+                                writer.writerow([
+                                    t_id,
+                                    rec.get("turn", i),
+                                    rec.get("tool", "unknown"),
+                                    rec.get("status", "error"),
+                                    rec.get("duration_ms", ""),
+                                    rec.get("timestamp", ""),
+                                    json.dumps(rec.get("arguments", {}), ensure_ascii=False),
+                                    rec.get("result", ""),
+                                    rec.get("exit_code", 0),
+                                ])
+                    print(f"Exported session agentic tool history to CSV '{out_path}'.")
+                except Exception as e:
+                    print(f"Error exporting tool history to CSV: {e}")
                 return CommandResult.ok()
 
             session_label = app.active_session_name or app.active_session_id or "unsaved"
@@ -650,7 +717,7 @@ async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandRes
         try:
             target_id = int(detail_arg)
         except ValueError:
-            print(f"Invalid argument '{detail_arg}'. Usage: /tool history [<turn_id>|current] [--verbose]")
+            print(f"Invalid argument '{detail_arg}'. Usage: /tool history [<turn_id>|current] [csv [file.csv]] [--verbose]")
             return CommandResult.ok()
 
         matched_turn = None
@@ -671,6 +738,32 @@ async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandRes
         al = matched_turn.get("agentic_loop")
         if not isinstance(al, list) or not al:
             print(f"Turn {target_id} has no recorded agentic loop data.")
+            return CommandResult.ok()
+
+        if is_csv:
+            out_path = csv_filename or f"turn_{target_id}_tool_history.csv"
+            import csv
+            try:
+                with open(out_path, "w", newline="", encoding="utf-8") as f:
+                    writer = csv.writer(f, quoting=csv.QUOTE_ALL)
+                    writer.writerow(["turn_id", "step", "tool", "status", "duration_ms", "timestamp", "arguments", "result", "exit_code"])
+                    for i, rec in enumerate(al, 1):
+                        if not isinstance(rec, dict):
+                            continue
+                        writer.writerow([
+                            target_id,
+                            rec.get("turn", i),
+                            rec.get("tool", "unknown"),
+                            rec.get("status", "error"),
+                            rec.get("duration_ms", ""),
+                            rec.get("timestamp", ""),
+                            json.dumps(rec.get("arguments", {}), ensure_ascii=False),
+                            rec.get("result", ""),
+                            rec.get("exit_code", 0),
+                        ])
+                print(f"Exported turn {target_id} tool history to CSV '{out_path}'.")
+            except Exception as e:
+                print(f"Error exporting turn {target_id} tool history to CSV: {e}")
             return CommandResult.ok()
 
         total = len(al)
@@ -729,6 +822,62 @@ async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandRes
                     print(f"      reason: {snippet}")
 
         print("=" * 60)
+        return CommandResult.ok()
+
+    elif subcmd == "export":
+        # /tool export csv <filename.csv>
+        raw_args = command.split(maxsplit=2)[2] if len(command.split(maxsplit=2)) > 2 else ""
+        words = raw_args.split()
+        if not words:
+            print("Usage: /tool export csv <filename.csv>")
+            return CommandResult.ok()
+
+        is_csv = words[0].lower() == "csv" or words[-1].lower().endswith(".csv")
+        if words[0].lower() == "csv":
+            words = words[1:]
+        out_path = " ".join(words).strip(" \"'")
+        if not out_path and is_csv:
+            s_name = app.active_session_name or app.active_session_id or "session"
+            out_path = f"{s_name}_tool_history.csv"
+        elif not out_path:
+            print("Usage: /tool export csv <filename.csv>")
+            return CommandResult.ok()
+
+        loops = []
+        if app.session_turns:
+            for turn in app.session_turns:
+                al = turn.get("agentic_loop")
+                if isinstance(al, list) and al:
+                    loops.append(turn)
+
+        if not loops:
+            print("No agentic tool loops found in active session to export.")
+            return CommandResult.ok()
+
+        import csv
+        try:
+            with open(out_path, "w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f, quoting=csv.QUOTE_ALL)
+                writer.writerow(["turn_id", "step", "tool", "status", "duration_ms", "timestamp", "arguments", "result", "exit_code"])
+                for turn in loops:
+                    t_id = turn.get("turn_id", 1)
+                    for i, rec in enumerate(turn.get("agentic_loop", []), 1):
+                        if not isinstance(rec, dict):
+                            continue
+                        writer.writerow([
+                            t_id,
+                            rec.get("turn", i),
+                            rec.get("tool", "unknown"),
+                            rec.get("status", "error"),
+                            rec.get("duration_ms", ""),
+                            rec.get("timestamp", ""),
+                            json.dumps(rec.get("arguments", {}), ensure_ascii=False),
+                            rec.get("result", ""),
+                            rec.get("exit_code", 0),
+                        ])
+            print(f"Exported session agentic tool history to CSV '{out_path}'.")
+        except Exception as e:
+            print(f"Error exporting tool history to CSV: {e}")
         return CommandResult.ok()
 
     elif subcmd == "replay":
