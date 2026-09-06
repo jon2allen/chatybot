@@ -331,13 +331,14 @@ async def cmd_context(ctx: CommandContext, parts: list, command: str) -> Command
         scoped_data = data.get(scope, {})
         scoped_tokens = scoped_data.get("estimated_tokens", 0)
         scope_label = "Session" if scope == "session" else ("Agentic Loop" if scope == "agentic_loop" else "Buffers")
+        print(f"  {scope_label} Usage:    ~{scoped_tokens:,} tokens ({scoped_data.get('kb', 0.0):.2f} KB)")
         if limit_info:
             eff_lim = limit_info["limit_tokens"]
             scoped_pct = min(100.0, (scoped_tokens / eff_lim) * 100.0) if eff_lim > 0 else 0.0
             bar_len = 20
             filled = int((scoped_pct / 100.0) * bar_len)
             bar_str = "█" * filled + "░" * (bar_len - filled)
-            print(f"  {scope_label} Total:    ~{scoped_tokens:,} / {eff_lim:,} tokens [{bar_str}] {scoped_pct:.1f}%")
+            print(f"  Context Limit:      {eff_lim:,} tokens [{bar_str}] {scoped_pct:.1f}%")
             rem_tokens = max(0, eff_lim - scoped_tokens)
             print(f"  Remaining:          ~{rem_tokens:,} tokens")
             auto_tr = limit_info["auto_truncate"]
@@ -345,7 +346,6 @@ async def cmd_context(ctx: CommandContext, parts: list, command: str) -> Command
             trunc_str = f"ON ({int(tr_pct)}%)" if auto_tr and tr_pct else ("ON" if auto_tr else "OFF")
             print(f"  Auto-Truncate:      {trunc_str}")
         else:
-            print(f"  {scope_label} Usage:    ~{scoped_tokens:,} tokens ({scoped_data.get('kb', 0.0):.2f} KB)")
             print("  Context Limit:      Disabled (no limit configured)")
     else:
         tot = data.get("total", {})
