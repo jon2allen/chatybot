@@ -189,13 +189,20 @@ class ContextLimiter:
 
         did_truncate = False
 
+        # Precompute per-message tokens to avoid O(N^2) tokenization during turn eviction
+        anchor_tokens = sum(self.count_tokens_message(m) for m in anchors)
+        evictable_token_counts = [self.count_tokens_message(m) for m in evictable]
+        current_total = 3 + anchor_tokens + sum(evictable_token_counts)
+
         # Step 1: Drop older intermediate turns (keeping the latest turn if possible)
-        while len(evictable) > 1 and self.count_tokens_messages(anchors + evictable) > target_limit:
+        while len(evictable) > 1 and current_total > target_limit:
+            current_total -= evictable_token_counts.pop(0)
             evictable.pop(0)
             did_truncate = True
 
         # If evictable has 1 item and total still exceeds target_limit, drop it if anchors alone fit better
-        if len(evictable) == 1 and self.count_tokens_messages(anchors + evictable) > target_limit:
+        if len(evictable) == 1 and current_total > target_limit:
+            current_total -= evictable_token_counts.pop(0)
             evictable.pop(0)
             did_truncate = True
 

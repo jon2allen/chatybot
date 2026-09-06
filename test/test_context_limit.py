@@ -389,7 +389,28 @@ def test_count_tokens_tool_calls_and_tool_messages():
     }
     resp_tokens = limiter.count_tokens_message(tool_resp_msg)
     assert resp_tokens > 5
+def test_context_limiter_multiturn_scaling():
+    """Verify that truncating a large multi-turn history runs efficiently and satisfies the token budget."""
+    limiter = ContextLimiter(default_limit=500, auto_truncate=True, truncate_pct=100.0)
 
+    # Build a conversation with system + initial user prompt + 100 turns
+    messages = [
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": "Initial user task request."},
+    ]
+    for i in range(1, 101):
+        messages.append({"role": "user", "content": f"Turn {i}: What is step {i} details with some padding text?"})
+        messages.append({"role": "assistant", "content": f"Turn {i}: Here are the details for step {i} with additional explanations."})
 
+    total_before = limiter.count_tokens_messages(messages)
+    assert total_before > 2000
 
+    truncated, did_trunc = limiter.truncate_messages(messages, limit=500, target_pct=100.0)
+    assert did_trunc is True
+    total_after = limiter.count_tokens_messages(truncated)
+    assert total_after <= 500
+    # Anchors preserved
+    assert truncated[0]["role"] == "system"
+    assert truncated[1]["role"] == "user"
+    assert "Initial user task request" in truncated[1]["content"]
 
