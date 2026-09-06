@@ -185,7 +185,7 @@ async def handle_replay_command(ctx: CommandContext, raw_tokens: List[str]) -> C
         return CommandResult.ok()
 
     if mode == "summary":
-        snapshots = replayer.replay_all(target, limit=limit)
+        snapshots = replayer.replay_all(target, limit=limit, turns=turns, system_prompt=system_prompt)
         _render_summary(snapshots)
         return CommandResult.ok()
 
@@ -215,7 +215,7 @@ async def handle_replay_command(ctx: CommandContext, raw_tokens: List[str]) -> C
         except ValueError:
             print(f"Invalid turn numbers: {mode_args[:2]}")
             return CommandResult.ok()
-        diff = replayer.diff_turns(target, turn_a, turn_b, limit=limit)
+        diff = replayer.diff_turns(target, turn_a, turn_b, limit=limit, turns=turns, system_prompt=system_prompt)
         if diff is None:
             print(f"Could not build diff for turns {turn_a} / {turn_b}. Available turn ids: {[t.get('turn_id') for t in llm_turns]}")
             return CommandResult.ok()
@@ -223,7 +223,7 @@ async def handle_replay_command(ctx: CommandContext, raw_tokens: List[str]) -> C
         return CommandResult.ok()
 
     if mode == "step":
-        snapshots = replayer.replay_all(target, limit=limit)
+        snapshots = replayer.replay_all(target, limit=limit, turns=turns, system_prompt=system_prompt)
         if not snapshots:
             print("No turns to step through.")
             return CommandResult.ok()

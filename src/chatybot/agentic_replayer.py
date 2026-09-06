@@ -224,10 +224,16 @@ class AgenticReplayer:
         target: str,
         turn_id: Optional[int] = None,
         limit: Optional[int] = None,
+        turns: Optional[List[Dict[str, Any]]] = None,
+        system_prompt: Optional[str] = None,
     ) -> List[AgenticStepSnapshot]:
         """Produce a snapshot for every step of the loop (including step 0 baseline)."""
-        meta, turns = self._load_turns(target)
-        system_prompt = self._session_replayer.reconstruct_system_prompt(meta, turns)
+        if turns is None:
+            meta, turns = self._load_turns(target)
+            if system_prompt is None:
+                system_prompt = self._session_replayer.reconstruct_system_prompt(meta, turns)
+        elif system_prompt is None:
+            system_prompt = self._session_replayer.reconstruct_system_prompt({}, turns)
         agentic_turn = self._find_agentic_turn(turns, turn_id)
         if agentic_turn is None:
             return []
@@ -254,10 +260,16 @@ class AgenticReplayer:
         step_a: int,
         step_b: int,
         limit: Optional[int] = None,
+        turns: Optional[List[Dict[str, Any]]] = None,
+        system_prompt: Optional[str] = None,
     ) -> Optional[AgenticStepDiff]:
         """Compare the reconstructed context at step_a vs step_b of a loop."""
-        meta, turns = self._load_turns(target)
-        system_prompt = self._session_replayer.reconstruct_system_prompt(meta, turns)
+        if turns is None:
+            meta, turns = self._load_turns(target)
+            if system_prompt is None:
+                system_prompt = self._session_replayer.reconstruct_system_prompt(meta, turns)
+        elif system_prompt is None:
+            system_prompt = self._session_replayer.reconstruct_system_prompt({}, turns)
         agentic_turn = self._find_agentic_turn(turns, turn_id)
         if agentic_turn is None:
             return None
@@ -271,11 +283,9 @@ class AgenticReplayer:
         added = [m for m in snap_b.messages if (m.get("role"), m.get("content")) not in a_keys]
 
         b_surviving_keys = {(m.get("role"), m.get("content")) for m in snap_b.truncated_messages}
-        b_all_keys = {(m.get("role"), m.get("content")) for m in snap_b.messages}
         newly_evicted = [
-            m for m in snap_a.messages
+            m for m in snap_a.truncated_messages
             if (m.get("role"), m.get("content")) not in b_surviving_keys
-            and (m.get("role"), m.get("content")) not in b_all_keys
         ]
 
         return AgenticStepDiff(
