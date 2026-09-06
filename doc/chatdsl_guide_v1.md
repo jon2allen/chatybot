@@ -738,6 +738,76 @@ src/chatybot/profiles/          # Preset profiles
 
 ---
 
+## HowTo: Context Management & Time-Travel Replay
+
+Chatybot includes context monitoring, auto-truncation, and time-travel replay tools to inspect, limit, and debug token usage across conversations and tool loops.
+
+### 1. Checking Context & Setting Limits
+```dsl
+# View active prompt context breakdown and budget bar
+/context
+
+# View specific scope breakdown
+/context session
+/context loop
+/context buffers
+
+# Set token limit (supports direct numbers or script variables)
+/context 10000
+set my_limit = 16000
+/context $my_limit
+
+# Clear context limit
+/context off
+
+# Save full metrics dictionary to variable
+/context ctx_data
+```
+
+### 2. Auto-Truncation & Anchor Protection
+```dsl
+# Enable auto-truncation (prunes older messages when limit is exceeded)
+/auto_truncate on
+
+# Set target threshold (e.g. prune down to 90% of limit upon overflow)
+/auto_truncate 90
+
+# Disable auto-truncation
+/auto_truncate off
+```
+* **Anchors Protected**: The System Message (index 0) and Initial User Goal (index 1) are never evicted.
+* **Message Eviction**: Older intermediate turns and prior tool call results are evicted from oldest to newest.
+* **Content Truncation**: Oversized tool results or messages are truncated with `[... content truncated to fit context limit ...]`.
+
+### 3. Time-Travel Context Replay
+```dsl
+# View summary timeline of turns in active session
+/replay
+
+# Inspect exact reconstructed message array at Turn 5
+/replay at 5
+
+# Compare Turn 3 vs Turn 4 (token deltas, newly evicted messages)
+/replay diff 3 4
+
+# Interactive turn-by-turn stepping debugger
+/replay step
+
+# Replay agentic tool loop step timeline
+/tool replay
+```
+
+*Timeline Columns Explained*:
+* **`Step / Turn`**: Turn index (0 is pre-loop baseline).
+* **`Tool`**: Tool executed at that step.
+* **`Msgs`**: Total raw messages in prompt array.
+* **`Uncut Tok`**: Token count before truncation.
+* **`Trunc Tok`**: Final token count after truncation.
+* **`Evicted`**: Count of older intermediate messages dropped from prompt array.
+* **`AnchorWarn`**: Indicates if protected anchors alone exceed the token limit.
+
+---
+
 # Reference
 
 # ChatDSL Keyword Reference

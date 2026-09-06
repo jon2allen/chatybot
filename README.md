@@ -706,6 +706,85 @@ When merging sessions that were generated with different AI models (for example,
 
 ---
 
+### **Context Window Management & Time-Travel Replay (New!)**
+
+Chatybot includes an advanced context monitoring, auto-truncation, and time-travel replay suite that lets you inspect, limit, and debug the exact message payloads and token budgets sent to language models across multi-turn sessions and agentic tool loops.
+
+#### **1. Live Context Monitoring (`/context`, `/ctx`)**
+View real-time token counts, buffer sizes, and context budget utilization:
+```bash
+/context                      # View active prompt context breakdown and budget bar
+/context session              # Inspect token usage by session conversation history
+/context loop                 # Inspect token usage by agentic tool loop executions
+/context buffers              # Inspect token usage by prompt buffers, file banks, and system message
+/context 10000                # Set context limit to 10,000 tokens (supports $variables: /context $my_limit)
+/context off                  # Disable context limit
+/context ctx_data             # Save full metrics dictionary to a ChatDSL script variable
+```
+
+*Example Output*:
+```text
+Context Usage Breakdown:
+  • Session History:  ~8,259 tokens (13 turns, 32.26 KB)
+  • Last Tool Loop:   ~3,042 tokens (3 tool calls, 11.88 KB) [archived trace]
+  • Buffers / System: ~7 tokens (0.03 KB)
+  ──────────────────────────────────────────────
+  Total:              ~8,266 / 10,000 tokens [████████████████░░░░] 82.7%
+  Remaining:          ~1,734 tokens
+  Auto-Truncate:      ON (100%)
+```
+
+#### **2. Context Limits & Auto-Truncation Engine (`/auto_truncate`)**
+Prevent context window overflows during lengthy discussions or data-heavy tool executions:
+* **Setting Limits**: Configure a hard token limit via `/context <tokens>`, `/context_limit <tokens>`, or model configuration (`context_limit = 16000` in `chat_config.toml`).
+* **Auto-Truncation**: Enable automated pruning with `/auto_truncate on` or `/auto_truncate <percentage>` (e.g. `/auto_truncate 90` to trim down to 90% of the limit when exceeded).
+* **Anchor Protection**: The **System Prompt** (index 0) and the **Initial User Goal / Prompt** (index 1) are permanently anchored and never dropped.
+* **Message Eviction**: When context exceeds the target budget, Chatybot evicts older intermediate conversation turns and prior tool call/result pairs from oldest to newest while preserving recent turns.
+* **Content Truncation**: If individual messages remain oversized (e.g. reading massive files), content is trimmed with a clear `[... content truncated to fit context limit ...]` indicator.
+* **Warning Tiers**:
+  * **$70.0\% - 89.9\%$**: `[Warning: Context usage at 75.0% of limit (7,500/10,000 tokens).]`
+  * **$90.0\% - 99.9\%$**: `[Warning: Context usage at 95.0% of limit (9,500/10,000 tokens). Approaching context window limit.]`
+  * **$\ge 100\%$**: `[Warning: Context usage at 120.0% of limit (12,000/10,000 tokens). Exceeds context limit (auto-truncate is OFF).]`
+
+#### **3. Time-Travel Context Replay (`/replay`, `/tool replay`)**
+Reconstruct and inspect the exact prompt array and truncation state sent to the LLM at any point in history.
+
+```bash
+/replay                                # Summary timeline of all turns in the active session
+/replay <session_id>                   # Summary timeline for a specific persisted session
+/replay at 5                           # Reconstructed message array dump at Turn 5 (anchors, kept, evicted)
+/replay diff 3 4                       # Compare Turn 3 vs Turn 4 (added messages, newly evicted, token delta)
+/replay step                           # Interactive turn-by-turn stepping debugger (Enter=next, show=dump, q=quit)
+/replay limit=8000                     # Override context limit on the fly to simulate different token budgets
+/tool replay [at N|diff A B|step]      # Replay agentic tool loop step timeline for the last tool execution
+```
+
+*Replay Timeline Overview*:
+```text
+==============================================================================
+AGENTIC LOOP REPLAY — SUMMARY (turn 17)
+==============================================================================
+Step  Tool                Msgs  Uncut Tok   Trunc Tok   Evicted  AnchorWarn 
+------------------------------------------------------------------------------
+0     (baseline)          34    12429       9721        15       -          
+1     list_directory      36    13761       9915        19       -          
+2     read_file           38    14775       9910        23       -          
+5     read_file           44    23499       2705        42       -          
+20    read_file           74    38089       2705        72       -          
+==============================================================================
+```
+
+*Timeline Column Reference*:
+* **`Step / Turn`**: 0-based or 1-based index in the tool loop or session (`0 = (baseline)` pre-loop state).
+* **`Tool`**: Name of the tool executed at that step.
+* **`Msgs`**: Total message count in the prompt array before truncation.
+* **`Uncut Tok`**: Raw token count of all messages if submitted without truncation.
+* **`Trunc Tok`**: Final token count submitted to the model after eviction and content truncation.
+* **`Evicted`**: Total count of older intermediate messages dropped from the prompt array to satisfy the token budget.
+* **`AnchorWarn`**: Flag (`OVERFLOW` / `-`) indicating if protected anchors (system message + initial user goal) alone exceed the token limit.
+
+---
+
 ## **Test Cases**
 
 ### **Test Case 1: Basic Command Execution**
