@@ -70,11 +70,23 @@ def test_context_limiter_warnings():
     assert "75.0%" in warn_70
     assert "750/1,000" in warn_70
 
-    # 90%+ -> 90% warning with approaching note
+    # 90% to 99.9% -> 90% warning with approaching note
     warn_90 = limiter.check_warnings(950)
     assert warn_90 is not None
     assert "95.0%" in warn_90
     assert "Approaching context window limit" in warn_90
+
+    # 100%+ -> Exceeds context limit warning (auto-truncate OFF)
+    warn_100 = limiter.check_warnings(1200)
+    assert warn_100 is not None
+    assert "120.0%" in warn_100
+    assert "Exceeds context limit (auto-truncate is OFF)" in warn_100
+
+    # 100%+ with auto-truncate ON
+    limiter.auto_truncate = True
+    warn_100_on = limiter.check_warnings(1200)
+    assert warn_100_on is not None
+    assert "Exceeds context limit." in warn_100_on
 
 
 def test_context_limiter_truncation():
