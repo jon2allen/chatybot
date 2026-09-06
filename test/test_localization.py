@@ -377,3 +377,74 @@ def test_tool_scratch_localization():
         mgr = LocalizationManager(loc)
         translated = mgr.translate_command_string(localized_input)
         assert translated == expected_cmd, f"Failed for {loc}: '{localized_input}' -> '{translated}', expected '{expected_cmd}'"
+
+
+def test_v083_features_localization():
+    """Verify v0.8.3 /replay, /context, and new keyword translations across all supported languages."""
+    # 1. English
+    mgr_en = LocalizationManager("en")
+    assert mgr_en.resolve_command("/replay") == "/replay"
+    assert mgr_en.resolve_command("/context") == "/context"
+    assert mgr_en.resolve_command("/ctx") == "/context"
+    rev_en = mgr_en.get_reverse_aliases()
+    assert rev_en.get("current") == "current"
+    assert rev_en.get("model") == "model"
+    assert rev_en.get("var") == "var"
+    assert rev_en.get("target") == "target"
+
+    # 2. Spanish
+    mgr_es = LocalizationManager("es")
+    assert mgr_es.resolve_command("/reproducir") == "/replay"
+    assert mgr_es.resolve_command("/contexto") == "/context"
+    assert mgr_es.resolve_command("/ctx") == "/context"
+    rev_es = mgr_es.get_reverse_aliases()
+    assert rev_es.get("actual") == "current"
+    assert rev_es.get("modelo") == "model"
+    assert rev_es.get("variable") == "var"
+    assert rev_es.get("destino") == "target"
+
+    # 3. French
+    mgr_fr = LocalizationManager("fr")
+    assert mgr_fr.resolve_command("/rejouer") == "/replay"
+    assert mgr_fr.resolve_command("/contexte") == "/context"
+    assert mgr_fr.resolve_command("/ctx") == "/context"
+    rev_fr = mgr_fr.get_reverse_aliases()
+    assert rev_fr.get("actuel") == "current"
+    assert rev_fr.get("modele") == "model"
+    assert rev_fr.get("variable") == "var"
+    assert rev_fr.get("cible") == "target"
+
+    # 4. Chinese
+    mgr_zh = LocalizationManager("zh")
+    assert mgr_zh.resolve_command("/重放") == "/replay"
+    assert mgr_zh.resolve_command("/回放") == "/replay"
+    assert mgr_zh.resolve_command("/上下文") == "/context"
+    assert mgr_zh.resolve_command("/ctx") == "/context"
+    rev_zh = mgr_zh.get_reverse_aliases()
+    assert rev_zh.get("当前") == "current"
+    assert rev_zh.get("模型") == "model"
+    assert rev_zh.get("变量") == "var"
+    assert rev_zh.get("目标") == "target"
+
+    # 5. Italian
+    mgr_it = LocalizationManager("it")
+    assert mgr_it.resolve_command("/riproduci") == "/replay"
+    assert mgr_it.resolve_command("/contesto") == "/context"
+    assert mgr_it.resolve_command("/ctx") == "/context"
+    rev_it = mgr_it.get_reverse_aliases()
+    assert rev_it.get("attuale") == "current"
+    assert rev_it.get("modello") == "model"
+    assert rev_it.get("variabile") == "var"
+    assert rev_it.get("destinazione") == "target"
+
+    # 6. Arabic
+    mgr_ar = LocalizationManager("ar")
+    assert mgr_ar.resolve_command("/إعادة_عرض") == "/replay"
+    assert mgr_ar.resolve_command("/تشغيل_مجدد") == "/replay"
+    assert mgr_ar.resolve_command("/سياق") == "/context"
+    assert mgr_ar.resolve_command("/ctx") == "/context"
+    rev_ar = mgr_ar.get_reverse_aliases()
+    assert rev_ar.get("حالي") == "current"
+    assert rev_ar.get("نموذج") == "model"
+    assert rev_ar.get("متغير") == "var"
+    assert rev_ar.get("هدف") == "target"

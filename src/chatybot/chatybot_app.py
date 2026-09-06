@@ -109,7 +109,8 @@ class ChatybotApp:
                 "reloadmacros", "listmacros", "calc", "stream", "script", "source", "profile", "quit", "exit",
                 "setdb", "dblist", "searchdb", "dblog", "dbprint", "documents", "rerank",
                 "loadvar", "savevar", "setvar", "notemode", "mem", "dump", "trace", "debug",
-                "run", "run_safe", "run_unsafe", "tool", "proc", "defproc", "endproc", "local", "foreach", "endfor", "break"
+                "run", "run_safe", "run_unsafe", "tool", "proc", "defproc", "endproc", "local", "foreach", "endfor", "break",
+                "session", "replay", "context", "ctx", "context_limit", "auto_truncate", "env", "chatdsl"
             ]
         )
 
