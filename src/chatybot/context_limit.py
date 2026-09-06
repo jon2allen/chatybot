@@ -124,7 +124,7 @@ class ContextLimiter:
 
     def check_warnings(self, total_tokens: int, limit: Optional[int] = None) -> Optional[str]:
         """
-        Check if total token usage approaches or exceeds warning thresholds (70%, 90%).
+        Check if total token usage approaches or exceeds warning thresholds (70%, 90%, 100%+).
         Returns warning message string if threshold reached, else None.
         """
         effective_limit = limit or self.context_limit
@@ -132,7 +132,10 @@ class ContextLimiter:
             return None
 
         pct = (total_tokens / effective_limit) * 100.0
-        if pct >= 90.0:
+        if pct >= 100.0:
+            auto_tr_note = " (auto-truncate is OFF)" if not self.auto_truncate else ""
+            return f"[Warning: Context usage at {pct:.1f}% of limit ({total_tokens:,}/{effective_limit:,} tokens). Exceeds context limit{auto_tr_note}.]"
+        elif pct >= 90.0:
             return f"[Warning: Context usage at {pct:.1f}% of limit ({total_tokens:,}/{effective_limit:,} tokens). Approaching context window limit.]"
         elif pct >= 70.0:
             return f"[Warning: Context usage at {pct:.1f}% of limit ({total_tokens:,}/{effective_limit:,} tokens).]"
