@@ -117,6 +117,27 @@ class ContextLimiter:
             return f"[Warning: Context usage at {pct:.1f}% of limit ({total_tokens:,}/{effective_limit:,} tokens).]"
         return None
 
+    @staticmethod
+    def partition_anchors(messages: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+        """
+        Partition messages into anchors (system prompt + initial user prompt) and evictable turns.
+        Returns: (anchors, evictable)
+        """
+        anchors: List[Dict[str, Any]] = []
+        if len(messages) > 0 and messages[0].get("role") == "system":
+            anchors.append(messages[0])
+            remaining = messages[1:]
+        else:
+            remaining = messages
+
+        if remaining and remaining[0].get("role") == "user":
+            anchors.append(remaining[0])
+            evictable = remaining[1:]
+        else:
+            evictable = remaining
+
+        return anchors, evictable
+
     def truncate_messages(
         self,
         messages: List[Dict[str, Any]],
@@ -143,19 +164,7 @@ class ContextLimiter:
         result = [dict(m) for m in messages]
         
         # Partition into anchors (system prompt + initial user prompt) and evictable intermediate turns
-        anchors: List[Dict[str, Any]] = []
-        if len(result) > 0 and result[0].get("role") == "system":
-            anchors.append(result[0])
-            remaining = result[1:]
-        else:
-            remaining = result
-
-        # Anchor initial user prompt if present
-        if remaining and remaining[0].get("role") == "user":
-            anchors.append(remaining[0])
-            evictable = remaining[1:]
-        else:
-            evictable = remaining
+        anchors, evictable = self.partition_anchors(result)
 
         did_truncate = False
 
@@ -254,11 +263,7 @@ class ContextLimiter:
         target_limit = int(effective_limit * pct) if effective_limit else 0
 
         # Anchor partition overflow detection (mirrors truncate_messages anchoring)
-        anchors: List[Dict[str, Any]] = []
-        if tagged_messages:
-            anchors.append(tagged_messages[0])
-            if len(tagged_messages) > 1 and tagged_messages[1].get("role") == "user":
-                anchors.append(tagged_messages[1])
+        anchors, _ = self.partition_anchors(tagged_messages)
         anchor_tokens = self.count_tokens_messages(anchors)
         anchors_alone_overflow = bool(target_limit and anchor_tokens > target_limit)
 
