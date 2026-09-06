@@ -310,6 +310,45 @@ def test_replay_all_and_diff_turns_with_preloaded_turns():
     assert not replayer.app.load_called
 
 
+@pytest.mark.anyio
+async def test_replay_populates_protected_var_and_custom_var(app):
+    """Test /session replay and /replay populate protected ${REPLAY} and support var=<name>."""
+    await app.handle_escape_command("/session start replay_var_test")
+    app.append_session_turn("turn 1 prompt", "turn 1 response")
+    app.append_session_turn("turn 2 prompt", "turn 2 response")
+
+    # 1. /session replay (summary) with var=
+    await _run_capture(app, "/session replay var=sess_timeline")
+    replay_data = app.buffer_manager.get_script_var("REPLAY")
+    assert isinstance(replay_data, list)
+    assert len(replay_data) == 2
+    assert replay_data[0]["turn_id"] == 1
+    assert replay_data[1]["turn_id"] == 2
+
+    assert app.buffer_manager.get_script_var("sess_timeline") == replay_data
+
+    # Verify REPLAY is protected
+    assert app.buffer_manager.is_protected_var("REPLAY")
+    with app.buffer_manager.script_vars.user_write():
+        with pytest.raises(ValueError, match="protected variable"):
+            app.buffer_manager.script_vars["REPLAY"] = "tampered"
+
+    # 2. Top-level /replay at 1 with var=
+    await _run_capture(app, "/replay at 1 var=t1_snap")
+    snap1 = app.buffer_manager.get_script_var("REPLAY")
+    assert isinstance(snap1, dict)
+    assert snap1["turn_id"] == 1
+    assert app.buffer_manager.get_script_var("t1_snap") == snap1
+
+    # 3. /replay diff 1 2 with var=
+    await _run_capture(app, "/replay diff 1 2 var=diff_snap")
+    diff_val = app.buffer_manager.get_script_var("REPLAY")
+    assert isinstance(diff_val, dict)
+    assert diff_val["turn_a"] == 1
+    assert diff_val["turn_b"] == 2
+    assert app.buffer_manager.get_script_var("diff_snap") == diff_val
+
+
 # Helper to run an escape command and capture stdout (defined at module bottom
 # to keep the test bodies focused).
 async def _run_capture(app, command):

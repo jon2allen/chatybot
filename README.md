@@ -575,10 +575,10 @@ set run_id = "${RUN_COMPLETION}"
 You can enable native-like tool usage for LLMs, allowing them to autonomously select and execute local python functions in a multi-turn loop.
 *   **`/tool on`**: Enables tool mode and injects all active tool definitions from `tools_config.toml` into the LLM system prompt context.
 *   **`/tool off`**: Disables tool mode.
-*   **`/tool list`**: Lists all available tools, showing their enabled/disabled status and description.
+*   **`/tool list [detail] [pattern] [var=<name>]`**: Lists all available tools, showing their enabled/disabled status and description. Automatically populates protected variable `${TOOL_LIST}` and optional target variable with structured tool metadata.
 *   **`/tool enable <tool>|all`**: Dynamically enables a specific tool or all tools for the current session.
 *   **`/tool disable <tool>|all`**: Dynamically disables a specific tool or all tools, forcing an immediate prompt context refresh and runtime block in the dispatcher.
-*   **`/tool prompt`**: Displays the active tool injection context and system instructions.
+*   **`/tool prompt [live_edit|edit_live|restore]`**: Displays the active tool injection context and system instructions, opens an external editor for live adjustments, or restores defaults.
 *   **`/tool scratch [on|off|clean|status|show]`**: Toggle or manage the dedicated agentic scratchpad directory:
     *   `on`: Enables scratchpad mode and injects dedicated instructions directing the LLM to write, test, and execute disposable Python/Bash scripts within a dedicated temporary folder (`~/.local/share/chatybot/sessions/<session_id>/scratch/` for active sessions, or `~/.local/share/chatybot/scratch/` as a global fallback) without altering project files.
     *   `off`: Disables scratchpad mode and removes scratchpad instructions from the system prompt.
@@ -588,13 +588,17 @@ You can enable native-like tool usage for LLMs, allowing them to autonomously se
     *   The model returns a conversational natural-language answer (terminal state).
     *   The maximum number of turns is reached (default 25; configurable via `max_turns` in `tools_config.toml`; use `max` or `max=100` to increase). Loop counts greater than 100 require the `force` flag.
 *   **`/tool auto [on|off]`**: Enables/disables auto-execution of the tool loop. When enabled, any tool call block detected in the LLM completion response automatically triggers the autonomous execution loop.
+*   **`/tool history [<turn_id>|current] [csv [file.csv]] [var=<name>]`**: List all agentic tool loops recorded in the active session, or show detailed tool calls for a specific turn. Automatically populates protected variable `${TOOL_HISTORY}` and optional target variable.
+*   **`/tool replay [<turn_id>] [at <N>|diff <A> <B>|step] [limit=<N>] [var=<name>]`**: Time-travel agentic loop replay. Automatically populates protected variable `${TOOL_REPLAY}` and optional target variable.
 *   **`/tool <file.json>` or `/tool <json_string>`**: Manually dispatch a specific tool invocation.
 
 *Example*:
 ```dsl
 /tool on
+/tool list var=my_tools
 chat --> find all markdown files
 /tool loop 10
+/tool history current var=last_loop
 # LLM will autonomously execute tools in a loop for up to 10 turns (or until finished).
 ```
 
@@ -748,16 +752,16 @@ Prevent context window overflows during lengthy discussions or data-heavy tool e
   * **$\ge 100\%$**: `[Warning: Context usage at 120.0% of limit (12,000/10,000 tokens). Exceeds context limit (auto-truncate is OFF).]`
 
 #### **3. Time-Travel Context Replay (`/replay`, `/tool replay`)**
-Reconstruct and inspect the exact prompt array and truncation state sent to the LLM at any point in history.
+Reconstruct and inspect the exact prompt array and truncation state sent to the LLM at any point in history. Both commands automatically populate protected script variables (`${REPLAY}` and `${TOOL_REPLAY}`) and support custom target variables via `var=<name>` or `target=<name>`.
 
 ```bash
-/replay                                # Summary timeline of all turns in the active session
+/replay                                # Summary timeline of all turns in the active session (sets ${REPLAY})
 /replay <session_id>                   # Summary timeline for a specific persisted session
-/replay at 5                           # Reconstructed message array dump at Turn 5 (anchors, kept, evicted)
+/replay at 5 var=turn_5                # Reconstructed message array dump at Turn 5 (anchors, kept, evicted)
 /replay diff 3 4                       # Compare Turn 3 vs Turn 4 (added messages, newly evicted, token delta)
 /replay step                           # Interactive turn-by-turn stepping debugger (Enter=next, show=dump, q=quit)
 /replay limit=8000                     # Override context limit on the fly to simulate different token budgets
-/tool replay [at N|diff A B|step]      # Replay agentic tool loop step timeline for the last tool execution
+/tool replay [at N|diff A B|step]      # Replay agentic tool loop step timeline for the last tool execution (sets ${TOOL_REPLAY})
 ```
 
 *Replay Timeline Overview*:

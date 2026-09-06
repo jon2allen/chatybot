@@ -436,3 +436,50 @@ async def test_tool_replay_limit_override(app):
 
     out = await _run_capture(app, "/tool replay limit=80")
     assert "SUMMARY" in out
+
+
+@pytest.mark.anyio
+async def test_tool_replay_populates_protected_var_and_custom_var(app):
+    """Test /tool replay populates protected ${TOOL_REPLAY} and supports var=<name>."""
+    await app.handle_escape_command("/session start tool_replay_var_test")
+    app.append_session_turn("do work", "...")
+    loop = [
+        {"turn": 1, "tool": "list_directory", "arguments": {"path": "."}, "result": "f1.txt", "exit_code": 0, "status": "success", "duration_ms": 10.0},
+        {"turn": 2, "tool": "read_file", "arguments": {"path": "f1.txt"}, "result": "hello", "exit_code": 0, "status": "success", "duration_ms": 20.0},
+    ]
+    app.attach_agentic_loop_to_current_turn(loop, final_response="done")
+    app.save_active_session()
+
+    # 1. Summary mode
+    await _run_capture(app, "/tool replay var=loop_snaps")
+    replay_data = app.buffer_manager.get_script_var("TOOL_REPLAY")
+    assert isinstance(replay_data, list)
+    assert len(replay_data) == 3  # step 0 (baseline) + step 1 + step 2
+    assert replay_data[0]["step"] == 0
+    assert replay_data[1]["tool"] == "list_directory"
+    assert replay_data[2]["tool"] == "read_file"
+
+    custom_data = app.buffer_manager.get_script_var("loop_snaps")
+    assert custom_data == replay_data
+
+    # Verify TOOL_REPLAY is protected
+    assert app.buffer_manager.is_protected_var("TOOL_REPLAY")
+    with app.buffer_manager.script_vars.user_write():
+        with pytest.raises(ValueError, match="protected variable"):
+            app.buffer_manager.script_vars["TOOL_REPLAY"] = "tampered"
+
+    # 2. At step mode
+    await _run_capture(app, "/tool replay at 1 var=step1_data")
+    step1 = app.buffer_manager.get_script_var("TOOL_REPLAY")
+    assert isinstance(step1, dict)
+    assert step1["step"] == 1
+    assert step1["tool"] == "list_directory"
+    assert app.buffer_manager.get_script_var("step1_data") == step1
+
+    # 3. Diff mode
+    await _run_capture(app, "/tool replay diff 0 2 var=diff_data")
+    diff_val = app.buffer_manager.get_script_var("TOOL_REPLAY")
+    assert isinstance(diff_val, dict)
+    assert diff_val["step_a"] == 0
+    assert diff_val["step_b"] == 2
+    assert app.buffer_manager.get_script_var("diff_data") == diff_val

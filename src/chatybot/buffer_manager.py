@@ -40,6 +40,10 @@ class ScriptVars(UserDict):
             'SESSION_NAME',
             'SESSION_ENABLE',
             'SESSION_LIST',
+            'TOOL_LIST',
+            'TOOL_HISTORY',
+            'TOOL_REPLAY',
+            'REPLAY',
         }
         super().__init__(*args, **kwargs)
 

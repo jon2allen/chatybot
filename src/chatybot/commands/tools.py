@@ -4,6 +4,7 @@ Migrated from chatybot_app.handle_escape_command elif chain:
   /run, /run_safe, /run_unsafe, /tool
 """
 
+import dataclasses
 import fnmatch
 import json
 import os
@@ -100,18 +101,28 @@ async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandRes
     subcmd = parts[1].lower()
 
     if subcmd == "list":
-        # Parse detail mode and glob pattern
+        # Parse detail mode, glob pattern, and var= / target=
         detail_mode = False
         glob_pattern = "*"
-        if len(parts) > 2:
-            sub_parts = parts[2].strip().split()
-            if "detail" in [p.lower() for p in sub_parts]:
+        target_var = None
+
+        raw_tokens = []
+        for p in parts[2:]:
+            raw_tokens.extend(p.strip().split())
+
+        filtered_tokens = []
+        for tok in raw_tokens:
+            if tok.lower().startswith("var="):
+                target_var = tok[4:].strip().lstrip("$")
+            elif tok.lower().startswith("target="):
+                target_var = tok[7:].strip().lstrip("$")
+            elif tok.lower() == "detail":
                 detail_mode = True
-                remaining_parts = [p for p in sub_parts if p.lower() != "detail"]
-                if remaining_parts:
-                    glob_pattern = remaining_parts[0]
             else:
-                glob_pattern = sub_parts[0]
+                filtered_tokens.append(tok)
+
+        if filtered_tokens:
+            glob_pattern = filtered_tokens[0]
 
         config = app._load_tools_config()
         tools = config.get('tools', {})
@@ -133,6 +144,43 @@ async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandRes
                         matching_mcp.append(tool)
                 if matching_mcp:
                     filtered_mcp[server_name] = matching_mcp
+
+        # Populate structured tool list data for TOOL_LIST / custom var
+        tools_data = []
+        for tool_name, tool_meta in filtered_local.items():
+            config_enabled = tool_meta.get('enabled', False)
+            is_enabled = app.tool_overrides.get(tool_name, config_enabled)
+            tools_data.append({
+                "name": tool_name,
+                "type": "local",
+                "enabled": is_enabled,
+                "description": tool_meta.get('description', 'No description'),
+                "parameters": tool_meta.get('parameters', {}),
+                "module": tool_meta.get('module', ''),
+                "function": tool_meta.get('function', ''),
+            })
+
+        if filtered_mcp:
+            for server_name, tools_list in filtered_mcp.items():
+                for tool in tools_list:
+                    mcp_tool_name = f"mcp__{server_name}__{tool.name}"
+                    is_enabled = app.tool_overrides.get(mcp_tool_name, True)
+                    desc = getattr(tool, "description", "No description") or "No description"
+                    input_schema = getattr(tool, "inputSchema", {})
+                    properties = input_schema.get("properties", {}) if hasattr(input_schema, "get") else {}
+                    tools_data.append({
+                        "name": mcp_tool_name,
+                        "type": "mcp",
+                        "server": server_name,
+                        "enabled": is_enabled,
+                        "description": desc,
+                        "parameters": properties,
+                    })
+
+        if hasattr(app, "buffer_manager") and app.buffer_manager:
+            app.buffer_manager.set_script_var('TOOL_LIST', tools_data, allow_protected=True)
+            if target_var:
+                app.buffer_manager.set_script_var(target_var, tools_data, allow_protected=True)
 
         if detail_mode:
             if glob_pattern != "*":
@@ -583,10 +631,23 @@ async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandRes
         return CommandResult.ok()
 
     elif subcmd == "history":
-        # /tool history [csv [file]]     — list all agentic loops recorded in the active session
-        # /tool history <turn_id> [csv [file]] — show detailed tool calls for a specific session turn
-        # /tool history current [csv [file]] [--verbose] — show the most recent in-memory AGENTIC_LOOP trace
-        tokens = parts[2].strip().split() if len(parts) > 2 else []
+        # /tool history [csv [file]] [var=<name>]     — list all agentic loops recorded in the active session
+        # /tool history <turn_id> [csv [file]] [var=<name>] — show detailed tool calls for a specific session turn
+        # /tool history current [csv [file]] [--verbose] [var=<name>] — show the most recent in-memory AGENTIC_LOOP trace
+        tokens = []
+        for p in parts[2:]:
+            tokens.extend(p.strip().split())
+
+        target_var = None
+        var_candidates = [t for t in tokens if t.lower().startswith("var=") or t.lower().startswith("target=")]
+        for vc in var_candidates:
+            if vc.lower().startswith("var="):
+                target_var = vc[4:].strip().lstrip("$")
+            elif vc.lower().startswith("target="):
+                target_var = vc[7:].strip().lstrip("$")
+
+        tokens = [t for t in tokens if not t.lower().startswith("var=") and not t.lower().startswith("target=")]
+
         verbose = any(t.lower() in ("--verbose", "-v", "verbose") for t in tokens)
         is_csv = any(t.lower() == "csv" or t.lower().endswith(".csv") for t in tokens)
         remaining_tokens = [t for t in tokens if t.lower() not in ("--verbose", "-v", "verbose")]
@@ -601,8 +662,14 @@ async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandRes
         detail_arg = remaining_tokens[0].strip().lower() if remaining_tokens else ""
 
         if detail_arg in ("current", "last"):
+            loop_data = app.buffer_manager.get_script_var('AGENTIC_LOOP') if hasattr(app, "buffer_manager") and app.buffer_manager else None
+            history_data = loop_data if isinstance(loop_data, list) else []
+            if hasattr(app, "buffer_manager") and app.buffer_manager:
+                app.buffer_manager.set_script_var('TOOL_HISTORY', history_data, allow_protected=True)
+                if target_var:
+                    app.buffer_manager.set_script_var(target_var, history_data, allow_protected=True)
+
             if is_csv:
-                loop_data = app.buffer_manager.get_script_var('AGENTIC_LOOP')
                 if not isinstance(loop_data, list) or not loop_data:
                     print("No agentic loop has been run yet.")
                     return CommandResult.ok()
@@ -635,15 +702,45 @@ async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandRes
 
         if detail_arg == "" or (is_csv and not detail_arg.isdigit()):
             # Summarize every turn in the active session that has an agentic_loop
-            if not app.session_turns:
-                print("No active session or no turns recorded.")
-                return CommandResult.ok()
-
             loops = []
-            for turn in app.session_turns:
+            for turn in (app.session_turns or []):
                 al = turn.get("agentic_loop")
                 if isinstance(al, list) and al:
                     loops.append(turn)
+
+            history_data = []
+            for turn in loops:
+                al = turn.get("agentic_loop", [])
+                t_id = turn.get("turn_id", 1)
+                count = len(al)
+                successes = sum(1 for r in al if isinstance(r, dict) and r.get("status") == "success")
+                failures = count - successes
+                loop_duration = sum(r.get("duration_ms", 0) for r in al if isinstance(r, dict))
+                tool_names = []
+                for rec in al:
+                    if isinstance(rec, dict):
+                        tn = rec.get("tool", "unknown")
+                        if tn not in tool_names:
+                            tool_names.append(tn)
+                history_data.append({
+                    "turn_id": t_id,
+                    "prompt": turn.get("prompt", ""),
+                    "agentic_loop": al,
+                    "total_calls": count,
+                    "success": successes,
+                    "failed": failures,
+                    "duration_ms": loop_duration,
+                    "tools": tool_names,
+                })
+
+            if hasattr(app, "buffer_manager") and app.buffer_manager:
+                app.buffer_manager.set_script_var('TOOL_HISTORY', history_data, allow_protected=True)
+                if target_var:
+                    app.buffer_manager.set_script_var(target_var, history_data, allow_protected=True)
+
+            if not app.session_turns:
+                print("No active session or no turns recorded.")
+                return CommandResult.ok()
 
             if not loops:
                 print("No agentic tool loops found in the active session.")
@@ -736,6 +833,12 @@ async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandRes
             return CommandResult.ok()
 
         al = matched_turn.get("agentic_loop")
+        history_data = al if isinstance(al, list) else []
+        if hasattr(app, "buffer_manager") and app.buffer_manager:
+            app.buffer_manager.set_script_var('TOOL_HISTORY', history_data, allow_protected=True)
+            if target_var:
+                app.buffer_manager.set_script_var(target_var, history_data, allow_protected=True)
+
         if not isinstance(al, list) or not al:
             print(f"Turn {target_id} has no recorded agentic loop data.")
             return CommandResult.ok()
@@ -927,7 +1030,7 @@ _TOOL_REPLAY_KEYWORDS = {"at", "diff", "step"}
 
 
 def _parse_tool_replay_tokens(tokens, ctx):
-    """Parse /tool replay tokens into (turn_id, mode, mode_args, limit).
+    """Parse /tool replay tokens into (turn_id, mode, mode_args, limit, target_var).
 
     turn_id is the session turn whose agentic_loop we replay (None = most
     recent turn with an agentic loop). mode is one of summary/at/diff/step.
@@ -937,6 +1040,7 @@ def _parse_tool_replay_tokens(tokens, ctx):
     turn_id = None
     mode = "summary"
     mode_args = []
+    target_var = None
 
     filtered = []
     for tok in tokens:
@@ -945,6 +1049,10 @@ def _parse_tool_replay_tokens(tokens, ctx):
                 limit = int(tok.split("=", 1)[1])
             except ValueError:
                 pass
+        elif tok.lower().startswith("var="):
+            target_var = tok[4:].strip().lstrip("$")
+        elif tok.lower().startswith("target="):
+            target_var = tok[7:].strip().lstrip("$")
         else:
             filtered.append(tok)
 
@@ -974,7 +1082,7 @@ def _parse_tool_replay_tokens(tokens, ctx):
             mode = "step"
             mode_args = rest[1:]
 
-    return turn_id, mode, mode_args, limit
+    return turn_id, mode, mode_args, limit, target_var
 
 
 def _render_tool_replay_summary(snapshots, turn_id):
@@ -1075,13 +1183,15 @@ def _render_tool_replay_diff(diff):
 
 
 async def _handle_tool_replay(ctx: CommandContext, parts: list) -> CommandResult:
-    """Handle /tool replay [<turn_id>] [at <N> | diff <A> <B> | step] [limit=<N>]."""
+    """Handle /tool replay [<turn_id>] [at <N> | diff <A> <B> | step] [limit=<N>] [var=<name>]."""
     from chatybot.agentic_replayer import AgenticReplayer
 
     app = ctx.app
     # Tokens after "/tool replay"
-    raw_tokens = parts[2].strip().split() if len(parts) > 2 else []
-    turn_id, mode, mode_args, limit = _parse_tool_replay_tokens(raw_tokens, ctx)
+    raw_tokens = []
+    for p in parts[2:]:
+        raw_tokens.extend(p.strip().split())
+    turn_id, mode, mode_args, limit, target_var = _parse_tool_replay_tokens(raw_tokens, ctx)
 
     target = app.active_session_id or app.active_session_name
     if not target:
@@ -1113,6 +1223,11 @@ async def _handle_tool_replay(ctx: CommandContext, parts: list) -> CommandResult
         snapshots = replayer.replay_loop(
             target, turn_id=resolved_turn_id, limit=limit, turns=turns, system_prompt=system_prompt
         )
+        data = [dataclasses.asdict(s) for s in snapshots] if snapshots else []
+        if hasattr(app, "buffer_manager") and app.buffer_manager:
+            app.buffer_manager.set_script_var('TOOL_REPLAY', data, allow_protected=True)
+            if target_var:
+                app.buffer_manager.set_script_var(target_var, data, allow_protected=True)
         _render_tool_replay_summary(snapshots, resolved_turn_id)
         return CommandResult.ok()
 
@@ -1129,6 +1244,11 @@ async def _handle_tool_replay(ctx: CommandContext, parts: list) -> CommandResult
         if snap is None:
             print(f"Step {step_n} not found. Valid steps: 0..{n_steps}")
             return CommandResult.ok()
+        data = dataclasses.asdict(snap)
+        if hasattr(app, "buffer_manager") and app.buffer_manager:
+            app.buffer_manager.set_script_var('TOOL_REPLAY', data, allow_protected=True)
+            if target_var:
+                app.buffer_manager.set_script_var(target_var, data, allow_protected=True)
         _render_tool_replay_at(snap, system_prompt)
         return CommandResult.ok()
 
@@ -1148,6 +1268,11 @@ async def _handle_tool_replay(ctx: CommandContext, parts: list) -> CommandResult
         if diff is None:
             print(f"Could not build diff for steps {step_a} / {step_b}. Valid steps: 0..{n_steps}")
             return CommandResult.ok()
+        data = dataclasses.asdict(diff)
+        if hasattr(app, "buffer_manager") and app.buffer_manager:
+            app.buffer_manager.set_script_var('TOOL_REPLAY', data, allow_protected=True)
+            if target_var:
+                app.buffer_manager.set_script_var(target_var, data, allow_protected=True)
         _render_tool_replay_diff(diff)
         return CommandResult.ok()
 
@@ -1158,6 +1283,11 @@ async def _handle_tool_replay(ctx: CommandContext, parts: list) -> CommandResult
         if not snapshots:
             print("No steps to step through.")
             return CommandResult.ok()
+        data = [dataclasses.asdict(s) for s in snapshots] if snapshots else []
+        if hasattr(app, "buffer_manager") and app.buffer_manager:
+            app.buffer_manager.set_script_var('TOOL_REPLAY', data, allow_protected=True)
+            if target_var:
+                app.buffer_manager.set_script_var(target_var, data, allow_protected=True)
         print("\nInteractive agentic loop stepper. Press Enter to advance, 'q' to quit, 'show' for full dump.")
         for s in snapshots:
             print("\n" + "-" * 78)

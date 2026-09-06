@@ -526,11 +526,28 @@ Enable a dedicated disposable workspace for models to create and execute tempora
 MCP tools are namespaced as `mcp__<server>__<tool>`:
 ```dsl
 # MCP tools auto-discovered from connected servers
-/tool list
+/tool list var=my_mcp_tools
 
 # Execute MCP tool
 # (Automatic via tool loop - LLM generates JSON tool calls)
 ```
+
+### Protected & Reserved System Variables
+
+Chatybot maintains reserved, read-only system variables populated by commands. User scripts cannot overwrite these directly via `set` (protecting against accidental mutation); however, inspection commands support `var=<name>` / `target=<name>` to write copies into user variables:
+
+| Variable | Populating Command | Content / Structure |
+| :--- | :--- | :--- |
+| `${TOOL_LIST}` | `/tool list [pattern]` | Array of tool metadata objects (`name`, `type`, `enabled`, `description`, `parameters`). |
+| `${TOOL_HISTORY}` | `/tool history [<id>\|current]` | Array of turn loop records or step dictionaries from agentic loops. |
+| `${TOOL_REPLAY}` | `/tool replay [...]` | Array of reconstructed step snapshots or step diff dictionary. |
+| `${REPLAY}` | `/replay` or `/session replay` | Array of session turn reconstructed context snapshots or turn diff dictionary. |
+| `${SESSION_LIST}` | `/session list [...]` | Array of session metadata objects (`sid`, `cname`, `slug`, `snote`, `turns_cnt`, `upd`). |
+| `${SESSION_NAME}` | `/session start\|use` | Current active session name or identifier. |
+| `${RUN_COMPLETION}` | `/run <command>` | Captured stdout from last executed shell command. |
+| `${RUN_ERROR}` | `/run <command>` | Captured stderr from last executed shell command. |
+| `${RUN_EXIT_CODE}` | `/run <command>` | Numeric exit code from last executed shell command. |
+| `${LAST_COMPLETION}` | `/run` or LLM interaction | Last raw text completion. |
 
 ---
 
