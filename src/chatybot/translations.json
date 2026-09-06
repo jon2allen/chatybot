@@ -82,7 +82,11 @@
       "size": "size",
       "limit": "limit",
       "scratch": "scratch",
-      "clean": "clean"
+      "clean": "clean",
+      "current": "current",
+      "model": "model",
+      "var": "var",
+      "target": "target"
     },
     "ui": {
       "language_changed": "Language set to: {lang}",
@@ -125,6 +129,12 @@
       "commands": {
         "/env": {
           "short_desc": "Display defined API keys and environment variables"
+        },
+        "/replay": {
+          "short_desc": "Replay and inspect session context window history and truncation state"
+        },
+        "/context": {
+          "short_desc": "Display active prompt context breakdown and token budget usage"
         }
       }
     }
@@ -320,7 +330,16 @@
       "límite": "limit",
       "scratch": "scratch",
       "borrador": "scratch",
-      "limpiar": "clean"
+      "limpiar": "clean",
+      "actual": "current",
+      "corriente": "current",
+      "current": "current",
+      "modelo": "model",
+      "model": "model",
+      "var": "var",
+      "variable": "var",
+      "destino": "target",
+      "target": "target"
     },
     "ui": {
       "language_changed": "Idioma establecido en: {lang}",
@@ -588,6 +607,12 @@
         },
         "/auto_truncate": {
           "short_desc": "Alterna el truncamiento automático del contexto con porcentaje opcional"
+        },
+        "/replay": {
+          "short_desc": "Reconstruye e inspecciona el historial de la ventana de contexto de la sesión"
+        },
+        "/context": {
+          "short_desc": "Muestra el desglose del uso del contexto y el presupuesto de tokens"
         }
       }
     }
@@ -781,7 +806,17 @@
       "limite": "limit",
       "scratch": "scratch",
       "brouillon": "scratch",
-      "nettoyer": "clean"
+      "nettoyer": "clean",
+      "actuel": "current",
+      "courant": "current",
+      "current": "current",
+      "modele": "model",
+      "modèle": "model",
+      "model": "model",
+      "var": "var",
+      "variable": "var",
+      "cible": "target",
+      "target": "target"
     },
     "ui": {
       "language_changed": "Langue définie sur : {lang}",
@@ -1049,6 +1084,12 @@
         },
         "/auto_truncate": {
           "short_desc": "Bascule la troncature automatique du contexte avec pourcentage optionnel"
+        },
+        "/replay": {
+          "short_desc": "Rejoue et inspecte l'historique de la fenêtre de contexte de la session"
+        },
+        "/context": {
+          "short_desc": "Affiche la décomposition de l'utilisation du contexte et le budget de jetons"
         }
       }
     }
@@ -1238,7 +1279,16 @@
       "草稿": "scratch",
       "暂存": "scratch",
       "清空": "clean",
-      "清除": "clean"
+      "清除": "clean",
+      "当前": "current",
+      "最近": "current",
+      "current": "current",
+      "模型": "model",
+      "model": "model",
+      "var": "var",
+      "变量": "var",
+      "目标": "target",
+      "target": "target"
     },
     "ui": {
       "language_changed": "语言设置为: {lang}",
@@ -1506,6 +1556,12 @@
         },
         "/auto_truncate": {
           "short_desc": "开启或关闭达到上下文限制时的历史记录自动截断"
+        },
+        "/replay": {
+          "short_desc": "重放并检查会话上下文窗口历史和截断状态"
+        },
+        "/context": {
+          "short_desc": "显示当前上下文使用详情和 Token 预算"
         }
       }
     }
@@ -1690,7 +1746,16 @@
       "limite": "limit",
       "scratch": "scratch",
       "bozza": "scratch",
-      "pulire": "clean"
+      "pulire": "clean",
+      "attuale": "current",
+      "corrente": "current",
+      "current": "current",
+      "modello": "model",
+      "model": "model",
+      "var": "var",
+      "variabile": "var",
+      "destinazione": "target",
+      "target": "target"
     },
     "ui": {
       "language_changed": "Lingua impostata su: {lang}",
@@ -1958,6 +2023,12 @@
         },
         "/auto_truncate": {
           "short_desc": "Attiva o disattiva il troncamento automatico del contesto con percentuale opzionale"
+        },
+        "/replay": {
+          "short_desc": "Riproduce e ispeziona la cronologia del contesto della sessione"
+        },
+        "/context": {
+          "short_desc": "Mostra la suddivisione dell'utilizzo del contesto e il budget di token"
         }
       }
     }
@@ -2145,7 +2216,15 @@
       "حد": "limit",
       "scratch": "scratch",
       "مسودة": "scratch",
-      "مسح": "clean"
+      "مسح": "clean",
+      "حالي": "current",
+      "current": "current",
+      "نموذج": "model",
+      "model": "model",
+      "var": "var",
+      "متغير": "var",
+      "هدف": "target",
+      "target": "target"
     },
     "ui": {
       "language_changed": "تغيرت اللغة لـ: {lang}",
@@ -2413,6 +2492,12 @@
         },
         "/auto_truncate": {
           "short_desc": "التبديل بين تشغيل وإيقاف الاقتطاع التلقائي للسياق بنسبة اختيارية"
+        },
+        "/replay": {
+          "short_desc": "إعادة عرض وفحص سجل نافذة السياق للجلسة"
+        },
+        "/context": {
+          "short_desc": "عرض تفاصيل استخدام السياق وميزانية الرموز"
         }
       }
     }

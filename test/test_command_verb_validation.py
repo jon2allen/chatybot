@@ -72,6 +72,10 @@ class TestCommandVerbValidation:
             "thoughtstyle gemma4",
             "exit",
             "loadimage1 cat.jpg",
+            "replay session_1",
+            "session list",
+            "context detail",
+            "env test",
             "   help me",
             "HELP ME",
             "help: explain this"
