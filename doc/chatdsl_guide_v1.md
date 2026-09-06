@@ -827,7 +827,7 @@ set my_limit = 16000
 | `/calc` | General | `/calc <expr>` | Evaluate math expression |
 | `/str_search` | General | `/str_search <needle> [haystack]` | Search for substring in text |
 | `/proc` | General | `/proc <name> [args]` | Execute defined procedure |
-| `/session` | General | `/session <subcmd> [args]` | Manage sessions (start/list/show/export [csv]/merge/compress/prune/replay) |
+| `/session` | General | `/session <subcmd> [args]` | Manage sessions (start/list [var=<name>]/show/export [csv]/merge/compress/prune/replay) |
 | `/session export` | General | `/session export [csv] <file> [-t]` | Export session transcript to Markdown (.md) or structured data to CSV (.csv) |
 | `/replay` | General | `/replay [<id>] [at <N>\|diff <A> <B>\|step] [limit=<N>]` | Time-travel context replay: inspect message arrays & truncation state |
 | `/context` | General | `/context [all\|session\|loop\|buffers] [var]` | View context token breakdown and budget utilization (alias: `/ctx`) |

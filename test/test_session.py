@@ -356,3 +356,41 @@ async def test_session_export_csv(app, capsys):
             assert row[7] == "35.0"
 
 
+@pytest.mark.anyio
+async def test_session_list_populates_protected_session_list_and_custom_var(app, capsys):
+    """Test that /session list populates protected ${SESSION_LIST} and supports var=<name>."""
+    # Create two sessions
+    await app.handle_escape_command("/session start session_alpha")
+    app.append_session_turn("Alpha prompt", "Alpha response")
+    
+    await app.handle_escape_command("/session start session_beta")
+    app.append_session_turn("Beta prompt", "Beta response")
+
+    capsys.readouterr()
+
+    # 1. Run /session list without var arg
+    await app.handle_escape_command("/session list all")
+    captured = capsys.readouterr()
+    assert "Available Sessions:" in captured.out
+    
+    sess_list = app.buffer_manager.get_script_var("SESSION_LIST")
+    assert isinstance(sess_list, list)
+    assert len(sess_list) >= 2
+    assert any("session_alpha" in str(s.get("cname", "")) or "session_alpha" in s["sid"] for s in sess_list)
+
+    # Verify SESSION_LIST is protected against user mutation
+    assert app.buffer_manager.is_protected_var("SESSION_LIST")
+    with app.buffer_manager.script_vars.user_write():
+        with pytest.raises(ValueError, match="protected variable"):
+            app.buffer_manager.script_vars["SESSION_LIST"] = "tampered_value"
+
+    # 2. Run /session list with var=my_sessions
+    await app.handle_escape_command("/session list all var=my_sessions")
+    custom_list = app.buffer_manager.get_script_var("my_sessions")
+    assert isinstance(custom_list, list)
+    assert len(custom_list) == len(sess_list)
+    assert custom_list == sess_list
+
+
+
+

@@ -39,6 +39,7 @@ class ScriptVars(UserDict):
             'STR_SEARCH',
             'SESSION_NAME',
             'SESSION_ENABLE',
+            'SESSION_LIST',
         }
         super().__init__(*args, **kwargs)
 
