@@ -47,7 +47,7 @@ async def test_get_context_metrics_with_app_data():
     # Populate prompt buffer
     app.buffer_manager.prompt_buffer = "You are a helpful coding assistant."
 
-    # 1. Test 'all' scope
+    # 1. Test 'all' scope (outside loop)
     res_all = get_context_metrics(scope="all", app=app)
     assert res_all["status"] == "success"
     assert res_all["session"]["turns"] == 2
@@ -56,9 +56,20 @@ async def test_get_context_metrics_with_app_data():
     assert res_all["agentic_loop"]["records"] == 2
     assert res_all["agentic_loop"]["characters"] > 0
     assert res_all["buffers"]["characters"] > 0
-    assert res_all["total"]["total_turns"] == 4
+    assert res_all["total"]["total_turns"] == 2
+    assert res_all["total"]["session_turns"] == 2
+    assert res_all["total"]["agentic_loop_turns"] == 2
+    assert res_all["total"]["in_loop"] is False
     assert res_all["total"]["characters"] > res_all["session"]["characters"]
     assert res_all["total"]["estimated_tokens"] > 0
+
+    # 1b. Test 'all' scope when in_tool_loop is True
+    app.in_tool_loop = True
+    res_in_loop = get_context_metrics(scope="all", app=app)
+    assert res_in_loop["total"]["total_turns"] == 4
+    assert res_in_loop["total"]["in_loop"] is True
+    assert res_in_loop["total"]["characters"] > res_all["total"]["characters"]
+    app.in_tool_loop = False
 
     # 2. Test 'session' scope
     res_session = get_context_metrics(scope="session", app=app)
@@ -81,7 +92,7 @@ async def test_get_context_metrics_with_app_data():
     saved = app.buffer_manager.get_script_var("MY_METRICS")
     assert saved is not None
     assert saved["scope"] == "all"
-    assert saved["total"]["total_turns"] == 4
+    assert saved["total"]["total_turns"] == 2
     assert saved["total"]["characters"] == res_all["total"]["characters"]
 
 
