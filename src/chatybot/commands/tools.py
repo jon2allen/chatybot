@@ -1101,7 +1101,9 @@ async def _handle_tool_replay(ctx: CommandContext, parts: list) -> CommandResult
     n_steps = len(loop) if isinstance(loop, list) else 0
 
     if mode == "summary":
-        snapshots = replayer.replay_loop(target, turn_id=resolved_turn_id, limit=limit)
+        snapshots = replayer.replay_loop(
+            target, turn_id=resolved_turn_id, limit=limit, turns=turns, system_prompt=system_prompt
+        )
         _render_tool_replay_summary(snapshots, resolved_turn_id)
         return CommandResult.ok()
 
@@ -1131,7 +1133,9 @@ async def _handle_tool_replay(ctx: CommandContext, parts: list) -> CommandResult
         except ValueError:
             print(f"Invalid step numbers: {mode_args[:2]}")
             return CommandResult.ok()
-        diff = replayer.diff_steps(target, resolved_turn_id, step_a, step_b, limit=limit)
+        diff = replayer.diff_steps(
+            target, resolved_turn_id, step_a, step_b, limit=limit, turns=turns, system_prompt=system_prompt
+        )
         if diff is None:
             print(f"Could not build diff for steps {step_a} / {step_b}. Valid steps: 0..{n_steps}")
             return CommandResult.ok()
@@ -1139,7 +1143,9 @@ async def _handle_tool_replay(ctx: CommandContext, parts: list) -> CommandResult
         return CommandResult.ok()
 
     if mode == "step":
-        snapshots = replayer.replay_loop(target, turn_id=resolved_turn_id, limit=limit)
+        snapshots = replayer.replay_loop(
+            target, turn_id=resolved_turn_id, limit=limit, turns=turns, system_prompt=system_prompt
+        )
         if not snapshots:
             print("No steps to step through.")
             return CommandResult.ok()

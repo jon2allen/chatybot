@@ -229,10 +229,10 @@ class HelpSystem:
         self.register_command(CommandHelp(
             name="/context",
             category="model",
-            short_desc="Show context and token usage metrics",
-            usage="/context [session|loop|buffers|all]",
-            long_desc="Display real-time context token usage, history/loop breakdown, and capacity progress against the configured context limit.",
-            examples=["/context", "/context session", "/context loop", "/ctx"],
+            short_desc="Show context usage metrics or set context limit",
+            usage="/context [<limit>|off|session|loop|buffers|all] [var]",
+            long_desc="Display real-time context token usage, history/loop breakdown, and capacity progress against the configured context limit. Can also set a context limit directly (e.g. /context 10000, /context off) or via a script variable (e.g. /context my_limit).",
+            examples=["/context", "/context 10000", "/context my_limit", "/context session", "/context all res", "/ctx"],
             aliases=["/ctx"],
             see_also=["/context_limit", "/auto_truncate", "/mem"]
         ))

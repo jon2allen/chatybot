@@ -224,6 +224,26 @@ async def test_session_replay_diff(app):
 
 
 @pytest.mark.anyio
+async def test_session_replay_diff_newly_evicted(app):
+    await app.handle_escape_command("/session start diff_evict_test")
+    big = "E" * 200
+    app.append_session_turn("Goal one", "Resp one")
+    app.append_session_turn("Turn two " + big, "Resp two " + big)
+    app.append_session_turn("Turn three " + big, "Resp three " + big)
+
+    # Use a limit that forces intermediate turns to be evicted by turn 3
+    replayer = SessionReplayer(app)
+    diff = replayer.diff_turns("diff_evict_test", 2, 3, limit=80)
+    assert diff is not None
+    assert len(diff.newly_evicted) > 0
+
+    out = await _run_capture(app, "/session replay diff_evict_test diff 2 3 limit=80")
+    assert "DIFF: TURN 2 -> TURN 3" in out
+    assert "Newly evicted messages" in out
+    assert "(none)" not in out
+
+
+@pytest.mark.anyio
 async def test_replay_alias_matches_session_replay(app):
     await app.handle_escape_command("/session start alias_test")
     app.append_session_turn("Alias prompt", "Alias response")
@@ -262,6 +282,32 @@ async def test_replay_limit_override_truncates(app):
     assert "SUMMARY TIMELINE" in out
     # With a tiny budget, the second turn should report evictions or truncation
     assert "80" in out or "Evicted" in out or "Evict" in out or "SUMMARY" in out
+
+
+def test_replay_all_and_diff_turns_with_preloaded_turns():
+    class DummyApp:
+        def __init__(self):
+            self.load_called = False
+        def _get_session_store(self):
+            self.load_called = True
+            raise RuntimeError("Should not load from disk when turns are provided")
+
+    replayer = SessionReplayer(DummyApp())
+    turns = [
+        {"turn_id": 1, "prompt": "p1", "response": "r1"},
+        {"turn_id": 2, "prompt": "p2", "response": "r2"},
+    ]
+    snapshots = replayer.replay_all("dummy_session", turns=turns, system_prompt="sys")
+    assert len(snapshots) == 2
+    assert snapshots[0].turn_id == 1
+    assert snapshots[1].turn_id == 2
+    assert not replayer.app.load_called
+
+    diff = replayer.diff_turns("dummy_session", 1, 2, turns=turns, system_prompt="sys")
+    assert diff is not None
+    assert diff.turn_a == 1
+    assert diff.turn_b == 2
+    assert not replayer.app.load_called
 
 
 # Helper to run an escape command and capture stdout (defined at module bottom

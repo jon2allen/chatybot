@@ -248,10 +248,16 @@ class SessionReplayer:
         self,
         target: str,
         limit: Optional[int] = None,
+        turns: Optional[List[Dict[str, Any]]] = None,
+        system_prompt: Optional[str] = None,
     ) -> List[TurnSnapshot]:
         """Produce a snapshot for every LLM turn in the session."""
-        meta, turns = self.load(target)
-        system_prompt = self.reconstruct_system_prompt(meta, turns)
+        if turns is None:
+            meta, turns = self.load(target)
+            if system_prompt is None:
+                system_prompt = self.reconstruct_system_prompt(meta, turns)
+        elif system_prompt is None:
+            system_prompt = self.reconstruct_system_prompt({}, turns)
         llm_turns = [t for t in turns if t.get("type") != "command" and "prompt" in t]
         snapshots: List[TurnSnapshot] = []
         for t in llm_turns:
@@ -266,10 +272,16 @@ class SessionReplayer:
         turn_a: int,
         turn_b: int,
         limit: Optional[int] = None,
+        turns: Optional[List[Dict[str, Any]]] = None,
+        system_prompt: Optional[str] = None,
     ) -> Optional[TurnDiff]:
         """Compare the reconstructed context at turn_a vs turn_b."""
-        meta, turns = self.load(target)
-        system_prompt = self.reconstruct_system_prompt(meta, turns)
+        if turns is None:
+            meta, turns = self.load(target)
+            if system_prompt is None:
+                system_prompt = self.reconstruct_system_prompt(meta, turns)
+        elif system_prompt is None:
+            system_prompt = self.reconstruct_system_prompt({}, turns)
         snap_a = self.snapshot_at_turn(turns, system_prompt, turn_id=turn_a, limit=limit)
         snap_b = self.snapshot_at_turn(turns, system_prompt, turn_id=turn_b, limit=limit)
         if snap_a is None or snap_b is None:
@@ -282,11 +294,8 @@ class SessionReplayer:
         # Messages that survived at a but were evicted by b's truncation
         b_surviving_keys = {(m.get("role"), m.get("content")) for m in snap_b.truncated_messages}
         newly_evicted = [
-            m for m in snap_a.messages
+            m for m in snap_a.truncated_messages
             if (m.get("role"), m.get("content")) not in b_surviving_keys
-            and (m.get("role"), m.get("content")) not in {
-                (mm.get("role"), mm.get("content")) for mm in snap_b.messages
-            }
         ]
 
         return TurnDiff(

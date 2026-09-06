@@ -232,17 +232,75 @@ registry.register("/maxtokens", _cmd_maxtokens, help="Set max output tokens", ar
 registry.register("/max_tokens", _cmd_maxtokens, help="Set max output tokens", args="[<n>]", category="models")
 
 
-@command("/context", help="Show context and token usage metrics", args="[session|loop|buffers|all] [var]", category="models")
+def _resolve_var_or_val(app, raw_str: str) -> str:
+    clean = raw_str.strip()
+    if clean.startswith("${") and clean.endswith("}"):
+        clean = clean[2:-1]
+    elif clean.startswith("{") and clean.endswith("}"):
+        clean = clean[1:-1]
+    elif clean.startswith("$"):
+        clean = clean[1:]
+    if hasattr(app, "buffer_manager") and app.buffer_manager:
+        if hasattr(app.buffer_manager, "script_vars") and clean in app.buffer_manager.script_vars:
+            val = app.buffer_manager.script_vars[clean]
+            return str(val).strip()
+    return raw_str.strip()
+
+
+@command("/context", help="Show context and token usage metrics, or set context limit", args="[<limit>|off|session|loop|buffers|all] [var]", category="models")
 async def cmd_context(ctx: CommandContext, parts: list, command: str) -> CommandResult:
     app = ctx.app
     from chatybot.tools.context_utils import get_context_metrics
-    scope = parts[1].strip().lower() if len(parts) > 1 else "all"
-    if scope in ("loop", "agentic", "tool", "tools"):
-        scope = "agentic_loop"
-    elif scope in ("buffer", "prompt"):
-        scope = "buffers"
 
-    var_target = parts[2].strip() if len(parts) > 2 else None
+    known_scopes = ("all", "session", "loop", "agentic", "tool", "tools", "buffer", "buffers", "prompt")
+    raw_arg = parts[1].strip() if len(parts) > 1 else ""
+
+    if raw_arg:
+        resolved = _resolve_var_or_val(app, raw_arg)
+        resolved_lower = resolved.lower()
+
+        # If it's a context limit setting: "off" or positive integer
+        if resolved_lower in ("off", "0", "none", "disable", "disabled"):
+            app.context_limiter.set_limit(None, from_user=True)
+            print("Context limit disabled.")
+            if app.tool_mode:
+                context = app.generate_tool_context()
+                if hasattr(app, "buffer_manager"):
+                    app.buffer_manager.set_script_var('TOOL_CONTEXT', context)
+            return CommandResult.ok()
+
+        try:
+            limit_val = int(resolved)
+            if limit_val <= 0:
+                app.context_limiter.set_limit(None, from_user=True)
+                print("Context limit disabled.")
+            else:
+                app.context_limiter.set_limit(limit_val, from_user=True)
+                print(f"Context limit set to {limit_val} tokens.")
+            if app.tool_mode:
+                context = app.generate_tool_context()
+                if hasattr(app, "buffer_manager"):
+                    app.buffer_manager.set_script_var('TOOL_CONTEXT', context)
+            return CommandResult.ok()
+        except ValueError:
+            pass
+
+    # If we get here, it's context metrics inspection mode
+    if raw_arg.lower() in known_scopes:
+        scope = raw_arg.lower()
+        if scope in ("loop", "agentic", "tool", "tools"):
+            scope = "agentic_loop"
+        elif scope in ("buffer", "prompt"):
+            scope = "buffers"
+        var_target = parts[2].strip() if len(parts) > 2 else None
+    elif raw_arg:
+        # Not a known scope and not a limit number -> treated as target var for 'all' metrics
+        scope = "all"
+        var_target = raw_arg
+    else:
+        scope = "all"
+        var_target = None
+
     data = get_context_metrics(scope=scope, app=app, target_variable=var_target)
     if var_target:
         print(f"{var_target} = {data}")
@@ -303,7 +361,7 @@ async def cmd_context(ctx: CommandContext, parts: list, command: str) -> Command
     print("")
     return CommandResult.ok()
 
-registry.register("/ctx", cmd_context, help="Show context and token usage metrics", args="[session|loop|buffers|all]", category="models")
+registry.register("/ctx", cmd_context, help="Show context and token usage metrics, or set context limit", args="[<limit>|off|session|loop|buffers|all]", category="models")
 
 
 @command("/context_limit", help="Set or view the context token limit", args="[<tokens>|off]", category="models")
@@ -317,7 +375,7 @@ async def cmd_context_limit(ctx: CommandContext, parts: list, command: str) -> C
             print("Context limit is disabled (no limit set)")
         return CommandResult.ok()
 
-    val_str = parts[1].strip().lower()
+    val_str = _resolve_var_or_val(app, parts[1]).lower()
     if val_str in ("off", "0", "none", "disable", "disabled"):
         app.context_limiter.set_limit(None, from_user=True)
         print("Context limit disabled.")

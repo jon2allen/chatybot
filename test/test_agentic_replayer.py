@@ -230,7 +230,7 @@ def test_diff_steps_added_messages_and_token_delta():
 
 
 def test_diff_steps_newly_evicted_under_limit():
-    app = _make_app_with_limiter(limit=80)
+    app = _make_app_with_limiter(limit=160)
     big = "B" * 200
     turns = [
         _agentic_turn(turn_id=1, prompt="p " + big, loop=[
@@ -239,8 +239,9 @@ def test_diff_steps_newly_evicted_under_limit():
         ]),
     ]
     replayer = AgenticReplayer(app)
-    diff = replayer.diff_steps_from_turns(turns, 1, "sys", 1, 2, limit=80)
-    assert diff.truncation_evicted_delta >= 0
+    diff = replayer.diff_steps_from_turns(turns, 1, "sys", 1, 2, limit=160)
+    assert diff.truncation_evicted_delta > 0
+    assert len(diff.newly_evicted) > 0
 
 
 # Add a convenience method used by the diff tests (avoids needing a session store).
@@ -255,11 +256,9 @@ def _diff_steps_from_turns(self, turns, agentic_turn_id, system_prompt, step_a, 
     a_keys = {(m.get("role"), m.get("content")) for m in snap_a.messages}
     added = [m for m in snap_b.messages if (m.get("role"), m.get("content")) not in a_keys]
     b_surviving_keys = {(m.get("role"), m.get("content")) for m in snap_b.truncated_messages}
-    b_all_keys = {(m.get("role"), m.get("content")) for m in snap_b.messages}
     newly_evicted = [
-        m for m in snap_a.messages
+        m for m in snap_a.truncated_messages
         if (m.get("role"), m.get("content")) not in b_surviving_keys
-        and (m.get("role"), m.get("content")) not in b_all_keys
     ]
     return AgenticStepDiff(
         step_a=step_a, step_b=step_b, added_messages=added, newly_evicted=newly_evicted,
@@ -270,6 +269,34 @@ def _diff_steps_from_turns(self, turns, agentic_turn_id, system_prompt, step_a, 
     )
 
 AgenticReplayer.diff_steps_from_turns = _diff_steps_from_turns
+
+
+def test_replay_loop_and_diff_steps_with_preloaded_turns():
+    class DummyApp:
+        def __init__(self):
+            self.load_called = False
+            self.context_limiter = None
+            self.config_manager = None
+        def _get_session_store(self):
+            self.load_called = True
+            raise RuntimeError("Should not load from disk when turns are provided")
+
+    replayer = AgenticReplayer(DummyApp())
+    turns = [
+        _agentic_turn(turn_id=1, prompt="p", loop=[
+            {"turn": 1, "tool": "t1", "arguments": {}, "result": "r1", "status": "success"},
+            {"turn": 2, "tool": "t2", "arguments": {}, "result": "r2", "status": "success"},
+        ]),
+    ]
+    snapshots = replayer.replay_loop("dummy_session", turn_id=1, turns=turns, system_prompt="sys")
+    assert len(snapshots) == 3  # step 0, 1, 2
+    assert not replayer.app.load_called
+
+    diff = replayer.diff_steps("dummy_session", turn_id=1, step_a=0, step_b=1, turns=turns, system_prompt="sys")
+    assert diff is not None
+    assert diff.step_a == 0
+    assert diff.step_b == 1
+    assert not replayer.app.load_called
 
 
 # ---------------------------------------------------------------------------
