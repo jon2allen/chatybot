@@ -66,3 +66,70 @@ async def test_cmd_context_specific_scopes(test_app, capsys):
     out = capsys.readouterr().out
     assert "Agentic Loop:" in out
     assert "Session History:" not in out
+
+
+@pytest.mark.anyio
+async def test_cmd_context_set_limit_direct_and_off(test_app, capsys):
+    capsys.readouterr()
+    await test_app.handle_escape_command("/context 10000")
+    out = capsys.readouterr().out
+    assert "Context limit set to 10000 tokens." in out
+    assert test_app.context_limiter.context_limit == 10000
+
+    await test_app.handle_escape_command("/context off")
+    out = capsys.readouterr().out
+    assert "Context limit disabled." in out
+    assert test_app.context_limiter.context_limit is None
+
+
+@pytest.mark.anyio
+async def test_cmd_context_set_limit_via_script_var(test_app, capsys):
+    test_app.buffer_manager.set_script_var("my_limit", "10000")
+    capsys.readouterr()
+
+    # /context my_limit
+    await test_app.handle_escape_command("/context my_limit")
+    out = capsys.readouterr().out
+    assert "Context limit set to 10000 tokens." in out
+    assert test_app.context_limiter.context_limit == 10000
+
+    # /context $my_limit
+    test_app.buffer_manager.set_script_var("next_limit", 15000)
+    await test_app.handle_escape_command("/context $next_limit")
+    out = capsys.readouterr().out
+    assert "Context limit set to 15000 tokens." in out
+    assert test_app.context_limiter.context_limit == 15000
+
+    # /context_limit via script variable
+    test_app.buffer_manager.set_script_var("cfg_limit", "8000")
+    await test_app.handle_escape_command("/context_limit cfg_limit")
+    out = capsys.readouterr().out
+    assert "Context limit set to 8000 tokens." in out
+    assert test_app.context_limiter.context_limit == 8000
+
+
+@pytest.mark.anyio
+async def test_cmd_context_save_metrics_to_var(test_app, capsys):
+    capsys.readouterr()
+    await test_app.handle_escape_command("/context ctx_saved")
+    out = capsys.readouterr().out
+    assert "ctx_saved =" in out
+    saved = test_app.buffer_manager.get_script_var("ctx_saved")
+    assert isinstance(saved, dict)
+    assert saved.get("status") == "success"
+    assert "session" in saved
+
+
+@pytest.mark.anyio
+async def test_context_metrics_includes_system_prompt_and_file_banks(test_app):
+    from chatybot.tools.context_utils import get_context_metrics
+
+    test_app.config_manager.system_message = "You are a specialized code reviewer."
+    test_app.buffer_manager.file_banks["filebank1"] = "def hello(): pass\n" * 10
+
+    metrics = get_context_metrics(scope="all", app=test_app)
+    assert metrics["status"] == "success"
+    assert metrics["buffers"]["characters"] > len(test_app.config_manager.system_message)
+    assert metrics["buffers"]["estimated_tokens"] > 0
+
+
