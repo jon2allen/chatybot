@@ -221,6 +221,36 @@ class ContextLimiter:
                     target_notice_list[0] = dict(target_notice_list[0])
                     target_notice_list[0]["content"] = f"{trunc_notice}\n\n{target_notice_list[0]['content']}"
 
+            # Ensure prepending the truncation notice did not push total tokens over target_limit
+            while self.count_tokens_messages(anchors + evictable) > target_limit:
+                candidate_list = evictable if evictable else anchors
+                if not candidate_list:
+                    break
+
+                largest_msg = max(
+                    candidate_list,
+                    key=lambda m: len(m.get("content", "")) if isinstance(m.get("content"), str) else 0
+                )
+                content = largest_msg.get("content", "")
+                if not isinstance(content, str) or len(content) <= 60:
+                    break
+
+                current_total = self.count_tokens_messages(anchors + evictable)
+                excess_tokens = current_total - target_limit
+                excess_chars = int(excess_tokens * 4) + 60
+                new_length = max(40, len(content) - excess_chars)
+                if new_length >= len(content):
+                    break
+
+                head_len = max(20, int(new_length * 0.6))
+                tail_len = max(0, new_length - head_len)
+                head = content[:head_len]
+                tail = content[-tail_len:] if tail_len > 0 else ""
+                new_content = f"{head}\n\n[... content truncated to fit context limit ...]\n\n{tail}"
+                if len(new_content) >= len(content):
+                    break
+                largest_msg["content"] = new_content
+
         result = anchors + evictable
         return result, did_truncate
 

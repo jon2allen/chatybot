@@ -334,3 +334,27 @@ def test_partition_anchors_and_verbose_diagnostic_consistency():
     assert diag3.anchors_alone_exceed_limit is False
 
 
+def test_truncation_notice_strictly_within_target_limit():
+    """Verify that prepending the truncation notice does not cause total tokens to exceed limit."""
+    limiter = ContextLimiter()
+    
+    # Create messages that exceed a tight budget of 100 tokens
+    messages = [
+        {"role": "system", "content": "System prompt"},
+        {"role": "user", "content": "First goal: " + "word " * 50},
+        {"role": "assistant", "content": "Assistant answer: " + "detail " * 60},
+        {"role": "user", "content": "Followup query: " + "query " * 40}
+    ]
+    
+    target_limit = 80
+    truncated, did_trunc = limiter.truncate_messages(messages, limit=target_limit, target_pct=100.0)
+    assert did_trunc is True
+    final_tokens = limiter.count_tokens_messages(truncated)
+    assert final_tokens <= target_limit
+    
+    # Check that the note was prepended
+    notice_present = any("[Note:" in str(m.get("content", "")) for m in truncated)
+    assert notice_present is True
+
+
+
