@@ -70,6 +70,27 @@ class ContextLimiter:
                         tokens += 85  # Standard token estimate for image reference
                 elif isinstance(part, str):
                     tokens += self.count_tokens_text(part)
+
+        # Count tool calls if present (function name + JSON arguments)
+        tool_calls = message.get("tool_calls")
+        if isinstance(tool_calls, list):
+            for tc in tool_calls:
+                if isinstance(tc, dict):
+                    tokens += 3  # tool call framing overhead
+                    fn = tc.get("function")
+                    if isinstance(fn, dict):
+                        tokens += self.count_tokens_text(fn.get("name", ""))
+                        tokens += self.count_tokens_text(str(fn.get("arguments", "")))
+                    elif "name" in tc:
+                        tokens += self.count_tokens_text(tc.get("name", ""))
+                        tokens += self.count_tokens_text(str(tc.get("arguments", "")))
+
+        # Count tool message metadata if present
+        if message.get("name"):
+            tokens += self.count_tokens_text(str(message["name"]))
+        if message.get("tool_call_id"):
+            tokens += self.count_tokens_text(str(message["tool_call_id"]))
+
         return tokens
 
     def count_tokens_messages(self, messages: List[Dict[str, Any]]) -> int:
