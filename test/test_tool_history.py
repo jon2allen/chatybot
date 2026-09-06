@@ -343,3 +343,77 @@ class TestToolHistory:
             out2 = capsys.readouterr().out
             assert "Exported turn 1 tool history to CSV" in out2
             assert os.path.exists(csv_path2)
+
+    @pytest.mark.anyio
+    async def test_tool_list_populates_protected_tool_list_and_custom_var(self, app, capsys):
+        """Test /tool list populates protected ${TOOL_LIST} and supports var=<name>."""
+        await app.handle_escape_command("/tool list")
+        out = capsys.readouterr().out
+        assert "Available Tools" in out or "STATUS" in out
+
+        t_list = app.buffer_manager.get_script_var("TOOL_LIST")
+        assert isinstance(t_list, list)
+        assert len(t_list) > 0
+        assert any(t["name"] == "list_directory" for t in t_list)
+
+        # Verify TOOL_LIST is protected against user mutation
+        assert app.buffer_manager.is_protected_var("TOOL_LIST")
+        with app.buffer_manager.script_vars.user_write():
+            with pytest.raises(ValueError, match="protected variable"):
+                app.buffer_manager.script_vars["TOOL_LIST"] = "tampered_value"
+
+        # Test with var=my_tools
+        await app.handle_escape_command("/tool list var=my_tools")
+        custom_tools = app.buffer_manager.get_script_var("my_tools")
+        assert isinstance(custom_tools, list)
+        assert len(custom_tools) == len(t_list)
+        assert custom_tools == t_list
+
+    @pytest.mark.anyio
+    async def test_tool_history_populates_protected_tool_history_and_custom_var(self, app, capsys):
+        """Test /tool history populates protected ${TOOL_HISTORY} and supports var=<name>."""
+        trace = _make_loop([
+            {"tool": "list_directory", "turn": 1, "status": "success", "result": "ok", "duration_ms": 10.0},
+            {"tool": "read_file", "turn": 2, "status": "success", "result": "file content", "duration_ms": 15.0},
+        ])
+        app.session_turns = [
+            {"turn_id": 1, "prompt": "list and read", "response": "done", "agentic_loop": trace}
+        ]
+
+        # 1. Summary / all loops
+        await app.handle_escape_command("/tool history var=all_hist")
+        out = capsys.readouterr().out
+        assert "AGENTIC LOOP HISTORY" in out
+
+        hist = app.buffer_manager.get_script_var("TOOL_HISTORY")
+        assert isinstance(hist, list)
+        assert len(hist) == 1
+        assert hist[0]["turn_id"] == 1
+        assert hist[0]["total_calls"] == 2
+        assert hist[0]["tools"] == ["list_directory", "read_file"]
+
+        # Check custom var
+        custom_hist = app.buffer_manager.get_script_var("all_hist")
+        assert custom_hist == hist
+
+        # Verify TOOL_HISTORY is protected against user mutation
+        assert app.buffer_manager.is_protected_var("TOOL_HISTORY")
+        with app.buffer_manager.script_vars.user_write():
+            with pytest.raises(ValueError, match="protected variable"):
+                app.buffer_manager.script_vars["TOOL_HISTORY"] = "tampered_value"
+
+        # 2. Specific turn_id
+        await app.handle_escape_command("/tool history 1 var=turn1_hist")
+        turn1_hist = app.buffer_manager.get_script_var("TOOL_HISTORY")
+        assert isinstance(turn1_hist, list)
+        assert len(turn1_hist) == 2
+        assert turn1_hist[0]["tool"] == "list_directory"
+        assert turn1_hist[1]["tool"] == "read_file"
+        assert app.buffer_manager.get_script_var("turn1_hist") == turn1_hist
+
+        # 3. Current in-memory loop
+        app.buffer_manager.set_script_var("AGENTIC_LOOP", trace, allow_protected=True)
+        await app.handle_escape_command("/tool history current var=current_hist")
+        curr_hist = app.buffer_manager.get_script_var("TOOL_HISTORY")
+        assert curr_hist == trace
+        assert app.buffer_manager.get_script_var("current_hist") == trace

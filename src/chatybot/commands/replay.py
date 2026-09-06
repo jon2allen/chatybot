@@ -4,6 +4,7 @@ Provides ``/replay`` as a top-level alias for ``/session replay`` and hosts the
 shared ``handle_replay_command`` helper used by both entry points.
 """
 
+import dataclasses
 from typing import List, Optional
 
 from chatybot.commands.registry import command, CommandResult
@@ -14,9 +15,9 @@ _KEYWORDS = {"at", "diff", "step"}
 
 
 def _parse_replay_tokens(tokens: List[str], ctx: CommandContext):
-    """Parse raw replay tokens into (target, mode, mode_args, limit).
+    """Parse raw replay tokens into (target, mode, mode_args, limit, target_var).
 
-    Returns (target, mode, mode_args, limit) where mode is one of
+    Returns (target, mode, mode_args, limit, target_var) where mode is one of
     "summary", "at", "diff", "step".
     """
     app = ctx.app
@@ -24,8 +25,9 @@ def _parse_replay_tokens(tokens: List[str], ctx: CommandContext):
     target: Optional[str] = None
     mode = "summary"
     mode_args: List[str] = []
+    target_var: Optional[str] = None
 
-    # Strip and collect limit= overrides anywhere in the token stream
+    # Strip and collect limit= overrides and var=/target= anywhere in the token stream
     filtered: List[str] = []
     for tok in tokens:
         if tok.lower().startswith("limit="):
@@ -33,6 +35,10 @@ def _parse_replay_tokens(tokens: List[str], ctx: CommandContext):
                 limit = int(tok.split("=", 1)[1])
             except ValueError:
                 pass
+        elif tok.lower().startswith("var="):
+            target_var = tok[4:].strip().lstrip("$")
+        elif tok.lower().startswith("target="):
+            target_var = tok[7:].strip().lstrip("$")
         else:
             filtered.append(tok)
 
@@ -62,7 +68,7 @@ def _parse_replay_tokens(tokens: List[str], ctx: CommandContext):
     if target is None:
         target = app.active_session_id or app.active_session_name
 
-    return target, mode, mode_args, limit
+    return target, mode, mode_args, limit, target_var
 
 
 def _preview(text: str, width: int = 60) -> str:
@@ -172,7 +178,7 @@ def _render_diff(diff) -> None:
 async def handle_replay_command(ctx: CommandContext, raw_tokens: List[str]) -> CommandResult:
     """Shared replay handler invoked by /session replay and /replay."""
     app = ctx.app
-    target, mode, mode_args, limit = _parse_replay_tokens(raw_tokens, ctx)
+    target, mode, mode_args, limit, target_var = _parse_replay_tokens(raw_tokens, ctx)
 
     if not target:
         print("No active session. Usage: /session replay [<id>] [at <N> | diff <A> <B> | step] [limit=<N>]")
@@ -193,6 +199,11 @@ async def handle_replay_command(ctx: CommandContext, raw_tokens: List[str]) -> C
 
     if mode == "summary":
         snapshots = replayer.replay_all(target, limit=limit, turns=turns, system_prompt=system_prompt)
+        data = [dataclasses.asdict(s) for s in snapshots] if snapshots else []
+        if hasattr(app, "buffer_manager") and app.buffer_manager:
+            app.buffer_manager.set_script_var('REPLAY', data, allow_protected=True)
+            if target_var:
+                app.buffer_manager.set_script_var(target_var, data, allow_protected=True)
         _render_summary(snapshots)
         return CommandResult.ok()
 
@@ -209,6 +220,11 @@ async def handle_replay_command(ctx: CommandContext, raw_tokens: List[str]) -> C
         if snap is None:
             print(f"Turn {turn_n} not found. Available turn ids: {[t.get('turn_id') for t in llm_turns]}")
             return CommandResult.ok()
+        data = dataclasses.asdict(snap)
+        if hasattr(app, "buffer_manager") and app.buffer_manager:
+            app.buffer_manager.set_script_var('REPLAY', data, allow_protected=True)
+            if target_var:
+                app.buffer_manager.set_script_var(target_var, data, allow_protected=True)
         _render_at(snap, system_prompt)
         return CommandResult.ok()
 
@@ -226,6 +242,11 @@ async def handle_replay_command(ctx: CommandContext, raw_tokens: List[str]) -> C
         if diff is None:
             print(f"Could not build diff for turns {turn_a} / {turn_b}. Available turn ids: {[t.get('turn_id') for t in llm_turns]}")
             return CommandResult.ok()
+        data = dataclasses.asdict(diff)
+        if hasattr(app, "buffer_manager") and app.buffer_manager:
+            app.buffer_manager.set_script_var('REPLAY', data, allow_protected=True)
+            if target_var:
+                app.buffer_manager.set_script_var(target_var, data, allow_protected=True)
         _render_diff(diff)
         return CommandResult.ok()
 
@@ -234,6 +255,11 @@ async def handle_replay_command(ctx: CommandContext, raw_tokens: List[str]) -> C
         if not snapshots:
             print("No turns to step through.")
             return CommandResult.ok()
+        data = [dataclasses.asdict(s) for s in snapshots] if snapshots else []
+        if hasattr(app, "buffer_manager") and app.buffer_manager:
+            app.buffer_manager.set_script_var('REPLAY', data, allow_protected=True)
+            if target_var:
+                app.buffer_manager.set_script_var(target_var, data, allow_protected=True)
         print("\nInteractive replay stepper. Press Enter to advance, 'q' to quit.")
         for s in snapshots:
             print("\n" + "-" * 78)
