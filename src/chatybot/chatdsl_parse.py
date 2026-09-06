@@ -168,7 +168,7 @@ class TParser:
         "help", "prompt", "file", "showfile", "clearfile", "filebank",
         "model", "listmodels", "logging", "save", "codeonly", "codeoff",
         "system", "temp", "maxtokens", "top_p", "top_k", "freq_penalty",
-        "pres_penalty", "reasoning", "effort", "seed", "stream", "script", "quit",
+        "pres_penalty", "reasoning", "effort", "seed", "stream", "script", "quit", "exit",
         "setdb", "dblist", "searchdb", "dblog", "dbprint", "loadvar",
         "savevar", "setvar", "calc", "notemode", "mem", "dump", "trace", "thinking",
         "filebank1", "filebank2", "filebank3", "filebank4", "filebank5",
@@ -184,7 +184,14 @@ class TParser:
         # Procedures & Local Scoping
         "proc", "defproc", "endproc", "local",
         # Multiline Foreach Loop
-        "foreach", "endfor", "break"
+        "foreach", "endfor", "break",
+        # Macro commands
+        "reloadmacros", "listmacros", "macros",
+        # Internationalization & Language
+        "language", "lang",
+        # Context budgeting, replay & diagnostics
+        "context", "context_limit", "auto_truncate", "ctx", "session", "replay",
+        "env", "str_search", "debug", "config", "setup_keys", "migrate_sessions"
     }
 
     def __init__(self, tokens: List[Token], verbose: bool = False):
@@ -309,9 +316,15 @@ class TParser:
         if self.match(TokenType.NUMBER):
             tok = self.expect(TokenType.NUMBER)
             return {"type": "number", "val": tok.value}
-        if self.match(TokenType.IDENTIFIER):
-            tok = self.expect(TokenType.IDENTIFIER)
-            return {"type": "literal", "val": tok.raw}
+
+        parts = []
+        while not self.match(TokenType.SYMBOL, ",") and not self.match(TokenType.SYMBOL, ")") and not self.match(TokenType.EOF):
+            parts.append(self.current.raw)
+            self.advance()
+        if parts:
+            val_str = "".join(parts).strip()
+            return {"type": "literal", "val": val_str}
+
         raise ParseError(f"Unexpected token in macro argument: {self.current.type.value}", self.current.line, self.current.column)
 
     def parse_set(self) -> Dict[str, Any]:
@@ -401,8 +414,13 @@ class TParser:
     def parse_command_or_chat(self) -> Dict[str, Any]:
         if self.match(TokenType.ESCAPE):
             tok = self.expect(TokenType.ESCAPE)
-            cmd_name = tok.raw[1:].lower() 
-            if cmd_name not in self.VALID_ESCAPE_COMMANDS:
+            cmd_name = tok.raw[1:].lower()
+            try:
+                from chatybot.localization import LocalizationManager
+                canonical = LocalizationManager().resolve_command("/" + cmd_name).lstrip("/").lower()
+            except Exception:
+                canonical = cmd_name
+            if cmd_name not in self.VALID_ESCAPE_COMMANDS and canonical not in self.VALID_ESCAPE_COMMANDS:
                 raise ParseError(f"Invalid escape command: /{cmd_name}", tok.line, tok.column)
             args = []
             while not self.match(TokenType.NEWLINE) and not self.match(TokenType.EOF):
