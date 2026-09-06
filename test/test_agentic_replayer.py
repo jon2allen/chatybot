@@ -336,6 +336,14 @@ async def test_tool_replay_no_loop(app):
 
 
 @pytest.mark.anyio
+async def test_tool_replay_specific_turn_no_loop(app):
+    await app.handle_escape_command("/session start specific_noloop_test")
+    app.append_session_turn("hello", "hi")
+    out = await _run_capture(app, "/tool replay 1")
+    assert "No agentic loop found on turn 1" in out
+
+
+@pytest.mark.anyio
 async def test_tool_replay_summary(app):
     await app.handle_escape_command("/session start replay_loop")
     app.append_session_turn("List my files", "thinking...")
