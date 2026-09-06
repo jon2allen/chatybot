@@ -80,7 +80,6 @@ def _render_summary(snapshots) -> None:
         return
     print("\n" + "=" * 78)
     print("SESSION REPLAY — SUMMARY TIMELINE")
-    print("=" * 78)
     header = f"{'Turn':<6}{'Msgs':<6}{'Uncut Tok':<12}{'Trunc Tok':<12}{'Evicted':<9}{'AnchorWarn':<11}"
     print(header)
     print("-" * 78)
@@ -90,7 +89,15 @@ def _render_summary(snapshots) -> None:
             f"{s.turn_id:<6}{s.message_count:<6}{s.total_tokens:<12}"
             f"{s.truncated_tokens:<12}{len(s.evicted_indices):<9}{warn:<11}"
         )
-    print("=" * 78 + "\n")
+    print("=" * 78)
+    print("Notes / Column Legend:")
+    print("  • Turn:       Session interaction turn number")
+    print("  • Msgs:       Total messages in prompt array before truncation")
+    print("  • Uncut Tok:  Raw token count of prompt array before truncation")
+    print("  • Trunc Tok:  Token count after auto-truncation/eviction to fit limit")
+    print("  • Evicted:    Number of older intermediate messages dropped from prompt")
+    print("  • AnchorWarn: YES if system + initial user anchors exceed context limit")
+    print("")
 
 
 def _render_at(snapshot, system_prompt: str) -> None:

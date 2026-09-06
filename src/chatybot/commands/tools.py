@@ -994,7 +994,16 @@ def _render_tool_replay_summary(snapshots, turn_id):
             f"{s.step:<6}{tool_disp:<20.18}{s.message_count:<6}{s.total_tokens:<12}"
             f"{s.truncated_tokens:<12}{len(s.evicted_indices):<9}{warn:<11}"
         )
-    print("=" * 78 + "\n")
+    print("=" * 78)
+    print("Notes / Column Legend:")
+    print("  • Step:       Agentic loop step index (0 = pre-loop baseline state)")
+    print("  • Tool:       Tool invoked at this step")
+    print("  • Msgs:       Total messages in prompt array before truncation")
+    print("  • Uncut Tok:  Raw token count of prompt array before truncation")
+    print("  • Trunc Tok:  Token count after auto-truncation/eviction to fit limit")
+    print("  • Evicted:    Number of older intermediate messages dropped from prompt")
+    print("  • AnchorWarn: YES if system + initial user anchors exceed context limit")
+    print("")
 
 
 def _render_tool_replay_at(snapshot, system_prompt):
