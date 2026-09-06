@@ -770,8 +770,15 @@ Step  Tool                Msgs  Uncut Tok   Trunc Tok   Evicted  AnchorWarn
 1     list_directory      36    13761       9915        19       -          
 2     read_file           38    14775       9910        23       -          
 5     read_file           44    23499       2705        42       -          
-20    read_file           74    38089       2705        72       -          
 ==============================================================================
+Notes / Column Legend:
+  • Step:       Agentic loop step index (0 = pre-loop baseline state)
+  • Tool:       Tool invoked at this step
+  • Msgs:       Total messages in prompt array before truncation
+  • Uncut Tok:  Raw token count of prompt array before truncation
+  • Trunc Tok:  Token count after auto-truncation/eviction to fit limit
+  • Evicted:    Number of older intermediate messages dropped from prompt
+  • AnchorWarn: YES if system + initial user anchors exceed context limit
 ```
 
 *Timeline Column Reference*:
