@@ -357,4 +357,39 @@ def test_truncation_notice_strictly_within_target_limit():
     assert notice_present is True
 
 
+def test_count_tokens_tool_calls_and_tool_messages():
+    """Verify that assistant messages with tool_calls and tool response messages count tokens properly."""
+    limiter = ContextLimiter()
+
+    # Message with tool_calls and empty content
+    tc_msg = {
+        "role": "assistant",
+        "content": None,
+        "tool_calls": [
+            {
+                "id": "call_abc123",
+                "type": "function",
+                "function": {
+                    "name": "write_file",
+                    "arguments": '{"path": "test.py", "content": "' + "code line\\n" * 50 + '"}'
+                }
+            }
+        ]
+    }
+    tokens = limiter.count_tokens_message(tc_msg)
+    # The JSON arguments have ~500 chars -> ~125 tokens, plus framing overhead
+    assert tokens > 100
+
+    # Tool result message
+    tool_resp_msg = {
+        "role": "tool",
+        "name": "write_file",
+        "tool_call_id": "call_abc123",
+        "content": "File written successfully."
+    }
+    resp_tokens = limiter.count_tokens_message(tool_resp_msg)
+    assert resp_tokens > 5
+
+
+
 
