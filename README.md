@@ -78,6 +78,7 @@ chatybot is an interactive command-line tool that enables seamless communication
 - **Profile TUI Manager** - Full curses-based profile editor (`--profile-edit` / `/profile edit`)
 - **Optimized Startup Performance** - Deferred macro PEG grammar compilation and on-demand SDK imports for ultra-fast boot times
 - **Context Budgeting & Metrics** - Dynamic token budget tracking, soft warnings (30KB), hard truncation safeguards (50KB), and `get_context_metrics` inspection tool
+- **Time-Travel Context Replay** - Reconstruct, inspect, and diff the exact token context arrays and message eviction histories across session turns (`/replay`) and agentic tool loops (`/tool replay`)
 - **Permanent Capability Error Guard** - Automatic protocol/capability error detection and immediate tool auto-disabling to eliminate infinite agentic retry loops
 - **Hugging Face Preset & `/env` Inspection** - Vendor preset for Hugging Face inference endpoints and dedicated `/env` environment inspection command
 - **Enhanced Session Filtering & Sorting** - `/session list` sorting by latest activity, model filtering (`model=...`), and range pagination (`limit=...`, `range=start:end`)
@@ -886,6 +887,25 @@ chat --> Create a blog post outline about ${topic}
 ```
 
 ### Change log
+
+September 6th, 2026 (v0.8.3)
+---------------------------
+- **Time-Travel Context Replay (`/replay`, `/tool replay`)**:
+  - Added interactive context replay engines to reconstruct and inspect the exact prompt/history arrays sent to LLMs at any turn (`/replay`) or agentic tool step (`/tool replay`).
+  - Supported timeline overview (`summary`), specific turn inspection (`at <N>`), step-by-step interactive navigation (`step`), and turn-to-turn differential diagnostics (`diff <A> <B>`).
+  - Added strict newly-evicted message tracking (`newly_evicted`), token delta calculation, and anchor overflow detection.
+  - Optimized CLI execution with zero redundant disk reads by passing preloaded session turns into `SessionReplayer` and `AgenticReplayer`.
+- **Context Limiting & Token Counting Enhancements**:
+  - Optimized message eviction in `ContextLimiter.truncate_messages` from $O(N^2)$ to $O(N)$ via precomputed token caching and running sums during turn dropping.
+  - Unified anchor partitioning logic (`ContextLimiter.partition_anchors`) across core truncation and verbose diagnostics.
+  - Enforced strict token budget compliance after prepending truncation notices to prevent budget overruns.
+  - Extended heuristic token counting to fully account for assistant `tool_calls` (function names + JSON arguments) and tool metadata (`name`, `tool_call_id`).
+- **Context Command & Script Variable Resolution**:
+  - Enhanced `/context` to support single-argument limit setting (`/context 10000`, `/context off`) and script variable resolution (`/context $my_limit`).
+  - Included system prompt and non-empty file bank token breakdown in `/context` metrics output.
+- **Cookbook Validation & Parser Hardening**:
+  - Validated all 55 ChatDSL cookbook recipe scripts in `doc/cookbook/` with full parser compliance.
+  - Integrated localized command alias resolution into `chatdsl_parse`.
 
 September 3rd, 2026 (v0.8.2)
 ---------------------------

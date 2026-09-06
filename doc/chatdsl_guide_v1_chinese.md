@@ -8,7 +8,7 @@ ChatDSL（Chat Domain-Specific Language，聊天领域特定语言）是一种�
 >
 > *版本：1.0*
 >
-> *兼容 Chatybot v0.8.2+*
+> *兼容 Chatybot v0.8.3+*
 
 ---
 
