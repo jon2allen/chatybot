@@ -161,7 +161,10 @@ class AgenticReplayer:
         if turn_id is not None:
             for t in llm_turns:
                 if t.get("turn_id") == turn_id:
-                    return t
+                    al = t.get("agentic_loop")
+                    if isinstance(al, list) and al:
+                        return t
+                    return None
             return None
         # Default: the most recent turn that has an agentic_loop
         for t in reversed(llm_turns):
