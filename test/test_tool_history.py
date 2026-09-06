@@ -299,3 +299,47 @@ class TestToolHistory:
         assert "timestamp" not in turn
         assert "elapsed_ms" not in turn
         assert "tps" not in turn
+
+    @pytest.mark.anyio
+    async def test_tool_export_csv_and_history_csv(self, app, capsys):
+        """Test exporting tool history to CSV using /tool export csv and /tool history csv."""
+        app.session_mode = "on"
+        store = app._get_session_store()
+        store.create_session("test_tool_csv", model_alias="test_model", custom_name="tool_csv", initial_prompt="", notes=None)
+        app.active_session_id = "test_tool_csv"
+        app.active_session_name = "tool_csv"
+        app.session_first_prompt_slug = "test"
+        app.session_created_at = "2026-09-03T12:00:00.000000"
+
+        trace = _make_loop([
+            {"tool": "list_directory", "turn": 1, "duration_ms": 12.5, "status": "success", "result": "file1.txt", "exit_code": 0},
+            {"tool": "read_file", "turn": 2, "duration_ms": 25.0, "status": "success", "result": "content", "exit_code": 0},
+        ])
+        app.session_turns = [
+            {"turn_id": 1, "prompt": "list and read", "response": "done", "agentic_loop": trace}
+        ]
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            csv_path1 = os.path.join(tmpdir, "tool_history_export.csv")
+            await app.handle_escape_command(f"/tool export csv {csv_path1}")
+            out1 = capsys.readouterr().out
+            assert "Exported session agentic tool history to CSV" in out1
+            assert os.path.exists(csv_path1)
+
+            import csv
+            with open(csv_path1, "r", encoding="utf-8") as f:
+                reader = list(csv.reader(f))
+                assert len(reader) == 3  # header + 2 steps
+                header = reader[0]
+                assert header == ["turn_id", "step", "tool", "status", "duration_ms", "timestamp", "arguments", "result", "exit_code"]
+                assert reader[1][0] == "1"
+                assert reader[1][2] == "list_directory"
+                assert reader[1][4] == "12.5"
+                assert reader[2][2] == "read_file"
+                assert reader[2][4] == "25.0"
+
+            csv_path2 = os.path.join(tmpdir, "turn_1_history.csv")
+            await app.handle_escape_command(f"/tool history 1 csv {csv_path2}")
+            out2 = capsys.readouterr().out
+            assert "Exported turn 1 tool history to CSV" in out2
+            assert os.path.exists(csv_path2)

@@ -321,3 +321,38 @@ async def test_auto_session_startup_commands_and_note_preservation(app):
         assert "# Step 6\nreview lu_xun dir and tell me the contents" in content
 
 
+@pytest.mark.anyio
+async def test_session_export_csv(app, capsys):
+    """Test exporting session turns to CSV."""
+    await app.handle_escape_command("/session start export_csv_test")
+    timing = {
+        "timestamp": "2026-09-05T12:00:00.000",
+        "elapsed_ms": 1200.5,
+        "tps": {"total": 35.0, "think": 15.0, "regular": 20.0},
+    }
+    app.append_session_turn("Hello world", "Hi there!", timing=timing)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        csv_file = os.path.join(tmpdir, "session_export.csv")
+        await app.handle_escape_command(f"/session export csv {csv_file}")
+        captured = capsys.readouterr()
+        assert "Exported session" in captured.out
+        assert os.path.exists(csv_file)
+
+        import csv
+        with open(csv_file, "r", encoding="utf-8") as f:
+            reader = list(csv.reader(f))
+            assert len(reader) == 2  # header + 1 row
+            header = reader[0]
+            row = reader[1]
+            assert "turn_id" in header
+            assert "prompt" in header
+            assert "response" in header
+            assert "tps_total" in header
+            assert row[0] == "1"
+            assert row[3] == "Hello world"
+            assert row[4] == "Hi there!"
+            assert row[6] == "1200.5"
+            assert row[7] == "35.0"
+
+

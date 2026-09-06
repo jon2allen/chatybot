@@ -80,9 +80,9 @@ def get_context_metrics(
 
             # Prompt & File buffers if available
             if hasattr(app.buffer_manager, "prompt_buffer") and app.buffer_manager.prompt_buffer:
-                buffer_text_parts.append(app.buffer_manager.prompt_buffer)
+                buffer_text_parts.append(str(app.buffer_manager.prompt_buffer))
             if hasattr(app.buffer_manager, "file_buffer") and app.buffer_manager.file_buffer:
-                buffer_text_parts.append(app.buffer_manager.file_buffer)
+                buffer_text_parts.append(str(app.buffer_manager.file_buffer))
 
     session_full_text = "\n".join(session_text_parts)
     loop_full_text = "\n".join(loop_text_parts)

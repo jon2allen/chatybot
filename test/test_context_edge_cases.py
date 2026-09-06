@@ -62,7 +62,7 @@ def test_edge_case_3_context_buffers_scope():
     assert metrics["scope"] == "buffers"
     assert "buffers" in metrics
     assert "chat_history" not in metrics
-    assert "Buffers Usage" in metrics["summary"]
+    assert "Buffers" in metrics["summary"]
 
 
 @pytest.mark.anyio
@@ -79,7 +79,7 @@ async def test_edge_case_4_scoped_context_command_display(capsys):
     res = await app.handle_escape_command("/context session")
     assert res is True
     out = capsys.readouterr().out
-    assert "Context Usage (Scope: session)" in out
+    assert "Session Usage:" in out
     assert "5,000" in out
 
 

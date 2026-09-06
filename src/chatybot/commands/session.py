@@ -291,9 +291,60 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
             show_thinking = True
             words.pop()
 
+        is_csv = False
+        if words and words[0].lower() == "csv":
+            is_csv = True
+            words = words[1:]
+
         export_path = " ".join(words).strip(" \"'")
+        if not export_path and is_csv:
+            # Generate default csv filename if omitted
+            s_name = app.active_session_name or app.active_session_id or "session"
+            export_path = f"{s_name}.csv"
+        elif not export_path:
+            print("Usage: /session export [csv] <filepath> [--thinking|-t]")
+            return CommandResult.ok()
+
+        if export_path.lower().endswith(".csv"):
+            is_csv = True
+
         if not app.session_turns:
             print("No exchanges in active session to export.")
+            return CommandResult.ok()
+
+        if is_csv:
+            import csv
+            try:
+                with open(export_path, "w", newline="", encoding="utf-8") as f:
+                    writer = csv.writer(f, quoting=csv.QUOTE_ALL)
+                    writer.writerow([
+                        "turn_id", "timestamp", "model_alias", "prompt", "response",
+                        "thinking", "elapsed_ms", "tps_total", "tps_think", "tps_regular",
+                        "tool_call_count", "has_agentic_loop"
+                    ])
+                    for turn in app.session_turns:
+                        t_id = turn.get("turn_id", 1)
+                        ts = turn.get("timestamp", "")
+                        model = turn.get("model_alias", app.session_model_alias or "default")
+                        prompt = turn.get("prompt", "")
+                        resp = turn.get("response", "")
+                        thinking = turn.get("thinking", "") if show_thinking else ""
+                        elapsed = turn.get("elapsed_ms", "")
+                        tps_dict = turn.get("tps") if isinstance(turn.get("tps"), dict) else {}
+                        tps_tot = tps_dict.get("total", "")
+                        tps_thk = tps_dict.get("think", "")
+                        tps_reg = tps_dict.get("regular", "")
+                        al = turn.get("agentic_loop")
+                        tool_count = len(al) if isinstance(al, list) else 0
+                        has_loop = bool(isinstance(al, list) and al)
+                        writer.writerow([
+                            t_id, ts, model, prompt, resp,
+                            thinking, elapsed, tps_tot, tps_thk, tps_reg,
+                            tool_count, has_loop
+                        ])
+                print(f"Exported session data to CSV '{export_path}'.")
+            except Exception as e:
+                print(f"Error exporting session to CSV: {e}")
             return CommandResult.ok()
 
         md_lines = []
