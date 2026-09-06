@@ -47,6 +47,8 @@ def get_context_metrics(
     if norm_scope not in valid_scopes:
         norm_scope = "all"
 
+    in_loop = bool(getattr(app, "in_tool_loop", False)) if app else False
+
     # Default empty metrics
     session_text_parts: List[str] = []
     session_turns = 0
@@ -97,7 +99,18 @@ def get_context_metrics(
     session_full_text = "\n".join(session_text_parts)
     loop_full_text = "\n".join(loop_text_parts)
     buffer_full_text = "\n".join(buffer_text_parts)
-    total_full_text = "\n".join(session_text_parts + loop_text_parts + buffer_text_parts)
+
+    # Active prompt context sent to LLM:
+    # If in_loop is True, the active tool loop messages are part of the prompt payload.
+    # If in_loop is False, AGENTIC_LOOP is an archived trace and not included in live prompt context.
+    if in_loop:
+        prompt_text_parts = session_text_parts + loop_text_parts + buffer_text_parts
+        total_turns = session_turns + loop_turns
+    else:
+        prompt_text_parts = session_text_parts + buffer_text_parts
+        total_turns = session_turns
+
+    total_full_text = "\n".join(prompt_text_parts)
 
     session_metrics = calculate_metrics(session_full_text)
     session_metrics["turns"] = session_turns
@@ -105,12 +118,15 @@ def get_context_metrics(
     loop_metrics = calculate_metrics(loop_full_text)
     loop_metrics["turns"] = loop_turns
     loop_metrics["records"] = loop_turns
+    loop_metrics["in_loop"] = in_loop
 
-    total_turns = session_turns + loop_turns
+    buffer_metrics = calculate_metrics(buffer_full_text)
+
     total_metrics = calculate_metrics(total_full_text)
     total_metrics["total_turns"] = total_turns
     total_metrics["session_turns"] = session_turns
     total_metrics["agentic_loop_turns"] = loop_turns
+    total_metrics["in_loop"] = in_loop
 
     response: Dict[str, Any] = {
         "status": "success",
@@ -138,7 +154,15 @@ def get_context_metrics(
                 pass
 
         if effective_limit and effective_limit > 0:
-            used_tokens = total_metrics["estimated_tokens"]
+            if norm_scope == "session":
+                used_tokens = session_metrics["estimated_tokens"]
+            elif norm_scope == "agentic_loop":
+                used_tokens = loop_metrics["estimated_tokens"]
+            elif norm_scope == "buffers":
+                used_tokens = buffer_metrics["estimated_tokens"]
+            else:
+                used_tokens = total_metrics["estimated_tokens"]
+
             rem_tokens = max(0, effective_limit - used_tokens)
             usage_pct = round((used_tokens / effective_limit) * 100.0, 1)
             context_limit_info = {
@@ -171,12 +195,12 @@ def get_context_metrics(
         )
     elif norm_scope == "agentic_loop":
         response["agentic_loop"] = loop_metrics
+        status_lbl = "Active Loop" if in_loop else "Archived Loop"
         response["summary"] = (
-            f"Agentic Loop: {loop_metrics['characters']} chars, "
+            f"Agentic Loop ({status_lbl}): {loop_metrics['characters']} chars, "
             f"{loop_metrics['kb']} KB, ~{loop_metrics['estimated_tokens']} tokens ({loop_turns} turns){limit_suffix}"
         )
     elif norm_scope == "buffers":
-        buffer_metrics = calculate_metrics(buffer_full_text)
         response["buffers"] = buffer_metrics
         response["summary"] = (
             f"Buffers & System: {buffer_metrics['characters']} chars, "
@@ -185,14 +209,27 @@ def get_context_metrics(
     else:  # 'all'
         response["session"] = session_metrics
         response["agentic_loop"] = loop_metrics
-        response["buffers"] = calculate_metrics(buffer_full_text)
+        response["buffers"] = buffer_metrics
         response["total"] = total_metrics
-        response["summary"] = (
-            f"Total Context: {total_metrics['characters']} chars, "
-            f"{total_metrics['kb']} KB, ~{total_metrics['estimated_tokens']} estimated tokens across {total_turns} total turns "
-            f"(Session: {session_metrics['kb']} KB / ~{session_metrics['estimated_tokens']} tokens [{session_turns} turns], "
-            f"Agentic Loop: {loop_metrics['kb']} KB / ~{loop_metrics['estimated_tokens']} tokens [{loop_turns} turns]){limit_suffix}"
-        )
+        if in_loop:
+            response["summary"] = (
+                f"Active Prompt Context: {total_metrics['characters']} chars, "
+                f"{total_metrics['kb']} KB, ~{total_metrics['estimated_tokens']} estimated tokens across {total_turns} total turns "
+                f"(Session: {session_metrics['kb']} KB / ~{session_metrics['estimated_tokens']} tokens [{session_turns} turns], "
+                f"Active Loop: {loop_metrics['kb']} KB / ~{loop_metrics['estimated_tokens']} tokens [{loop_turns} turns]){limit_suffix}"
+            )
+        elif loop_turns > 0:
+            response["summary"] = (
+                f"Active Prompt Context: {total_metrics['characters']} chars, "
+                f"{total_metrics['kb']} KB, ~{total_metrics['estimated_tokens']} estimated tokens across {session_turns} session turns "
+                f"(Session: {session_metrics['kb']} KB / ~{session_metrics['estimated_tokens']} tokens [{session_turns} turns]; "
+                f"Archived Loop: {loop_metrics['kb']} KB / ~{loop_metrics['estimated_tokens']} tokens [{loop_turns} records]){limit_suffix}"
+            )
+        else:
+            response["summary"] = (
+                f"Active Prompt Context: {total_metrics['characters']} chars, "
+                f"{total_metrics['kb']} KB, ~{total_metrics['estimated_tokens']} estimated tokens across {session_turns} session turns{limit_suffix}"
+            )
 
     # Save to target variable if requested
     if target_variable and app and hasattr(app, "buffer_manager"):

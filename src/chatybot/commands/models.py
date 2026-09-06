@@ -313,7 +313,13 @@ async def cmd_context(ctx: CommandContext, parts: list, command: str) -> Command
     if "agentic_loop" in data:
         l = data["agentic_loop"]
         recs = l.get("records", 0)
-        print(f"  • Agentic Loop:     ~{l['estimated_tokens']:,} tokens ({recs} tool call{'s' if recs != 1 else ''}, {l['kb']:.2f} KB)")
+        in_loop = l.get("in_loop", False) or data.get("total", {}).get("in_loop", False)
+        if in_loop:
+            print(f"  • Active Tool Loop: ~{l['estimated_tokens']:,} tokens ({recs} tool call{'s' if recs != 1 else ''}, {l['kb']:.2f} KB)")
+        elif recs > 0:
+            print(f"  • Last Tool Loop:   ~{l['estimated_tokens']:,} tokens ({recs} tool call{'s' if recs != 1 else ''}, {l['kb']:.2f} KB) [archived trace]")
+        else:
+            print(f"  • Agentic Loop:     ~{l['estimated_tokens']:,} tokens ({recs} tool call{'s' if recs != 1 else ''}, {l['kb']:.2f} KB)")
     if "buffers" in data:
         b = data["buffers"]
         print(f"  • Buffers / System: ~{b['estimated_tokens']:,} tokens ({b['kb']:.2f} KB)")

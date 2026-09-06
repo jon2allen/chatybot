@@ -32,7 +32,7 @@ async def test_cmd_context_default_all_no_limit(test_app, capsys):
     assert "Context Usage Breakdown:" in out
     assert "Session History:" in out
     assert "2 turns" in out
-    assert "Agentic Loop:" in out
+    assert "Last Tool Loop:" in out or "Agentic Loop:" in out
     assert "1 tool call" in out
     assert "Context Limit:      Disabled (no limit configured)" in out
 
@@ -59,12 +59,13 @@ async def test_cmd_context_specific_scopes(test_app, capsys):
     out = capsys.readouterr().out
     assert "Session History:" in out
     assert "Agentic Loop:" not in out
+    assert "Last Tool Loop:" not in out
 
     # Test loop scope
     capsys.readouterr()
     await test_app.handle_escape_command("/context loop")
     out = capsys.readouterr().out
-    assert "Agentic Loop:" in out
+    assert "Last Tool Loop:" in out or "Agentic Loop Usage:" in out
     assert "Session History:" not in out
 
 
