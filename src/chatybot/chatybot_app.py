@@ -4417,8 +4417,8 @@ class ChatybotApp:
         cmd = self.i18n.resolve_command(raw_cmd.lower())
 
         # Record action verbs in chronological session activity for reference/codification
-        # Exclude meta/export/session lifecycle commands to avoid polluting activity history
-        if cmd not in ("/chatdsl", "/help", "/exit", "/quit", "/dump", "/mem", "/session"):
+        # Exclude meta/help commands from activity history
+        if cmd not in ("/chatdsl", "/help"):
             self.session_activity.append({
                 "type": "command",
                 "text": command,
