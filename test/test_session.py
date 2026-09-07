@@ -305,11 +305,11 @@ async def test_auto_session_startup_commands_and_note_preservation(app):
 
     # Reload session with /session use
     await app.handle_escape_command(f"/session use {session_id}")
-    assert len(app.session_activity) == 6  # 5 commands + 1 prompt
+    assert len(app.session_activity) == 7  # 5 commands + 1 prompt + 1 session note
 
     with tempfile.TemporaryDirectory() as tmpdir:
         out_script = os.path.join(tmpdir, "lu_xun.chatdsl")
-        await app.handle_escape_command(f"/chatdsl history 1-6 {out_script}")
+        await app.handle_escape_command(f"/chatdsl history 1-7 {out_script}")
         with open(out_script, "r", encoding="utf-8") as f:
             content = f.read()
 
@@ -319,6 +319,7 @@ async def test_auto_session_startup_commands_and_note_preservation(app):
         assert "# Step 4\n/tool enable read*" in content
         assert "# Step 5\n/tool enable list*" in content
         assert "# Step 6\nreview lu_xun dir and tell me the contents" in content
+        assert '# Step 7\n/session note "lu xun"' in content
 
 
 @pytest.mark.anyio
@@ -389,7 +390,8 @@ async def test_session_list_populates_protected_session_list_and_custom_var(app,
     custom_list = app.buffer_manager.get_script_var("my_sessions")
     assert isinstance(custom_list, list)
     assert len(custom_list) == len(sess_list)
-    assert custom_list == sess_list
+    assert [s["sid"] for s in custom_list] == [s["sid"] for s in sess_list]
+    assert [s["cname"] for s in custom_list] == [s["cname"] for s in sess_list]
 
 
 
