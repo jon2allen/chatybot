@@ -473,3 +473,88 @@ async def test_session_list_since_header_shows_filters(app, capsys):
     # The header should contain the filter summary with since date
     assert "since=" in captured.out
 
+
+@pytest.mark.anyio
+async def test_session_ids_always_populated(app, capsys):
+    """${SESSION_IDS} is always set by /session list, even without the ids flag."""
+    await app.handle_escape_command("/session start alpha")
+    app.append_session_turn("Alpha", "Response A")
+
+    await app.handle_escape_command("/session start beta")
+    app.append_session_turn("Beta", "Response B")
+
+    capsys.readouterr()
+
+    # Normal full-output list — SESSION_IDS must still be populated
+    await app.handle_escape_command("/session list all")
+    capsys.readouterr()
+
+    ids = app.buffer_manager.get_script_var("SESSION_IDS")
+    assert isinstance(ids, list)
+    assert len(ids) >= 2
+    # All entries must be plain strings (not dicts)
+    for sid in ids:
+        assert isinstance(sid, str)
+
+    # SESSION_IDS and SESSION_LIST must be in the same order
+    sess_list = app.buffer_manager.get_script_var("SESSION_LIST")
+    assert [s["sid"] for s in sess_list] == ids
+
+
+@pytest.mark.anyio
+async def test_session_ids_flag_compact_output(app, capsys):
+    """ids flag switches to compact sid-only print format."""
+    await app.handle_escape_command("/session start compact_test")
+    app.append_session_turn("Compact", "Response")
+
+    capsys.readouterr()
+
+    await app.handle_escape_command("/session list ids all")
+    captured = capsys.readouterr()
+
+    # Header must say "Session IDs:" not "Available Sessions:"
+    assert "Session IDs:" in captured.out
+    assert "Available Sessions:" not in captured.out
+    # Tree decorators must NOT appear
+    assert "├─ Prompt:" not in captured.out
+    assert "└─ Turns:" not in captured.out
+    # The sid itself must appear
+    assert "compact_test" in captured.out or app.active_session_id in captured.out
+
+
+@pytest.mark.anyio
+async def test_session_ids_var_receives_sid_list(app, capsys):
+    """var= with ids flag saves list[str] sids; without ids flag saves list[dict]."""
+    await app.handle_escape_command("/session start var_test")
+    app.append_session_turn("Var", "Response")
+
+    capsys.readouterr()
+
+    # With ids flag: var= should get list[str]
+    await app.handle_escape_command("/session list ids all var=my_ids")
+    capsys.readouterr()
+    my_ids = app.buffer_manager.get_script_var("my_ids")
+    assert isinstance(my_ids, list)
+    assert all(isinstance(x, str) for x in my_ids)
+
+    # Without ids flag: var= should get list[dict]
+    await app.handle_escape_command("/session list all var=my_full")
+    capsys.readouterr()
+    my_full = app.buffer_manager.get_script_var("my_full")
+    assert isinstance(my_full, list)
+    assert all(isinstance(x, dict) for x in my_full)
+
+
+@pytest.mark.anyio
+async def test_session_ids_is_protected(app, capsys):
+    """SESSION_IDS must be a protected variable — user scripts cannot overwrite it."""
+    await app.handle_escape_command("/session start protected_test")
+    app.append_session_turn("P", "R")
+    await app.handle_escape_command("/session list all")
+    capsys.readouterr()
+
+    assert app.buffer_manager.is_protected_var("SESSION_IDS")
+
+    with app.buffer_manager.script_vars.user_write():
+        with pytest.raises(ValueError, match="protected variable"):
+            app.buffer_manager.script_vars["SESSION_IDS"] = "tampered"

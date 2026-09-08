@@ -139,12 +139,15 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
         compressed_filter = None
         target_var = None
         since_dt = None
+        ids_only = False
 
         args = parts[2].split() if len(parts) >= 3 else []
         for arg in args:
             param = arg.lower()
             if param == "all":
                 limit = None
+            elif param == "ids":
+                ids_only = True
             elif param in ("compressed", "status=compressed"):
                 compressed_filter = True
             elif param in ("uncompressed", "status=uncompressed"):
@@ -200,10 +203,15 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
             since_dt=since_dt,
         )
 
+        # Always extract the sid list and populate both protected vars
+        session_ids = [s["sid"] for s in parsed_sessions]
         if hasattr(app, "buffer_manager") and app.buffer_manager:
             app.buffer_manager.set_script_var('SESSION_LIST', parsed_sessions, allow_protected=True)
+            app.buffer_manager.set_script_var('SESSION_IDS', session_ids, allow_protected=True)
             if target_var:
-                app.buffer_manager.set_script_var(target_var, parsed_sessions, allow_protected=True)
+                # var= targets the sid list when ids_only, full dicts otherwise
+                value_for_var = session_ids if ids_only else parsed_sessions
+                app.buffer_manager.set_script_var(target_var, value_for_var, allow_protected=True)
 
         if not parsed_sessions:
             print("No saved sessions found.")
@@ -219,19 +227,27 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
             filter_parts.append("compressed")
         elif compressed_filter is False:
             filter_parts.append("uncompressed")
+        if ids_only:
+            filter_parts.append("ids")
         filter_str = f"  [{', '.join(filter_parts)}]" if filter_parts else ""
 
-        print(f"\nAvailable Sessions:{filter_str}")
-        for idx, s in enumerate(parsed_sessions, 1):
-            name_str = f" (Name: '{s['cname']}')" if s["cname"] else ""
-            gz_str = " [compressed]" if s.get("compressed") else ""
-            print(f"  {idx}. {s['sid']}{name_str}{gz_str}")
-            print(f"     ├─ Prompt: \"{s['slug']}\"")
-            if s.get("snote"):
-                short_note = s["snote"][:60] + "..." if len(s["snote"]) > 60 else s["snote"]
-                print(f"     ├─ Notes: \"{short_note}\"")
-            print(f"     └─ Turns: {s['turns_cnt']} exchanges (Updated: {s['upd']})")
-        print("")
+        if ids_only:
+            print(f"\nSession IDs:{filter_str}")
+            for sid in session_ids:
+                print(f"  {sid}")
+            print("")
+        else:
+            print(f"\nAvailable Sessions:{filter_str}")
+            for idx, s in enumerate(parsed_sessions, 1):
+                name_str = f" (Name: '{s['cname']}')" if s["cname"] else ""
+                gz_str = " [compressed]" if s.get("compressed") else ""
+                print(f"  {idx}. {s['sid']}{name_str}{gz_str}")
+                print(f"     ├─ Prompt: \"{s['slug']}\"")
+                if s.get("snote"):
+                    short_note = s["snote"][:60] + "..." if len(s["snote"]) > 60 else s["snote"]
+                    print(f"     ├─ Notes: \"{short_note}\"")
+                print(f"     └─ Turns: {s['turns_cnt']} exchanges (Updated: {s['upd']})")
+            print("")
         return CommandResult.ok()
 
 
