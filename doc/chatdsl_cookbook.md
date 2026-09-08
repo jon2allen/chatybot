@@ -1119,6 +1119,92 @@ Summarize the recent 5 git commits above and create release notes for version 1.
 3. **Multiline Formatting:** Multiline user prompts are automatically wrapped inside `/multiline` ... `;;` ... `/multiline` blocks.
 4. **Execution:** The generated script can be executed immediately or shared with team members using `/script release_flow.chatdsl`.
 
+### 10.5 Session Filtering and Bulk Management with `foreach`
+- **Goal:** Filter workspace sessions by model or recency, inspect session memory allocations, and execute bulk operations (such as automated session cleanup) via `foreach`.
+- **Commands:** `/session list [model=...] [since=...] [ids] [var=...]`, `/mem`, `/dump`, `foreach ... in ...`, `/session delete`.
+- **Script:** `cookbook/10_5_session_management.chatdsl`
+- **Run:** `/script doc/cookbook/10_5_session_management.chatdsl` (or run interactively in REPL)
+
+```dsl
+# Filter sessions created by a specific model alias in compact ID format
+/session list model=test_model ids
+
+# Inspect memory footprint of SESSION_LIST and SESSION_IDS
+/mem
+
+# Dump session ID list
+/dump SESSION_IDS
+
+# Bulk delete matched sessions using foreach
+foreach item in SESSION_IDS
+  /echo ${item}
+  /session delete ${item}
+endfor
+```
+
+**Walkthrough**
+1. **Automatic Protected Variables:** Whenever `/session list` is executed, Chatybot automatically populates two protected script variables in memory:
+   - `${SESSION_LIST}`: A list of session summary dictionaries containing metadata (`sid`, `cname`, `slug`, `turns_cnt`, `upd`, `updated_at`, `snote`, `compressed`, `model_alias`).
+   - `${SESSION_IDS}`: A flat list of string session IDs (`list[str]`), perfectly tailored for looping without needing JSON parsing or manual extraction.
+2. **Compact Output with `ids`:** Passing the `ids` keyword (e.g. `/session list ids` or `/session list model=test_model ids`) displays a clean, compact ID-only list in the terminal instead of the full table, while still populating both `${SESSION_IDS}` and `${SESSION_LIST}`.
+3. **Recency Filtering with `since=`:** You can filter sessions by recency using duration strings like `since=7d` (last 7 days), `since=24h` (last 24 hours), or `since=30m` (last 30 minutes). Filters compound with `AND` logic (e.g., `/session list since=7d model=devstral ids`).
+4. **Custom Target Variable (`var=`):** Specifying `var=my_var` saves the results to a user-defined script variable. When combined with `ids`, `var=` receives the flat `list[str]` of session IDs; without `ids`, it receives the full `list[dict]` session objects.
+5. **Interactive or Scripted `foreach` Loop:** In ChatDSL scripts or interactively in the REPL, iterate over `${SESSION_IDS}` (or directly `SESSION_IDS`) using `foreach item in SESSION_IDS` ... `endfor` to automate batch deletion, export, or analysis across all matched sessions.
+
+**Live Interactive REPL Example**
+```text
+chat --> /session list ids
+
+Session IDs:  [ids]
+  test_model_20260908_083213_2
+  test_model_20260908_083213_1
+  test_model_20260908_083213
+  mistral_1_20260908_083130
+  test_model_20260908_083123_6
+  test_model_20260908_083123_5
+  test_model_20260908_083123_4
+  test_model_20260908_083123_3
+  test_model_20260908_083123_2
+  test_model_20260908_083123_1
+
+chat --> /mem
+
+Source                Size (KB)
+--------------------------------
+FILE_BUFFER                0.00
+...
+SESSION_LIST[] (10 items)       2.28
+SESSION_IDS[] (10 items)       0.27
+
+chat --> /dump SESSION_IDS
+SCRIPT_VAR 'SESSION_IDS': ['test_model_20260908_083213_2', 'test_model_20260908_083213_1', ...]
+
+chat --> /session list model=test_model ids
+
+Session IDs:  [model=test_model, ids]
+  test_model_20260908_083213_2
+  test_model_20260908_083213_1
+  test_model_20260908_083213
+  test_model_20260908_083123_6
+  test_model_20260908_083123_5
+  test_model_20260908_083123_4
+  test_model_20260908_083123_3
+  test_model_20260908_083123_2
+  test_model_20260908_083123_1
+  test_model_20260908_083123
+
+chat --> foreach item in SESSION_IDS
+Entering foreach loop for 'item' in 'SESSION_IDS'. Enter commands (type 'endfor' on a line by itself to finish):
+(for)> /echo ${item}
+(for)> /session delete ${item}
+(for)> endfor
+Executing: /echo ${item}
+test_model_20260908_083213_2
+Executing: /session delete ${item}
+Deleted session 'test_model_20260908_083213_2'.
+...
+```
+
 ---
 
 ## Chapter 11 — Macros & Reusable Prompts
@@ -1717,6 +1803,7 @@ Summarize the consensus algorithms mentioned and who discussed them.
 | 10.2 | Built-in profiles | `/profile use` | general/coding/explorer |
 | 10.3 | Dynamic sourcing with /source | `/source` state retention | new |
 | 10.4 | Codifying session history | `/chatdsl history` | new |
+| 10.5 | Session filtering & bulk management | `/session list` `ids` `since=` `foreach` | new |
 | 11.1 | Defining & invoking macros | `def` `%name()` | macro.chatdsl |
 | 11.2 | Bundled macro library | (narrative) | macro.chatdsl, menu.chatdsl |
 | 11.3 | Custom macro file | `/reloadmacros` | new |
