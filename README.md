@@ -683,8 +683,10 @@ A legacy single-file flat JSON store (`monolithic`) is also supported via `sessi
 #### **Session Commands**
 ```bash
 /session start project_alpha               # Start and persist new named session (sets ${SESSION_NAME})
-/session list [limit=N] [range=A:B] [all]  # List recent sessions with pagination (sets protected ${SESSION_LIST})
+/session list [limit=N] [range=A:B] [all]  # List sessions; always sets ${SESSION_LIST} (dicts) and ${SESSION_IDS} (sid strings)
+/session list ids                          # Compact sid-only output; ${SESSION_IDS} still set; var= gets sid list
 /session list model=test_model var=my_var  # Filter by model alias and save session objects to custom variable
+/session list ids var=old_ids             # Save filtered sid list to custom variable
 /session list [compressed|uncompressed]    # Filter sessions by compression state
 /session list since=7d                     # Filter to sessions updated in the last 7 days
 /session list since=24h model=devstral     # Compound AND filter: last 24 hours AND model match
@@ -705,6 +707,21 @@ A legacy single-file flat JSON store (`monolithic`) is also supported via `sessi
 > **`since=` filter syntax**: Use `d` (days), `h` (hours), or `m` (minutes) as the unit suffix.
 > All filters compound as **AND** — e.g. `since=7d model=gemini compressed` returns only sessions
 > matching all three criteria. The output header shows the active filter set for confirmation.
+>
+> **Protected variables set by `/session list`**:
+> - `${SESSION_LIST}` — always set; list of session summary dicts (`sid`, `cname`, `slug`, `turns_cnt`, `upd`, `snote`, `compressed`, `model_alias`).
+> - `${SESSION_IDS}` — always set; flat `list[str]` of session IDs in the same order as `SESSION_LIST`. Ready for `foreach` without any further extraction.
+>
+> When `var=<name>` is used with `ids`, the named variable receives the **sid list** (same as `${SESSION_IDS}`).
+> Without `ids`, `var=` receives the **full dict list** (same as `${SESSION_LIST}`).
+
+**Scripting example — delete all old devstral sessions:**
+```dsl
+/session list since=30d model=devstral ids all
+foreach sid in ${SESSION_IDS}
+    /session delete ${sid}
+endfor
+```
 
 #### **Merging Sessions from Different Models**
 When merging sessions that were generated with different AI models (for example, merging a `cohere_north` session with a `mistral_large` session via `/session merge comparison_report sess_1 sess_2`):

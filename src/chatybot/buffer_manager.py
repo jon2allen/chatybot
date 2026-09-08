@@ -40,6 +40,7 @@ class ScriptVars(UserDict):
             'SESSION_NAME',
             'SESSION_ENABLE',
             'SESSION_LIST',
+            'SESSION_IDS',
             'TOOL_LIST',
             'TOOL_HISTORY',
             'TOOL_REPLAY',
