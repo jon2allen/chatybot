@@ -86,7 +86,8 @@
       "current": "current",
       "model": "model",
       "var": "var",
-      "target": "target"
+      "target": "target",
+      "since": "since"
     },
     "ui": {
       "language_changed": "Language set to: {lang}",
@@ -339,7 +340,10 @@
       "var": "var",
       "variable": "var",
       "destino": "target",
-      "target": "target"
+      "target": "target",
+      "since": "since",
+      "desde": "since",
+      "a_partir_de": "since"
     },
     "ui": {
       "language_changed": "Idioma establecido en: {lang}",
@@ -816,7 +820,10 @@
       "var": "var",
       "variable": "var",
       "cible": "target",
-      "target": "target"
+      "target": "target",
+      "since": "since",
+      "depuis": "since",
+      "a_partir_de": "since"
     },
     "ui": {
       "language_changed": "Langue définie sur : {lang}",
@@ -1288,7 +1295,10 @@
       "var": "var",
       "变量": "var",
       "目标": "target",
-      "target": "target"
+      "target": "target",
+      "since": "since",
+      "自从": "since",
+      "从": "since"
     },
     "ui": {
       "language_changed": "语言设置为: {lang}",
@@ -1755,7 +1765,10 @@
       "var": "var",
       "variabile": "var",
       "destinazione": "target",
-      "target": "target"
+      "target": "target",
+      "since": "since",
+      "da": "since",
+      "dal": "since"
     },
     "ui": {
       "language_changed": "Lingua impostata su: {lang}",
@@ -2224,7 +2237,10 @@
       "var": "var",
       "متغير": "var",
       "هدف": "target",
-      "target": "target"
+      "target": "target",
+      "since": "since",
+      "منذ": "since",
+      "من": "since"
     },
     "ui": {
       "language_changed": "تغيرت اللغة لـ: {lang}",

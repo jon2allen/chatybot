@@ -370,8 +370,13 @@ class MonolithicJsonSessionStore(BaseSessionStore):
         limit: Optional[int] = 10,
         model_filter: Optional[str] = None,
         compressed_filter: Optional[bool] = None,
+        since_dt: Optional["datetime"] = None,
     ) -> List[Dict[str, Any]]:
         summaries = self._get_all_summaries()
+
+        since_ts: Optional[float] = None
+        if since_dt is not None:
+            since_ts = since_dt.timestamp()
 
         parsed: List[Dict[str, Any]] = []
         for s in summaries:
@@ -379,6 +384,10 @@ class MonolithicJsonSessionStore(BaseSessionStore):
                 continue
             if compressed_filter is not None and s.get("compressed") != compressed_filter:
                 continue
+            if since_ts is not None:
+                upd_ts = self._parse_iso_timestamp(s.get("updated_at"))
+                if upd_ts is None or upd_ts < since_ts:
+                    continue
             parsed.append(s)
 
         if limit is not None:
