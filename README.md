@@ -1004,6 +1004,17 @@ chat --> Create a blog post outline about ${topic}
 
 ### Change log
 
+September 8th, 2026 (v0.8.4)
+---------------------------
+- **Session Management & Filtering Automation**:
+  - Added `${SESSION_IDS}` protected variable and `ids` compact flag to `/session list` for automated batch workflows and clean terminal display.
+  - Added `since=` datetime filter (`<N>d`, `<N>h`, `<N>m`) with compounding `AND` logic to filter sessions by recency.
+  - Added target variable support (`var=<name>`) for `/session list`, assigning flat string IDs when `ids` is present or full session objects otherwise.
+  - Added protected variables `${TOOL_LIST}`, `${TOOL_HISTORY}`, `${TOOL_REPLAY}`, and `${REPLAY}` with `var=` support across tool and replay commands.
+- **Cookbook & Documentation**:
+  - Added Recipe 10.5 (*Session Filtering and Bulk Management with `foreach`*) to `doc/chatdsl_cookbook.md` and runnable script `doc/cookbook/10_5_session_management.chatdsl`.
+  - Updated all multilingual documentation and guides to reflect v0.8.4 compatibility.
+
 September 6th, 2026 (v0.8.3)
 ---------------------------
 - **Time-Travel Context Replay (`/replay`, `/tool replay`)**:
