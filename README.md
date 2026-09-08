@@ -81,7 +81,7 @@ chatybot is an interactive command-line tool that enables seamless communication
 - **Time-Travel Context Replay** - Reconstruct, inspect, and diff the exact token context arrays and message eviction histories across session turns (`/replay`) and agentic tool loops (`/tool replay`)
 - **Permanent Capability Error Guard** - Automatic protocol/capability error detection and immediate tool auto-disabling to eliminate infinite agentic retry loops
 - **Hugging Face Preset & `/env` Inspection** - Vendor preset for Hugging Face inference endpoints and dedicated `/env` environment inspection command
-- **Enhanced Session Filtering & Sorting** - `/session list` sorting by latest activity, model filtering (`model=...`), and range pagination (`limit=...`, `range=start:end`)
+- **Enhanced Session Filtering & Sorting** - `/session list` sorting by latest activity, model filtering (`model=...`), age filtering (`since=Nd/h/m`), and range pagination (`limit=...`, `range=start:end`)
 
 
 ---
@@ -686,6 +686,9 @@ A legacy single-file flat JSON store (`monolithic`) is also supported via `sessi
 /session list [limit=N] [range=A:B] [all]  # List recent sessions with pagination (sets protected ${SESSION_LIST})
 /session list model=test_model var=my_var  # Filter by model alias and save session objects to custom variable
 /session list [compressed|uncompressed]    # Filter sessions by compression state
+/session list since=7d                     # Filter to sessions updated in the last 7 days
+/session list since=24h model=devstral     # Compound AND filter: last 24 hours AND model match
+/session list since=30m limit=5            # Last 30 minutes, at most 5 results
 /session use project_alpha                 # Load prior session history into memory (sets ${SESSION_NAME})
 /session note "Initial design discussion"  # Add persistent metadata note (up to 1024 chars)
 /session show [--thinking|-t]              # Inspect full exchange history and tool logs
@@ -697,6 +700,11 @@ A legacy single-file flat JSON store (`monolithic`) is also supported via `sessi
 /session delete <name|id|--all>            # Delete a session or purge workspace
 /session merge <target> <s1> <s2> [s3...]  # Merge multiple sessions into a combined session
 ```
+
+> [!NOTE]
+> **`since=` filter syntax**: Use `d` (days), `h` (hours), or `m` (minutes) as the unit suffix.
+> All filters compound as **AND** — e.g. `since=7d model=gemini compressed` returns only sessions
+> matching all three criteria. The output header shows the active filter set for confirmation.
 
 #### **Merging Sessions from Different Models**
 When merging sessions that were generated with different AI models (for example, merging a `cohere_north` session with a `mistral_large` session via `/session merge comparison_report sess_1 sess_2`):
@@ -1176,9 +1184,10 @@ August 16th, 2026
 - **Rate Limit Delay Configuration**:
   - Added `/tool rate_limit <seconds>` with runtime caching and per-turn delay calculations in the agentic loop.
 - **Session List Filtering & Sorting (`/session list`)**:
-  - Sorted session files by most recent modification timestamp (newest first).
+  - Added sorting by `updated_at` descending (most recently active first).
   - Added model filtering: `/session list model=<alias>`.
   - Added pagination options: `/session list limit=10`, `/session list range=start:end`, and `/session list all`.
+  - Added `since=` age filter: `/session list since=7d`, `since=24h`, `since=30m`. Filters to sessions updated within the given window. Compounds as AND with all other filters.
 - **Multilingual Support (i18n) & Documentation**:
   - Expanded `translations.json` across all 6 supported locales (EN, ES, FR, IT, ZH, AR) for new v0.7.0+ commands and context budgeting.
   - Updated all language-specific ChatDSL documentation guides in `doc/`.

@@ -138,6 +138,7 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
         model_filter = None
         compressed_filter = None
         target_var = None
+        since_dt = None
 
         args = parts[2].split() if len(parts) >= 3 else []
         for arg in args:
@@ -170,6 +171,25 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
                 target_var = arg[4:].strip().lstrip("$")
             elif param.startswith("target="):
                 target_var = arg[7:].strip().lstrip("$")
+            elif param.startswith("since="):
+                raw = param[6:]
+                try:
+                    if raw.endswith("d"):
+                        from datetime import timedelta
+                        delta = timedelta(days=float(raw[:-1]))
+                    elif raw.endswith("h"):
+                        from datetime import timedelta
+                        delta = timedelta(hours=float(raw[:-1]))
+                    elif raw.endswith("m"):
+                        from datetime import timedelta
+                        delta = timedelta(minutes=float(raw[:-1]))
+                    else:
+                        print(f"Invalid since= unit '{raw}'. Use d (days), h (hours), or m (minutes). E.g. since=7d")
+                        delta = None
+                    if delta is not None:
+                        since_dt = datetime.now() - delta
+                except ValueError:
+                    print(f"Invalid since= value '{raw}'. Use numeric values like since=7d, since=24h, since=30m")
 
         store = app._get_session_store()
         parsed_sessions = store.list_sessions(
@@ -177,6 +197,7 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
             limit=limit,
             model_filter=model_filter,
             compressed_filter=compressed_filter,
+            since_dt=since_dt,
         )
 
         if hasattr(app, "buffer_manager") and app.buffer_manager:
@@ -188,7 +209,19 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
             print("No saved sessions found.")
             return CommandResult.ok()
 
-        print("\nAvailable Sessions:")
+        # Build a compact filter summary for the header
+        filter_parts = []
+        if model_filter:
+            filter_parts.append(f"model={model_filter}")
+        if since_dt:
+            filter_parts.append(f"since={since_dt.strftime('%Y-%m-%d %H:%M')}")
+        if compressed_filter is True:
+            filter_parts.append("compressed")
+        elif compressed_filter is False:
+            filter_parts.append("uncompressed")
+        filter_str = f"  [{', '.join(filter_parts)}]" if filter_parts else ""
+
+        print(f"\nAvailable Sessions:{filter_str}")
         for idx, s in enumerate(parsed_sessions, 1):
             name_str = f" (Name: '{s['cname']}')" if s["cname"] else ""
             gz_str = " [compressed]" if s.get("compressed") else ""
@@ -200,6 +233,7 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
             print(f"     └─ Turns: {s['turns_cnt']} exchanges (Updated: {s['upd']})")
         print("")
         return CommandResult.ok()
+
 
     elif subcmd == "use":
         if len(parts) < 3:

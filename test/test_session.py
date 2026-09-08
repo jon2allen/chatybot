@@ -393,4 +393,83 @@ async def test_session_list_populates_protected_session_list_and_custom_var(app,
 
 
 
+@pytest.mark.anyio
+async def test_session_list_since_filter(app, capsys):
+    """Test that /session list since= correctly filters by age."""
+    import time
+    from datetime import datetime, timedelta
+
+    # Create a session now — it will have a recent updated_at
+    await app.handle_escape_command("/session start recent_session")
+    app.append_session_turn("Recent prompt", "Recent response")
+
+    capsys.readouterr()
+
+    # since=1d should include the just-created session
+    await app.handle_escape_command("/session list since=1d all")
+    captured = capsys.readouterr()
+    assert "recent_session" in captured.out
+    assert "[model=None, since=" in captured.out or "since=" in captured.out
+
+    # since=1m should also include it (was just created)
+    await app.handle_escape_command("/session list since=1m all")
+    captured = capsys.readouterr()
+    assert "recent_session" in captured.out
+
+    # since=1h should also include it
+    await app.handle_escape_command("/session list since=1h all")
+    captured = capsys.readouterr()
+    assert "recent_session" in captured.out
+
+
+@pytest.mark.anyio
+async def test_session_list_since_compound_and(app, capsys):
+    """Test that since= and model= compound as AND filter."""
+    await app.handle_escape_command("/session start compound_test")
+    app.append_session_turn("Compound prompt", "Compound response")
+
+    capsys.readouterr()
+
+    # model= that doesn't match + since=1d → should return nothing (the mock model alias won't match "no_such_model")
+    await app.handle_escape_command("/session list since=1d model=no_such_model all")
+    captured = capsys.readouterr()
+    assert "No saved sessions found" in captured.out or "compound_test" not in captured.out
+
+    # since=1d with no model filter → should show the session
+    await app.handle_escape_command("/session list since=1d all")
+    captured = capsys.readouterr()
+    assert "compound_test" in captured.out
+
+
+@pytest.mark.anyio
+async def test_session_list_since_invalid_unit(app, capsys):
+    """Test that invalid since= unit prints an error and does not crash."""
+    await app.handle_escape_command("/session start err_test")
+    app.append_session_turn("Err prompt", "Err response")
+
+    capsys.readouterr()
+
+    # Bad unit — should print error and fall back to showing all (no since filter applied)
+    await app.handle_escape_command("/session list since=7x all")
+    captured = capsys.readouterr()
+    assert "Invalid since= unit" in captured.out
+
+    # Bad value — non-numeric
+    await app.handle_escape_command("/session list since=abcd all")
+    captured = capsys.readouterr()
+    assert "Invalid since=" in captured.out
+
+
+@pytest.mark.anyio
+async def test_session_list_since_header_shows_filters(app, capsys):
+    """Test that the output header reflects active filters when since= or model= is set."""
+    await app.handle_escape_command("/session start header_test")
+    app.append_session_turn("Header prompt", "Header response")
+
+    capsys.readouterr()
+
+    await app.handle_escape_command("/session list since=7d all")
+    captured = capsys.readouterr()
+    # The header should contain the filter summary with since date
+    assert "since=" in captured.out
 

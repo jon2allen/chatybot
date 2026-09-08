@@ -5,6 +5,7 @@ Defines the contract for all pluggable session store implementations.
 
 import threading
 from abc import ABC, abstractmethod
+from datetime import datetime
 from typing import Dict, Any, List, Tuple, Optional
 
 
@@ -67,11 +68,16 @@ class BaseSessionStore(ABC):
         limit: Optional[int] = 10,
         model_filter: Optional[str] = None,
         compressed_filter: Optional[bool] = None,
+        since_dt: Optional[datetime] = None,
     ) -> List[Dict[str, Any]]:
         """
         List all saved sessions sorted by most recently updated.
         Returns lightweight summaries:
             [{'sid': ..., 'cname': ..., 'slug': ..., 'turns_cnt': ..., 'upd': ..., 'snote': ..., 'compressed': ...}, ...]
+
+        Args:
+            since_dt: If provided, only include sessions whose updated_at >= this datetime.
+                      Accepts a datetime object (naive = local time).
         """
         pass
 
