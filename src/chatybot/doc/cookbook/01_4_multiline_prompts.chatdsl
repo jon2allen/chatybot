@@ -1,0 +1,13 @@
+# Recipe 1.4 - Multiline prompts done right
+# Goal: send a structured multi-line prompt; show the ;; terminator style.
+# Run: /script doc/cookbook/01_4_multiline_prompts.chatdsl
+
+/model mistral_1
+/multiline
+Summarize the following points as one paragraph each:
+1. Economic impact of remote work
+2. Social changes from remote work
+3. Environmental effects of remote work
+;;
+/multiline
+/save 01_4_summary.txt

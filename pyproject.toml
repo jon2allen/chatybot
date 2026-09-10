@@ -40,4 +40,11 @@ chatybot-migrate-sessions = "chatybot.migrate_sessions:main"
 chatybot-setup-keys = "chatybot.setup_keys:main"
 
 [tool.setuptools.package-data]
-chatybot = ["*.toml", "*.chatdsl", "profiles/*.chatdsl", "translations.json"]
+chatybot = [
+    "*.toml",
+    "*.chatdsl",
+    "profiles/*.chatdsl",
+    "translations.json",
+    "doc/*",
+    "doc/**/*",
+]

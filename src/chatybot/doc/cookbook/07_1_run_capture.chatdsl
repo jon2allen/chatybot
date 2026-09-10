@@ -1,0 +1,10 @@
+# Recipe 7.1 - /run and capturing output
+# Goal: run a shell command and use its captured outputs.
+# Run: /script doc/cookbook/07_1_run_capture.chatdsl
+
+/run date +%Y-%m-%d
+/echo "stdout: ${RUN_COMPLETION}"
+/echo "exit: ${RUN_EXIT_CODE}"
+/run ls -1 *.txt
+/echo "files:"
+/echo "${LAST_COMPLETION}"

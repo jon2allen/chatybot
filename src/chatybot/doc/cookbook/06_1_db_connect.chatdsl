@@ -1,0 +1,11 @@
+# Recipe 6.1 - Create/connect a DB
+# Goal: /setdb, /dblist, /dblog the response loop.
+# Run: /script doc/cookbook/06_1_db_connect.chatdsl
+
+/dblist
+/setdb research_log
+/model mistral_1
+Summarize the latest NIST guidance on password length in three bullets.
+/save 06_1_pw.txt
+/dblog
+/echo "Response logged to research_log"

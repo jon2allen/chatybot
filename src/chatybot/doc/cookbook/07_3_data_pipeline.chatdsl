@@ -1,0 +1,13 @@
+# Recipe 7.3 - Data pipeline: shell -> prompt -> save
+# Goal: capture git log via /run, feed into a prompt, save a summary.
+# Run: /script doc/cookbook/07_3_data_pipeline.chatdsl
+
+/run git log --oneline -20
+/setvar log {LAST_COMPLETION}
+/model mistral_1
+/multiline
+Summarize the recent activity from this git log:
+${log}
+;;
+/multiline
+/save 07_3_activity.txt

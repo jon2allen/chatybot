@@ -1,0 +1,10 @@
+# Recipe 12.1 - Switching script language
+# Goal: /language es and write with localized command aliases.
+# Run: /script doc/cookbook/12_1_language_switch.chatdsl
+# Spanish-flavored; aliases verified in doc/multilingual_cross_reference.md
+
+/language es
+/modelo mistral_1
+/sistema "Eres un traductor preciso."
+Traduce la siguiente frase al ingles: "El cielo esta nublado."
+/guardar 12_1_traduccion.txt

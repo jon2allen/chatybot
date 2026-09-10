@@ -1,0 +1,12 @@
+# Recipe 5.5 - Rerank from a DB
+# Goal: /documents db=<name> combined with /setdb.
+# Run: /script doc/cookbook/05_5_rerank_db.chatdsl
+# Requires: a TinyDB named knowledge_base (created on first /setdb if absent)
+
+/setdb knowledge_base
+/model bge_reranker_f16
+/documents db=knowledge_base
+/rerank "encryption standards" top_n=3 return=text
+/setvar kb_hits {LAST_RESPONSE}
+/echo "KB hits:"
+/echo "${kb_hits}"

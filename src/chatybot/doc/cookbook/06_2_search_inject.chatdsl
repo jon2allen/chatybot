@@ -1,0 +1,14 @@
+# Recipe 6.2 - Search & inject (Research-Log pattern)
+# Goal: /searchdb -> /loadvar -> ${history} in prompt -> /dblog.
+# Run: /script doc/cookbook/06_2_search_inject.chatdsl
+
+/setdb research_log
+/searchdb "password guidance 2024"
+/loadvar history ALL
+/model mistral_1
+/multiline
+Given prior research: ${history}
+What is the recommended transition plan for password policy?
+;;
+/multiline
+/dblog

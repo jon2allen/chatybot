@@ -1,0 +1,10 @@
+# Recipe 7.2 - Safe vs unsafe mode
+# Goal: /run_safe, /run_unsafe askfirst.
+# Run: /script doc/cookbook/07_2_run_safe.chatdsl
+# Note: /run_unsafe askfirst will prompt Y/N before each command.
+
+/run_safe
+/run echo "safe path confirmed"
+/run_unsafe askfirst
+/run echo "unsafe path confirmed"
+/run_safe

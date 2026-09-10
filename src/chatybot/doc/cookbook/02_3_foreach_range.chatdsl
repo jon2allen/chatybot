@@ -1,0 +1,11 @@
+# Recipe 2.3 - foreach over range()
+# Goal: iterate a numeric sequence, run one prompt per step, accumulate.
+# Run: /script doc/cookbook/02_3_foreach_range.chatdsl
+
+/model mistral_1
+foreach num in range(1:4:1)
+  /echo "Generating table for x=${num}"
+  Generate the multiplication table for ${num} up to 10.
+  /save 02_3_table_${num}.txt
+endfor
+/echo "Done"

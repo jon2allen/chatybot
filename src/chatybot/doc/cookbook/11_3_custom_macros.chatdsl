@@ -1,0 +1,11 @@
+# Recipe 11.3 - Custom macro file + /reloadmacros
+# Goal: author a project macro set and reload it at runtime.
+# Run: /script doc/cookbook/11_3_custom_macros.chatdsl
+# Requires: a file my_macros.chatdsl in the working directory containing a def my_review(language) = "..."
+
+/reloadmacros my_macros.chatdsl
+/filebank1 some_code.py
+/model mistral_1
+%my_review(python)
+Review the code in {filebank1} for bugs.
+/save 11_3_review.txt

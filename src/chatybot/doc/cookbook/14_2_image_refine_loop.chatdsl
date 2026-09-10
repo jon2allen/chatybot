@@ -1,0 +1,22 @@
+# Recipe 14.2 - Iterative image refinement loop (novel)
+# Goal: generate, critique with vision, regenerate using the critique, repeat.
+# Run: /script doc/cookbook/14_2_image_refine_loop.chatdsl x="a poster about ocean conservation"
+# Combines: /imagine + /loadimage vision + foreach (never combined in the repo)
+
+if ${x} != "" then set prompt = ${x}
+if ${prompt} == "" then set prompt = "a poster about ocean conservation"
+set critique = ""
+
+/imagedir images/
+/imagesize 1024x1024
+foreach pass in range(1:4:1)
+  /model mistral_1
+  /imagine ${prompt} version ${pass}, incorporating: ${critique}
+  /saveimage images/14_2_pass_${pass}.jpg
+  /loadimage images/14_2_pass_${pass}.jpg imagebank1
+  /model gemini_flash
+  Critique this image for composition and color balance. Give 3 concrete improvements in one line: {imagebank1}
+  /save 14_2_critique_${pass}.txt
+  /setvar critique {LAST_RESPONSE}
+endfor
+/echo "Refinement loop done"

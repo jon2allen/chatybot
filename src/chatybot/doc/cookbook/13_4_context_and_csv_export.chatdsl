@@ -1,0 +1,20 @@
+# Recipe 13.4: Context Budget Inspection & CSV Trace Exports
+# Exercises: /context, /context_limit, /session export csv, /tool history csv
+
+/context_limit 12000
+/auto_truncate on
+/session start context_trace_demo
+
+/model mistral_1
+Explain the architecture of LSM trees in database storage engines.
+
+# Inspect context utilization breakdown (session history vs buffers)
+/context
+/context session
+
+/model gemini_flash
+What are the trade-offs of LSM trees compared to B-Trees?
+
+# Export session metrics and conversation turns to CSV
+/session export csv 13_4_session_turns.csv -t
+/echo "Exported session conversation turns to 13_4_session_turns.csv"

@@ -1,0 +1,19 @@
+# Recipe 10.5 - Session Filtering and Bulk Management
+# Goal: Filter sessions by model or age and execute bulk operations with foreach.
+# Run: /script doc/cookbook/10_5_session_management.chatdsl
+# Note: /session list automatically populates ${SESSION_LIST} (dicts) and ${SESSION_IDS} (strings).
+
+# List all sessions associated with model 'test_model' in compact ID-only format
+/session list model=test_model ids
+
+# Inspect populated script variables and memory allocation
+/mem
+/dump SESSION_IDS
+
+# Bulk delete all matched sessions using foreach
+foreach item in SESSION_IDS
+  /echo "Cleaning session: ${item}"
+  /session delete ${item}
+endfor
+
+/echo "Bulk session cleanup complete."

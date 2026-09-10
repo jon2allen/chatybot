@@ -1,0 +1,28 @@
+# Recipe 4.2 - Reusable comparison template
+# Goal: parameterized so a user drops in their own topic/models without editing the body.
+# Run: /script doc/cookbook/04_2_comparison_template.chatdsl x="photosynthesis" y=mistral_1 z=gemma_3
+
+if ${x} != "" then set topic = ${x}
+if ${topic} == "" then set topic = "the water cycle"
+if ${y} != "" then set model1 = ${y}
+if ${model1} == "" then set model1 = "mistral_1"
+if ${z} != "" then set model2 = ${z}
+if ${model2} == "" then set model2 = "gemma_3"
+set judge = "gemini_flash"
+
+/model ${model1}
+Generate a study guide on ${topic}.
+/save 04_2_a.txt
+/filebank1 04_2_a.txt
+
+/model ${model2}
+Generate a study guide on ${topic}.
+/save 04_2_b.txt
+/filebank2 04_2_b.txt
+
+/model ${judge}
+/multiline
+Compare {filebank1} and {filebank2} for clarity, accuracy, and completeness on ${topic}. Give scores and a winner.
+;;
+/multiline
+/save 04_2_verdict.txt

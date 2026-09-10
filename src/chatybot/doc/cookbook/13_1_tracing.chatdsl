@@ -1,0 +1,10 @@
+# Recipe 13.1 - Tracing
+# Goal: turn on traces and read them.
+# Run: /script doc/cookbook/13_1_tracing.chatdsl
+
+/trace tps on
+/trace rawpayload on
+/model mistral_1
+Say hello.
+/trace tps off
+/trace rawpayload off

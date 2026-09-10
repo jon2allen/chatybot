@@ -1,0 +1,16 @@
+# Recipe 2.5 - Procedures: defproc / endproc / local / /proc
+# Goal: define a reusable procedure with a parameter and local state.
+# Run: /script doc/cookbook/02_5_procedures.chatdsl
+
+defproc find_and_stop(target)
+  local found = false
+  foreach num in range(10:50:10)
+    if ${num} == ${target} then break
+    /echo "checking ${num} (looking for ${target})"
+    /dump num
+  endfor
+  /echo "done searching for ${target}"
+endproc
+
+/proc find_and_stop target="30"
+/proc find_and_stop target="20"

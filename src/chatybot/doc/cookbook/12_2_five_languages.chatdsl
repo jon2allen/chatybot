@@ -1,0 +1,31 @@
+# Recipe 12.2 - One task, five languages
+# Goal: run the same translation recipe under EN/ES/FR/ZH/IT.
+# Run: /script doc/cookbook/12_2_five_languages.chatdsl
+# Note: Arabic (ar) aliases are not in doc/multilingual_cross_reference.md; verify before adding.
+
+set phrase = "The sky is cloudy."
+
+/language en
+/model mistral_1
+Translate to Spanish: ${phrase}
+/save 12_2_en.txt
+
+/language es
+/modelo mistral_1
+Traduce al ingles: ${phrase}
+/save 12_2_es.txt
+
+/language fr
+/modele mistral_1
+Traduire en anglais: ${phrase}
+/save 12_2_fr.txt
+
+/language zh
+/模型 mistral_1
+翻译成英文: ${phrase}
+/save 12_2_zh.txt
+
+/language it
+/modello mistral_1
+Traduci in inglese: ${phrase}
+/save 12_2_it.txt

@@ -1,0 +1,34 @@
+# Recipe 14.9 - Self-improving prompt via macro + judge (novel)
+# Goal: run a macro prompt, judge the output, use the critique to author an improved macro, reload, re-run, A/B.
+# Run: /script doc/cookbook/14_9_self_improve_macro.chatdsl
+# Combines: macros (def/%) + /reloadmacros + judge + filebank compare (no repo example invokes macros at all)
+# Requires: my_macros.chatdsl defining expert_answer(topic)
+
+# Round 1: baseline macro
+/reloadmacros my_macros.chatdsl
+/model mistral_1
+%expert_answer(rust ownership)
+/save 14_9_r1.txt
+/filebank1 14_9_r1.txt
+
+# Judge rewrites the prompt template as a new def statement
+/model gemini_flash
+/multiline
+Critique this answer about rust ownership for technical correctness and clarity. Output ONLY a rewritten, better prompt template that would fix the weaknesses, in the form: def expert_answer(topic) = "..."
+;;
+/multiline
+/save my_macros_v2.chatdsl
+
+# Round 2: swap in the improved macro and re-run
+/reloadmacros my_macros_v2.chatdsl
+/model mistral_1
+%expert_answer(rust ownership)
+/save 14_9_r2.txt
+/filebank2 14_9_r2.txt
+
+/model gemini_flash
+/multiline
+Compare {filebank1} (round 1) and {filebank2} (round 2). Did the rewritten prompt improve the answer? Score both 0-10.
+;;
+/multiline
+/save 14_9_verdict.txt

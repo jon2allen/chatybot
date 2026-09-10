@@ -1,0 +1,16 @@
+# Recipe 14.1 - Autonomous research agent (novel)
+# Goal: a tool-calling agent reads a directory, reranks for relevance, logs a synthesis to a DB.
+# Run: /script doc/cookbook/14_1_research_agent.chatdsl
+# Combines: /tool loop + /documents dir= + /rerank + /setdb + /dblog (never combined in the repo)
+
+/setdb research_log
+/model devstral_1
+/tool on
+/tool enable all
+/tool auto on
+/tool max_turns 30
+/tool rate_limit 2
+/system You are a research agent. Use file tools to read documents in the working directory, then synthesize a 5-bullet briefing on "rate limiting". After synthesizing, state READY TO LOG.
+/tool loop 30 force
+/dblog
+/echo "Briefing logged to research_log DB"

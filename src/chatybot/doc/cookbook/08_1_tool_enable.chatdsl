@@ -1,0 +1,10 @@
+# Recipe 8.1 - Enabling tools
+# Goal: turn on tools and configure limits.
+# Run: /script doc/cookbook/08_1_tool_enable.chatdsl
+
+/tool on
+/tool enable all
+/tool auto on
+/tool max_turns 30
+/tool rate_limit 2
+/tool list

@@ -668,6 +668,22 @@ class HelpSystem:
             examples=["/quit"]
         ))
         
+        # Documentation command
+        self.register_command(CommandHelp(
+            name="/docs",
+            category="system",
+            short_desc="List or view bundled documentation, guides, and cookbook examples",
+            usage="/docs [filename|cookbook|path]",
+            long_desc="List or display bundled documentation guides, specs, and ChatDSL cookbook recipes.\n\n"
+                      "Modes:\n"
+                      "  /docs                  - List all available bundled guides and recipes\n"
+                      "  /docs <filename>       - View a specific document (e.g. chatdsl_cookbook.md)\n"
+                      "  /docs cookbook         - List all ChatDSL cookbook recipe files\n"
+                      "  /docs path             - Show filesystem path to documentation directory",
+            examples=["/docs", "/docs cookbook", "/docs chatdsl_guide.md", "/docs cookbook/01_1_first_automation.chatdsl", "/docs path"],
+            aliases=["/doc"]
+        ))
+        
         # Shell execution and tool extraction commands
         self.register_command(CommandHelp(
             name="/run",
