@@ -658,13 +658,19 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
         return await handle_replay_command(ctx, raw_tokens)
 
     elif subcmd == "query":
+        import shlex
         from chatybot.query.base import QueryRequest, get_query_engine
         from chatybot.query.date_parser import parse_datetime_expr, parse_date_range
 
-        raw_args = parts[2:]
-        if not raw_args:
+        raw_str = parts[2].strip() if len(parts) > 2 else ""
+        if not raw_str:
             print("Usage: /session query <terms...> [or|and] [ids] [full] [since=<date>] [until=<date>] [range=<date to date>] [--scratch|--no-scratch] [limit=<N>] [var=<varname>]")
             return CommandResult.ok()
+
+        try:
+            raw_args = shlex.split(raw_str)
+        except ValueError:
+            raw_args = raw_str.split()
 
         terms = []
         operator = "AND"
@@ -686,9 +692,9 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
                 operator = "OR"
             elif arg_lower in ("and", "--and"):
                 operator = "AND"
-            elif arg_lower in ("ids", "--ids", "ids_only"):
+            elif arg_lower in ("ids", "--ids", "ids_only", "--ids_only"):
                 ids_only = True
-            elif arg_lower in ("full", "--full"):
+            elif arg_lower in ("full", "--full", "-f"):
                 full_mode = True
             elif arg_lower in ("--scratch", "scratch"):
                 include_scratch = True
@@ -702,7 +708,6 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
                 until_dt = parse_datetime_expr(until_val)
             elif arg_lower.startswith("range="):
                 range_val = arg.split("=", 1)[1].strip("\"'")
-                # If range was space-separated like range="2026-03-01 to 2026-05-01"
                 r_start, r_end = parse_date_range(range_val)
                 if r_start:
                     since_dt = r_start
@@ -717,8 +722,11 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
                 target_var = arg.split("=", 1)[1].strip()
             elif arg_lower.startswith("engine="):
                 engine_name = arg.split("=", 1)[1].strip()
+            elif arg_lower.startswith("terms=") or arg_lower.startswith("text=") or arg_lower.startswith("query="):
+                val = arg.split("=", 1)[1].strip("\"'")
+                if val:
+                    terms.extend(val.split())
             else:
-                # Remove quotes if present
                 clean_term = arg.strip("\"'")
                 if clean_term:
                     terms.append(clean_term)
@@ -808,12 +816,18 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
         return CommandResult.ok()
 
     elif subcmd == "get":
+        import shlex
         from chatybot.tools.context_query import session_get
 
-        raw_args = parts[2:]
-        if not raw_args:
+        raw_str = parts[2].strip() if len(parts) > 2 else ""
+        if not raw_str:
             print("Usage: /session get <session_id|name|active> [turn=<N>|all] [prompt|response|both|thinking] [var=<varname>]")
             return CommandResult.ok()
+
+        try:
+            raw_args = shlex.split(raw_str)
+        except ValueError:
+            raw_args = raw_str.split()
 
         target = raw_args[0].strip("\"'")
         turn_id = None
