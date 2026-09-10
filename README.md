@@ -82,6 +82,7 @@ chatybot is an interactive command-line tool that enables seamless communication
 - **Permanent Capability Error Guard** - Automatic protocol/capability error detection and immediate tool auto-disabling to eliminate infinite agentic retry loops
 - **Hugging Face Preset & `/env` Inspection** - Vendor preset for Hugging Face inference endpoints and dedicated `/env` environment inspection command
 - **Enhanced Session Filtering & Sorting** - `/session list` sorting by latest activity, model filtering (`model=...`), age filtering (`since=Nd/h/m`), and range pagination (`limit=...`, `range=start:end`)
+- **Non-Destructive Session Query & Turn Extraction** - Search past session turns, conversation history, notes, and scratchpads with boolean AND/OR matching, date constraints (`since=`, `until=`, `range=`), fast discovery (`ids`), and entire session byte size tracking (`/session query`, `session_search`). Extract turn prompts, responses, or reasoning traces read-only without switching sessions or polluting context (`/session get`, `session_get`).
 
 
 ---
@@ -321,6 +322,8 @@ chat --> Hello!           # Start chatting!
 | `/imagebank{1-5} <file>` | Load image into bank for vision analysis | `/imagebank1 cat.jpg` |
 | `/imagebank{1-5} clear` | Clear an image bank | `/imagebank1 clear` |
 | `/session [subcommand]` | Manage multi-turn session persistence, note annotations, exports, merging, compression, and pruning | `/session start my_project` |
+| `/session query [terms] [options]` | Search turns, notes, and scratchpads with boolean logic, date filters, and whole session byte sizes | `/session query "error" since=7d ids` |
+| `/session get <sid|active> [turn=N] [part]` | Extract turn prompts, responses, or thoughts read-only without switching sessions | `/session get sess_1 turn=1 both var=turn_data` |
 | `/listmacros [filter]` | List loaded macros with signatures, templates, and search filter | `/listmacros debug` |
 | `/reloadmacros [file]` | Reload macro definitions from `macro.chatdsl` or a custom file | `/reloadmacros` |
 | `/str_search "<pat>" <var> [flags] [dest]` | Search substring patterns in a text variable into `${STR_SEARCH}` (flags: `c`=count, `m`=positions, `i`=ignore case) | `/str_search "error" ${LOG} ic count_var` |
@@ -701,6 +704,9 @@ A legacy single-file flat JSON store (`monolithic`) is also supported via `sessi
 /session info                              # Display aggregate workspace disk metrics and stats
 /session delete <name|id|--all>            # Delete a session or purge workspace
 /session merge <target> <s1> <s2> [s3...]  # Merge multiple sessions into a combined session
+/session query "keyword" [since=7d] [ids]  # Search turns, notes, and scratchpad with date & size metrics
+/session query since=24h ids               # Filter-only discovery of all recent sessions with sizes
+/session get <sid|active> [turn=N] [part]  # Read-only extraction without switching active sessions
 ```
 
 > [!NOTE]
@@ -722,6 +728,66 @@ foreach sid in ${SESSION_IDS}
     /session delete ${sid}
 endfor
 ```
+
+#### **Non-Destructive Session Query & Extraction (`/session query`, `/session get`)**
+
+Chatybot provides high-speed, non-destructive search and extraction across conversation histories, turn exchanges, metadata notes, and scratchpads without switching sessions or polluting the model's active context window.
+
+##### **1. Querying Sessions (`/session query`)**
+Search across active and persisted sessions using the pluggable `GrepQueryEngine`:
+```bash
+# Basic keyword search (displays matching turns with 80-char snippets and whole session size)
+/session query "database migration"
+
+# Boolean OR search
+/session query database migration or
+
+# Restrict search to messages updated in the last 7 days
+/session query "auth error" since=7d
+
+# Search within an explicit date range
+/session query "token expired" range="2026-03-01 to 2026-05-01"
+
+# Fast discovery mode: return matching session IDs and full session storage sizes
+/session query "binary search" ids var=MATCH_IDS
+
+# Filter-only discovery: list all sessions updated in the last 24 hours with their sizes
+/session query since=24h ids
+
+# Full-content mode: view complete turn prompt and response without snippet truncation
+/session query "architecture decision" full
+```
+
+* **Storage Footprint Display**: Every match and discovered session reports its **entire session storage size** on disk (e.g. `8.2 KB` or `45.1 KB`), cached via a 3-tier lazy evaluation architecture to eliminate redundant disk I/O.
+* **Automatic Script Variables**:
+  * `${SESSION_QUERY}`: Always populated with the query result dictionary (`total_matches`, `matches`, `session_ids`, `sessions`).
+  * `var=<name>`: When `ids` is specified, saves the flat list of session IDs to `<name>`; otherwise, saves the full query dictionary.
+  * In `ids` mode, `${SESSION_IDS}` is also automatically updated, allowing immediate pipelining into `foreach`.
+
+##### **2. Non-Destructive Turn Extraction (`/session get`)**
+Extract turns from any past session on disk or the active session without loading it into active memory (`/session use`), keeping your current conversation pristine:
+```bash
+# Extract both prompt and response for turn 1 of a past session
+/session get sess_20260908_083123 turn=1 both var=FIRST_TURN
+
+# Extract only the assistant response
+/session get sess_20260908_083123 turn=2 response var=BOT_REPLY
+
+# Extract model thinking/reasoning trace
+/session get sess_20260908_083123 turn=1 thinking
+
+# Extract all turns from the active session into a structured array
+/session get active turn=all both var=ALL_TURNS
+```
+
+* **Protected Variable**: Populates `${SESSION_GET}` with the extracted dictionary (`session_id`, `turn_id`, `prompt`, `response`, `thinking`, `model_alias`, `size_bytes`).
+* **Field Access**: When saved into a variable via `var=MY_VAR`, access fields directly in ChatDSL: `${MY_VAR}.prompt`, `${MY_VAR}.response`, or array indices `${MY_VAR}[0].prompt` when `turn=all`.
+
+##### **3. Agentic Tool Calling (`session_search`, `session_get`)**
+Both capabilities are exposed as native tools for LLM tool calling in agentic loops:
+* `session_search(query="", since="7d", ids_only=True)`: Enables the AI model to discover relevant past interactions, notes, or scratchpads, returning matching sessions with their whole-session byte sizes.
+* `session_get(session_id="...", turn=1, part="both")`: Enables the model to selectively pull prior context into its working memory on demand without bloating its context window.
+
 
 #### **Merging Sessions from Different Models**
 When merging sessions that were generated with different AI models (for example, merging a `cohere_north` session with a `mistral_large` session via `/session merge comparison_report sess_1 sess_2`):
@@ -1003,6 +1069,20 @@ chat --> Create a blog post outline about ${topic}
 ```
 
 ### Change log
+
+September 10th, 2026 (v0.8.5)
+---------------------------
+- **Non-Destructive Session Query & Extraction Engine (`/session query`, `/session get`)**:
+  - Added `/session query` command and `session_search` tool to search session turns, conversation history, notes, and scratchpad files with boolean AND/OR matching.
+  - Implemented rich date range and timestamp constraints (`since=`, `until=`, `range=`) supporting relative expressions (`today`, `yesterday`, `7d`, `24h`) and date ranges (`2026-03-01..2026-05-01`).
+  - Added fast discovery mode (`ids` / `--ids`) to return matched session IDs, and full-content mode (`full` / `--full`) to inspect unabbreviated exchanges.
+  - Added `/session get` command and `session_get` tool for non-destructive, read-only extraction of prompts, responses, thinking blocks, or both (`turn=N` or `turn=all`) from past or active sessions without session switching or context pollution.
+  - Added automated script variable assignment via `var=<name>` and protected variables `${SESSION_QUERY}` and `${SESSION_GET}`.
+  - Implemented 3-tier session size caching (`_summary_cache`, lazy size evaluation during search, and per-query memoization) to report exact session storage sizes in bytes and formatted human units (`KB`/`MB`) with zero redundant disk reads.
+  - Added dedicated `sessions` list to search responses with whole-session byte counts, eliminating turn-level size confusion.
+- **Cookbook & Documentation**:
+  - Added Recipe 10.6 (*Non-Destructive Session Query and Turn Extraction*) to `doc/chatdsl_cookbook.md` and runnable script `doc/cookbook/10_6_session_query_and_extraction.chatdsl`.
+  - Updated `README.md` with complete command specifications, tool calling configurations, and workflow recipes.
 
 September 8th, 2026 (v0.8.4)
 ---------------------------

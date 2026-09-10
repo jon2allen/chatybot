@@ -1205,6 +1205,44 @@ Deleted session 'test_model_20260908_083213_2'.
 ...
 ```
 
+### 10.6 Session Query and Non-Destructive Turn Extraction
+- **Goal:** Search across sessions, turns, notes, and scratchpad files with boolean logic and date constraints; extract specific turns or parts (prompt, response, thinking) read-only without switching sessions; automate downstream workflows with variables.
+- **Commands:** `/session query [terms] [since=...] [until=...] [range=...] [ids] [full] [or] [var=...]`, `/session get <sid|active> [turn=N|all] [prompt|response|both|thinking] [var=...]`.
+- **Script:** `cookbook/10_6_session_query_and_extraction.chatdsl`
+- **Run:** `/script doc/cookbook/10_6_session_query_and_extraction.chatdsl` (or run interactively in REPL)
+
+```dsl
+# 1. Search recent sessions containing keywords (with whole session sizes displayed)
+/session query "database error" since=7d
+
+# 2. Fast discovery mode: find matching session IDs into a variable
+/session query "database error" ids var=ERROR_SESSIONS
+
+# 3. Discovery mode without terms: find all sessions from the last 24 hours with their sizes
+/session query since=24h ids
+
+# 4. Non-destructive turn extraction: inspect turn 1 (prompt & response) of a target session
+# Extracts read-only without interrupting or switching the active session
+/session get ${ERROR_SESSIONS}[0] turn=1 both var=FIRST_TURN
+
+/echo "First turn prompt: ${FIRST_TURN}.prompt"
+/echo "First turn response: ${FIRST_TURN}.response"
+
+# 5. Extract only the response text into a dedicated variable for downstream processing
+/session get ${ERROR_SESSIONS}[0] turn=1 response var=BOT_ANSWER
+/echo "Extracted response: ${BOT_ANSWER}"
+```
+
+**Walkthrough**
+1. **Content & Metadata Search (`/session query`):** Searches across all session turns (prompts, responses, tool calls), metadata notes, and scratchpad files using a pluggable query engine (`GrepQueryEngine`).
+2. **Date Constraints & Relative Filtering:** Supports `since=` (`today`, `yesterday`, `7d`, `24h`), `until=`, or `range=` (`2026-03-01..2026-05-01`).
+3. **Filter-Only Discovery Without Search Terms:** Execute `/session query since=24h ids` or `/session query "*" since=7d` to discover all recent sessions matching the date window without needing dummy search terms.
+4. **Entire Session Storage Footprint:** Every matched session reports its full storage footprint on disk (e.g. `8.2 KB` or exact `size_bytes`) rather than confusing turn snippet sizes. Results are cached via a 3-tier lazy evaluation architecture to eliminate redundant disk I/O.
+5. **Fast Discovery Mode (`ids`):** Passing `ids` displays a compact list of session IDs and their whole-session byte sizes, populating `${SESSION_IDS}` and saving the ID list to `var=` if provided.
+6. **Full-Content Inspection (`full`):** Passing `full` outputs the entire un-truncated exchange instead of 80-character snippets.
+7. **Non-Destructive Extraction (`/session get`):** Inspect turns from any session on disk (or the active session via `active`) without calling `/session use` (which would switch the active session and pollute the context window). Specify `turn=N` (or `turn=all`), and select `prompt`, `response`, `thinking`, or `both`.
+8. **Automated Variable Assignment:** Populates protected variables `${SESSION_QUERY}` and `${SESSION_GET}`, or assign directly to custom script variables via `var=<name>`.
+
 ---
 
 ## Chapter 11 — Macros & Reusable Prompts
@@ -1804,6 +1842,7 @@ Summarize the consensus algorithms mentioned and who discussed them.
 | 10.3 | Dynamic sourcing with /source | `/source` state retention | new |
 | 10.4 | Codifying session history | `/chatdsl history` | new |
 | 10.5 | Session filtering & bulk management | `/session list` `ids` `since=` `foreach` | new |
+| 10.6 | Session query & turn extraction | `/session query` `/session get` `ids` `full` `since=` `var=` | new |
 | 11.1 | Defining & invoking macros | `def` `%name()` | macro.chatdsl |
 | 11.2 | Bundled macro library | (narrative) | macro.chatdsl, menu.chatdsl |
 | 11.3 | Custom macro file | `/reloadmacros` | new |
