@@ -822,8 +822,10 @@ class ChatybotApp:
 
     def _generate_session_id(self, model_alias: str) -> str:
         """Generate a unique session ID, appending a counter if the timestamp collides."""
+        clean_alias = re.sub(r"[^\w\-]", "_", str(model_alias).strip())[:32].strip("_")
+        clean_alias = clean_alias or "default"
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        base_id = f"{model_alias}_{timestamp}"
+        base_id = f"{clean_alias}_{timestamp}"
         candidate = base_id
         counter = 1
         store = self._get_session_store()
@@ -854,14 +856,20 @@ class ChatybotApp:
             self.session_created_at = now.isoformat()
             if initial_prompt:
                 self.session_first_prompt_slug = self._slugify_text(initial_prompt)
-            self._acquire_session_lock(self.active_session_id)
-            self._get_session_store().create_session(
-                session_id=self.active_session_id,
-                model_alias=self.session_model_alias,
-                custom_name=self.active_session_name,
-                initial_prompt=initial_prompt,
-                notes=self.session_notes,
-            )
+            try:
+                self._acquire_session_lock(self.active_session_id)
+                self._get_session_store().create_session(
+                    session_id=self.active_session_id,
+                    model_alias=self.session_model_alias,
+                    custom_name=self.active_session_name,
+                    initial_prompt=initial_prompt,
+                    notes=self.session_notes,
+                )
+            except OSError as e:
+                print(f"Warning: Failed to create session on disk ({e}). Falling back to in-memory session.")
+                self.session_mode = "off"
+                self.active_session_id = None
+                return
             # Flush any commands executed prior to session creation
             if self.session_activity:
                 for act in self.session_activity:
@@ -872,7 +880,10 @@ class ChatybotApp:
                             "verb": act.get("verb"),
                             "timestamp": act.get("timestamp")
                         }
-                        self._get_session_store().append_turn(self.active_session_id, cmd_data)
+                        try:
+                            self._get_session_store().append_turn(self.active_session_id, cmd_data)
+                        except OSError:
+                            pass
 
     def _acquire_session_lock(self, session_id: str) -> bool:
         """Acquire an advisory lock file for the session. Returns True if acquired or already held."""
@@ -907,33 +918,36 @@ class ChatybotApp:
             "turns": self.session_turns,
         }
         store = self._get_session_store()
-        store.save_meta(self.active_session_id, meta)
-        if self.session_activity:
-            # Reconstruct turns list preserving command events and exchange turns
-            combined_items = []
-            turn_map = {t.get("prompt"): t for t in self.session_turns if "prompt" in t}
-            for act in self.session_activity:
-                if act.get("type") == "command":
-                    combined_items.append({
-                        "type": "command",
-                        "text": act.get("text"),
-                        "verb": act.get("verb"),
-                        "timestamp": act.get("timestamp")
-                    })
-                elif act.get("type") == "prompt":
-                    p_text = act.get("text")
-                    if p_text in turn_map:
-                        combined_items.append(turn_map[p_text])
-                    else:
+        try:
+            store.save_meta(self.active_session_id, meta)
+            if self.session_activity:
+                # Reconstruct turns list preserving command events and exchange turns
+                combined_items = []
+                turn_map = {t.get("prompt"): t for t in self.session_turns if "prompt" in t}
+                for act in self.session_activity:
+                    if act.get("type") == "command":
                         combined_items.append({
-                            "turn_id": len(combined_items) + 1,
-                            "prompt": p_text,
-                            "response": "",
-                            "model_alias": act.get("model", model_alias)
+                            "type": "command",
+                            "text": act.get("text"),
+                            "verb": act.get("verb"),
+                            "timestamp": act.get("timestamp")
                         })
-            store.replace_turns(self.active_session_id, combined_items)
-        else:
-            store.replace_turns(self.active_session_id, self.session_turns)
+                    elif act.get("type") == "prompt":
+                        p_text = act.get("text")
+                        if p_text in turn_map:
+                            combined_items.append(turn_map[p_text])
+                        else:
+                            combined_items.append({
+                                "turn_id": len(combined_items) + 1,
+                                "prompt": p_text,
+                                "response": "",
+                                "model_alias": act.get("model", model_alias)
+                            })
+                store.replace_turns(self.active_session_id, combined_items)
+            else:
+                store.replace_turns(self.active_session_id, self.session_turns)
+        except OSError as e:
+            print(f"Warning: Could not save session to disk ({e}).")
 
     def append_session_turn(self, prompt: str, response: str, agentic_loop_data: Optional[List[Dict[str, Any]]] = None, timing: Optional[Dict[str, Any]] = None):
         """Append a completed exchange turn to active session and save to disk."""
@@ -967,7 +981,10 @@ class ChatybotApp:
             turn_data.update(timing)
 
         self.session_turns.append(turn_data)
-        self._get_session_store().append_turn(self.active_session_id, turn_data)
+        try:
+            self._get_session_store().append_turn(self.active_session_id, turn_data)
+        except OSError as e:
+            print(f"Warning: Could not write turn to disk session ({e}). Session continues in memory.")
         self.buffer_manager.set_script_var('SESSION_NAME', self.active_session_name or self.active_session_id, allow_protected=True)
 
     def attach_agentic_loop_to_current_turn(self, agentic_trace: List[Dict[str, Any]], final_response: Optional[str] = None) -> None:
@@ -992,7 +1009,10 @@ class ChatybotApp:
             "verb": verb,
             "timestamp": datetime.now().isoformat()
         }
-        self._get_session_store().append_turn(self.active_session_id, cmd_data)
+        try:
+            self._get_session_store().append_turn(self.active_session_id, cmd_data)
+        except OSError:
+            pass
 
     def get_history_path(self) -> str:
         """
