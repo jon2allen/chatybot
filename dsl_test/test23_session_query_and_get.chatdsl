@@ -1,0 +1,93 @@
+# Test Case 23: Session Query and Extraction Capabilities
+# Exercises:
+#   1. /session query with keywords and boolean AND
+#   2. /session query with boolean OR
+#   3. /session query with date constraints (since=, range=)
+#   4. /session query with fast discovery (ids mode) and variable assignment
+#   5. /session query with full unabbreviated content (full mode)
+#   6. /session get with specific turn extraction (turn=N)
+#   7. /session get with specific turn part extraction (prompt, response, thinking, both)
+#   8. /session get with all turns into a script variable
+#   9. /session query searching scratchpad files
+#  10. Tool calling integration: session_search and session_get
+
+# -------------------------------------------------------------
+# Setup: Start a dedicated test session and create rich turns
+# -------------------------------------------------------------
+/session start dsl_query_and_get_test
+/session note Verification test session for search and non-destructive extraction
+
+/model cohere_north
+Explain what a binary search tree is and its time complexity in one concise sentence.
+
+/model devstral_1
+Explain what a hash map is and how collisions are resolved in one concise sentence.
+
+# -------------------------------------------------------------
+# 1. Basic Keyword Query (Default Snippet Mode)
+# -------------------------------------------------------------
+/echo "\n=== 1. Basic query for 'binary search' ==="
+/session query "binary search"
+
+# -------------------------------------------------------------
+# 2. Boolean OR Query
+# -------------------------------------------------------------
+/echo "\n=== 2. Boolean OR query: 'binary' OR 'hash' ==="
+/session query binary hash or
+
+# -------------------------------------------------------------
+# 3. Fast Discovery Mode ('ids' / '--ids') with Target Variable
+# -------------------------------------------------------------
+/echo "\n=== 3. Query IDs mode into variable ${MATCH_IDS} ==="
+/session query binary ids var=MATCH_IDS
+/echo "Found matching session IDs: ${MATCH_IDS}"
+
+# -------------------------------------------------------------
+# 4. Full Content Query ('full' / '--full')
+# -------------------------------------------------------------
+/echo "\n=== 4. Query full mode for 'hash map' ==="
+/session query "hash map" full
+
+# -------------------------------------------------------------
+# 5. Date Filtering Query (since=yesterday)
+# -------------------------------------------------------------
+/echo "\n=== 5. Query with date filter (since=yesterday) ==="
+/session query binary since=yesterday
+
+# -------------------------------------------------------------
+# 6. Non-Destructive Extraction: /session get turn=1 (both prompt & response)
+# -------------------------------------------------------------
+/echo "\n=== 6. Extract Turn 1 (both prompt and response) ==="
+/session get active turn=1 both
+
+# -------------------------------------------------------------
+# 7. Targeted Extraction: /session get prompt only vs response only
+# -------------------------------------------------------------
+/echo "\n=== 7. Extract Turn 2 prompt only ==="
+/session get active turn=2 prompt
+
+/echo "\n=== 8. Extract Turn 2 response only into variable ${HASH_ANS} ==="
+/session get active turn=2 response var=HASH_ANS
+/echo "Extracted response: ${HASH_ANS}"
+
+# -------------------------------------------------------------
+# 8. Extract All Turns into a Script Variable
+# -------------------------------------------------------------
+/echo "\n=== 9. Extract all turns from active session into variable ==="
+/session get active all both var=FULL_TRANSCRIPT
+/echo "Full transcript length: ${FULL_TRANSCRIPT}"
+
+# -------------------------------------------------------------
+# 9. LLM Tool Invocation: session_search tool
+# -------------------------------------------------------------
+/echo "\n=== 10. Direct tool dispatch for session_search ==="
+/tool on
+/tool {"tool": "session_search", "arguments": {"query": "binary search", "full": true}}
+
+# -------------------------------------------------------------
+# 10. LLM Tool Invocation: session_get tool
+# -------------------------------------------------------------
+/echo "\n=== 11. Direct tool dispatch for session_get ==="
+/tool {"tool": "session_get", "arguments": {"session_id": "active", "turn_id": 1, "part": "response"}}
+
+/echo "\n=== Session Query & Get Tests Completed Successfully ==="
