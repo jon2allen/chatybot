@@ -58,3 +58,27 @@ def test_parse_date_range():
     start2, end2 = parse_date_range("2026-03-01..2026-05-01", now=ref_now)
     assert start2 == datetime(2026, 3, 1, 0, 0, 0)
     assert end2 == datetime(2026, 5, 1, 23, 59, 59)
+
+    # Unspaced colon date range
+    start3, end3 = parse_date_range("2026-03-01:2026-05-01", now=ref_now)
+    assert start3 == datetime(2026, 3, 1, 0, 0, 0)
+    assert end3 == datetime(2026, 5, 1, 23, 59, 59)
+
+
+def test_parse_datetime_offset_signs():
+    ref_now = datetime(2026, 9, 10, 12, 0, 0)
+
+    plus_3d = parse_datetime_expr("+3d", now=ref_now)
+    assert plus_3d == ref_now + timedelta(days=3)
+
+    minus_3d = parse_datetime_expr("-3d", now=ref_now)
+    assert minus_3d == ref_now - timedelta(days=3)
+
+    bare_3d = parse_datetime_expr("3d", now=ref_now)
+    assert bare_3d == ref_now - timedelta(days=3)
+
+
+def test_parse_datetime_iso_trailing_z():
+    dt = parse_datetime_expr("2026-09-10T12:00:00Z")
+    assert dt == datetime(2026, 9, 10, 12, 0, 0)
+

@@ -68,26 +68,32 @@ def parse_datetime_expr(val: str, now: Optional[datetime] = None) -> Optional[da
     if raw in ("lastyear", "last_year"):
         return datetime(now_dt.year - 1, 1, 1, 0, 0, 0)
 
-    # Relative unit offset: e.g. '7d', '24h', '30m', '2w', '-1d'
-    offset_match = re.match(r"^[-+]?(\d+)([dhmsw])$", raw)
+    # Relative unit offset: e.g. '7d', '24h', '30m', '2w', '+7d', '-1d'
+    offset_match = re.match(r"^([+-]?)(\d+)([dhmsw])$", raw)
     if offset_match:
-        num = int(offset_match.group(1))
-        unit = offset_match.group(2)
+        sign = offset_match.group(1)
+        num = int(offset_match.group(2))
+        unit = offset_match.group(3)
+        delta = None
         if unit == "d":
-            return now_dt - timedelta(days=num)
+            delta = timedelta(days=num)
         elif unit == "h":
-            return now_dt - timedelta(hours=num)
+            delta = timedelta(hours=num)
         elif unit == "m":
-            return now_dt - timedelta(minutes=num)
+            delta = timedelta(minutes=num)
         elif unit == "s":
-            return now_dt - timedelta(seconds=num)
+            delta = timedelta(seconds=num)
         elif unit == "w":
-            return now_dt - timedelta(weeks=num)
+            delta = timedelta(weeks=num)
+
+        if delta is not None:
+            return now_dt + delta if sign == "+" else now_dt - delta
 
     # Date string matching
     original_val = val.strip()
-    # Try ISO formats
-    iso_clean = original_val.replace("Z", "").rstrip()
+    # Try ISO formats - strip trailing 'Z' if present
+    iso_clean = original_val[:-1] if original_val.endswith("Z") else original_val
+    iso_clean = iso_clean.rstrip()
     if "T" in iso_clean:
         try:
             return datetime.fromisoformat(iso_clean)
@@ -119,7 +125,7 @@ def parse_date_range(range_expr: str, now: Optional[datetime] = None) -> Tuple[O
     Supports:
       - '03/01/2026 to 05/01/2026'
       - '2026-03-01..2026-05-01'
-      - '2026-03-01 : 2026-05-01'
+      - '2026-03-01:2026-05-01'
       - 'lastmonth to today'
     """
     if not range_expr or not isinstance(range_expr, str):
@@ -132,8 +138,18 @@ def parse_date_range(range_expr: str, now: Optional[datetime] = None) -> Tuple[O
         parts = re.split(r"\s+to\s+", clean, flags=re.IGNORECASE, maxsplit=1)
     elif ".." in clean:
         parts = clean.split("..", 1)
-    elif ":" in clean and not re.search(r"\d:\d", clean):  # Avoid splitting timestamps like 12:00
-        parts = clean.split(":", 1)
+    elif ":" in clean:
+        # Avoid splitting timestamps like 14:30:00.
+        # A range separator colon separates two dates (e.g. 2026-03-01:2026-05-01 or with spaces)
+        if " : " in clean:
+            parts = clean.split(" : ", 1)
+        else:
+            date_colon = re.search(r"(\d{1,4}[-/]\d{1,2}[-/]\d{1,4}):(\d{1,4}[-/]\d{1,2}[-/]\d{1,4})", clean)
+            if date_colon:
+                idx = date_colon.start(1) + len(date_colon.group(1))
+                parts = [clean[:idx], clean[idx+1:]]
+            elif not re.search(r"\b\d{1,2}:\d{2}\b", clean):
+                parts = clean.split(":", 1)
 
     if len(parts) == 2:
         start_dt = parse_datetime_expr(parts[0], now=now)

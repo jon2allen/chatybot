@@ -118,6 +118,27 @@ def test_grep_engine_scratchpad_files(tmp_path):
     assert "test_task.py" in scratch_matches[0].metadata["file"]
 
 
+def test_scratch_dir_deduplication(tmp_path):
+    app = MockApp(tmp_path)
+    scratch_file = os.path.join(app.scratch_dir, "task.txt")
+    with open(scratch_file, "w") as f:
+        f.write("unique token to match\n")
+
+    # Point session_dir so that its parent / scratch is the same directory
+    app.session_dir = str(tmp_path / "sessions")
+    os.makedirs(app.session_dir, exist_ok=True)
+    # Even if get_scratch_dir returns a path ending with /., realpath canonicalizes it
+    app.get_scratch_dir = lambda create=False: str(tmp_path / "scratch" / ".")
+
+    engine = get_query_engine("grep")
+    req = QueryRequest(terms=["unique", "token"], include_scratch=True)
+    res = engine.search(app, req)
+
+    scratch_matches = [m for m in res.matches if m.source == "scratch"]
+    assert len(scratch_matches) == 1
+
+
+
 def test_session_search_llm_tool(tmp_path):
     app = MockApp(tmp_path)
     
@@ -167,4 +188,106 @@ def test_session_search_full_content(tmp_path):
     first_match = res["matches"][0]
     assert "We encountered an auth error with expired token" in first_match["snippet"]
     assert first_match["full_text"] is not None
+
+
+def test_total_matches_unbounded_by_limit(tmp_path):
+    app = MockApp(tmp_path)
+    # Add several matching turns to active session
+    app.session_turns = [
+        {"prompt": f"test query term item {i}", "response": "answer", "timestamp": "2026-04-10T10:00:00"}
+        for i in range(10)
+    ]
+    engine = get_query_engine("grep")
+    # Request limit of 3
+    req = QueryRequest(terms=["test"], limit=3)
+    res = engine.search(app, req)
+
+    # matches list is capped at limit 3, but total_matches reflects all 10 hits
+    assert len(res.matches) == 3
+    assert res.total_matches == 10
+
+
+def test_missing_timestamp_excluded_under_date_filter(tmp_path):
+    app = MockApp(tmp_path)
+    # 1 turn has a timestamp inside range, 1 turn has timestamp outside range, 1 turn has NO timestamp
+    app.session_turns = [
+        {"prompt": "auth token in range", "response": "ok", "timestamp": "2026-04-12T12:00:00"},
+        {"prompt": "auth token out of range", "response": "ok", "timestamp": "2026-01-01T12:00:00"},
+        {"prompt": "auth token without timestamp", "response": "ok", "timestamp": None},
+    ]
+    engine = get_query_engine("grep")
+    req = QueryRequest(
+        terms=["auth"],
+        since_dt=datetime(2026, 4, 1, 0, 0, 0),
+        until_dt=datetime(2026, 4, 30, 0, 0, 0),
+    )
+    res = engine.search(app, req)
+    # Only the turn with in-range timestamp should match; missing timestamp must not bypass filter
+    turn_matches = [m for m in res.matches if m.role == "exchange"]
+    assert len(turn_matches) == 1
+    assert "in range" in turn_matches[0].full_text
+
+
+def test_ids_only_not_bounded_by_limit(tmp_path):
+    app = MockApp(tmp_path)
+    # Mock saved sessions store
+    class MockStore:
+        def list_sessions(self, limit=None, since_dt=None):
+            return [
+                {"sid": "sess_1"},
+                {"sid": "sess_2"},
+                {"sid": "sess_3"},
+            ]
+        def load_session(self, sid):
+            return ({"notes": None}, [{"prompt": f"match term in {sid}", "response": "res"}])
+
+    class MockAppWithStore(MockApp):
+        def get_session_store(self):
+            return MockStore()
+
+    store_app = MockAppWithStore(tmp_path)
+    store_app.active_session_id = None
+    store_app.session_turns = []
+    store_app.session_notes = None
+
+    engine = get_query_engine("grep")
+    # Request with limit=1 and ids_only=True
+    req = QueryRequest(terms=["match"], limit=1, ids_only=True)
+    res = engine.search(store_app, req)
+
+    # All 3 sessions should be found despite limit=1
+    assert len(res.session_ids) == 3
+    assert res.total_matches == 3
+    assert sorted(res.session_ids) == ["sess_1", "sess_2", "sess_3"]
+
+
+def test_store_error_isolation(tmp_path):
+    # If one session file raises an exception when loaded, other sessions are still searched
+    class CorruptStore:
+        def list_sessions(self, limit=None, since_dt=None):
+            return [
+                {"sid": "sess_corrupt"},
+                {"sid": "sess_healthy"},
+            ]
+        def load_session(self, sid):
+            if sid == "sess_corrupt":
+                raise IOError("Corrupted json file")
+            return ({"notes": None}, [{"prompt": "healthy match", "response": "res"}])
+
+    class MockAppCorrupt(MockApp):
+        def get_session_store(self):
+            return CorruptStore()
+
+    corrupt_app = MockAppCorrupt(tmp_path)
+    corrupt_app.active_session_id = None
+    corrupt_app.session_turns = []
+    corrupt_app.session_notes = None
+
+    engine = get_query_engine("grep")
+    req = QueryRequest(terms=["healthy"])
+    res = engine.search(corrupt_app, req)
+
+    assert res.total_matches == 1
+    assert res.matches[0].session_id == "sess_healthy"
+
 
