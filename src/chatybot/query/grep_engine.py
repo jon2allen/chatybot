@@ -65,8 +65,9 @@ class GrepQueryEngine(BaseQueryEngine):
             return f"{prefix}{clean_text[start:end]}{suffix}"
 
         def is_within_date(dt_val: Optional[datetime]) -> bool:
-            if not dt_val:
-                return True
+            # If a date filter is active, items lacking a timestamp cannot satisfy it
+            if dt_val is None:
+                return not (request.since_dt or request.until_dt)
             if request.since_dt and dt_val < request.since_dt:
                 return False
             if request.until_dt and dt_val > request.until_dt:
@@ -74,15 +75,15 @@ class GrepQueryEngine(BaseQueryEngine):
             return True
 
         matched_session_ids = set()
+        total_matches_count = 0
 
         # 1. Search Active Session Turns & Buffer
         active_sid = getattr(app, "active_session_id", None)
         if (not request.session_id or request.session_id == active_sid):
             # Check session turns in memory
             turns = getattr(app, "session_turns", []) or []
+            active_session_has_match = False
             for idx, turn in enumerate(turns, 1):
-                if len(matches) >= request.limit:
-                    break
                 # Timestamp check
                 ts_raw = turn.get("timestamp") or turn.get("created_at")
                 turn_dt = parse_datetime_expr(str(ts_raw)) if ts_raw else None
@@ -101,52 +102,62 @@ class GrepQueryEngine(BaseQueryEngine):
                 full_content = "\n".join(content_parts)
                 matched_ok, hit_terms = check_text_match(full_content)
                 if matched_ok:
+                    total_matches_count += 1
                     sess_key = active_sid or "active"
                     matched_session_ids.add(sess_key)
-                    snippet_text = full_content if request.full else make_snippet(full_content, hit_terms)
-                    matches.append(
-                        QueryMatch(
-                            source="session",
-                            session_id=sess_key,
-                            turn_id=idx,
-                            role="exchange",
-                            timestamp=str(ts_raw) if ts_raw else None,
-                            matched_terms=hit_terms,
-                            snippet=snippet_text,
-                            full_text=full_content,
-                            metadata={"active": True, "custom_name": getattr(app, "active_session_name", None)},
+                    active_session_has_match = True
+
+                    if len(matches) < request.limit and not request.ids_only:
+                        snippet_text = full_content if request.full else make_snippet(full_content, hit_terms)
+                        matches.append(
+                            QueryMatch(
+                                source="session",
+                                session_id=sess_key,
+                                turn_id=idx,
+                                role="exchange",
+                                timestamp=str(ts_raw) if ts_raw else None,
+                                matched_terms=hit_terms,
+                                snippet=snippet_text,
+                                full_text=full_content,
+                                metadata={"active": True, "custom_name": getattr(app, "active_session_name", None)},
+                            )
                         )
-                    )
                     if request.ids_only:
                         break
 
             # Check active session notes
             active_notes = getattr(app, "session_notes", None)
-            if active_notes and len(matches) < request.limit and (not request.ids_only or (active_sid or "active") not in matched_session_ids):
+            if active_notes and (not request.ids_only or not active_session_has_match):
                 matched_ok, hit_terms = check_text_match(active_notes)
                 if matched_ok:
+                    total_matches_count += 1
                     sess_key = active_sid or "active"
                     matched_session_ids.add(sess_key)
-                    snippet_text = active_notes if request.full else make_snippet(active_notes, hit_terms)
-                    matches.append(
-                        QueryMatch(
-                            source="session",
-                            session_id=sess_key,
-                            turn_id=None,
-                            role="note",
-                            timestamp=None,
-                            matched_terms=hit_terms,
-                            snippet=snippet_text,
-                            full_text=active_notes,
-                            metadata={"active": True, "type": "note"},
+                    if len(matches) < request.limit and not request.ids_only:
+                        snippet_text = active_notes if request.full else make_snippet(active_notes, hit_terms)
+                        matches.append(
+                            QueryMatch(
+                                source="session",
+                                session_id=sess_key,
+                                turn_id=None,
+                                role="note",
+                                timestamp=None,
+                                matched_terms=hit_terms,
+                                snippet=snippet_text,
+                                full_text=active_notes,
+                                metadata={"active": True, "type": "note"},
+                            )
                         )
-                    )
 
         # 2. Search Persisted Sessions (via Session Store)
         if not request.active_only:
             store = None
             if hasattr(app, "_get_session_store"):
                 store = app._get_session_store()
+            elif hasattr(app, "get_session_store"):
+                store = app.get_session_store()
+            elif hasattr(app, "session_store"):
+                store = getattr(app, "session_store", None)
             elif hasattr(app, "session_dir"):
                 from chatybot.session_factory import get_session_store
                 store = get_session_store(sessions_dir=app.session_dir)
@@ -159,32 +170,37 @@ class GrepQueryEngine(BaseQueryEngine):
 
             if store:
                 try:
-                    # List sessions; note since_dt can prune entire files if updated before since_dt
                     saved_sessions = store.list_sessions(limit=None, since_dt=request.since_dt)
-                    for s_summary in saved_sessions:
-                        if len(matches) >= request.limit:
-                            break
-                        sid = s_summary.get("sid")
-                        # Skip active session if we already searched it in-memory
-                        if sid == active_sid:
-                            continue
-                        if request.session_id and request.session_id != sid:
-                            continue
-                        if request.ids_only and sid in matched_session_ids:
-                            continue
+                except Exception:
+                    saved_sessions = []
 
-                        # Load full session turns
-                        try:
-                            meta, loaded_turns = store.load_session(sid)
-                        except Exception:
-                            continue
+                for s_summary in saved_sessions:
+                    sid = s_summary.get("sid")
+                    # Skip active session if we already searched it in-memory
+                    if sid == active_sid:
+                        continue
+                    if request.session_id and request.session_id != sid:
+                        continue
+                    if request.ids_only and sid in matched_session_ids:
+                        continue
 
-                        # Search session notes if present in meta
-                        s_notes = meta.get("notes") or meta.get("session_notes")
-                        if s_notes and len(matches) < request.limit:
-                            matched_ok, hit_terms = check_text_match(str(s_notes))
-                            if matched_ok:
-                                matched_session_ids.add(sid)
+                    # Load full session turns with per-session error isolation
+                    try:
+                        meta, loaded_turns = store.load_session(sid)
+                    except Exception:
+                        continue
+
+                    session_has_match = False
+
+                    # Search session notes if present in meta
+                    s_notes = meta.get("notes") or meta.get("session_notes")
+                    if s_notes:
+                        matched_ok, hit_terms = check_text_match(str(s_notes))
+                        if matched_ok:
+                            total_matches_count += 1
+                            matched_session_ids.add(sid)
+                            session_has_match = True
+                            if len(matches) < request.limit and not request.ids_only:
                                 snippet_text = str(s_notes) if request.full else make_snippet(str(s_notes), hit_terms)
                                 matches.append(
                                     QueryMatch(
@@ -199,33 +215,33 @@ class GrepQueryEngine(BaseQueryEngine):
                                         metadata={"custom_name": meta.get("custom_name"), "type": "note"},
                                     )
                                 )
-                                if request.ids_only:
-                                    continue
-
-                        # Search loaded turns
-                        for t_idx, turn in enumerate(loaded_turns, 1):
-                            if len(matches) >= request.limit:
-                                break
-                            ts_raw = turn.get("timestamp") or turn.get("created_at")
-                            turn_dt = parse_datetime_expr(str(ts_raw)) if ts_raw else None
-                            if not is_within_date(turn_dt):
+                            if request.ids_only:
                                 continue
 
-                            # Extract text
-                            content_parts = []
-                            if turn.get("prompt"):
-                                content_parts.append(f"user: {turn['prompt']}")
-                            if turn.get("response"):
-                                content_parts.append(f"assistant: {turn['response']}")
-                            if turn.get("text"):
-                                content_parts.append(str(turn['text']))
-                            if turn.get("tool_calls"):
-                                content_parts.append(f"tool_calls: {str(turn['tool_calls'])}")
+                    # Search loaded turns
+                    for t_idx, turn in enumerate(loaded_turns, 1):
+                        ts_raw = turn.get("timestamp") or turn.get("created_at")
+                        turn_dt = parse_datetime_expr(str(ts_raw)) if ts_raw else None
+                        if not is_within_date(turn_dt):
+                            continue
 
-                            full_content = "\n".join(content_parts)
-                            matched_ok, hit_terms = check_text_match(full_content)
-                            if matched_ok:
-                                matched_session_ids.add(sid)
+                        # Extract text
+                        content_parts = []
+                        if turn.get("prompt"):
+                            content_parts.append(f"user: {turn['prompt']}")
+                        if turn.get("response"):
+                            content_parts.append(f"assistant: {turn['response']}")
+                        if turn.get("text"):
+                            content_parts.append(str(turn['text']))
+                        if turn.get("tool_calls"):
+                            content_parts.append(f"tool_calls: {str(turn['tool_calls'])}")
+
+                        full_content = "\n".join(content_parts)
+                        matched_ok, hit_terms = check_text_match(full_content)
+                        if matched_ok:
+                            total_matches_count += 1
+                            matched_session_ids.add(sid)
+                            if len(matches) < request.limit and not request.ids_only:
                                 snippet_text = full_content if request.full else make_snippet(full_content, hit_terms)
                                 matches.append(
                                     QueryMatch(
@@ -240,29 +256,26 @@ class GrepQueryEngine(BaseQueryEngine):
                                         metadata={"custom_name": meta.get("custom_name")},
                                     )
                                 )
-                                if request.ids_only:
-                                    break
-                except Exception as e:
-                    # Silently catch store errors or log them
-                    pass
+                            if request.ids_only:
+                                break
 
         # 3. Search Scratch Area (Files in scratch dir) - skip if ids_only is strictly for sessions
-        if request.include_scratch and not request.ids_only and len(matches) < request.limit:
+        if request.include_scratch and not request.ids_only:
             scratch_dirs = []
             if hasattr(app, "get_scratch_dir"):
                 s_dir = app.get_scratch_dir(create=False)
                 if s_dir and os.path.exists(s_dir):
-                    scratch_dirs.append(s_dir)
+                    scratch_dirs.append(os.path.realpath(s_dir))
             # Also check session-level scratch if different
             session_dir_val = getattr(app, "session_dir", None)
             if session_dir_val:
                 global_scratch = Path(session_dir_val).expanduser().resolve().parent / "scratch"
-                if global_scratch.exists() and str(global_scratch) not in scratch_dirs:
-                    scratch_dirs.append(str(global_scratch))
+                if global_scratch.exists():
+                    canon_global = os.path.realpath(str(global_scratch))
+                    if canon_global not in scratch_dirs:
+                        scratch_dirs.append(canon_global)
 
             for s_dir in scratch_dirs:
-                if len(matches) >= request.limit:
-                    break
                 try:
                     for root, _, files in os.walk(s_dir):
                         for fname in files:
@@ -285,29 +298,29 @@ class GrepQueryEngine(BaseQueryEngine):
                                 continue
 
                             for line_no, line in enumerate(lines, 1):
-                                if len(matches) >= request.limit:
-                                    break
                                 matched_ok, hit_terms = check_text_match(line)
                                 if matched_ok:
-                                    snippet_text = line.rstrip() if request.full else make_snippet(line.strip(), hit_terms)
-                                    matches.append(
-                                        QueryMatch(
-                                            source="scratch",
-                                            session_id=None,
-                                            turn_id=line_no,
-                                            role="file",
-                                            timestamp=mtime.isoformat() if mtime else None,
-                                            matched_terms=hit_terms,
-                                            snippet=snippet_text,
-                                            full_text=line.rstrip(),
-                                            metadata={"file": rel_path, "path": file_path},
+                                    total_matches_count += 1
+                                    if len(matches) < request.limit:
+                                        snippet_text = line.rstrip() if request.full else make_snippet(line.strip(), hit_terms)
+                                        matches.append(
+                                            QueryMatch(
+                                                source="scratch",
+                                                session_id=None,
+                                                turn_id=line_no,
+                                                role="file",
+                                                timestamp=mtime.isoformat() if mtime else None,
+                                                matched_terms=hit_terms,
+                                                snippet=snippet_text,
+                                                full_text=line.rstrip(),
+                                                metadata={"file": rel_path, "path": file_path},
+                                            )
                                         )
-                                    )
                 except Exception:
                     pass
 
         return QueryResponse(
-            total_matches=len(matches),
+            total_matches=total_matches_count if not request.ids_only else len(matched_session_ids),
             matches=matches,
             session_ids=sorted(list(matched_session_ids)),
             engine=self.name,
