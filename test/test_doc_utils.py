@@ -66,6 +66,51 @@ def test_chatybot_package_exports():
     assert callable(chatybot.get_doc_dir)
     assert callable(chatybot.get_doc_path)
     assert callable(chatybot.list_docs)
+    assert callable(chatybot.display_doc)
+    assert callable(chatybot.highlight_content)
+
+
+def test_highlight_content():
+    """Verify highlight_content applies syntax highlighting to markdown and chatdsl."""
+    from chatybot.doc_utils import highlight_content
+
+    md_text = "# Header\n\n- item 1\n- item 2"
+    hl_md = highlight_content(md_text, "test.md")
+    assert isinstance(hl_md, str)
+
+    dsl_text = "/model mistral_1\n# Comment\n/echo hello"
+    hl_dsl = highlight_content(dsl_text, "test.chatdsl")
+    assert isinstance(hl_dsl, str)
+
+
+def test_display_doc_script_mode(capsys):
+    """Verify display_doc in script mode renders incremental chunked pages."""
+    from chatybot.doc_utils import display_doc
+
+    sample_content = "\n".join(f"Line {i}" for i in range(1, 101))
+    
+    # Page 1 (lines 1-40)
+    display_doc(sample_content, "sample.md", in_script=True, page_size=40, page_num=1)
+    out1 = capsys.readouterr().out
+    assert "Page 1/3" in out1
+    assert "Line 1" in out1
+    assert "Line 40" in out1
+    assert "Line 41" not in out1
+    assert "Next: /docs sample.md page=2" in out1
+
+    # Page 2 (lines 41-80)
+    display_doc(sample_content, "sample.md", in_script=True, page_size=40, page_num=2)
+    out2 = capsys.readouterr().out
+    assert "Page 2/3" in out2
+    assert "Line 41" in out2
+    assert "Line 80" in out2
+
+    # Page 3 (lines 81-100, final)
+    display_doc(sample_content, "sample.md", in_script=True, page_size=40, page_num=3)
+    out3 = capsys.readouterr().out
+    assert "Page 3/3" in out3
+    assert "Line 100" in out3
+    assert "End of sample.md" in out3
 
 
 @pytest.mark.anyio
@@ -99,9 +144,18 @@ async def test_cmd_docs_path_and_cookbook(capsys):
 
 @pytest.mark.anyio
 async def test_cmd_docs_view_file(capsys):
-    """Test /docs <filename> displays the file content preview."""
+    """Test /docs <filename> in standard and script context."""
     app = _make_app(capsys)
+
+    # Non-script (TTY mock fallback or piped)
     await app.handle_escape_command("/docs cookbook/01_1_first_automation.chatdsl")
     out = capsys.readouterr().out
-    assert "01_1_first_automation.chatdsl" in out
-    assert "model" in out or "prompt" in out or "chatdsl" in out.lower()
+    assert "01_1_first_automation.chatdsl" in out or "mistral_1" in out
+
+    # In script mode
+    app.script_context = True
+    await app.handle_escape_command("/docs chatdsl_cookbook.md page=1")
+    out_script = capsys.readouterr().out
+    assert "Page 1/" in out_script
+    assert "Lines 1-40" in out_script
+    assert "Next: /docs chatdsl_cookbook.md page=2" in out_script
