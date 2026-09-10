@@ -190,8 +190,6 @@ class GrepQueryEngine(BaseQueryEngine):
                     except Exception:
                         continue
 
-                    session_has_match = False
-
                     # Search session notes if present in meta
                     s_notes = meta.get("notes") or meta.get("session_notes")
                     if s_notes:
@@ -199,7 +197,6 @@ class GrepQueryEngine(BaseQueryEngine):
                         if matched_ok:
                             total_matches_count += 1
                             matched_session_ids.add(sid)
-                            session_has_match = True
                             if len(matches) < request.limit and not request.ids_only:
                                 snippet_text = str(s_notes) if request.full else make_snippet(str(s_notes), hit_terms)
                                 matches.append(
@@ -286,10 +283,11 @@ class GrepQueryEngine(BaseQueryEngine):
                             # Check file mtime for date filters
                             try:
                                 mtime = datetime.fromtimestamp(os.path.getmtime(file_path))
-                                if not is_within_date(mtime):
-                                    continue
                             except OSError:
                                 mtime = None
+
+                            if not is_within_date(mtime):
+                                continue
 
                             try:
                                 with open(file_path, "r", encoding="utf-8", errors="ignore") as f:

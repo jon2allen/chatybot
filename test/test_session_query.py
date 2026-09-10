@@ -138,6 +138,39 @@ def test_scratch_dir_deduplication(tmp_path):
     assert len(scratch_matches) == 1
 
 
+def test_scratch_file_unreadable_mtime(tmp_path, monkeypatch):
+    app = MockApp(tmp_path)
+    scratch_file = os.path.join(app.scratch_dir, "task_err.txt")
+    with open(scratch_file, "w") as f:
+        f.write("scratch test data\n")
+
+    # Simulate OSError when fetching mtime
+    def mock_getmtime(path):
+        if "task_err.txt" in path:
+            raise OSError("Permission denied")
+        return os.path.getmtime(path)
+
+    monkeypatch.setattr(os.path, "getmtime", mock_getmtime)
+    engine = get_query_engine("grep")
+
+    # 1. Under active date filter, unreadable mtime (mtime=None) is excluded
+    req_date = QueryRequest(
+        terms=["scratch"],
+        include_scratch=True,
+        since_dt=datetime(2026, 1, 1),
+    )
+    res_date = engine.search(app, req_date)
+    assert len([m for m in res_date.matches if m.source == "scratch"]) == 0
+
+    # 2. Without date filter, file is still searched and matched
+    req_no_date = QueryRequest(terms=["scratch"], include_scratch=True)
+    res_no_date = engine.search(app, req_no_date)
+    scratch_matches = [m for m in res_no_date.matches if m.source == "scratch"]
+    assert len(scratch_matches) == 1
+    assert scratch_matches[0].timestamp is None
+
+
+
 
 def test_session_search_llm_tool(tmp_path):
     app = MockApp(tmp_path)
