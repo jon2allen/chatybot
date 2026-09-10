@@ -395,6 +395,20 @@ class JsonlSessionStore(BaseSessionStore):
             return parsed[offset : offset + limit]
         return parsed[offset:]
 
+    def get_session_size(self, target: str) -> int:
+        sid = self.resolve_session(target) or target
+        s_dir = self._session_dir(sid)
+        if os.path.isdir(s_dir):
+            total = 0
+            for root, _, files in os.walk(s_dir):
+                for f in files:
+                    try:
+                        total += os.path.getsize(os.path.join(root, f))
+                    except OSError:
+                        pass
+            return total
+        return 0
+
     def delete_session(self, target: str) -> bool:
         with self._thread_lock:
             sid = self.resolve_session(target)
