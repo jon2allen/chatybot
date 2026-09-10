@@ -12,7 +12,7 @@ from chatybot.commands.context import CommandContext
 from chatybot.commands.replay import handle_replay_command
 
 
-@command("/session", help="Manage sessions", args="<start|auto|stop|status|history|note|save|list|use|show|export|info|delete|merge|compress|prune|replay|query> ...", category="session")
+@command("/session", help="Manage sessions", args="<start|auto|stop|status|history|note|save|list|use|show|export|info|delete|merge|compress|prune|replay|query|get> ...", category="session")
 async def cmd_session(ctx: CommandContext, parts: list, command: str) -> CommandResult:
     app = ctx.app
     if len(parts) < 2:
@@ -663,7 +663,7 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
 
         raw_args = parts[2:]
         if not raw_args:
-            print("Usage: /session query <terms...> [or|and] [since=<date>] [until=<date>] [range=<date to date>] [--scratch|--no-scratch] [limit=<N>] [var=<varname>]")
+            print("Usage: /session query <terms...> [or|and] [ids] [full] [since=<date>] [until=<date>] [range=<date to date>] [--scratch|--no-scratch] [limit=<N>] [var=<varname>]")
             return CommandResult.ok()
 
         terms = []
@@ -671,6 +671,8 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
         since_dt = None
         until_dt = None
         include_scratch = True
+        ids_only = False
+        full_mode = False
         limit = 20
         target_var = None
         engine_name = None
@@ -684,6 +686,10 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
                 operator = "OR"
             elif arg_lower in ("and", "--and"):
                 operator = "AND"
+            elif arg_lower in ("ids", "--ids", "ids_only"):
+                ids_only = True
+            elif arg_lower in ("full", "--full"):
+                full_mode = True
             elif arg_lower in ("--scratch", "scratch"):
                 include_scratch = True
             elif arg_lower in ("--no-scratch", "no-scratch"):
@@ -729,6 +735,8 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
             until_dt=until_dt,
             include_scratch=include_scratch,
             limit=limit,
+            ids_only=ids_only,
+            full=full_mode,
         )
 
         try:
@@ -742,25 +750,39 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
         if hasattr(app, "buffer_manager") and app.buffer_manager:
             app.buffer_manager.set_script_var("SESSION_QUERY", res_dict, allow_protected=True)
             if target_var:
-                app.buffer_manager.set_script_var(target_var, res_dict, allow_protected=True)
+                val_to_save = response.session_ids if ids_only else res_dict
+                app.buffer_manager.set_script_var(target_var, val_to_save, allow_protected=True)
 
         # Format output
         filter_parts = [f"operator={operator}"]
+        if ids_only:
+            filter_parts.append("ids")
+        if full_mode:
+            filter_parts.append("full")
         if since_dt:
             filter_parts.append(f"since={since_dt.strftime('%Y-%m-%d %H:%M')}")
         if until_dt:
             filter_parts.append(f"until={until_dt.strftime('%Y-%m-%d %H:%M')}")
-        if include_scratch:
+        if include_scratch and not ids_only:
             filter_parts.append("scratch=ON")
         if engine_name:
             filter_parts.append(f"engine={engine_name}")
 
         filter_str = f" [{', '.join(filter_parts)}]"
 
+        if ids_only:
+            print(f"\nMatching Sessions for '{' '.join(terms)}'{filter_str}: {len(response.session_ids)} session(s)\n")
+            if not response.session_ids:
+                print("  No matching sessions found.\n")
+                return CommandResult.ok()
+            for sid in response.session_ids:
+                print(f"  {sid}")
+            print("")
+            return CommandResult.ok()
+
         print(f"\nQuery Results for '{' '.join(terms)}'{filter_str}: {response.total_matches} match(es)\n")
         if not response.matches:
-            print("  No matches found.")
-            print("")
+            print("  No matches found.\n")
             return CommandResult.ok()
 
         for idx, match in enumerate(response.matches, 1):
@@ -776,11 +798,71 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
                     loc += f" | Line: {match.turn_id}"
 
             print(f"  {idx}. [{loc}] ({match.role})")
-            print(f"     \"{match.snippet}\"")
+            if full_mode:
+                for line in (match.full_text or match.snippet).splitlines():
+                    print(f"     {line}")
+                print("")
+            else:
+                print(f"     \"{match.snippet}\"")
         print("")
         return CommandResult.ok()
 
+    elif subcmd == "get":
+        from chatybot.tools.context_query import session_get
+
+        raw_args = parts[2:]
+        if not raw_args:
+            print("Usage: /session get <session_id|name|active> [turn=<N>|all] [prompt|response|both|thinking] [var=<varname>]")
+            return CommandResult.ok()
+
+        target = raw_args[0].strip("\"'")
+        turn_id = None
+        part_name = "both"
+        target_var = None
+
+        for arg in raw_args[1:]:
+            arg_lower = arg.lower()
+            if arg_lower.startswith("turn="):
+                val = arg.split("=", 1)[1].strip()
+                if val.lower() != "all":
+                    try:
+                        turn_id = int(val)
+                    except ValueError:
+                        print(f"Invalid turn number: '{val}'")
+                        return CommandResult.ok()
+            elif arg_lower == "all":
+                turn_id = None
+            elif arg_lower in ("prompt", "response", "both", "thinking"):
+                part_name = arg_lower
+            elif arg_lower.startswith("var="):
+                target_var = arg.split("=", 1)[1].strip()
+            elif arg.isdigit():
+                turn_id = int(arg)
+
+        res = session_get(
+            session_id=target,
+            turn_id=turn_id,
+            part=part_name,
+            target_variable=target_var,
+            app=app,
+        )
+
+        if res.get("status") != "success":
+            print(f"Error: {res.get('message', 'Failed to retrieve session content')}")
+            return CommandResult.ok()
+
+        sid_display = res.get("session_id", target)
+        cname = res.get("custom_name")
+        cname_str = f" ('{cname}')" if cname else ""
+        turn_str = f"Turn {turn_id}" if turn_id is not None else f"All Turns ({res.get('total_turns', 0)} total)"
+        var_str = f" (Saved to '${target_var}')" if target_var else ""
+
+        print(f"\n--- Extracted from {sid_display}{cname_str} [{turn_str} | {part_name}]{var_str} ---")
+        print(res.get("text", ""))
+        print("--- End of extraction ---\n")
+        return CommandResult.ok()
+
     else:
-        print(f"Unknown session subcommand: {subcmd}. Use start, auto, stop, status, save, list, use, show, export, info, delete, merge, compress, prune, replay, query.")
+        print(f"Unknown session subcommand: {subcmd}. Use start, auto, stop, status, save, list, use, show, export, info, delete, merge, compress, prune, replay, query, get.")
         return CommandResult.ok()
 
