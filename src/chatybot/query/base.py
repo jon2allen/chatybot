@@ -19,6 +19,8 @@ class QueryRequest:
     limit: int = 20
     active_only: bool = False
     session_id: Optional[str] = None  # If specified, restrict to single session
+    ids_only: bool = False  # If True, only identify matching session IDs
+    full: bool = False      # If True, retrieve full turn content without snippet truncation
 
 
 @dataclass
@@ -31,6 +33,7 @@ class QueryMatch:
     timestamp: Optional[str] = None
     matched_terms: List[str] = field(default_factory=list)
     snippet: str = ""
+    full_text: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -42,6 +45,7 @@ class QueryMatch:
             "timestamp": self.timestamp,
             "matched_terms": self.matched_terms,
             "snippet": self.snippet,
+            "full_text": self.full_text,
             "metadata": self.metadata,
         }
 
@@ -51,12 +55,14 @@ class QueryResponse:
     """Full response returned by query engine."""
     total_matches: int
     matches: List[QueryMatch]
+    session_ids: List[str] = field(default_factory=list)
     engine: str = "grep"
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             "total_matches": self.total_matches,
             "matches": [m.to_dict() for m in self.matches],
+            "session_ids": self.session_ids,
             "engine": self.engine,
         }
 

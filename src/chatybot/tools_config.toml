@@ -288,9 +288,46 @@ type = "integer"
 description = "Maximum number of match items to return (default: 15)"
 optional = true
 
+[tools.session_search.parameters.ids_only]
+type = "boolean"
+description = "If true, only returns matching session IDs without turn details (fast discovery, saves context)"
+optional = true
+
+[tools.session_search.parameters.full]
+type = "boolean"
+description = "If true, returns complete turn prompt and response without 80-character snippet truncation"
+optional = true
+
 [tools.session_search.parameters.target_variable]
 type = "string"
 description = "Optional script variable name to save the search results into"
 optional = true
+
+[tools.session_get]
+enabled = true
+description = "Extract read-only prompt, response, thinking, or full exchange text from a past session or the active session without switching sessions."
+module = "chatybot.tools.context_query"
+function = "session_get"
+
+[tools.session_get.parameters.session_id]
+type = "string"
+description = "The session ID or custom name to extract from (use 'active' for the current session)"
+optional = false
+
+[tools.session_get.parameters.turn_id]
+type = "integer"
+description = "Optional 1-based turn number to extract. If omitted, extracts all turns."
+optional = true
+
+[tools.session_get.parameters.part]
+type = "string"
+description = "Which part of the turn to extract: 'both' (default), 'prompt', 'response', or 'thinking'"
+optional = true
+
+[tools.session_get.parameters.target_variable]
+type = "string"
+description = "Optional script variable name to save the extracted text into"
+optional = true
+
 
 

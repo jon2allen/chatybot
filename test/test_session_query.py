@@ -137,3 +137,34 @@ def test_session_search_llm_tool(tmp_path):
     assert "SESSION_QUERY" in app.buffer_manager.script_vars
     assert "MY_TOOL_VAR" in app.buffer_manager.script_vars
     assert app.buffer_manager.script_vars["MY_TOOL_VAR"]["total_matches"] == res["total_matches"]
+
+
+def test_session_search_ids_only(tmp_path):
+    app = MockApp(tmp_path)
+    
+    res = session_search(
+        query="auth",
+        ids_only=True,
+        target_variable="SIDS_VAR",
+        app=app,
+    )
+    assert res["status"] == "success"
+    assert "session_ids" in res
+    assert "test_sess_01" in res["session_ids"]
+    assert app.buffer_manager.script_vars["SIDS_VAR"] == ["test_sess_01"]
+
+
+def test_session_search_full_content(tmp_path):
+    app = MockApp(tmp_path)
+    
+    res = session_search(
+        query="auth",
+        full=True,
+        app=app,
+    )
+    assert res["status"] == "success"
+    assert res["total_matches"] >= 1
+    first_match = res["matches"][0]
+    assert "We encountered an auth error with expired token" in first_match["snippet"]
+    assert first_match["full_text"] is not None
+
