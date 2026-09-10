@@ -34,6 +34,7 @@ class QueryMatch:
     matched_terms: List[str] = field(default_factory=list)
     snippet: str = ""
     full_text: Optional[str] = None
+    size_bytes: int = 0
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -46,6 +47,7 @@ class QueryMatch:
             "matched_terms": self.matched_terms,
             "snippet": self.snippet,
             "full_text": self.full_text,
+            "size_bytes": self.size_bytes,
             "metadata": self.metadata,
         }
 

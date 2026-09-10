@@ -38,6 +38,8 @@ def test_session_get_active_turn_both():
     assert res["status"] == "success"
     assert res["session_id"] == "sess_active_123"
     assert res["turn_id"] == 1
+    assert res["size_bytes"] > 0
+    assert res["size_bytes"] == len(res["text"].encode("utf-8"))
     assert "How do we handle 401 error?" in res["text"]
     assert "Inspect www-authenticate header" in res["text"]
     assert "Thinking: Step 1" in res["text"]

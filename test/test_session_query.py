@@ -73,6 +73,8 @@ def test_grep_engine_and_or_matching(tmp_path):
     req_and = QueryRequest(terms=["auth", "token"], operator="AND")
     res_and = engine.search(app, req_and)
     assert res_and.total_matches == 2  # Turn 2 + Note
+    assert res_and.matches[0].size_bytes > 0
+    assert res_and.to_dict()["matches"][0]["size_bytes"] > 0
     
     # 2. Test AND operator failure: 'migration' and 'auth' are in different turns
     req_and_fail = QueryRequest(terms=["migration", "auth"], operator="AND")

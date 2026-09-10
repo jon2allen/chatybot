@@ -119,6 +119,7 @@ class GrepQueryEngine(BaseQueryEngine):
                                 matched_terms=hit_terms,
                                 snippet=snippet_text,
                                 full_text=full_content,
+                                size_bytes=len(full_content.encode("utf-8")),
                                 metadata={"active": True, "custom_name": getattr(app, "active_session_name", None)},
                             )
                         )
@@ -145,6 +146,7 @@ class GrepQueryEngine(BaseQueryEngine):
                                 matched_terms=hit_terms,
                                 snippet=snippet_text,
                                 full_text=active_notes,
+                                size_bytes=len(active_notes.encode("utf-8")),
                                 metadata={"active": True, "type": "note"},
                             )
                         )
@@ -209,6 +211,7 @@ class GrepQueryEngine(BaseQueryEngine):
                                         matched_terms=hit_terms,
                                         snippet=snippet_text,
                                         full_text=str(s_notes),
+                                        size_bytes=len(str(s_notes).encode("utf-8")),
                                         metadata={"custom_name": meta.get("custom_name"), "type": "note"},
                                     )
                                 )
@@ -250,6 +253,7 @@ class GrepQueryEngine(BaseQueryEngine):
                                         matched_terms=hit_terms,
                                         snippet=snippet_text,
                                         full_text=full_content,
+                                        size_bytes=len(full_content.encode("utf-8")),
                                         metadata={"custom_name": meta.get("custom_name")},
                                     )
                                 )
@@ -311,6 +315,7 @@ class GrepQueryEngine(BaseQueryEngine):
                                                 matched_terms=hit_terms,
                                                 snippet=snippet_text,
                                                 full_text=line.rstrip(),
+                                                size_bytes=len(line.encode("utf-8")),
                                                 metadata={"file": rel_path, "path": file_path},
                                             )
                                         )
