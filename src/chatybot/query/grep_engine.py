@@ -115,17 +115,16 @@ class GrepQueryEngine(BaseQueryEngine):
                 if sz > 0:
                     session_size_cache[sid_or_target] = sz
                     return sz
-            # If not found on disk or store unavailable, compute total size from all turns and notes
+            # If not found on disk or store unavailable, compute total size from text content (prompt, response, thinking) and notes
             total = 0
             if notes_fallback:
                 total += len(str(notes_fallback).encode("utf-8"))
             if turns_fallback:
                 for t in turns_fallback:
-                    for k, v in t.items():
-                        if isinstance(v, str):
-                            total += len(v.encode("utf-8"))
-                        elif v is not None:
-                            total += len(str(v).encode("utf-8"))
+                    for field in ("prompt", "response", "thinking"):
+                        val = t.get(field)
+                        if val and isinstance(val, str):
+                            total += len(val.encode("utf-8"))
             session_size_cache[sid_or_target] = total
             return total
 

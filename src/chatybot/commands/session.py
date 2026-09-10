@@ -718,6 +718,7 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
         limit = 20
         target_var = None
         engine_name = None
+        sess_filter = None
 
         i = 0
         while i < len(raw_args):
@@ -736,6 +737,8 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
                 include_scratch = True
             elif arg_lower in ("--no-scratch", "no-scratch"):
                 include_scratch = False
+            elif arg_lower.startswith("session=") or arg_lower.startswith("session_id=") or arg_lower.startswith("sid="):
+                sess_filter = arg.split("=", 1)[1].strip("\"'")
             elif arg_lower.startswith("since="):
                 since_val = arg.split("=", 1)[1].strip("\"'")
                 since_dt = parse_datetime_expr(since_val)

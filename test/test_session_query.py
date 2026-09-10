@@ -426,5 +426,105 @@ def test_lazy_size_evaluation_and_caching(tmp_path):
     assert res.matches[1].size_bytes == 12345
 
 
+def test_session_search_exception_response_includes_sessions_key():
+    """When session_search catches an exception, the returned dict must include 'sessions': []."""
+    from unittest.mock import patch
+    with patch("chatybot.tools.context_query.get_query_engine", side_effect=RuntimeError("Engine exploded")):
+        res = session_search(query="test terms")
+        assert res["status"] == "error"
+        assert "Engine exploded" in res["message"]
+        assert res["total_matches"] == 0
+        assert res["matches"] == []
+        assert res["session_ids"] == []
+        assert res["sessions"] == []  # Verifies key presence to prevent KeyError
+
+
+def test_active_session_byte_size_fallback_not_inflated(tmp_path):
+    """The fallback byte size for active sessions should only sum text content, not metadata keys."""
+    app = MockApp(tmp_path)
+    # Turn with modest prompt/response but lots of metadata
+    app.session_turns = [{
+        "turn_id": 1,
+        "prompt": "Hello",        # 5 bytes
+        "response": "World",       # 5 bytes
+        "thinking": "Ponder",      # 6 bytes
+        "timestamp": "2026-09-10T17:15:36.123456789",  # 29 bytes (should NOT be counted)
+        "model_alias": "very_long_model_alias_here",    # 26 bytes (should NOT be counted)
+        "elapsed_ms": 123456,                           # (should NOT be counted)
+        "tps": {"total": 55.5, "think": 22.2},         # (should NOT be counted)
+    }]
+    app.session_notes = "Note"  # 4 bytes
+    app.active_session_id = "test_active"
+
+    engine = get_query_engine("grep")
+    # Force fallback calculation by ensuring store is not present
+    req = QueryRequest(terms=["Hello"])
+    res = engine.search(app, req)
+
+    assert res.total_matches == 1
+    # Expected size: "Note" (4) + "Hello" (5) + "World" (5) + "Ponder" (6) = 20 bytes
+    assert res.matches[0].size_bytes == 20
+
+
+@pytest.mark.anyio
+async def test_session_query_cli_command_execution(tmp_path, monkeypatch, capsys):
+    """The /session query CLI command executes without NameError (sess_filter) and returns matches."""
+    from chatybot.chatybot_app import ChatybotApp
+    sessions_dir = str(tmp_path / "sessions")
+    monkeypatch.setenv("CHATYBOT_TEST_SESSIONS_DIR", sessions_dir)
+    app = ChatybotApp()
+    app.initialize()
+    app.session_dir = sessions_dir
+    app.session_store = None
+
+    await app.handle_escape_command('/session start "Python Exploration"')
+    app.append_session_turn("Tell me about Python decorators", "Decorators wrap functions.")
+    capsys.readouterr()
+
+    # 1. Standard query with terms
+    await app.handle_escape_command("/session query decorators")
+    captured = capsys.readouterr()
+    assert "Query Results for 'decorators'" in captured.out
+    assert "Decorators wrap functions." in captured.out
+    assert "Error: No search terms specified" not in captured.out
+
+    # 2. Query with session= filter
+    sid = app.active_session_id
+    await app.handle_escape_command(f"/session query decorators session={sid}")
+    captured = capsys.readouterr()
+    assert "Query Results for 'decorators'" in captured.out
+    assert f"session={sid}" in captured.out
+
+    # 3. Filter-only query with session= and ids flag (empty terms allowed)
+    await app.handle_escape_command(f"/session query ids session={sid}")
+    captured = capsys.readouterr()
+    assert "Matching Sessions for all sessions" in captured.out
+    assert sid in captured.out
+
+
+@pytest.mark.anyio
+async def test_session_get_uses_resolved_sid_without_double_resolution(tmp_path, monkeypatch):
+    """session_get correctly retrieves session details and total size."""
+    from chatybot.chatybot_app import ChatybotApp
+    from chatybot.tools.context_query import session_get
+    sessions_dir = str(tmp_path / "sessions")
+    monkeypatch.setenv("CHATYBOT_TEST_SESSIONS_DIR", sessions_dir)
+    app = ChatybotApp()
+    app.initialize()
+    app.session_dir = sessions_dir
+    app.session_store = None
+
+    await app.handle_escape_command('/session start "Double Resolve Test"')
+    app.append_session_turn("First Q", "First A")
+    sid = app.active_session_id
+
+    res = session_get(session_id="Double Resolve Test", app=app)
+    assert res["status"] == "success"
+    assert res["session_id"] == sid
+    assert res["custom_name"] == "Double Resolve Test"
+    assert res["session_size_bytes"] > 0
+
+
+
 
 

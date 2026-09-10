@@ -123,6 +123,7 @@ def session_search(
             "total_matches": 0,
             "matches": [],
             "session_ids": [],
+            "sessions": [],
         }
 
 
@@ -156,14 +157,17 @@ def session_get(
 
     meta: Dict[str, Any] = {}
     turns: List[Dict[str, Any]] = []
+    store = None
+    resolved_sid: Optional[str] = None
 
     # 1. Resolve from Active Session
     active_sid = getattr(app, "active_session_id", None)
     active_cname = getattr(app, "active_session_name", None)
 
     if target.lower() in ("active", "current") or target == active_sid or (active_cname and target == active_cname):
+        resolved_sid = active_sid or "active"
         meta = {
-            "session_id": active_sid or "active",
+            "session_id": resolved_sid,
             "custom_name": active_cname,
             "model_alias": getattr(app, "session_model_alias", "default"),
             "notes": getattr(app, "session_notes", None),
@@ -173,7 +177,6 @@ def session_get(
     else:
         # 2. Resolve from Persisted Store
         try:
-            store = None
             if hasattr(app, "_get_session_store"):
                 store = app._get_session_store()
             elif hasattr(app, "session_dir"):
@@ -186,6 +189,7 @@ def session_get(
             resolved = store.resolve_session(target)
             if not resolved:
                 return {"status": "error", "message": f"Session '{target}' not found."}
+            resolved_sid = resolved
             meta, turns = store.load_session(resolved)
         except Exception as e:
             return {"status": "error", "message": f"Could not load session '{target}': {e}"}
@@ -241,19 +245,22 @@ def session_get(
         extracted_turns = turns
 
     session_total_bytes = 0
-    resolved_sid = meta.get("session_id") or target
-    store = None
-    if app:
+    if not store and app:
         if hasattr(app, "_get_session_store"):
             store = app._get_session_store()
         elif hasattr(app, "get_session_store"):
             store = app.get_session_store()
         elif hasattr(app, "session_store"):
             store = getattr(app, "session_store", None)
-    if store and hasattr(store, "get_session_size"):
+    if store and hasattr(store, "get_session_size") and resolved_sid:
         session_total_bytes = store.get_session_size(resolved_sid)
     if not session_total_bytes and turns:
-        session_total_bytes = sum(len(str(v).encode("utf-8")) for t in turns for v in t.values() if v is not None)
+        session_total_bytes = sum(
+            len(val.encode("utf-8"))
+            for t in turns
+            for field in ("prompt", "response", "thinking")
+            if (val := t.get(field)) and isinstance(val, str)
+        )
     if not session_total_bytes:
         session_total_bytes = len(extracted_text.encode("utf-8"))
 
