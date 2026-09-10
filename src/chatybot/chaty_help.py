@@ -672,18 +672,28 @@ class HelpSystem:
         self.register_command(CommandHelp(
             name="/docs",
             category="system",
-            short_desc="List or view bundled documentation, guides, and cookbook examples",
-            usage="/docs [filename|cookbook|path] [page=N]",
-            long_desc="List or display bundled documentation guides, specs, and ChatDSL cookbook recipes.\n\n"
+            short_desc="List, view, or load bundled documentation, guides, and cookbook examples",
+            usage="/docs [filename|cookbook|path] [page=N] [var=<varname>]",
+            long_desc="List, display, or load bundled documentation guides, specs, and ChatDSL cookbook recipes.\n\n"
                       "In interactive REPL mode, opens a full-screen syntax-highlighted pager (less/pydoc with ANSI color styling).\n"
-                      "In script context (/script, /source), documents are rendered in incremental readable pages (40 lines/page).\n\n"
+                      "In script context (/script, /source), documents are rendered in incremental readable pages (40 lines/page).\n"
+                      "Use 'var=<varname>' (or 'target=<varname>') to load the document into a script variable (e.g. to load a cookbook template).\n\n"
                       "Modes:\n"
                       "  /docs                      - List all available bundled guides and recipes\n"
                       "  /docs <filename>           - View document (REPL: highlighted pager; Script: chunked)\n"
                       "  /docs <filename> page=N    - View specific page chunk (in script mode)\n"
+                      "  /docs <filename> var=<var> - Load document content into script_var $<var>\n"
                       "  /docs cookbook             - List all ChatDSL cookbook recipe files\n"
                       "  /docs path                 - Show filesystem path to documentation directory",
-            examples=["/docs", "/docs cookbook", "/docs chatdsl_guide.md", "/docs chatdsl_cookbook.md page=2", "/docs cookbook/01_1_first_automation.chatdsl", "/docs path"],
+            examples=[
+                "/docs",
+                "/docs cookbook",
+                "/docs chatdsl_guide.md",
+                "/docs chatdsl_cookbook.md page=2",
+                "/docs cookbook/01_1_first_automation.chatdsl",
+                "/docs cookbook/01_1_first_automation.chatdsl var=my_template",
+                "/docs path",
+            ],
             aliases=["/doc"]
         ))
         

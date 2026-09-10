@@ -159,3 +159,29 @@ async def test_cmd_docs_view_file(capsys):
     assert "Page 1/" in out_script
     assert "Lines 1-40" in out_script
     assert "Next: /docs chatdsl_cookbook.md page=2" in out_script
+
+
+@pytest.mark.anyio
+async def test_cmd_docs_load_to_script_var(capsys):
+    """Test /docs <filename> var=<name> loads content into a script variable."""
+    app = _make_app(capsys)
+
+    # Load cookbook example into a script var
+    await app.handle_escape_command("/docs cookbook/01_1_first_automation.chatdsl var=my_template")
+    out = capsys.readouterr().out
+    assert "Loaded '01_1_first_automation.chatdsl'" in out
+    assert "into script_var '$my_template'" in out
+
+    # Verify content in buffer_manager script_vars
+    val = app.buffer_manager.get_script_var("my_template")
+    assert val is not None
+    assert "/model mistral_1" in val or "chatdsl" in val.lower()
+
+    # Also verify target= alias
+    await app.handle_escape_command("/docs chatdsl_guide.md target=guide_var")
+    out2 = capsys.readouterr().out
+    assert "into script_var '$guide_var'" in out2
+    val2 = app.buffer_manager.get_script_var("guide_var")
+    assert val2 is not None
+    assert "ChatDSL" in val2
+

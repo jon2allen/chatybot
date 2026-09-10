@@ -719,6 +719,7 @@ async def cmd_docs(ctx: CommandContext, parts: list, command: str) -> CommandRes
     raw_args = command.split()[1:] if len(command.split()) > 1 else []
     sub = ""
     page_num = 1
+    target_var = None
     
     for arg in raw_args:
         arg_lower = arg.lower()
@@ -727,6 +728,10 @@ async def cmd_docs(ctx: CommandContext, parts: list, command: str) -> CommandRes
                 page_num = max(1, int(arg.split("=", 1)[1]))
             except ValueError:
                 page_num = 1
+        elif arg_lower.startswith("var="):
+            target_var = arg.split("=", 1)[1].strip().lstrip("$")
+        elif arg_lower.startswith("target="):
+            target_var = arg.split("=", 1)[1].strip().lstrip("$")
         elif not sub:
             sub = arg.strip("\"'")
 
@@ -757,6 +762,7 @@ async def cmd_docs(ctx: CommandContext, parts: list, command: str) -> CommandRes
         print("\nUsage:")
         print("  /docs <filename>       - View documentation file (REPL: highlighted pager, Script: chunked)")
         print("  /docs <filename> page=N - View specific page (40 lines/page in script context)")
+        print("  /docs <filename> var=<name> - Load full doc content into a script variable")
         print("  /docs cookbook         - List all cookbook recipes")
         print("  /docs path             - Print full path to documentation directory\n")
         return CommandResult.ok()
@@ -797,6 +803,15 @@ async def cmd_docs(ctx: CommandContext, parts: list, command: str) -> CommandRes
 
     try:
         content = target.read_text(encoding="utf-8")
+
+        if target_var:
+            if hasattr(app, "buffer_manager") and app.buffer_manager:
+                app.buffer_manager.set_script_var(target_var, content, allow_protected=True)
+                print(f"Loaded '{target.name}' ({len(content.splitlines())} lines) into script_var '${target_var}'")
+            else:
+                print(f"Error: Buffer manager not available to set script_var '${target_var}'")
+            return CommandResult.ok()
+
         display_doc(
             content=content,
             filename=target.name,
