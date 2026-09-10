@@ -1,0 +1,31 @@
+# Recipe 14.10 - Personal knowledge base harvester (novel)
+# Goal: shell-harvest notes, rerank each for a topic, store in a DB, then answer from the KB.
+# Run: /script doc/cookbook/14_10_kb_harvester.chatdsl x=notes
+# Combines: /run + per-file /rerank + /dblog + /searchdb (no repo example ties all three together)
+
+if ${x} != "" then set notes_dir = ${x}
+if ${notes_dir} == "" then set notes_dir = "notes"
+/setdb my_kb
+/run find ${notes_dir} -name "*.md"
+/setvar notes {LAST_COMPLETION}
+/model bge_reranker_f16
+foreach path in lines(${notes})
+  if ${path} == "" then break
+  /file ${path}
+  /documents filebank=1
+  /rerank "distributed systems consistency" top_n=2 split=paragraph return=summ
+  /dblog
+  /clearfile
+endfor
+
+# Query the accumulated KB
+/setdb my_kb
+/searchdb "consensus algorithms"
+/loadvar recall ALL
+/model mistral_1
+/multiline
+Using only the retrieved notes: ${recall}
+Summarize the consensus algorithms mentioned and who discussed them.
+;;
+/multiline
+/save 14_10_kb_brief.txt

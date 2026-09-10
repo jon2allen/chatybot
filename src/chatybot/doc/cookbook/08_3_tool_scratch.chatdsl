@@ -1,0 +1,17 @@
+# Recipe 8.3 - Disposable scratchpad execution
+# Goal: run agentic tasks in an isolated scratch area without altering project files
+# Run: /script doc/cookbook/08_3_tool_scratch.chatdsl
+
+/model devstral_1
+/tool on
+/tool auto on
+/tool scratch on
+
+# Ask model to write and test code in scratch
+chat --> Write a python script in scratch to print system platform information, then run it.
+
+# Inspect generated files in the scratch directory
+/tool scratch status
+
+# Clean up all temporary files when done
+/tool scratch clean

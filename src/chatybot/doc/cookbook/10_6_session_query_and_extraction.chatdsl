@@ -1,0 +1,26 @@
+# Recipe 10.6 - Session Query and Non-Destructive Turn Extraction
+# Goal: Search across sessions with boolean logic, date filters, and size metrics;
+#       extract turn contents read-only without switching sessions; automate with variables.
+# Run: /script doc/cookbook/10_6_session_query_and_extraction.chatdsl
+# Note: /session query populates ${SESSION_QUERY} (and ${SESSION_IDS} in ids mode).
+#       /session get populates ${SESSION_GET}.
+
+# 1. Search recent sessions containing keywords (with whole session sizes displayed)
+/session query "database error" since=7d
+
+# 2. Fast discovery mode: find matching session IDs into a variable
+/session query "database error" ids var=ERROR_SESSIONS
+
+# 3. Discovery mode without terms: find all sessions from the last 24 hours with their sizes
+/session query since=24h ids
+
+# 4. Non-destructive turn extraction: inspect turn 1 (prompt & response) of a target session
+# Extracts read-only without interrupting or switching the active session
+/session get ${ERROR_SESSIONS}[0] turn=1 both var=FIRST_TURN
+
+/echo "First turn prompt: ${FIRST_TURN}.prompt"
+/echo "First turn response: ${FIRST_TURN}.response"
+
+# 5. Extract only the response text into a dedicated variable for downstream processing
+/session get ${ERROR_SESSIONS}[0] turn=1 response var=BOT_ANSWER
+/echo "Extracted response: ${BOT_ANSWER}"

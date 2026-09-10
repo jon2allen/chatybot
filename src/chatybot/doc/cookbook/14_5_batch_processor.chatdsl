@@ -1,0 +1,18 @@
+# Recipe 14.5 - Batch file processor (novel)
+# Goal: list files via /run ls, iterate with foreach ... in lines(...), translate each.
+# Run: /script doc/cookbook/14_5_batch_processor.chatdsl x=src_notes
+# Combines: /run + lines() + foreach over a discovered file list
+
+if ${x} != "" then set dir = ${x}
+if ${dir} == "" then set dir = "src_notes"
+/run ls -1 ${dir}
+/setvar filelist {LAST_COMPLETION}
+/model gemini_flash
+foreach name in lines(${filelist})
+  if ${name} == "" then break
+  /file ${dir}/${name}
+  Translate to French and keep the structure.
+  /save out_fr/${name}
+  /clearfile
+endfor
+/echo "Batch done"

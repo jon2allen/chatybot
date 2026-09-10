@@ -707,3 +707,88 @@ async def cmd_listmacros(ctx: CommandContext, parts: list, command: str) -> Comm
     filter_term = list_parts[1].strip() if len(list_parts) > 1 else None
     app.list_macros(filter_term=filter_term)
     return CommandResult.ok()
+
+
+@command("/docs", help="List or open bundled documentation and guides", args="[filename|subpath]", category="debug", aliases=["/doc"])
+async def cmd_docs(ctx: CommandContext, parts: list, command: str) -> CommandResult:
+    from chatybot.doc_utils import get_doc_dir, get_doc_path, list_docs
+    
+    sub = parts[1].strip() if len(parts) > 1 else ""
+    if not sub:
+        doc_dir = get_doc_dir()
+        docs = list_docs()
+        print(f"\nBundled Documentation ({doc_dir}):")
+        print("=" * 60)
+        # Group by category / folder
+        root_docs = [d for d in docs if "/" not in d and "\\" not in d]
+        cookbooks = [d for d in docs if d.startswith("cookbook/") or d.startswith("cookbook\\")]
+        sub_docs = [d for d in docs if d not in root_docs and d not in cookbooks]
+        
+        if root_docs:
+            print("\nGuides & Specifications:")
+            for d in sorted(root_docs):
+                print(f"  {d}")
+        if cookbooks:
+            print(f"\nCookbook Examples ({len(cookbooks)} scripts):")
+            for d in sorted(cookbooks)[:10]:
+                print(f"  {d}")
+            if len(cookbooks) > 10:
+                print(f"  ... and {len(cookbooks) - 10} more in cookbook/ (use '/docs cookbook' to view all)")
+        if sub_docs:
+            print("\nAdditional Documentation:")
+            for d in sorted(sub_docs):
+                print(f"  {d}")
+        print("\nUsage:")
+        print("  /docs <filename>       - View documentation file")
+        print("  /docs cookbook         - List all cookbook recipes")
+        print("  /docs path             - Print full path to documentation directory\n")
+        return CommandResult.ok()
+
+    if sub.lower() == "path":
+        print(f"Documentation directory: {get_doc_dir()}")
+        return CommandResult.ok()
+
+    if sub.lower() == "cookbook":
+        cookbooks = [d for d in list_docs("cookbook")]
+        print(f"\nChatDSL Cookbook Recipes ({len(cookbooks)}):")
+        print("=" * 60)
+        for d in cookbooks:
+            print(f"  cookbook/{d}")
+        print("\nView any recipe with: /docs cookbook/<name>\n")
+        return CommandResult.ok()
+
+    # Attempt to resolve the requested doc file
+    target = get_doc_path(sub)
+    if not target.exists():
+        # Try appending .md or .chatdsl
+        if (target.parent / f"{target.name}.md").exists():
+            target = target.parent / f"{target.name}.md"
+        elif (target.parent / f"{target.name}.chatdsl").exists():
+            target = target.parent / f"{target.name}.chatdsl"
+
+    if not target.exists():
+        print(f"Error: Documentation '{sub}' not found.")
+        print("Use '/docs' to list all available documentation.")
+        return CommandResult.ok()
+
+    if target.is_dir():
+        items = list_docs(sub)
+        print(f"\nDocuments in '{sub}':")
+        for item in items:
+            print(f"  {item}")
+        return CommandResult.ok()
+
+    try:
+        content = target.read_text(encoding="utf-8")
+        print(f"\n--- {target.name} ({target}) ---")
+        # Print up to 100 lines or pager
+        lines = content.splitlines()
+        if len(lines) > 120:
+            print("\n".join(lines[:100]))
+            print(f"\n[Showing first 100 of {len(lines)} lines. Full file at: {target}]")
+        else:
+            print(content)
+    except Exception as e:
+        print(f"Error reading documentation file '{target}': {e}")
+
+    return CommandResult.ok()

@@ -1,0 +1,12 @@
+# Recipe 3.4 - notemode + codeonly
+# Goal: get just code blocks saved to files, suppress prose.
+# Run: /script doc/cookbook/03_4_notemode_codeonly.chatdsl
+
+/model mistral_1
+/codeonly
+/notemode on
+Write a Python function that returns the nth Fibonacci number.
+/save 03_4_fib.py
+/notemode off
+/codeoff
+/echo "Code extracted to 03_4_fib.py"

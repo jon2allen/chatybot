@@ -1,0 +1,10 @@
+# Recipe 9.1 - Generate & save an image
+# Goal: basic image generation.
+# Run: /script doc/cookbook/09_1_image_generate.chatdsl
+
+/imagesize 1024x1024
+/imagequality hd
+/imagedir images/
+/imagine sunset over a calm mountain lake, cinematic
+/saveimage images/09_1_lake.jpg
+/listimages

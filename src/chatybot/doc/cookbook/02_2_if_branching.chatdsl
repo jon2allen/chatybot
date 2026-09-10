@@ -1,0 +1,14 @@
+# Recipe 2.2 - if / not / == / != branching
+# Goal: branch behavior on a feature toggle variable.
+# Run: /script doc/cookbook/02_2_if_branching.chatdsl x=creative
+
+if ${x} != "" then set mode = ${x}
+if ${mode} == "" then set mode = "factual"
+
+if ${mode} == "creative" then /temp 1.2
+if ${mode} == "factual" then /temp 0.3
+if not ${mode} == "creative" then /model mistral_1
+if ${mode} == "creative" then /model gemini_flash
+
+Write a short paragraph about the invention of the printing press.
+/save 02_2_press.txt

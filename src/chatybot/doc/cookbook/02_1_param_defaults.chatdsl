@@ -1,0 +1,16 @@
+# Recipe 2.1 - Conditional defaults for script params
+# Goal: robust parameter handling with fallbacks (the translate.chatdsl idiom).
+# Run: /script doc/cookbook/02_1_param_defaults.chatdsl x=english.txt y=spanish z=output.txt
+
+if ${x} != "" then set source = ${x}
+if ${source} == "" then set source = "english.txt"
+if ${y} != "" then set target_lang = ${y}
+if ${target_lang} == "" then set target_lang = "spanish"
+if ${z} != "" then set output_file = ${z}
+if ${output_file} == "" then set output_file = "02_1_output.txt"
+
+/file ${source}
+/model gemini_flash
+Translate the following into ${target_lang}:
+/save ${output_file}
+/echo "Translated to ${target_lang} -> ${output_file}"
