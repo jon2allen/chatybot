@@ -12,7 +12,7 @@ from chatybot.commands.context import CommandContext
 from chatybot.commands.replay import handle_replay_command
 
 
-@command("/session", help="Manage sessions", args="<start|auto|stop|status|history|note|save|list|use|show|export|info|delete|merge|compress|prune|replay> ...", category="session")
+@command("/session", help="Manage sessions", args="<start|auto|stop|status|history|note|save|list|use|show|export|info|delete|merge|compress|prune|replay|query> ...", category="session")
 async def cmd_session(ctx: CommandContext, parts: list, command: str) -> CommandResult:
     app = ctx.app
     if len(parts) < 2:
@@ -657,6 +657,130 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
         raw_tokens = parts[2].strip().split() if len(parts) > 2 else []
         return await handle_replay_command(ctx, raw_tokens)
 
-    else:
-        print(f"Unknown session subcommand: {subcmd}. Use start, auto, stop, status, save, list, use, show, export, info, delete, merge, compress, prune, replay.")
+    elif subcmd == "query":
+        from chatybot.query.base import QueryRequest, get_query_engine
+        from chatybot.query.date_parser import parse_datetime_expr, parse_date_range
+
+        raw_args = parts[2:]
+        if not raw_args:
+            print("Usage: /session query <terms...> [or|and] [since=<date>] [until=<date>] [range=<date to date>] [--scratch|--no-scratch] [limit=<N>] [var=<varname>]")
+            return CommandResult.ok()
+
+        terms = []
+        operator = "AND"
+        since_dt = None
+        until_dt = None
+        include_scratch = True
+        limit = 20
+        target_var = None
+        engine_name = None
+
+        i = 0
+        while i < len(raw_args):
+            arg = raw_args[i]
+            arg_lower = arg.lower()
+
+            if arg_lower in ("or", "--or"):
+                operator = "OR"
+            elif arg_lower in ("and", "--and"):
+                operator = "AND"
+            elif arg_lower in ("--scratch", "scratch"):
+                include_scratch = True
+            elif arg_lower in ("--no-scratch", "no-scratch"):
+                include_scratch = False
+            elif arg_lower.startswith("since="):
+                since_val = arg.split("=", 1)[1].strip("\"'")
+                since_dt = parse_datetime_expr(since_val)
+            elif arg_lower.startswith("until="):
+                until_val = arg.split("=", 1)[1].strip("\"'")
+                until_dt = parse_datetime_expr(until_val)
+            elif arg_lower.startswith("range="):
+                range_val = arg.split("=", 1)[1].strip("\"'")
+                # If range was space-separated like range="2026-03-01 to 2026-05-01"
+                r_start, r_end = parse_date_range(range_val)
+                if r_start:
+                    since_dt = r_start
+                if r_end:
+                    until_dt = r_end
+            elif arg_lower.startswith("limit="):
+                try:
+                    limit = int(arg.split("=", 1)[1])
+                except ValueError:
+                    pass
+            elif arg_lower.startswith("var="):
+                target_var = arg.split("=", 1)[1].strip()
+            elif arg_lower.startswith("engine="):
+                engine_name = arg.split("=", 1)[1].strip()
+            else:
+                # Remove quotes if present
+                clean_term = arg.strip("\"'")
+                if clean_term:
+                    terms.append(clean_term)
+            i += 1
+
+        if not terms:
+            print("Error: No search terms specified. Usage: /session query <terms...>")
+            return CommandResult.ok()
+
+        req = QueryRequest(
+            terms=terms,
+            operator=operator,
+            since_dt=since_dt,
+            until_dt=until_dt,
+            include_scratch=include_scratch,
+            limit=limit,
+        )
+
+        try:
+            engine = get_query_engine(engine_name)
+            response = engine.search(app, req)
+            res_dict = response.to_dict()
+        except Exception as e:
+            print(f"Query error: {e}")
+            return CommandResult.ok()
+
+        if hasattr(app, "buffer_manager") and app.buffer_manager:
+            app.buffer_manager.set_script_var("SESSION_QUERY", res_dict, allow_protected=True)
+            if target_var:
+                app.buffer_manager.set_script_var(target_var, res_dict, allow_protected=True)
+
+        # Format output
+        filter_parts = [f"operator={operator}"]
+        if since_dt:
+            filter_parts.append(f"since={since_dt.strftime('%Y-%m-%d %H:%M')}")
+        if until_dt:
+            filter_parts.append(f"until={until_dt.strftime('%Y-%m-%d %H:%M')}")
+        if include_scratch:
+            filter_parts.append("scratch=ON")
+        if engine_name:
+            filter_parts.append(f"engine={engine_name}")
+
+        filter_str = f" [{', '.join(filter_parts)}]"
+
+        print(f"\nQuery Results for '{' '.join(terms)}'{filter_str}: {response.total_matches} match(es)\n")
+        if not response.matches:
+            print("  No matches found.")
+            print("")
+            return CommandResult.ok()
+
+        for idx, match in enumerate(response.matches, 1):
+            if match.source == "session":
+                loc = f"Session: {match.session_id}"
+                if match.turn_id:
+                    loc += f" | Turn: {match.turn_id}"
+                if match.timestamp:
+                    loc += f" | {match.timestamp}"
+            else:
+                loc = f"Scratchpad: {match.metadata.get('file', 'scratch')}"
+                if match.turn_id:
+                    loc += f" | Line: {match.turn_id}"
+
+            print(f"  {idx}. [{loc}] ({match.role})")
+            print(f"     \"{match.snippet}\"")
+        print("")
         return CommandResult.ok()
+
+    else:
+        print(f"Unknown session subcommand: {subcmd}. Use start, auto, stop, status, save, list, use, show, export, info, delete, merge, compress, prune, replay, query.")
+        return CommandResult.ok()
+
