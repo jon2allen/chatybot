@@ -489,15 +489,22 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
         oldest_dt = datetime.fromtimestamp(oldest_mtime).strftime("%Y-%m-%d %H:%M:%S") if oldest_name else "N/A"
         newest_dt = datetime.fromtimestamp(newest_mtime).strftime("%Y-%m-%d %H:%M:%S") if newest_name else "N/A"
 
-        print("\n" + "=" * 60)
+        lines = [
+            f"Total Sessions:   {total_cnt}",
+            f"Space Consumed:   {size_str}",
+            f"Oldest Session:   {oldest_name or 'N/A'} ({oldest_dt})",
+            f"Newest Session:   {newest_name or 'N/A'} ({newest_dt})",
+            f"Largest Session:  {largest_name or 'N/A'} ({largest_str})",
+        ]
+        width = max(80, max(len(l) for l in lines))
+        sep = "=" * width
+
+        print("\n" + sep)
         print("SESSION WORKSPACE METRICS")
-        print("=" * 60)
-        print(f"Total Sessions:   {total_cnt}")
-        print(f"Space Consumed:   {size_str}")
-        print(f"Oldest Session:   {oldest_name or 'N/A'} ({oldest_dt})")
-        print(f"Newest Session:   {newest_name or 'N/A'} ({newest_dt})")
-        print(f"Largest Session:  {largest_name or 'N/A'} ({largest_str})")
-        print("=" * 60 + "\n")
+        print(sep)
+        for l in lines:
+            print(l)
+        print(sep + "\n")
         return CommandResult.ok()
 
     elif subcmd == "delete":
