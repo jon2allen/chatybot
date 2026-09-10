@@ -11,7 +11,7 @@ from chatybot.query.date_parser import parse_datetime_expr, parse_date_range
 
 
 def session_search(
-    query: str,
+    query: str = "",
     operator: str = "AND",
     since: Optional[str] = None,
     until: Optional[str] = None,
@@ -29,7 +29,7 @@ def session_search(
     Search past session turns, conversation history, notes, and scratchpad.
 
     Args:
-        query: Space-separated search terms or keywords (e.g. 'migration error').
+        query: Space-separated search terms or keywords (e.g. 'migration error'). Pass '*' or empty string if filtering solely by date or session.
         operator: Match operator: 'AND' (all terms required) or 'OR' (any term). Default is 'AND'.
         since: Filter messages after this timestamp or relative date (e.g. 'yesterday', '7d', '2026-03-01').
         until: Filter messages before this timestamp (e.g. '2026-05-01').
@@ -44,22 +44,34 @@ def session_search(
         app: ChatybotApp instance passed when called within application context.
 
     Returns:
-        Dict containing total_matches, matches list, session_ids, and status.
+        Dict containing:
+        - total_matches: Total number of match items.
+        - matches: List of match items with total session size_bytes (not turn size).
+        - session_ids: List of matching session IDs.
+        - sessions: List of matching session objects with session_id and entire session size_bytes.
+        - status: 'success' or 'error'.
     """
-    if not query or not query.strip():
-        return {
-            "status": "error",
-            "message": "Query string cannot be empty",
-            "total_matches": 0,
-            "matches": [],
-            "session_ids": [],
-        }
-
-    # Split query into terms, respecting quotes
-    try:
-        terms = shlex.split(query)
-    except ValueError:
-        terms = query.split()
+    query_str = (query or "").strip()
+    if query_str == "*":
+        terms = []
+    elif not query_str:
+        if since or until or range or session_id or ids_only:
+            terms = []
+        else:
+            return {
+                "status": "error",
+                "message": "Query string cannot be empty unless a filter (since, until, range, session_id, ids_only) is provided",
+                "total_matches": 0,
+                "matches": [],
+                "session_ids": [],
+                "sessions": [],
+            }
+    else:
+        # Split query into terms, respecting quotes
+        try:
+            terms = shlex.split(query_str)
+        except ValueError:
+            terms = query_str.split()
 
     # Parse date constraints
     since_dt = None

@@ -739,11 +739,11 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
                     terms.extend(val.split())
             else:
                 clean_term = arg.strip("\"'")
-                if clean_term:
+                if clean_term and clean_term != "*":
                     terms.append(clean_term)
             i += 1
 
-        if not terms:
+        if not terms and not (since_dt or until_dt or ids_only or sess_filter):
             print("Error: No search terms specified. Usage: /session query <terms...>")
             return CommandResult.ok()
 
@@ -754,6 +754,7 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
             until_dt=until_dt,
             include_scratch=include_scratch,
             limit=limit,
+            session_id=sess_filter,
             ids_only=ids_only,
             full=full_mode,
         )
@@ -782,24 +783,30 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
             filter_parts.append(f"since={since_dt.strftime('%Y-%m-%d %H:%M')}")
         if until_dt:
             filter_parts.append(f"until={until_dt.strftime('%Y-%m-%d %H:%M')}")
+        if sess_filter:
+            filter_parts.append(f"session={sess_filter}")
         if include_scratch and not ids_only:
             filter_parts.append("scratch=ON")
         if engine_name:
             filter_parts.append(f"engine={engine_name}")
 
         filter_str = f" [{', '.join(filter_parts)}]"
+        query_desc = f"'{' '.join(terms)}'" if terms else "all sessions"
 
         if ids_only:
-            print(f"\nMatching Sessions for '{' '.join(terms)}'{filter_str}: {len(response.session_ids)} session(s)\n")
+            print(f"\nMatching Sessions for {query_desc}{filter_str}: {len(response.session_ids)} session(s)\n")
             if not response.session_ids:
                 print("  No matching sessions found.\n")
                 return CommandResult.ok()
+            sess_map = {s.get("session_id"): s.get("size_bytes") for s in getattr(response, "sessions", [])}
             for sid in response.session_ids:
-                print(f"  {sid}")
+                sz = sess_map.get(sid)
+                sz_str = f" | {_format_size_bytes(sz)}" if sz else ""
+                print(f"  {sid}{sz_str}")
             print("")
             return CommandResult.ok()
 
-        print(f"\nQuery Results for '{' '.join(terms)}'{filter_str}: {response.total_matches} match(es)\n")
+        print(f"\nQuery Results for {query_desc}{filter_str}: {response.total_matches} match(es)\n")
         if not response.matches:
             print("  No matches found.\n")
             return CommandResult.ok()

@@ -249,14 +249,14 @@ optional = true
 
 [tools.session_search]
 enabled = true
-description = "Search across past session turns, conversation history, notes, and scratchpad areas with boolean AND/OR logic and date filtering."
+description = "Search across past session turns, conversation history, notes, and scratchpad areas with boolean AND/OR logic and date filtering. Returns match items and matching sessions with entire session storage sizes (in bytes)."
 module = "chatybot.tools.context_query"
 function = "session_search"
 
 [tools.session_search.parameters.query]
 type = "string"
-description = "Keywords or search phrase (e.g. 'database migration error')"
-optional = false
+description = "Keywords or search phrase (e.g. 'database migration error'). Pass '*' or empty string to match all sessions under date/time filters."
+optional = true
 
 [tools.session_search.parameters.operator]
 type = "string"
