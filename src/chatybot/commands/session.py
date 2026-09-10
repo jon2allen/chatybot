@@ -5,11 +5,22 @@ Migrated from chatybot_app.handle_escape_command elif chain:
   save, list, use, show, export, info, delete, merge, compress, uncompress, prune)
 """
 
+import re
 from datetime import datetime
 
 from chatybot.commands.registry import command, CommandResult
 from chatybot.commands.context import CommandContext
 from chatybot.commands.replay import handle_replay_command
+
+MAX_SESSION_NAME_LEN: int = 128
+
+
+def _sanitize_session_name(name: str) -> str:
+    cleaned = re.sub(r"[\r\n\t]+", " ", name.strip(" \"'\r\n\t")).strip()
+    if len(cleaned) > MAX_SESSION_NAME_LEN:
+        print(f"Warning: Session name exceeds {MAX_SESSION_NAME_LEN} characters ({len(cleaned)} chars). Truncating...")
+        cleaned = cleaned[:MAX_SESSION_NAME_LEN].rstrip()
+    return cleaned
 
 
 def _format_size_bytes(bytes_cnt: int) -> str:
@@ -41,7 +52,7 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
         if len(parts) < 3:
             print("Usage: /session start <name>")
             return CommandResult.ok()
-        session_name = " ".join(parts[2:]).strip(" \"'")
+        session_name = _sanitize_session_name(" ".join(parts[2:]))
         app._release_session_lock()
         app.chat_history.clear()
         app.session_turns.clear()
@@ -57,13 +68,19 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
         app.session_mode = "on" if app.session_mode == "off" else app.session_mode
         app._acquire_session_lock(app.active_session_id)
         store = app._get_session_store()
-        store.create_session(
-            session_id=app.active_session_id,
-            model_alias=model_alias,
-            custom_name=session_name,
-            initial_prompt="",
-            notes=None
-        )
+        try:
+            store.create_session(
+                session_id=app.active_session_id,
+                model_alias=model_alias,
+                custom_name=session_name,
+                initial_prompt="",
+                notes=None
+            )
+        except OSError as e:
+            print(f"Warning: Failed to create session on disk ({e}). Falling back to in-memory session.")
+            app.session_mode = "off"
+            app.active_session_id = None
+            return CommandResult.ok()
         app.buffer_manager.set_script_var('SESSION_NAME', session_name, allow_protected=True)
         print(f"Started new session '{session_name}' (ID: {app.active_session_id})")
         return CommandResult.ok()
@@ -135,7 +152,7 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
 
     elif subcmd in ("save", "name"):
         if len(parts) >= 3:
-            custom_name = " ".join(parts[2:]).strip(" \"'")
+            custom_name = _sanitize_session_name(" ".join(parts[2:]))
             app.active_session_name = custom_name
             app.buffer_manager.set_script_var('SESSION_NAME', custom_name, allow_protected=True)
         app._ensure_active_session()
@@ -370,9 +387,10 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
 
         export_path = " ".join(words).strip(" \"'")
         if not export_path and is_csv:
-            # Generate default csv filename if omitted
+            # Generate default csv filename if omitted, sanitizing for OS filename limits
             s_name = app.active_session_name or app.active_session_id or "session"
-            export_path = f"{s_name}.csv"
+            clean_name = re.sub(r"[^\w\-]", "_", s_name.strip())[:64].strip("_")
+            export_path = f"{clean_name or 'session'}.csv"
         elif not export_path:
             print("Usage: /session export [csv] <filepath> [--thinking|-t]")
             return CommandResult.ok()
@@ -558,7 +576,7 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
             print("Usage: /session merge <target_name> <session_a> <session_b> [session_c ...]")
             return CommandResult.ok()
 
-        target_name = merge_words[0].strip(" \"'")
+        target_name = _sanitize_session_name(merge_words[0])
         source_targets = merge_words[1:]
 
         store = app._get_session_store()

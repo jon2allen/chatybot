@@ -560,3 +560,64 @@ async def test_session_ids_is_protected(app, capsys):
     with app.buffer_manager.script_vars.user_write():
         with pytest.raises(ValueError, match="protected variable"):
             app.buffer_manager.script_vars["SESSION_IDS"] = "tampered"
+
+
+def test_session_id_sanitizes_model_alias(app):
+    """Session IDs must sanitize slashes, colons, spaces, and truncate alias to 32 chars."""
+    # Slashes and colons
+    sid = app._generate_session_id("vendor/model:fast")
+    assert "/" not in sid
+    assert ":" not in sid
+    assert sid.startswith("vendor_model_fast_")
+
+    # Long alias truncated to 32 chars
+    long_alias = "a" * 100
+    sid_long = app._generate_session_id(long_alias)
+    alias_part = sid_long.rsplit("_", 2)[0]  # strip timestamp _YYYYMMDD_HHMMSS
+    assert len(alias_part) <= 32
+
+
+@pytest.mark.anyio
+async def test_session_name_truncation_and_newlines(app, capsys):
+    """Session names exceeding MAX_SESSION_NAME_LEN (128) must truncate with a warning and strip newlines."""
+    huge_name = "Session\nName\tWith\rNewlines " + ("X" * 200)
+    await app.handle_escape_command(f'/session start "{huge_name}"')
+    captured = capsys.readouterr()
+
+    assert "Warning: Session name exceeds 128 characters" in captured.out
+    assert len(app.active_session_name) <= 128
+    assert "\n" not in app.active_session_name
+    assert "\r" not in app.active_session_name
+    assert "\t" not in app.active_session_name
+
+
+@pytest.mark.anyio
+async def test_session_export_csv_default_sanitizes_filename(app, tmp_path, monkeypatch):
+    """Default export csv filename must be sanitized against illegal characters and capped at 64 chars."""
+    monkeypatch.chdir(tmp_path)
+    await app.handle_escape_command('/session start "Comparison: Model A / Model B? [Q3]"')
+    app.append_session_turn("Hi", "Hello")
+
+    await app.handle_escape_command("/session export csv")
+    # File created should have no colons, slashes, or question marks
+    csv_files = list(tmp_path.glob("*.csv"))
+    assert len(csv_files) == 1
+    filename = csv_files[0].name
+    assert ":" not in filename
+    assert "/" not in filename
+    assert "?" not in filename
+    assert len(filename) <= 70  # 64 + len(".csv")
+
+
+def test_session_creation_oserror_graceful_degradation(app, capsys):
+    """If filesystem session creation raises OSError, app gracefully falls back to in-memory mode."""
+    from unittest.mock import patch
+    with patch.object(app._get_session_store(), "create_session", side_effect=OSError("Disk full / permission denied")):
+        app.session_mode = "on"
+        app.active_session_id = None
+        app._ensure_active_session("Test prompt")
+        captured = capsys.readouterr()
+        assert "Warning: Failed to create session on disk" in captured.out
+        assert app.session_mode == "off"
+        assert app.active_session_id is None
+
