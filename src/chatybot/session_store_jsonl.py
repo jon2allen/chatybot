@@ -348,6 +348,13 @@ class JsonlSessionStore(BaseSessionStore):
                 compressed = bool(
                     meta.get("compressed") or os.path.exists(self._turns_gz_path(d))
                 )
+                dir_sz = 0
+                for root, _, files in os.walk(dpath):
+                    for f in files:
+                        try:
+                            dir_sz += os.path.getsize(os.path.join(root, f))
+                        except OSError:
+                            pass
                 summaries.append({
                     "sid": meta.get("session_id", d),
                     "cname": meta.get("custom_name"),
@@ -358,6 +365,7 @@ class JsonlSessionStore(BaseSessionStore):
                     "snote": meta.get("notes"),
                     "compressed": compressed,
                     "model_alias": meta.get("model_alias"),
+                    "size_bytes": dir_sz,
                 })
 
         summaries.sort(key=lambda x: x["updated_at"], reverse=True)
@@ -397,6 +405,10 @@ class JsonlSessionStore(BaseSessionStore):
 
     def get_session_size(self, target: str) -> int:
         sid = self.resolve_session(target) or target
+        if self._summary_cache:
+            for s in self._summary_cache:
+                if s.get("sid") == sid and "size_bytes" in s:
+                    return s["size_bytes"]
         s_dir = self._session_dir(sid)
         if os.path.isdir(s_dir):
             total = 0

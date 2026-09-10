@@ -335,6 +335,11 @@ class MonolithicJsonSessionStore(BaseSessionStore):
         for fname in files:
             is_gz = fname.endswith(".gz")
             fp = os.path.join(self.sessions_dir, fname)
+            sz = 0
+            try:
+                sz = os.path.getsize(fp)
+            except OSError:
+                pass
             try:
                 open_fn = gzip.open if is_gz else open
                 with open_fn(fp, "rt", encoding="utf-8") as sf:
@@ -349,6 +354,7 @@ class MonolithicJsonSessionStore(BaseSessionStore):
                     "snote": sdata.get("notes"),
                     "compressed": is_gz,
                     "model_alias": sdata.get("model_alias"),
+                    "size_bytes": sz,
                 })
             except Exception:
                 corrupted_files.append(fname)
@@ -396,6 +402,10 @@ class MonolithicJsonSessionStore(BaseSessionStore):
 
     def get_session_size(self, target: str) -> int:
         sid = self.resolve_session(target) or target
+        if self._summary_cache:
+            for s in self._summary_cache:
+                if s.get("sid") == sid and "size_bytes" in s:
+                    return s["size_bytes"]
         filepath = self._session_file(sid)
         gz_path = self._session_gz_file(sid)
         for p in (filepath, gz_path):

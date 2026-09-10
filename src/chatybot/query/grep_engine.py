@@ -95,10 +95,25 @@ class GrepQueryEngine(BaseQueryEngine):
             except Exception:
                 store = None
 
-        def get_session_size_bytes(sid_or_target: str, turns_fallback: Optional[List[Dict[str, Any]]] = None, notes_fallback: Optional[str] = None) -> int:
+        session_size_cache: Dict[str, int] = {}
+        scratch_size_cache: Dict[str, int] = {}
+
+        def get_session_size_bytes(
+            sid_or_target: str,
+            turns_fallback: Optional[List[Dict[str, Any]]] = None,
+            notes_fallback: Optional[str] = None,
+            cached_summary: Optional[Dict[str, Any]] = None,
+        ) -> int:
+            if sid_or_target in session_size_cache:
+                return session_size_cache[sid_or_target]
+            if cached_summary and "size_bytes" in cached_summary and cached_summary["size_bytes"] > 0:
+                sz = cached_summary["size_bytes"]
+                session_size_cache[sid_or_target] = sz
+                return sz
             if store and hasattr(store, "get_session_size"):
                 sz = store.get_session_size(sid_or_target)
                 if sz > 0:
+                    session_size_cache[sid_or_target] = sz
                     return sz
             # If not found on disk or store unavailable, compute total size from all turns and notes
             total = 0
@@ -111,6 +126,7 @@ class GrepQueryEngine(BaseQueryEngine):
                             total += len(v.encode("utf-8"))
                         elif v is not None:
                             total += len(str(v).encode("utf-8"))
+            session_size_cache[sid_or_target] = total
             return total
 
         # 1. Search Active Session Turns & Buffer
@@ -119,7 +135,7 @@ class GrepQueryEngine(BaseQueryEngine):
             # Check session turns in memory
             turns = getattr(app, "session_turns", []) or []
             active_notes = getattr(app, "session_notes", None)
-            active_session_size = get_session_size_bytes(active_sid or "active", turns_fallback=turns, notes_fallback=active_notes)
+            active_session_size: Optional[int] = None
             active_session_has_match = False
             for idx, turn in enumerate(turns, 1):
                 # Timestamp check
@@ -146,6 +162,8 @@ class GrepQueryEngine(BaseQueryEngine):
                     active_session_has_match = True
 
                     if len(matches) < request.limit and not request.ids_only:
+                        if active_session_size is None:
+                            active_session_size = get_session_size_bytes(active_sid or "active", turns_fallback=turns, notes_fallback=active_notes)
                         snippet_text = full_content if request.full else make_snippet(full_content, hit_terms)
                         matches.append(
                             QueryMatch(
@@ -172,6 +190,8 @@ class GrepQueryEngine(BaseQueryEngine):
                     sess_key = active_sid or "active"
                     matched_session_ids.add(sess_key)
                     if len(matches) < request.limit and not request.ids_only:
+                        if active_session_size is None:
+                            active_session_size = get_session_size_bytes(active_sid or "active", turns_fallback=turns, notes_fallback=active_notes)
                         snippet_text = active_notes if request.full else make_snippet(active_notes, hit_terms)
                         matches.append(
                             QueryMatch(
@@ -214,7 +234,7 @@ class GrepQueryEngine(BaseQueryEngine):
 
                     # Search session notes if present in meta
                     s_notes = meta.get("notes") or meta.get("session_notes")
-                    persisted_session_size = get_session_size_bytes(sid, turns_fallback=loaded_turns, notes_fallback=s_notes)
+                    persisted_session_size: Optional[int] = None
 
                     if s_notes:
                         matched_ok, hit_terms = check_text_match(str(s_notes))
@@ -222,6 +242,8 @@ class GrepQueryEngine(BaseQueryEngine):
                             total_matches_count += 1
                             matched_session_ids.add(sid)
                             if len(matches) < request.limit and not request.ids_only:
+                                if persisted_session_size is None:
+                                    persisted_session_size = get_session_size_bytes(sid, turns_fallback=loaded_turns, notes_fallback=s_notes, cached_summary=s_summary)
                                 snippet_text = str(s_notes) if request.full else make_snippet(str(s_notes), hit_terms)
                                 matches.append(
                                     QueryMatch(
@@ -264,6 +286,8 @@ class GrepQueryEngine(BaseQueryEngine):
                             total_matches_count += 1
                             matched_session_ids.add(sid)
                             if len(matches) < request.limit and not request.ids_only:
+                                if persisted_session_size is None:
+                                    persisted_session_size = get_session_size_bytes(sid, turns_fallback=loaded_turns, notes_fallback=s_notes, cached_summary=s_summary)
                                 snippet_text = full_content if request.full else make_snippet(full_content, hit_terms)
                                 matches.append(
                                     QueryMatch(
@@ -315,11 +339,13 @@ class GrepQueryEngine(BaseQueryEngine):
                             if not is_within_date(mtime):
                                 continue
 
-                            file_size = 0
-                            try:
-                                file_size = os.path.getsize(file_path)
-                            except OSError:
-                                file_size = 0
+                            file_size = scratch_size_cache.get(file_path)
+                            if file_size is None:
+                                try:
+                                    file_size = os.path.getsize(file_path)
+                                except OSError:
+                                    file_size = 0
+                                scratch_size_cache[file_path] = file_size
 
                             try:
                                 with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
