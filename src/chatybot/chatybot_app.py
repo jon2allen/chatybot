@@ -4161,7 +4161,7 @@ class ChatybotApp:
 
         print("\n=== AGENTIC LOOP TRACE ===")
         print(f"Total tool calls: {total}  ({successes} success, {failures} failed)")
-        print("-" * 60)
+        print("-" * 80)
 
         for i, rec in enumerate(loop_data, 1):
             if not isinstance(rec, dict):
@@ -4204,7 +4204,7 @@ class ChatybotApp:
                 if snippet:
                     print(f"      reason: {snippet}")
 
-        print("=" * 60)
+        print("=" * 80)
 
     def _load_tools_config(self) -> dict:
         """Loads and returns the TOML tool definitions configuration."""

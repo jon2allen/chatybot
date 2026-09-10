@@ -84,8 +84,8 @@ def list_dbs() -> None:
         print("No database files found in 'db/'.")
         return
 
-    print(f"\n{'DB Name':<20} {'Filename':<25} {'Entries':>8} {'Size (KB)':>10}")
-    print("-" * 65)
+    print(f"\n{'DB Name':<24} {'Filename':<30} {'Entries':>10} {'Size (KB)':>13}")
+    print("-" * 80)
 
     for filename in sorted(json_files):
         db_path = os.path.join(db_dir, filename)
@@ -105,7 +105,7 @@ def list_dbs() -> None:
         except Exception:
             entries = "ERR"
 
-        print(f"{db_name:<20} {filename:<25} {entries:>8} {size_kb:>10.2f}")
+        print(f"{db_name:<24} {filename:<30} {entries:>10} {size_kb:>13.2f}")
     print()
 
 
