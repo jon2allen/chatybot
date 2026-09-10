@@ -77,11 +77,49 @@ class GrepQueryEngine(BaseQueryEngine):
         matched_session_ids = set()
         total_matches_count = 0
 
+        # Resolve Session Store if available
+        store = None
+        if hasattr(app, "_get_session_store"):
+            store = app._get_session_store()
+        elif hasattr(app, "get_session_store"):
+            store = app.get_session_store()
+        elif hasattr(app, "session_store"):
+            store = getattr(app, "session_store", None)
+        elif hasattr(app, "session_dir"):
+            from chatybot.session_factory import get_session_store
+            store = get_session_store(sessions_dir=app.session_dir)
+        else:
+            try:
+                from chatybot.session_factory import get_session_store
+                store = get_session_store()
+            except Exception:
+                store = None
+
+        def get_session_size_bytes(sid_or_target: str, turns_fallback: Optional[List[Dict[str, Any]]] = None, notes_fallback: Optional[str] = None) -> int:
+            if store and hasattr(store, "get_session_size"):
+                sz = store.get_session_size(sid_or_target)
+                if sz > 0:
+                    return sz
+            # If not found on disk or store unavailable, compute total size from all turns and notes
+            total = 0
+            if notes_fallback:
+                total += len(str(notes_fallback).encode("utf-8"))
+            if turns_fallback:
+                for t in turns_fallback:
+                    for k, v in t.items():
+                        if isinstance(v, str):
+                            total += len(v.encode("utf-8"))
+                        elif v is not None:
+                            total += len(str(v).encode("utf-8"))
+            return total
+
         # 1. Search Active Session Turns & Buffer
         active_sid = getattr(app, "active_session_id", None)
         if (not request.session_id or request.session_id == active_sid):
             # Check session turns in memory
             turns = getattr(app, "session_turns", []) or []
+            active_notes = getattr(app, "session_notes", None)
+            active_session_size = get_session_size_bytes(active_sid or "active", turns_fallback=turns, notes_fallback=active_notes)
             active_session_has_match = False
             for idx, turn in enumerate(turns, 1):
                 # Timestamp check
@@ -119,15 +157,14 @@ class GrepQueryEngine(BaseQueryEngine):
                                 matched_terms=hit_terms,
                                 snippet=snippet_text,
                                 full_text=full_content,
-                                size_bytes=len(full_content.encode("utf-8")),
-                                metadata={"active": True, "custom_name": getattr(app, "active_session_name", None)},
+                                size_bytes=active_session_size,
+                                metadata={"active": True, "custom_name": getattr(app, "active_session_name", None), "turn_bytes": len(full_content.encode("utf-8"))},
                             )
                         )
                     if request.ids_only:
                         break
 
             # Check active session notes
-            active_notes = getattr(app, "session_notes", None)
             if active_notes and (not request.ids_only or not active_session_has_match):
                 matched_ok, hit_terms = check_text_match(active_notes)
                 if matched_ok:
@@ -146,30 +183,13 @@ class GrepQueryEngine(BaseQueryEngine):
                                 matched_terms=hit_terms,
                                 snippet=snippet_text,
                                 full_text=active_notes,
-                                size_bytes=len(active_notes.encode("utf-8")),
+                                size_bytes=active_session_size,
                                 metadata={"active": True, "type": "note"},
                             )
                         )
 
         # 2. Search Persisted Sessions (via Session Store)
         if not request.active_only:
-            store = None
-            if hasattr(app, "_get_session_store"):
-                store = app._get_session_store()
-            elif hasattr(app, "get_session_store"):
-                store = app.get_session_store()
-            elif hasattr(app, "session_store"):
-                store = getattr(app, "session_store", None)
-            elif hasattr(app, "session_dir"):
-                from chatybot.session_factory import get_session_store
-                store = get_session_store(sessions_dir=app.session_dir)
-            else:
-                try:
-                    from chatybot.session_factory import get_session_store
-                    store = get_session_store()
-                except Exception:
-                    store = None
-
             if store:
                 try:
                     saved_sessions = store.list_sessions(limit=None, since_dt=request.since_dt)
@@ -194,6 +214,8 @@ class GrepQueryEngine(BaseQueryEngine):
 
                     # Search session notes if present in meta
                     s_notes = meta.get("notes") or meta.get("session_notes")
+                    persisted_session_size = get_session_size_bytes(sid, turns_fallback=loaded_turns, notes_fallback=s_notes)
+
                     if s_notes:
                         matched_ok, hit_terms = check_text_match(str(s_notes))
                         if matched_ok:
@@ -211,7 +233,7 @@ class GrepQueryEngine(BaseQueryEngine):
                                         matched_terms=hit_terms,
                                         snippet=snippet_text,
                                         full_text=str(s_notes),
-                                        size_bytes=len(str(s_notes).encode("utf-8")),
+                                        size_bytes=persisted_session_size,
                                         metadata={"custom_name": meta.get("custom_name"), "type": "note"},
                                     )
                                 )
@@ -253,8 +275,8 @@ class GrepQueryEngine(BaseQueryEngine):
                                         matched_terms=hit_terms,
                                         snippet=snippet_text,
                                         full_text=full_content,
-                                        size_bytes=len(full_content.encode("utf-8")),
-                                        metadata={"custom_name": meta.get("custom_name")},
+                                        size_bytes=persisted_session_size,
+                                        metadata={"custom_name": meta.get("custom_name"), "turn_bytes": len(full_content.encode("utf-8"))},
                                     )
                                 )
                             if request.ids_only:
@@ -293,6 +315,12 @@ class GrepQueryEngine(BaseQueryEngine):
                             if not is_within_date(mtime):
                                 continue
 
+                            file_size = 0
+                            try:
+                                file_size = os.path.getsize(file_path)
+                            except OSError:
+                                file_size = 0
+
                             try:
                                 with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                                     lines = f.readlines()
@@ -315,8 +343,8 @@ class GrepQueryEngine(BaseQueryEngine):
                                                 matched_terms=hit_terms,
                                                 snippet=snippet_text,
                                                 full_text=line.rstrip(),
-                                                size_bytes=len(line.encode("utf-8")),
-                                                metadata={"file": rel_path, "path": file_path},
+                                                size_bytes=file_size or len(line.encode("utf-8")),
+                                                metadata={"file": rel_path, "path": file_path, "line_bytes": len(line.encode("utf-8"))},
                                             )
                                         )
                 except Exception:

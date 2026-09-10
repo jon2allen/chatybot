@@ -81,6 +81,12 @@ class BaseSessionStore(ABC):
         """
         pass
 
+    def get_session_size(self, target: str) -> int:
+        """
+        Return the total storage size in bytes of the session on disk, or 0 if not found.
+        """
+        return 0
+
     @abstractmethod
     def delete_session(self, target: str) -> bool:
         """Delete a single session by ID, custom name, or path. Returns True if deleted."""

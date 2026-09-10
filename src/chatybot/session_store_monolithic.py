@@ -394,6 +394,18 @@ class MonolithicJsonSessionStore(BaseSessionStore):
             return parsed[offset : offset + limit]
         return parsed[offset:]
 
+    def get_session_size(self, target: str) -> int:
+        sid = self.resolve_session(target) or target
+        filepath = self._session_file(sid)
+        gz_path = self._session_gz_file(sid)
+        for p in (filepath, gz_path):
+            if os.path.exists(p):
+                try:
+                    return os.path.getsize(p)
+                except OSError:
+                    return 0
+        return 0
+
     def delete_session(self, target: str) -> bool:
         with self._thread_lock:
             sid = self.resolve_session(target)

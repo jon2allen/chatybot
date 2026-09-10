@@ -228,6 +228,23 @@ def session_get(
         extracted_text = "\n\n".join(formatted_list)
         extracted_turns = turns
 
+    session_total_bytes = 0
+    resolved_sid = meta.get("session_id") or target
+    store = None
+    if app:
+        if hasattr(app, "_get_session_store"):
+            store = app._get_session_store()
+        elif hasattr(app, "get_session_store"):
+            store = app.get_session_store()
+        elif hasattr(app, "session_store"):
+            store = getattr(app, "session_store", None)
+    if store and hasattr(store, "get_session_size"):
+        session_total_bytes = store.get_session_size(resolved_sid)
+    if not session_total_bytes and turns:
+        session_total_bytes = sum(len(str(v).encode("utf-8")) for t in turns for v in t.values() if v is not None)
+    if not session_total_bytes:
+        session_total_bytes = len(extracted_text.encode("utf-8"))
+
     result = {
         "status": "success",
         "session_id": meta.get("session_id") or target,
@@ -236,6 +253,7 @@ def session_get(
         "part": part_norm,
         "total_turns": len(turns),
         "size_bytes": len(extracted_text.encode("utf-8")),
+        "session_size_bytes": session_total_bytes,
         "text": extracted_text,
     }
 

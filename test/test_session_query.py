@@ -326,3 +326,33 @@ def test_store_error_isolation(tmp_path):
     assert res.matches[0].session_id == "sess_healthy"
 
 
+def test_query_match_reports_full_session_size(tmp_path):
+    class SizedStore:
+        def list_sessions(self, limit=None, since_dt=None):
+            return [{"sid": "large_sess"}]
+        def load_session(self, sid):
+            return ({"notes": None}, [{"prompt": "hi", "response": "session search"}])
+        def get_session_size(self, sid):
+            return 45000
+
+    class MockAppSized(MockApp):
+        def get_session_store(self):
+            return SizedStore()
+
+    sized_app = MockAppSized(tmp_path)
+    sized_app.active_session_id = None
+    sized_app.session_turns = []
+    sized_app.session_notes = None
+
+    engine = get_query_engine("grep")
+    req = QueryRequest(terms=["session"])
+    res = engine.search(sized_app, req)
+
+    assert res.total_matches == 1
+    match = res.matches[0]
+    # size_bytes must be the full session size (45,000 bytes), not the short turn text (~25 bytes)
+    assert match.size_bytes == 45000
+    assert match.metadata.get("turn_bytes") < 100
+
+
+
