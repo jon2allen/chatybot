@@ -6,6 +6,7 @@ Allows browsing, editing, cloning, deleting models with vendor presets.
 
 import os
 import sys
+import re
 import argparse
 try:
     import curses
@@ -14,7 +15,7 @@ except ImportError:
     curses = None
 from typing import Optional, List, Tuple, Dict, Any
 
-from .config_model import ChatConfig, ChatModelConfig, RerankerModelConfig
+from .config_model import ChatConfig, ChatModelConfig, RerankerModelConfig, MAX_MODEL_ALIAS_LEN
 from .vendors import VENDOR_PRESETS, vendor_names, get_env_status
 
 
@@ -555,13 +556,15 @@ class ConfigTUI:
         win.addstr(8, 4, "Temperature:")
         win.addstr(9, 4, "Top K:")
         
-        new_alias = f"{alias}_clone"
+        suffix = "_clone"
+        prefix_len = MAX_MODEL_ALIAS_LEN - len(suffix)
+        new_alias = f"{alias[:prefix_len]}{suffix}"
         temp_val = f"{model.temperature}" if getattr(model, "temperature", None) is not None else ""
         top_k_val = f"{model.top_k}" if getattr(model, "top_k", None) is not None else ""
         
         # Setup form navigation
         fields = [
-            ("new_alias", 4, 16, 26, new_alias, "text"),
+            ("new_alias", 4, 16, 32, new_alias, "text"),
             ("temperature", 8, 18, 10, temp_val, "text"),
             ("top_k", 9, 18, 10, top_k_val, "text"),
         ]
@@ -621,6 +624,12 @@ class ConfigTUI:
                         if not new_alias_str:
                             self.set_status("Error: New alias cannot be empty!", is_error=True)
                             continue
+                        if len(new_alias_str) > MAX_MODEL_ALIAS_LEN:
+                            self.set_status(f"Error: Alias exceeds maximum length of {MAX_MODEL_ALIAS_LEN} chars ({len(new_alias_str)})!", is_error=True)
+                            continue
+                        if not re.match(r"^[a-zA-Z0-9_\-]+$", new_alias_str):
+                            self.set_status("Error: Alias must contain only alphanumeric characters, dashes, or underscores!", is_error=True)
+                            continue
                         if new_alias_str in self.config.models:
                             self.set_status(f"Error: Alias '{new_alias_str}' already exists!", is_error=True)
                             continue
@@ -665,6 +674,14 @@ class ConfigTUI:
             return False
             
         new_alias = new_alias.strip()
+        if len(new_alias) > MAX_MODEL_ALIAS_LEN:
+            self.set_status(f"Error: Alias exceeds maximum length of {MAX_MODEL_ALIAS_LEN} chars ({len(new_alias)})!", is_error=True)
+            return False
+
+        if not re.match(r"^[a-zA-Z0-9_\-]+$", new_alias):
+            self.set_status("Error: Alias must contain only alphanumeric characters, dashes, or underscores!", is_error=True)
+            return False
+
         if new_alias in self.config.models:
             # BLOCKS! Duplicate alias must be rejected.
             self.set_status(f"Error: Alias '{new_alias}' already exists!", is_error=True)
@@ -1463,7 +1480,7 @@ class ConfigTUI:
         # Form field coordinates & types
         # format: (key, label, y, x, field_width, f_type, options_list)
         fields = [
-            ("alias",            "Alias:",           2,  16, 24, "text", None),
+            ("alias",            "Alias:",           2,  16, 34, "text", None),
             ("name",             "Model Name:",      3,  16, 42, "text", None),
             ("type",             "Type:",            4,  16, 16, "cycle", ["chat", "reranker"]),
             
@@ -1661,6 +1678,14 @@ class ConfigTUI:
             self.set_status("Error: Alias cannot be empty!", is_error=True)
             return False
             
+        if len(new_alias) > MAX_MODEL_ALIAS_LEN:
+            self.set_status(f"Error: Alias exceeds maximum length of {MAX_MODEL_ALIAS_LEN} chars ({len(new_alias)})!", is_error=True)
+            return False
+
+        if not re.match(r"^[a-zA-Z0-9_\-]+$", new_alias):
+            self.set_status("Error: Alias must contain only alphanumeric characters, dashes, or underscores!", is_error=True)
+            return False
+
         if (is_new or new_alias != old_alias) and new_alias in self.config.models:
             self.set_status(f"Error: Alias '{new_alias}' already exists!", is_error=True)
             return False
