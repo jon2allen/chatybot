@@ -7,7 +7,7 @@ import pytest
 import tempfile
 import os
 import shutil
-from src.chatybot.config_manager import ConfigManager
+from chatybot.config_manager import ConfigManager
 
 
 class TestConfigManager:
@@ -309,6 +309,56 @@ temperature = 0.7
         with pytest.raises(ValueError):
             manager.load_config()
 
+    def test_long_model_alias_warning(self, capsys):
+        """A model alias exceeding MAX_MODEL_ALIAS_LEN emits a non-fatal warning on startup."""
+        from chatybot.config_model import MAX_MODEL_ALIAS_LEN
+        long_alias = "a" * (MAX_MODEL_ALIAS_LEN + 5)
+        config_content = f"""
+[models]
+[models.{long_alias}]
+name = "Long Model"
+base_url = "http://localhost:11434"
+"""
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.toml') as f:
+            f.write(config_content)
+            f.flush()
+            temp_path = f.name
+        try:
+            manager = ConfigManager(config_path=temp_path)
+            manager.load_config()
+            captured = capsys.readouterr()
+            assert "Warning: Model alias" in captured.out
+            assert long_alias in captured.out
+            assert str(MAX_MODEL_ALIAS_LEN) in captured.out
+            # Confirms non-fatal loading
+            assert long_alias in manager.config["models"]
+        finally:
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+
+    def test_valid_model_alias_no_warning(self, capsys):
+        """Model aliases within the recommended length do not emit warnings."""
+        config_content = """
+[models]
+[models.valid_alias_123]
+name = "Standard Model"
+base_url = "http://localhost:11434"
+"""
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.toml') as f:
+            f.write(config_content)
+            f.flush()
+            temp_path = f.name
+        try:
+            manager = ConfigManager(config_path=temp_path)
+            manager.load_config()
+            captured = capsys.readouterr()
+            assert "Warning: Model alias" not in captured.out
+            assert "valid_alias_123" in manager.config["models"]
+        finally:
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+

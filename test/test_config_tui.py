@@ -653,6 +653,120 @@ def test_apply_form_edits_preserves_context_limit():
     assert updated_model.context_limit == 128000
 
 
+def test_tui_execute_clone_alias_length_limit():
+    from chatybot.config_model import MAX_MODEL_ALIAS_LEN
+    tui = ConfigTUI()
+    tui.config = ChatConfig(models={
+        "source": ChatModelConfig(name="source", base_url="https://api.test/v1")
+    })
+    tui.sync_models_list()
+
+    too_long = "a" * (MAX_MODEL_ALIAS_LEN + 1)
+    res = tui.execute_clone(None, tui.config.models["source"], too_long, "", "")
+    assert res is False
+    assert tui.status_is_error is True
+    assert "maximum length" in tui.status_message
+
+
+def test_tui_execute_clone_alias_invalid_characters():
+    tui = ConfigTUI()
+    tui.config = ChatConfig(models={
+        "source": ChatModelConfig(name="source", base_url="https://api.test/v1")
+    })
+    tui.sync_models_list()
+
+    for bad_alias in ["has space", "bad@char", "invalid/slash", "colon:alias"]:
+        res = tui.execute_clone(None, tui.config.models["source"], bad_alias, "", "")
+        assert res is False
+        assert tui.status_is_error is True
+        assert "alphanumeric" in tui.status_message
+
+
+def test_tui_apply_form_edits_alias_length_limit():
+    from chatybot.config_model import MAX_MODEL_ALIAS_LEN
+    tui = ConfigTUI()
+    tui.config = ChatConfig(models={
+        "m1": ChatModelConfig(name="test", base_url="https://api.test/v1")
+    })
+    tui.sync_models_list()
+
+    too_long = "b" * (MAX_MODEL_ALIAS_LEN + 1)
+    form_data = {
+        "alias": too_long,
+        "name": "test",
+        "type": "chat",
+        "base_url": "https://api.test/v1",
+        "api_key": "",
+        "vendor": "openai",
+        "temperature": "",
+        "top_k": "",
+        "image_generation": "false",
+        "image_endpoint": "",
+        "image_modalities": "",
+    }
+    res = tui.apply_form_edits("m1", form_data, is_new=False)
+    assert res is False
+    assert tui.status_is_error is True
+    assert "maximum length" in tui.status_message
+
+
+def test_tui_apply_form_edits_alias_invalid_characters():
+    tui = ConfigTUI()
+    tui.config = ChatConfig(models={
+        "m1": ChatModelConfig(name="test", base_url="https://api.test/v1")
+    })
+    tui.sync_models_list()
+
+    for bad_alias in ["alias with spaces", "alias$bad", "model#1", "model.name"]:
+        form_data = {
+            "alias": bad_alias,
+            "name": "test",
+            "type": "chat",
+            "base_url": "https://api.test/v1",
+            "api_key": "",
+            "vendor": "openai",
+            "temperature": "",
+            "top_k": "",
+            "image_generation": "false",
+            "image_endpoint": "",
+            "image_modalities": "",
+        }
+        res = tui.apply_form_edits("m1", form_data, is_new=False)
+        assert res is False
+        assert tui.status_is_error is True
+        assert "alphanumeric" in tui.status_message
+
+
+def test_tui_apply_form_edits_valid_alias_formats():
+    tui = ConfigTUI()
+    tui.config = ChatConfig(models={
+        "m1": ChatModelConfig(name="test", base_url="https://api.test/v1")
+    })
+    tui.sync_models_list()
+
+    valid_aliases = ["valid-alias-1", "valid_alias_2", "ValidAlias3", "a" * 32]
+    for valid_alias in valid_aliases:
+        form_data = {
+            "alias": valid_alias,
+            "name": "test",
+            "type": "chat",
+            "base_url": "https://api.test/v1",
+            "api_key": "",
+            "vendor": "openai",
+            "temperature": "",
+            "top_k": "",
+            "image_generation": "false",
+            "image_endpoint": "",
+            "image_modalities": "",
+        }
+        res = tui.apply_form_edits("m1", form_data, is_new=False)
+        assert res is True
+        assert valid_alias in tui.config.models
+        # Reset m1 for next iteration
+        tui.config.models["m1"] = tui.config.models.pop(valid_alias)
+
+
+
 
 
 

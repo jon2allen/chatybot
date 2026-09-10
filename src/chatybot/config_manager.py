@@ -41,13 +41,22 @@ class ConfigManager:
             from .config_sync import sync_toml_file
             sync_toml_file(local_config, config_path, "chat_config.toml")
         
-        from .config_model import ChatConfig
+        from .config_model import ChatConfig, MAX_MODEL_ALIAS_LEN
         try:
             chat_config = ChatConfig.from_toml(config_path)
             self.config = chat_config.model_dump(exclude_none=True)
         except Exception as e:
             raise ValueError(f"Failed to parse or validate config at '{config_path}': {e}")
-        
+
+        # Check model aliases against recommended length and warn if exceeded
+        for alias in self.config.get("models", {}).keys():
+            if len(alias) > MAX_MODEL_ALIAS_LEN:
+                print(
+                    f"[Warning: Model alias '{alias}' is {len(alias)} characters "
+                    f"(recommended maximum is {MAX_MODEL_ALIAS_LEN}). "
+                    f"Long aliases may cause table and border clipping in 80-column terminal displays.]"
+                )
+
         # Set the default model alias: use [default].model if specified,
         # otherwise fall back to the first model in TOML order.
         default_cfg = self.config.get("default", {})

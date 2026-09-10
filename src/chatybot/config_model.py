@@ -29,6 +29,9 @@ from typing import Annotated, Literal, Optional, Union
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+# Maximum recommended length for model aliases across terminal displays
+MAX_MODEL_ALIAS_LEN: int = 32
+
 
 # ============================================================================
 # IMAGE GENERATION SETTINGS
