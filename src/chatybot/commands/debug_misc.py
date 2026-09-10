@@ -709,11 +709,27 @@ async def cmd_listmacros(ctx: CommandContext, parts: list, command: str) -> Comm
     return CommandResult.ok()
 
 
-@command("/docs", help="List or open bundled documentation and guides", args="[filename|subpath]", category="debug", aliases=["/doc"])
+@command("/docs", help="List or open bundled documentation and guides", args="[filename|subpath] [page=N]", category="debug", aliases=["/doc"])
 async def cmd_docs(ctx: CommandContext, parts: list, command: str) -> CommandResult:
-    from chatybot.doc_utils import get_doc_dir, get_doc_path, list_docs
+    from chatybot.doc_utils import get_doc_dir, get_doc_path, list_docs, display_doc
     
-    sub = parts[1].strip() if len(parts) > 1 else ""
+    app = ctx.app
+    in_script = bool(getattr(app, "script_context", False))
+    
+    raw_args = command.split()[1:] if len(command.split()) > 1 else []
+    sub = ""
+    page_num = 1
+    
+    for arg in raw_args:
+        arg_lower = arg.lower()
+        if arg_lower.startswith("page="):
+            try:
+                page_num = max(1, int(arg.split("=", 1)[1]))
+            except ValueError:
+                page_num = 1
+        elif not sub:
+            sub = arg.strip("\"'")
+
     if not sub:
         doc_dir = get_doc_dir()
         docs = list_docs()
@@ -739,7 +755,8 @@ async def cmd_docs(ctx: CommandContext, parts: list, command: str) -> CommandRes
             for d in sorted(sub_docs):
                 print(f"  {d}")
         print("\nUsage:")
-        print("  /docs <filename>       - View documentation file")
+        print("  /docs <filename>       - View documentation file (REPL: highlighted pager, Script: chunked)")
+        print("  /docs <filename> page=N - View specific page (40 lines/page in script context)")
         print("  /docs cookbook         - List all cookbook recipes")
         print("  /docs path             - Print full path to documentation directory\n")
         return CommandResult.ok()
@@ -780,14 +797,13 @@ async def cmd_docs(ctx: CommandContext, parts: list, command: str) -> CommandRes
 
     try:
         content = target.read_text(encoding="utf-8")
-        print(f"\n--- {target.name} ({target}) ---")
-        # Print up to 100 lines or pager
-        lines = content.splitlines()
-        if len(lines) > 120:
-            print("\n".join(lines[:100]))
-            print(f"\n[Showing first 100 of {len(lines)} lines. Full file at: {target}]")
-        else:
-            print(content)
+        display_doc(
+            content=content,
+            filename=target.name,
+            in_script=in_script,
+            page_size=40,
+            page_num=page_num,
+        )
     except Exception as e:
         print(f"Error reading documentation file '{target}': {e}")
 
