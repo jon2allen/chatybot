@@ -804,10 +804,10 @@ async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandRes
                 duration_str = f" [{loop_duration:.0f}ms]" if loop_duration else ""
                 print(f"  Turn {t_id}: {count} calls ({successes} ok, {failures} fail){duration_str} — {tools_str}")
 
-            print("-" * 60)
+            print("-" * 80)
             print(f"Total: {len(loops)} loop(s), {total_calls} tool calls ({total_success} success, {total_failed} failed)")
             print("Use '/tool history <turn_id>' for per-call details, '/tool history current' for the latest in-memory loop.")
-            print("=" * 60)
+            print("=" * 80)
             return CommandResult.ok()
 
         # Specific turn_id requested — show detailed tool calls
@@ -881,7 +881,7 @@ async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandRes
                 snippet = snippet[:97] + "..."
             print(f"Prompt: {snippet}")
         print(f"Total tool calls: {total}  ({successes} success, {failures} failed)")
-        print("-" * 60)
+        print("-" * 80)
 
         for i, rec in enumerate(al, 1):
             if not isinstance(rec, dict):
@@ -924,7 +924,7 @@ async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandRes
                 if snippet:
                     print(f"      reason: {snippet}")
 
-        print("=" * 60)
+        print("=" * 80)
         return CommandResult.ok()
 
     elif subcmd == "export":

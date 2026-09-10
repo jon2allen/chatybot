@@ -192,14 +192,14 @@ def run_migration(
         return 0, 0
 
     if not quiet:
-        print("=" * 68)
+        print("=" * 80)
         print(" Chatybot Session Migration Utility: Monolithic JSON -> JSONL")
-        print("=" * 68)
+        print("=" * 80)
         print(f" Sessions directory : {sessions_dir}")
         print(f" Backup directory   : {backup_dir}")
         print(f" Mode               : {'DRY RUN (preview only)' if dry_run else 'LIVE MIGRATION'}")
         print(f" Found {total} legacy session(s) to convert.")
-        print("-" * 68)
+        print("-" * 80)
         print(" Starting migration...")
 
     migrated_count = 0
@@ -220,12 +220,12 @@ def run_migration(
                 print(f"  {prefix} [{idx:>{len(str(total))}}/{total}] ERROR '{sid}': {msg}")
 
     if not quiet:
-        print("=" * 68)
+        print("=" * 80)
         status = "DRY RUN COMPLETE" if dry_run else "MIGRATION COMPLETE"
         print(f" {status}: {migrated_count} session(s) successfully converted, {error_count} error(s).")
         if not dry_run and migrated_count > 0:
             print(f" Original files archived to: {backup_dir}")
-        print("=" * 68)
+        print("=" * 80)
 
     return migrated_count, error_count
 

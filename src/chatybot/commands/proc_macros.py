@@ -323,16 +323,16 @@ async def cmd_chatdsl(ctx: CommandContext, parts: list, command: str) -> Command
 
     # If no selection provided, display interactive picklist
     if selection_str is None:
-        print("\n" + "=" * 60)
+        print("\n" + "=" * 80)
         print("  Active Session History (Codify to ChatDSL)")
-        print("=" * 60)
+        print("=" * 80)
         for itm in items:
             idx = itm["index"]
             prompt_preview = itm["prompt"].replace("\n", " ")
-            if len(prompt_preview) > 65:
-                prompt_preview = prompt_preview[:62] + "..."
+            if len(prompt_preview) > 72:
+                prompt_preview = prompt_preview[:69] + "..."
             print(f"  [{idx:>2}] {prompt_preview}")
-        print("-" * 60)
+        print("-" * 80)
         print("Select items (e.g. '1,3,5-7', 'last 3', 'all', or 'q' to cancel):")
         try:
             user_sel = input("Selection> ").strip()
