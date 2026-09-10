@@ -355,4 +355,48 @@ def test_query_match_reports_full_session_size(tmp_path):
     assert match.metadata.get("turn_bytes") < 100
 
 
+def test_lazy_size_evaluation_and_caching(tmp_path):
+    size_call_counts = {"match_sess": 0, "unmatched_sess": 0}
+
+    class InstrumentedStore:
+        def list_sessions(self, limit=None, since_dt=None):
+            return [
+                {"sid": "match_sess", "size_bytes": 12345},
+                {"sid": "unmatched_sess"},
+            ]
+        def load_session(self, sid):
+            if sid == "match_sess":
+                return ({"notes": None}, [
+                    {"prompt": "match query turn 1", "response": "res 1"},
+                    {"prompt": "match query turn 2", "response": "res 2"},
+                ])
+            return ({"notes": None}, [{"prompt": "other", "response": "other"}])
+
+        def get_session_size(self, sid):
+            size_call_counts[sid] = size_call_counts.get(sid, 0) + 1
+            return 99999
+
+    class MockAppLazy(MockApp):
+        def get_session_store(self):
+            return InstrumentedStore()
+
+    app = MockAppLazy(tmp_path)
+    app.active_session_id = None
+    app.session_turns = []
+    app.session_notes = None
+
+    engine = get_query_engine("grep")
+    req = QueryRequest(terms=["match"])
+    res = engine.search(app, req)
+
+    assert res.total_matches == 2
+    # Unmatched session size should NEVER be computed/called
+    assert size_call_counts["unmatched_sess"] == 0
+    # Matched session size was served directly from cached summary (12345), avoiding get_session_size disk call
+    assert size_call_counts["match_sess"] == 0
+    assert res.matches[0].size_bytes == 12345
+    assert res.matches[1].size_bytes == 12345
+
+
+
 
