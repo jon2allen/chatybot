@@ -58,6 +58,7 @@ class QueryResponse:
     total_matches: int
     matches: List[QueryMatch]
     session_ids: List[str] = field(default_factory=list)
+    sessions: List[Dict[str, Any]] = field(default_factory=list)
     engine: str = "grep"
 
     def to_dict(self) -> Dict[str, Any]:
@@ -65,6 +66,7 @@ class QueryResponse:
             "total_matches": self.total_matches,
             "matches": [m.to_dict() for m in self.matches],
             "session_ids": self.session_ids,
+            "sessions": self.sessions,
             "engine": self.engine,
         }
 

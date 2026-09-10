@@ -176,7 +176,7 @@ class GrepQueryEngine(BaseQueryEngine):
                                 snippet=snippet_text,
                                 full_text=full_content,
                                 size_bytes=active_session_size,
-                                metadata={"active": True, "custom_name": getattr(app, "active_session_name", None), "turn_bytes": len(full_content.encode("utf-8"))},
+                                metadata={"active": True, "custom_name": getattr(app, "active_session_name", None)},
                             )
                         )
                     if request.ids_only:
@@ -300,7 +300,7 @@ class GrepQueryEngine(BaseQueryEngine):
                                         snippet=snippet_text,
                                         full_text=full_content,
                                         size_bytes=persisted_session_size,
-                                        metadata={"custom_name": meta.get("custom_name"), "turn_bytes": len(full_content.encode("utf-8"))},
+                                        metadata={"custom_name": meta.get("custom_name")},
                                     )
                                 )
                             if request.ids_only:
@@ -370,15 +370,24 @@ class GrepQueryEngine(BaseQueryEngine):
                                                 snippet=snippet_text,
                                                 full_text=line.rstrip(),
                                                 size_bytes=file_size or len(line.encode("utf-8")),
-                                                metadata={"file": rel_path, "path": file_path, "line_bytes": len(line.encode("utf-8"))},
+                                                metadata={"file": rel_path, "path": file_path},
                                             )
                                         )
                 except Exception:
                     pass
 
+        sessions_list = []
+        for sid in sorted(list(matched_session_ids)):
+            sz = get_session_size_bytes(sid)
+            sessions_list.append({
+                "session_id": sid,
+                "size_bytes": sz,
+            })
+
         return QueryResponse(
             total_matches=total_matches_count if not request.ids_only else len(matched_session_ids),
             matches=matches,
             session_ids=sorted(list(matched_session_ids)),
+            sessions=sessions_list,
             engine=self.name,
         )

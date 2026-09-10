@@ -350,9 +350,37 @@ def test_query_match_reports_full_session_size(tmp_path):
 
     assert res.total_matches == 1
     match = res.matches[0]
-    # size_bytes must be the full session size (45,000 bytes), not the short turn text (~25 bytes)
+    # size_bytes must be the full session size (45,000 bytes), not the short turn text
     assert match.size_bytes == 45000
-    assert match.metadata.get("turn_bytes") < 100
+    assert "turn_bytes" not in match.metadata
+    # res.sessions must also report the entire session size
+    assert len(res.sessions) == 1
+    assert res.sessions[0]["session_id"] == "large_sess"
+    assert res.sessions[0]["size_bytes"] == 45000
+
+
+def test_session_search_empty_query_with_filters(tmp_path):
+    app = MockApp(tmp_path)
+    res = session_search(
+        query="",
+        since="yesterday",
+        ids_only=True,
+        app=app,
+    )
+    assert res["status"] == "success"
+    assert "sessions" in res
+    assert len(res["sessions"]) >= 1
+    # Check that each entry in sessions has the entire session size
+    for s_info in res["sessions"]:
+        assert "session_id" in s_info
+        assert "size_bytes" in s_info
+        assert isinstance(s_info["size_bytes"], int)
+
+
+def test_session_search_empty_query_without_filters_errors():
+    res = session_search(query="")
+    assert res["status"] == "error"
+    assert "cannot be empty" in res["message"]
 
 
 def test_lazy_size_evaluation_and_caching(tmp_path):
