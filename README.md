@@ -94,6 +94,7 @@ chatybot is an interactive command-line tool that enables seamless communication
 - `pip` package manager
 - `parsley` library
 - API keys for your preferred LLMs (OpenAI, Anthropic, etc.)
+- Terminal emulator with at least **80 columns** (minimum `80x24`; **100–120 columns** recommended for optimal REPL and TUI operation)
 
 ### **Installation Steps**
 
@@ -262,6 +263,11 @@ chat --> /model mistral_1 # Switch active model (or e.g. /model gemini_flash)
 chat --> /help            # View all available escape commands
 chat --> Hello!           # Start chatting!
 ```
+
+> [!TIP]
+> **Optimal Terminal Size for REPL Operation**:
+> * **Standard Baseline:** A terminal window of at least **80 columns by 24 rows (`80x24`)** is required for standard operation. Command separators, status banners, session workspace metrics (`/session info`), conversation turn histories (`/session show`), picklists (`/chatdsl history`), tool loop summaries (`/tool history`), and context differential replay (`/replay`) are all standardized to 80-column output.
+> * **Recommended Power-User Size:** A window width of **100 to 120 columns** (e.g. `100x30` or `120x35`) provides the best interactive experience. It leaves ample breathing room for complex multi-turn dialogs, side-by-side terminal splits, long filepaths, and curses-based configuration TUIs (`--profile-edit` / `/profile edit` and `config_tui`) without horizontal line wrapping.
 
 
 ---
