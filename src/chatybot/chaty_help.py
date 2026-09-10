@@ -825,8 +825,14 @@ class HelpSystem:
         return sorted(self.categories.keys())
     
     def get_command(self, name: str) -> Optional[CommandHelp]:
-        """Get help for a specific command."""
-        return self.commands.get(name)
+        """Get help for a specific command, checking exact name then aliases."""
+        if name in self.commands:
+            return self.commands[name]
+        norm = name.lower()
+        for cmd in self.commands.values():
+            if any(a.lower() == norm for a in cmd.aliases):
+                return cmd
+        return None
     
     def filter_commands(self, keyword: str) -> List[CommandHelp]:
         """Filter commands by keyword."""
@@ -1010,15 +1016,15 @@ class HelpSystem:
         if query is None:
             return self.format_command_list(self.get_all_commands(), i18n=i18n)
         
-        if query in self.commands:
-            return self.format_command_detail(self.commands[query], i18n=i18n)
+        cmd = self.get_command(query)
+        if cmd:
+            return self.format_command_detail(cmd, i18n=i18n)
 
         if query.startswith('/'):
             query_without_slash = query.lstrip('/')
-            if f"/{query_without_slash}" in self.commands:
-                return self.format_command_detail(self.commands[f"/{query_without_slash}"], i18n=i18n)
-            elif query_without_slash in self.commands:
-                return self.format_command_detail(self.commands[query_without_slash], i18n=i18n)
+            cmd = self.get_command(f"/{query_without_slash}") or self.get_command(query_without_slash)
+            if cmd:
+                return self.format_command_detail(cmd, i18n=i18n)
             else:
                 filtered = self.filter_commands(query)
                 if not filtered:
