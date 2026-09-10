@@ -235,6 +235,7 @@ def session_get(
         "turn_id": turn_id,
         "part": part_norm,
         "total_turns": len(turns),
+        "size_bytes": len(extracted_text.encode("utf-8")),
         "text": extracted_text,
     }
 

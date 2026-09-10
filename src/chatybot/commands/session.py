@@ -12,6 +12,17 @@ from chatybot.commands.context import CommandContext
 from chatybot.commands.replay import handle_replay_command
 
 
+def _format_size_bytes(bytes_cnt: int) -> str:
+    if not bytes_cnt:
+        return "0 B"
+    if bytes_cnt < 1024:
+        return f"{bytes_cnt} B"
+    elif bytes_cnt < 1024 * 1024:
+        return f"{bytes_cnt / 1024:.1f} KB"
+    else:
+        return f"{bytes_cnt / (1024 * 1024):.1f} MB"
+
+
 @command("/session", help="Manage sessions", args="<start|auto|stop|status|history|note|save|list|use|show|export|info|delete|merge|compress|prune|replay|query|get> ...", category="session")
 async def cmd_session(ctx: CommandContext, parts: list, command: str) -> CommandResult:
     app = ctx.app
@@ -805,6 +816,9 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
                 if match.turn_id:
                     loc += f" | Line: {match.turn_id}"
 
+            if getattr(match, "size_bytes", None):
+                loc += f" | {_format_size_bytes(match.size_bytes)}"
+
             print(f"  {idx}. [{loc}] ({match.role})")
             if full_mode:
                 for line in (match.full_text or match.snippet).splitlines():
@@ -871,7 +885,8 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
         turn_str = f"Turn {turn_id}" if turn_id is not None else f"All Turns ({res.get('total_turns', 0)} total)"
         var_str = f" (Saved to '${target_var}')" if target_var else ""
 
-        print(f"\n--- Extracted from {sid_display}{cname_str} [{turn_str} | {part_name}]{var_str} ---")
+        size_str = f" | {_format_size_bytes(res.get('size_bytes', 0))}" if res.get("size_bytes") else ""
+        print(f"\n--- Extracted from {sid_display}{cname_str} [{turn_str} | {part_name}{size_str}]{var_str} ---")
         print(res.get("text", ""))
         print("--- End of extraction ---\n")
         return CommandResult.ok()
