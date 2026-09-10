@@ -3370,6 +3370,34 @@ class ChatybotApp:
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', str(e))
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
                     return err_msg
+            elif tool_name in ("session_search", "session_get"):
+                is_enabled = self.tool_overrides.get(tool_name, True)
+                if not is_enabled:
+                    err_msg = f"Error: Tool '{tool_name}' is currently disabled."
+                    self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
+                    self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', err_msg)
+                    self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '-1')
+                    print(err_msg)
+                    return err_msg
+                try:
+                    from .tools.context_query import session_search, session_get
+                    args = tool_call.get("arguments", {}) or {}
+                    if tool_name == "session_search":
+                        res = session_search(app=self, **args)
+                    else:
+                        res = session_get(app=self, **args)
+                    result_str = json.dumps({"status": "success", "tool": tool_name, "result": res}, indent=2, ensure_ascii=False)
+                    self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', result_str)
+                    self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', '')
+                    self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '0')
+                    print(f"Tool dispatched successfully (in-process {tool_name})")
+                    return result_str
+                except Exception as e:
+                    err_msg = f"Error: {tool_name} execution failed: {e}"
+                    self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
+                    self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', str(e))
+                    self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
+                    return err_msg
         
         # Create a temporary file for the invocation
         with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', suffix='.json', delete=False) as tmp_file:

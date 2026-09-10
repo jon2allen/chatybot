@@ -158,18 +158,25 @@ def session_get(
             "turn_count": len(getattr(app, "session_turns", []) or []),
         }
         turns = getattr(app, "session_turns", []) or []
-    elif app and hasattr(app, "_get_session_store"):
+    else:
         # 2. Resolve from Persisted Store
         try:
-            store = app._get_session_store()
+            store = None
+            if hasattr(app, "_get_session_store"):
+                store = app._get_session_store()
+            elif hasattr(app, "session_dir"):
+                from chatybot.session_factory import get_session_store
+                store = get_session_store(sessions_dir=app.session_dir)
+            else:
+                from chatybot.session_factory import get_session_store
+                store = get_session_store()
+
             resolved = store.resolve_session(target)
             if not resolved:
                 return {"status": "error", "message": f"Session '{target}' not found."}
             meta, turns = store.load_session(resolved)
         except Exception as e:
             return {"status": "error", "message": f"Could not load session '{target}': {e}"}
-    else:
-        return {"status": "error", "message": "Session store not available."}
 
     # Filter to specific turn if requested
     extracted_text = ""
