@@ -423,6 +423,7 @@ class MonolithicJsonSessionStore(BaseSessionStore):
                 return False
             filepath = self._session_file(sid)
             gz_path = self._session_gz_file(sid)
+            s_dir = os.path.join(self.sessions_dir, sid)
             deleted = False
             for p in (filepath, gz_path):
                 if os.path.exists(p):
@@ -431,6 +432,9 @@ class MonolithicJsonSessionStore(BaseSessionStore):
                         deleted = True
                     except OSError:
                         pass
+            if os.path.isdir(s_dir):
+                shutil.rmtree(s_dir, ignore_errors=True)
+                deleted = True
             self.release_lock(sid)
             self._invalidate_cache()
             return deleted
@@ -441,13 +445,16 @@ class MonolithicJsonSessionStore(BaseSessionStore):
                 return 0
             count = 0
             for f in os.listdir(self.sessions_dir):
+                fpath = os.path.join(self.sessions_dir, f)
                 if (f.endswith(".json") or f.endswith(".json.gz") or f.endswith(".lock")) and not f.startswith("."):
                     try:
-                        os.remove(os.path.join(self.sessions_dir, f))
+                        os.remove(fpath)
                         if not f.endswith(".lock"):
                             count += 1
                     except OSError:
                         pass
+                elif os.path.isdir(fpath) and not f.startswith("."):
+                    shutil.rmtree(fpath, ignore_errors=True)
             self._invalidate_cache()
             return count
 
