@@ -8,11 +8,12 @@
 /tool auto on
 /tool on
 /tool disable run_command
-/tool disable run_safe
-/tool disable run_unsafe
+/tool disable write_file
+/tool disable replace_file_content
 /tool disable setdb
 /reasoning off
 /thinking off
 /effort none
 /temp 0.7
 /tool max_turns 25
+

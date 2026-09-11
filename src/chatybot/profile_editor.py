@@ -272,7 +272,7 @@ class ProfileEditor:
             self.description = "Safe read-only exploration for browsing and querying"
             self.selected_model = "mistral_1" if "mistral_1" in self.models_list else self.models_list[0]
             self.tool_mode = "auto"
-            self.disabled_tools = ["run_command", "run_safe", "run_unsafe", "setdb"]
+            self.disabled_tools = ["run_command", "write_file", "replace_file_content", "setdb"]
             self.trace_tps = False
             self.trace_agentic_loop = False
             self.trace_raw_payload = False
