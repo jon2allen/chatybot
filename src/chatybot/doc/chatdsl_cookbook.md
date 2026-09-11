@@ -1934,6 +1934,7 @@ Summarize the consensus algorithms mentioned and who discussed them.
 - **`if` is single-line only:** `if cond then cmd`. No `else`; emulate with mutually exclusive conditions.
 - **Comments inside `/multiline` bodies are text**, not comments — `#` only comments outside a block.
 - **`/echo` is local:** it prints with variable expansion and makes no LLM call.
+- **`/ask` in batch / background runs:** interactive prompts require a foreground terminal TTY. In headless batch mode (pipes, CI runners, or background jobs `&`), `/ask` bypasses without prompting to avoid freezing or SIGTTIN suspension. Always initialize default fallback variables in scripts that may run in batch.
 
 ---
 
