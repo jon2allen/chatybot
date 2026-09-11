@@ -318,21 +318,42 @@ def create_file_backup(file_path: str, app: Any = None) -> Optional[str]:
     """
     Create a backup of file_path inside the active session's backup directory:
     ~/.local/share/chatybot/sessions/<session_id>/backups/<relative_path>
-    If no active session exists, uses ~/.local/share/chatybot/backups/<relative_path>.
+    Backups are placed in the session directory even when unnamed.
+    Only falls back to the global backup path (~/.local/share/chatybot/backups/<relative_path>)
+    if chat history collection is turned off (/session history off).
     Returns the backup path if created, or None if skipped/failed.
     """
     try:
-        # Check if backup is enabled in config or app
+        # Check if backup is enabled in config, app, or env
         backup_enabled = True
+        enable_chat_history = True
         session_dir = os.path.expanduser("~/.local/share/chatybot/sessions")
         active_session_id = None
 
         if app is not None:
             backup_enabled = getattr(app, "backup_file_on_write", True)
+            enable_chat_history = getattr(app, "enable_chat_history", True)
             session_dir = getattr(app, "session_dir", session_dir)
             active_session_id = getattr(app, "active_session_id", None)
+            if enable_chat_history and not active_session_id:
+                if hasattr(app, "_ensure_active_session"):
+                    try:
+                        app._ensure_active_session()
+                        active_session_id = getattr(app, "active_session_id", None)
+                    except Exception:
+                        pass
         else:
-            # Fallback check directly in tools_config.toml if app not passed
+            # Check environment variables passed by parent process (chatybot_app)
+            if "CHATYBOT_ENABLE_CHAT_HISTORY" in os.environ:
+                enable_chat_history = os.environ.get("CHATYBOT_ENABLE_CHAT_HISTORY", "1") != "0"
+            if "CHATYBOT_BACKUP_ON_WRITE" in os.environ:
+                backup_enabled = os.environ.get("CHATYBOT_BACKUP_ON_WRITE", "1") != "0"
+            if os.environ.get("CHATYBOT_SESSION_DIR"):
+                session_dir = os.environ["CHATYBOT_SESSION_DIR"]
+            if os.environ.get("CHATYBOT_ACTIVE_SESSION_ID"):
+                active_session_id = os.environ["CHATYBOT_ACTIVE_SESSION_ID"]
+
+            # Fallback check directly in tools_config.toml if not passed via env
             try:
                 import tomllib
                 cfg_path = os.path.expanduser("~/.config/chatybot/tools_config.toml")
@@ -342,8 +363,9 @@ def create_file_backup(file_path: str, app: Any = None) -> Optional[str]:
                     with open(cfg_path, "rb") as f:
                         cfg = tomllib.load(f)
                     cfg_sec = cfg.get("config", {})
-                    backup_enabled = cfg_sec.get("backup_file_on_write", True)
-                    if "session_dir" in cfg_sec:
+                    if "backup_file_on_write" in cfg_sec and "CHATYBOT_BACKUP_ON_WRITE" not in os.environ:
+                        backup_enabled = cfg_sec.get("backup_file_on_write", True)
+                    if "session_dir" in cfg_sec and not os.environ.get("CHATYBOT_SESSION_DIR"):
                         session_dir = os.path.expanduser(str(cfg_sec.get("session_dir")))
             except Exception:
                 pass
@@ -357,10 +379,17 @@ def create_file_backup(file_path: str, app: Any = None) -> Optional[str]:
         # On Windows, strip drive letter colon (e.g. C:\ -> C\)
         rel_target = rel_target.replace(":", "")
 
-        if active_session_id:
-            backup_base = os.path.join(session_dir, active_session_id, "backups")
-        else:
+        # Behavior rule:
+        # If /session history off is enabled (enable_chat_history is False), use global backups.
+        # Otherwise, place backup inside session dir (even when unnamed).
+        if not enable_chat_history:
             backup_base = os.path.join(os.path.dirname(session_dir), "backups")
+        else:
+            if not active_session_id:
+                # If session_id not yet created in an unnamed session, generate a deterministic/timestamped session id
+                from datetime import datetime
+                active_session_id = f"default_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            backup_base = os.path.join(session_dir, active_session_id, "backups")
 
         backup_file_path = os.path.join(backup_base, rel_target)
         os.makedirs(os.path.dirname(backup_file_path), exist_ok=True)
