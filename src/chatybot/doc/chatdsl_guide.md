@@ -496,6 +496,8 @@ What are the key developments in ML in 2024?
 | `/source` | General | `/source file.dsl` | Load and execute a script file |
 | `/script` | General | `/script file.dsl [x=v y=v z=v]` | Run script with parameters |
 | `/language` | General | `/language lang` | Set the scripting language |
+| `/ask` | Interact | `/ask [yesno\|choice] "question" [opts] [-> VAR]` | Prompt user for input (skipped if not a TTY) |
+| `/docs` | General | `/docs [filename\|search terms\|cookbook\|path] [page=N] [var=V]` | List, view, search, or load bundled documentation |
 
 ### Model & LLM Commands
 
@@ -575,6 +577,9 @@ What are the key developments in ML in 2024?
 | `/dump` | Debug | `/dump all/variable` | Dump variables |
 | `/mem` | Debug | `/mem` | Show memory usage |
 | `/help` | Debug | `/help` | Show help |
+| `/session` | Session | `/session <start\|list\|query\|get\|...>` | Manage sessions (save, list, search, extract) |
+| `/session query` | Session | `/session query <terms> [ids] [full] [since=N] [var=V]` | Search session turns, notes, and scratchpad |
+| `/session get` | Session | `/session get <sid> [turn=N] [part=prompt\|response\|both]` | Extract text from a past or active session |
 
 ### Database Commands
 
@@ -612,6 +617,8 @@ What are the key developments in ML in 2024?
 | `/quit` | `/salir` | `/quitter` | `/退出` | `/esci` | Quit |
 | `/file` | `/archivo` | `/fichier` | `/文件` | `/file` | File load |
 | `/clearfile` | `/limpiar_archivo` | `/vider_fichier` | `/清空文件` | `/svuota_file` | Clear file |
+| `/ask` | `/preguntar` | `/demander` | `/询问` | `/chiedi` | Interactive prompt |
+| `/docs` | `/docs` | `/docs` | `/文档` | `/docs` | Documentation viewer |
 
 ## Scripting Keywords
 

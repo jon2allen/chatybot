@@ -339,6 +339,41 @@ endproc
 
 **Variations:** return a value by `set`-ting a script variable the caller reads after the call.
 
+### 2.6 Interactive user prompts (/ask)
+- **Goal:** prompt the user interactively for decisions (yes/no, multiple choice, free-text) and branch execution.
+- **Commands:** `/ask`, `${ASK_RESULT}`, `if`, `set`.
+- **Script:** `cookbook/02_6_interactive_ask.chatdsl`
+- **Run:** `/source doc/cookbook/02_6_interactive_ask.chatdsl`
+
+```dsl
+# Set default fallback in case script is run in non-interactive / batch mode
+set proceed = "yes"
+set chosen_model = "mistral_1"
+
+# 1. Ask yes/no confirmation (stores into proceed and reserved $ASK_RESULT)
+/ask yesno "Proceed with analysis?" -> proceed
+
+/echo "Decision: ${proceed} (recorded in ASK_RESULT: ${ASK_RESULT})"
+
+if "${proceed}" == "no" then /echo "Aborted by user."
+if "${proceed}" == "no" then break
+
+# 2. Ask multiple-choice model selection
+/ask choice "Which model would you like to run?" mistral_1 gemini_flash devstral_1 -> chosen_model
+
+/echo "Using model: ${chosen_model}"
+/model ${chosen_model}
+
+Explain the concept of speculative decoding in two clear sentences.
+/echo "Finished completion."
+```
+
+**Walkthrough**
+1. `/ask` pauses execution to prompt the user directly via keyboard when a TTY is available.
+2. The user's response is **always** saved to the protected reserved variable `${ASK_RESULT}`, and optionally copied into a target variable via `-> VARNAME`.
+3. In non-interactive batch runs without a TTY (pipes, background cron, CI runners), `/ask` is skipped without blocking, allowing scripts to continue safely using default fallback variables. When run interactively via `/script` or `/source` with a terminal TTY, it will prompt the user directly.
+4. Subsequent lines can branch using standard `if "${proceed}" == "..."` or inspect `${ASK_RESULT}`.
+
 ---
 
 ## Chapter 3 — Context & Buffer Patterns
@@ -943,6 +978,47 @@ chat --> Write a quick python script in scratch to compute first 15 fibonacci nu
 2. The model writes its scripts using `write_file` and runs them via `run_command` (e.g. `python3 "<scratch_dir>/<file>"`).
 3. `/tool scratch status` lists the generated scripts and file counts.
 4. `/tool scratch clean` deletes disposable artifacts from the scratch directory.
+
+### 8.4 User interaction during tool loops (ask_user) and batch mode feedback
+- **Goal:** allow the model to pause during an autonomous agentic loop to ask the user a clarifying or confirmation question, and handle headless/batch execution gracefully.
+- **Commands:** `/tool on`, `/tool auto on`, `ask_user`.
+- **Script:** `cookbook/08_4_ask_user_tool.chatdsl`
+
+```dsl
+/model devstral_1
+/tool on
+/tool auto on
+
+# Prompt the agent to inspect files and ask before making modifications
+chat --> Check the markdown files in docs/ and ask me which one should be refactored first.
+```
+
+**Walkthrough**
+1. When the model needs clarification or user confirmation, it calls the `ask_user` tool:
+   ```json
+   {
+     "tool": "ask_user",
+     "arguments": {
+       "prompt": "Which file should I refactor first?",
+       "question_type": "choice",
+       "choices": ["guide.md", "api.md", "tutorial.md"]
+     }
+   }
+   ```
+2. **Interactive Terminal (Foreground TTY):** The tool loop pauses, displays a clean formatted menu, and waits for keyboard input. The user's answer is returned to the model as a success result, and also saved to `${ASK_RESULT}`.
+3. **Headless / Batch Mode Feedback:** If the tool loop is executing in a non-interactive environment (pipes, background job with `&`, cron, or CI runners), `ask_user` **never hangs or throws an unhandled error**. Instead, it returns a structured JSON skip payload back to the LLM:
+   ```json
+   {
+     "status": "skipped",
+     "tool": "ask_user",
+     "result": {
+       "status": "skipped",
+       "reason": "non-interactive stdin"
+     }
+   }
+   ```
+   *(or `"reason": "background process"` if placed in the background).*
+4. The model observes this payload in its tool result and understands no human operator is available to answer; it will either fall back to a safe default action autonomously or report its recommendation in natural language.
 
 ---
 
@@ -1813,6 +1889,7 @@ Summarize the consensus algorithms mentioned and who discussed them.
 | 2.3 | foreach over range | `foreach` `range()` `endfor` | for_test1 (range) |
 | 2.4 | foreach over lines + break | `lines()` `break` | new |
 | 2.5 | Procedures | `defproc` `local` `/proc` `endproc` | for_test1 (defproc) |
+| 2.6 | Interactive user prompts | `/ask` `${ASK_RESULT}` `if` `set` | new |
 | 3.1 | /clearfile discipline | `/clearfile` `/showfile` | new |
 | 3.2 | Five file banks | `/filebank1-5` | new |
 | 3.3 | Sparse-context retrieval | `/rerank` `/setvar {LAST_RESPONSE}` | sparse_context_example |
@@ -1834,6 +1911,8 @@ Summarize the consensus algorithms mentioned and who discussed them.
 | 7.3 | Data pipeline | `/run` + prompt | new |
 | 8.1 | Enabling tools | `/tool on/enable/auto/max_turns` | new |
 | 8.2 | Autonomous loop & live edit | `/tool loop` `/tool prompt [live_edit]` | new |
+| 8.3 | Scratchpad execution | `/tool scratch on/status/clean` | new |
+| 8.4 | User interaction during tool loops | `ask_user` `/tool auto` `${ASK_RESULT}` | new |
 | 9.1 | Generate & save image | `/imagine` `/saveimage` | new |
 | 9.2 | Image banks (vision) | `/loadimage` `{imagebankN}` | new |
 | 9.3 | Batch images | `foreach` + `/imagine` | new |
@@ -1898,6 +1977,7 @@ Summarize the consensus algorithms mentioned and who discussed them.
 - **`if` is single-line only:** `if cond then cmd`. No `else`; emulate with mutually exclusive conditions.
 - **Comments inside `/multiline` bodies are text**, not comments — `#` only comments outside a block.
 - **`/echo` is local:** it prints with variable expansion and makes no LLM call.
+- **`/ask` in batch / background runs:** interactive prompts require a foreground terminal TTY. In headless batch mode (pipes, CI runners, or background jobs `&`), `/ask` bypasses without prompting to avoid freezing or SIGTTIN suspension. Always initialize default fallback variables in scripts that may run in batch.
 
 ---
 
