@@ -3442,6 +3442,12 @@ class ChatybotApp:
             # Run the dispatcher with overrides
             env = os.environ.copy()
             env["CHATYBOT_TOOL_OVERRIDES"] = json.dumps(self.tool_overrides)
+            if self.active_session_id:
+                env["CHATYBOT_ACTIVE_SESSION_ID"] = str(self.active_session_id)
+            if hasattr(self, "session_dir") and self.session_dir:
+                env["CHATYBOT_SESSION_DIR"] = str(self.session_dir)
+            env["CHATYBOT_ENABLE_CHAT_HISTORY"] = "1" if getattr(self, "enable_chat_history", True) else "0"
+            env["CHATYBOT_BACKUP_ON_WRITE"] = "1" if getattr(self, "backup_file_on_write", True) else "0"
             python_cmd = sys.executable if sys.executable else (
                 'python' if sys.platform == 'win32' else ('python3' if shutil.which('python3') else 'python')
             )
@@ -3783,6 +3789,12 @@ class ChatybotApp:
                     if "arguments" not in data:
                         data["arguments"] = {k: v for k, v in data.items() if k != "tool"}
                     return data
+                elif "tool_name" in data:
+                    tool_name = str(data["tool_name"])
+                    if "." in tool_name:
+                        tool_name = tool_name.split(".")[-1]
+                    args = data.get("arguments") if "arguments" in data else data.get("args") if "args" in data else data.get("parameters") if "parameters" in data else {k: v for k, v in data.items() if k not in ("tool_name", "tool_call_id")}
+                    return {"tool": tool_name, "arguments": args}
                 elif "name" in data:
                     tool_name = str(data["name"])
                     if "." in tool_name:

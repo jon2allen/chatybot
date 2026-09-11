@@ -312,4 +312,66 @@ def test_write_file_and_replace_backup_preservation():
         assert "backup saved" not in res4
 
 
+def test_backup_unnamed_session_and_history_off():
+    """Verify backups are in session dir even when unnamed, and only in global backup dir if history is off."""
+    from src.chatybot.tools.file_utils import write_file
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        session_root = os.path.join(tmpdir, "sessions")
+        target_file = os.path.join(tmpdir, "target.txt")
+
+        # 1. Unnamed session (active_session_id is None, but enable_chat_history is True)
+        class MockAppUnnamed:
+            def __init__(self):
+                self.session_dir = session_root
+                self.active_session_id = None
+                self.enable_chat_history = True
+                self.backup_file_on_write = True
+
+        app_unnamed = MockAppUnnamed()
+        write_file(target_file, "initial text", app=app_unnamed)
+        res = write_file(target_file, "updated text", app=app_unnamed)
+        assert "pre-edit backup saved" in res
+        # Check that backup is located under sessions/, NOT directly under backups/
+        backup_path = res.split("pre-edit backup saved: '")[1].split("'")[0]
+        assert backup_path.startswith(session_root)
+        assert "/backups/" in backup_path
+        with open(backup_path, "r", encoding="utf-8") as bf:
+            assert bf.read() == "initial text"
+
+        # 2. History collection OFF (/session history off) -> should go to global backups directory
+        class MockAppHistoryOff:
+            def __init__(self):
+                self.session_dir = session_root
+                self.active_session_id = "test_sess"
+                self.enable_chat_history = False
+                self.backup_file_on_write = True
+
+        app_hist_off = MockAppHistoryOff()
+        res_off = write_file(target_file, "history off update", app=app_hist_off)
+        assert "pre-edit backup saved" in res_off
+        backup_path_off = res_off.split("pre-edit backup saved: '")[1].split("'")[0]
+        global_backup_dir = os.path.join(os.path.dirname(session_root), "backups")
+        assert backup_path_off.startswith(global_backup_dir)
+        with open(backup_path_off, "r", encoding="utf-8") as bf:
+            assert bf.read() == "updated text"
+
+        # 3. Environment variable fallback (when app is None, e.g. from dispatcher subprocess)
+        os.environ["CHATYBOT_SESSION_DIR"] = session_root
+        os.environ["CHATYBOT_ACTIVE_SESSION_ID"] = "env_sess_456"
+        os.environ["CHATYBOT_ENABLE_CHAT_HISTORY"] = "1"
+        os.environ["CHATYBOT_BACKUP_ON_WRITE"] = "1"
+        try:
+            res_env = write_file(target_file, "subprocess update", app=None)
+            assert "pre-edit backup saved" in res_env
+            backup_path_env = res_env.split("pre-edit backup saved: '")[1].split("'")[0]
+            assert backup_path_env.startswith(os.path.join(session_root, "env_sess_456", "backups"))
+        finally:
+            os.environ.pop("CHATYBOT_SESSION_DIR", None)
+            os.environ.pop("CHATYBOT_ACTIVE_SESSION_ID", None)
+            os.environ.pop("CHATYBOT_ENABLE_CHAT_HISTORY", None)
+            os.environ.pop("CHATYBOT_BACKUP_ON_WRITE", None)
+
+
+
 
