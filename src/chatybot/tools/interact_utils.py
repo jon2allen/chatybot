@@ -19,6 +19,7 @@ Supported question types
   "text"    — free-form input(), no validation
 """
 
+import os
 import sys
 from typing import Any, Dict, List, Optional
 
@@ -68,7 +69,8 @@ def ask_user(
     during script execution.
     """
     if not _is_interactive(app):
-        return {"status": "skipped", "reason": "non-interactive stdin (no TTY)"}
+        reason = "background process" if sys.stdin.isatty() else "non-interactive stdin"
+        return {"status": "skipped", "reason": reason}
 
     try:
         answer = _prompt_user(prompt, choices, question_type)
@@ -106,10 +108,21 @@ def _in_script(app: Any) -> bool:
 
 
 def _is_interactive(app: Any = None) -> bool:
-    """Return True only when stdin is a real TTY with a user present."""
+    """Return True only when stdin is a TTY and the process is in the foreground.
+
+    If a process is placed in the background (e.g. ``cmd &``), reading from stdin
+    triggers SIGTTIN and causes the process to be suspended by the OS.
+    Checking ``os.getpgrp() == os.tcgetpgrp(sys.stdin.fileno())`` detects background
+    jobs and skips interactive prompts cleanly without suspension.
+    """
     if not sys.stdin.isatty():
         return False
-    return True
+    try:
+        # Check if current process group is the terminal's foreground process group
+        return os.getpgrp() == os.tcgetpgrp(sys.stdin.fileno())
+    except (OSError, AttributeError, ValueError):
+        # Platform does not support tcgetpgrp or fileno is not available
+        return True
 
 
 def _prompt_user(prompt: str, choices: Optional[List[str]], question_type: str) -> str:
