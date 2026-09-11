@@ -36,16 +36,28 @@ class TestIsInteractive(unittest.TestCase):
             mock_stdin.isatty.return_value = False
             self.assertFalse(_is_interactive(app))
 
-    def test_interactive_when_tty_and_no_script(self):
+    def test_interactive_when_tty_and_foreground(self):
         app = _make_app(script_context=False)
         with patch("sys.stdin") as mock_stdin:
             mock_stdin.isatty.return_value = True
-            self.assertTrue(_is_interactive(app))
+            mock_stdin.fileno.return_value = 0
+            with patch("os.getpgrp", return_value=100), patch("os.tcgetpgrp", return_value=100):
+                self.assertTrue(_is_interactive(app))
+
+    def test_background_process_blocks(self):
+        app = _make_app(script_context=False)
+        with patch("sys.stdin") as mock_stdin:
+            mock_stdin.isatty.return_value = True
+            mock_stdin.fileno.return_value = 0
+            with patch("os.getpgrp", return_value=100), patch("os.tcgetpgrp", return_value=200):
+                self.assertFalse(_is_interactive(app))
 
     def test_none_app_uses_stdin_only(self):
         with patch("sys.stdin") as mock_stdin:
             mock_stdin.isatty.return_value = True
-            self.assertTrue(_is_interactive(None))
+            mock_stdin.fileno.return_value = 0
+            with patch("os.getpgrp", return_value=100), patch("os.tcgetpgrp", return_value=100):
+                self.assertTrue(_is_interactive(None))
 
 
 # ---------------------------------------------------------------------------
