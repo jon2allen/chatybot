@@ -137,7 +137,20 @@ class TestAskUserSuccess(unittest.TestCase):
         )
         self.assertEqual(result["answer"], "yes")
         self.assertEqual(result["target_variable"], "MY_VAR")
-        app.buffer_manager.set_script_var.assert_called_once_with("MY_VAR", "yes")
+        self.assertEqual(result["reserved_variable"], "ASK_RESULT")
+        # Should set both ASK_RESULT (reserved) and MY_VAR (target)
+        app.buffer_manager.set_script_var.assert_any_call("ASK_RESULT", "yes", allow_protected=True)
+        app.buffer_manager.set_script_var.assert_any_call("MY_VAR", "yes")
+
+    def test_always_sets_reserved_ask_result_without_target_var(self):
+        result, app = self._run_interactive(
+            ["optionA"],
+            prompt="Pick:", choices=["optionA", "optionB"], question_type="choice"
+        )
+        self.assertEqual(result["answer"], "optionA")
+        self.assertIsNone(result["target_variable"])
+        self.assertEqual(result["reserved_variable"], "ASK_RESULT")
+        app.buffer_manager.set_script_var.assert_called_once_with("ASK_RESULT", "optionA", allow_protected=True)
 
     def test_eof_returns_error(self):
         app = _make_app(script_context=False)
@@ -200,5 +213,118 @@ class TestParseAskArgs(unittest.TestCase):
         self.assertIsNone(var)
 
 
+# ---------------------------------------------------------------------------
+# cmd_ask command handler
+# ---------------------------------------------------------------------------
+
+class TestCmdAsk(unittest.IsolatedAsyncioTestCase):
+    async def test_cmd_ask_with_target_var(self):
+        from chatybot.commands.interact import cmd_ask
+        from chatybot.commands.context import CommandContext
+        import io
+        from contextlib import redirect_stdout
+
+        app = _make_app(script_context=False)
+        ctx = CommandContext(
+            buffer_manager=app.buffer_manager,
+            config_manager=MagicMock(),
+            i18n=MagicMock(),
+            session_store=None,
+            app=app,
+        )
+        f = io.StringIO()
+        with patch("sys.stdin") as mock_stdin:
+            mock_stdin.isatty.return_value = True
+            with patch("builtins.input", return_value="yes"):
+                with redirect_stdout(f):
+                    result = await cmd_ask(ctx, ["/ask", 'yesno "OK?" -> MY_FLAG'], '/ask yesno "OK?" -> MY_FLAG')
+
+        from chatybot.commands.registry import CommandAction
+        output = f.getvalue()
+        self.assertEqual(result.action, CommandAction.HANDLED)
+        self.assertIn("[ask] 'yes' -> $MY_FLAG (also in $ASK_RESULT)", output)
+
+    async def test_cmd_ask_without_target_var(self):
+        from chatybot.commands.interact import cmd_ask
+        from chatybot.commands.context import CommandContext
+        from chatybot.commands.registry import CommandAction
+        import io
+        from contextlib import redirect_stdout
+
+        app = _make_app(script_context=False)
+        ctx = CommandContext(
+            buffer_manager=app.buffer_manager,
+            config_manager=MagicMock(),
+            i18n=MagicMock(),
+            session_store=None,
+            app=app,
+        )
+        f = io.StringIO()
+        with patch("sys.stdin") as mock_stdin:
+            mock_stdin.isatty.return_value = True
+            with patch("builtins.input", return_value="hello"):
+                with redirect_stdout(f):
+                    result = await cmd_ask(ctx, ["/ask", '"Enter name:"'], '/ask "Enter name:"')
+
+        output = f.getvalue()
+        self.assertEqual(result.action, CommandAction.HANDLED)
+        self.assertIn("[ask] 'hello' -> $ASK_RESULT", output)
+
+
+# ---------------------------------------------------------------------------
+# Help system registration
+# ---------------------------------------------------------------------------
+
+class TestAskHelp(unittest.TestCase):
+    def test_help_system_has_ask(self):
+        from chatybot.chaty_help import get_help_system, reset_help_system
+        reset_help_system()
+        hs = get_help_system()
+        cmd = hs.get_command("/ask")
+        self.assertIsNotNone(cmd)
+        self.assertEqual(cmd.name, "/ask")
+        self.assertIn("ASK_RESULT", cmd.long_desc)
+        self.assertEqual(cmd.category, "interact")
+
+    def test_help_system_text_for_ask(self):
+        from chatybot.chaty_help import get_help_system, reset_help_system
+        reset_help_system()
+        hs = get_help_system()
+        help_text = hs.get_help_text("/ask")
+        self.assertIn("/ask", help_text)
+        self.assertIn("ASK_RESULT", help_text)
+
+
+# ---------------------------------------------------------------------------
+# Dispatch ask_user in ChatybotApp
+# ---------------------------------------------------------------------------
+
+class TestDispatchAskUser(unittest.IsolatedAsyncioTestCase):
+    async def test_dispatch_unwraps_nested_parameters(self):
+        from chatybot.chatybot_app import ChatybotApp
+        import json
+        app = ChatybotApp()
+        payload = json.dumps({
+            "tool": "ask_user",
+            "arguments": {
+                "parameters": {
+                    "prompt": "Which option?",
+                    "question_type": "choice",
+                    "choices": ["Alpha", "Beta"]
+                }
+            }
+        })
+        with patch("sys.stdin") as mock_stdin:
+            mock_stdin.isatty.return_value = True
+            with patch("builtins.input", return_value="1"):
+                result_json = await app.dispatch_tool(payload)
+
+        data = json.loads(result_json)
+        self.assertEqual(data["status"], "success")
+        self.assertEqual(data["result"]["answer"], "Alpha")
+
+
 if __name__ == "__main__":
     unittest.main()
+
+

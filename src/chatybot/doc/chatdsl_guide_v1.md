@@ -548,6 +548,7 @@ Chatybot maintains reserved, read-only system variables populated by commands. U
 | `${RUN_ERROR}` | `/run <command>` | Captured stderr from last executed shell command. |
 | `${RUN_EXIT_CODE}` | `/run <command>` | Numeric exit code from last executed shell command. |
 | `${LAST_COMPLETION}` | `/run` or LLM interaction | Last raw text completion. |
+| `${ASK_RESULT}` | `/ask` | User answer from last interactive prompt. |
 
 ---
 

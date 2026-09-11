@@ -46,6 +46,7 @@ class ScriptVars(UserDict):
             'TOOL_HISTORY',
             'TOOL_REPLAY',
             'REPLAY',
+            'ASK_RESULT',
         }
         super().__init__(*args, **kwargs)
 

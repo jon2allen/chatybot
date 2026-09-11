@@ -73,9 +73,9 @@ async def cmd_ask(ctx: CommandContext, parts: list, command: str) -> CommandResu
     else:
         answer = result["answer"]
         if target_var:
-            print(f"[ask] {answer!r} -> ${target_var}")
+            print(f"[ask] {answer!r} -> ${target_var} (also in $ASK_RESULT)")
         else:
-            print(f"[ask] {answer!r}")
+            print(f"[ask] {answer!r} -> $ASK_RESULT")
 
     return CommandResult.ok()
 
