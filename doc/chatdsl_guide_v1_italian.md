@@ -715,7 +715,11 @@ src/chatybot/profiles/          # Profili predefiniti
 | `/str_search` | Generale | `/str_search <termine> [fonte]` | Cerca una sottostringa nel testo o buffer |
 | `/procedura` | Generale | `/procedura <nome> [args]` | Esegue una procedura definita |
 | `/sessione` | Generale | `/sessione <subcmd> [args]` | Gestisci le sessioni di chat (salva, elenca, pulisci, ecc.) |
+| `/sessione interroga` | Sessione | `/sessione interroga <termini> [ids] [completo] [since=N] [var=V]` | Cerca nei turni, note e bozza delle sessioni |
+| `/sessione ottieni` | Sessione | `/sessione ottieni <sid> [turn=N] [part=prompt\|response\|both]` | Estrai testo da una sessione passata o attiva |
 | `/reloadmacros` | Generale | `/reloadmacros [file]` | Ricarica le definizioni delle macro |
+| `/chiedi` | Interazione | `/chiedi [sino\|scelta] "domanda" [opts] [-> VAR]` | Richiede input all'utente (saltato se stdin non è un TTY) |
+| `/docs` | Generale | `/docs [file\|cerca termini\|ricettario\|percorso] [page=N] [var=V]` | Elenca, visualizza, cerca o carica documentazione integrata |
 
 ### Comandi dei Modelli e LLM
 
