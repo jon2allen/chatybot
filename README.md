@@ -1093,11 +1093,11 @@ chat --> Create a blog post outline about ${topic}
 
 September 11th, 2026
 ---------------------------
-- **File Write Backup Preservation (`backup_file_on_write`)**:
-  - Automatically creates a pre-modification backup of existing files before `write_file` (overwrite/append) and `replace_file_content` execute.
-  - Backups are preserved within the session's own backup directory (`~/.local/share/chatybot/sessions/<session_id>/backups/<relative_path>`), even for unnamed sessions.
-  - Only falls back to the global backup path (`~/.local/share/chatybot/backups/<relative_path>`) when chat history is disabled via `/session history off`.
-  - Enabled by default with `backup_file_on_write = true` in `tools_config.toml` (can be disabled by hand-editing `backup_file_on_write = false`).
+- **File Write Backup & Re-applicable Diff Preservation**:
+  - `write_file` preserves a single initial full-copy backup of existing files before modification under `<session_dir>/<session_id>/backups/<relative_path>`.
+  - `replace_file_content` computes and saves standard, re-applicable unified diff patches (`<session_dir>/<session_id>/diffs/<relative_path>.<timestamp>.patch`).
+  - Backups and diffs are preserved within the session's own directory, even for unnamed sessions, and only fall back to the global directory when chat history is disabled via `/session history off`.
+  - Configurable via `backup_file_on_write = true` in `tools_config.toml` (can be disabled by hand-editing `backup_file_on_write = false`).
   - Passed session directory, session ID, and history status across the tool dispatcher boundary via environment variables.
 
 September 10th, 2026 (v0.8.5)
