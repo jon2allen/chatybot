@@ -1,6 +1,6 @@
 import os
 import fnmatch
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import re
 import datetime
 import math
@@ -314,10 +314,72 @@ def run_command(command: str, shell: bool = True) -> str:
     except Exception as e:
         return f"Error executing command: {e}"
 
-def write_file(path: str, content: str, append: bool = False) -> str:
-    """Write or append contents to a file."""
+def create_file_backup(file_path: str, app: Any = None) -> Optional[str]:
+    """
+    Create a backup of file_path inside the active session's backup directory:
+    ~/.local/share/chatybot/sessions/<session_id>/backups/<relative_path>
+    If no active session exists, uses ~/.local/share/chatybot/backups/<relative_path>.
+    Returns the backup path if created, or None if skipped/failed.
+    """
+    try:
+        # Check if backup is enabled in config or app
+        backup_enabled = True
+        session_dir = os.path.expanduser("~/.local/share/chatybot/sessions")
+        active_session_id = None
+
+        if app is not None:
+            backup_enabled = getattr(app, "backup_file_on_write", True)
+            session_dir = getattr(app, "session_dir", session_dir)
+            active_session_id = getattr(app, "active_session_id", None)
+        else:
+            # Fallback check directly in tools_config.toml if app not passed
+            try:
+                import tomllib
+                cfg_path = os.path.expanduser("~/.config/chatybot/tools_config.toml")
+                if not os.path.exists(cfg_path):
+                    cfg_path = os.path.join(os.path.dirname(__file__), "..", "tools_config.toml")
+                if os.path.exists(cfg_path):
+                    with open(cfg_path, "rb") as f:
+                        cfg = tomllib.load(f)
+                    cfg_sec = cfg.get("config", {})
+                    backup_enabled = cfg_sec.get("backup_file_on_write", True)
+                    if "session_dir" in cfg_sec:
+                        session_dir = os.path.expanduser(str(cfg_sec.get("session_dir")))
+            except Exception:
+                pass
+
+        if not backup_enabled or not os.path.exists(file_path) or not os.path.isfile(file_path):
+            return None
+
+        # Build backup destination
+        abs_target = os.path.abspath(file_path)
+        rel_target = abs_target.lstrip(os.path.sep)
+        # On Windows, strip drive letter colon (e.g. C:\ -> C\)
+        rel_target = rel_target.replace(":", "")
+
+        if active_session_id:
+            backup_base = os.path.join(session_dir, active_session_id, "backups")
+        else:
+            backup_base = os.path.join(os.path.dirname(session_dir), "backups")
+
+        backup_file_path = os.path.join(backup_base, rel_target)
+        os.makedirs(os.path.dirname(backup_file_path), exist_ok=True)
+
+        import shutil
+        shutil.copy2(abs_target, backup_file_path)
+        return backup_file_path
+    except Exception:
+        return None
+
+
+def write_file(path: str, content: str, append: bool = False, app: Any = None) -> str:
+    """Write or append contents to a file, preserving a backup in session data before modification."""
     path = normalize_path(path)
     try:
+        backup_path = None
+        if os.path.exists(path):
+            backup_path = create_file_backup(path, app=app)
+
         dir_name = os.path.dirname(path)
         if dir_name:
             os.makedirs(dir_name, exist_ok=True)
@@ -325,7 +387,10 @@ def write_file(path: str, content: str, append: bool = False) -> str:
         with open(path, mode, encoding='utf-8') as f:
             f.write(content)
         action = "Appended to" if append else "Wrote to"
-        return f"Success: {action} file '{path}'"
+        msg = f"Success: {action} file '{path}'"
+        if backup_path:
+            msg += f" (pre-edit backup saved: '{backup_path}')"
+        return msg
     except Exception as e:
         return f"Error writing file: {e}"
 
@@ -410,8 +475,8 @@ def grep_search(
 
     return enforce_list_payload_limits(results, "grep_search", max_items=max_matches)
 
-def replace_file_content(path: str, target: str, replacement: str) -> str:
-    """Replace target content with replacement content in the file at path."""
+def replace_file_content(path: str, target: str, replacement: str, app: Any = None) -> str:
+    """Replace target content with replacement content in the file at path, preserving a backup."""
     path = normalize_path(path)
     try:
         if not os.path.exists(path):
@@ -422,6 +487,8 @@ def replace_file_content(path: str, target: str, replacement: str) -> str:
         
         if target not in content:
             return f"Error: Target content not found in file '{path}'."
+
+        backup_path = create_file_backup(path, app=app)
         
         occurrences = content.count(target)
         new_content = content.replace(target, replacement)
@@ -429,7 +496,10 @@ def replace_file_content(path: str, target: str, replacement: str) -> str:
         with open(path, 'w', encoding='utf-8') as f:
             f.write(new_content)
             
-        return f"Success: Replaced {occurrences} occurrence(s) of target in '{path}'"
+        msg = f"Success: Replaced {occurrences} occurrence(s) of target in '{path}'"
+        if backup_path:
+            msg += f" (pre-edit backup saved: '{backup_path}')"
+        return msg
     except Exception as e:
         return f"Error replacing file content: {e}"
 

@@ -649,6 +649,7 @@ tool_timeout = 60              # Execution timeout in seconds per tool
 rate_limit_delay = 2.0         # Rate limit sleep duration (seconds) between LLM calls
 max_turns = 25                 # Maximum turn count for auto-loop or default loop
 strip_thinking_from_filebanks = true
+backup_file_on_write = true    # Automatically preserve pre-edit backups in session backups/ before modifying files
 
 # Define individual tools
 [tools.list_directory]
@@ -662,6 +663,20 @@ type = "string"
 description = "Directory path to list"
 optional = true
 ```
+
+##### **File Mutation Safety & Automatic Backups**
+Whenever agent tools (`write_file` or `replace_file_content`) overwrite or modify an existing file on disk, Chatybot automatically creates a pre-edit copy inside the active session backup directory:
+```text
+~/.local/share/chatybot/sessions/<session_id>/backups/<relative_path>
+```
+* **Default Enabled**: Enabled by default (`backup_file_on_write = true`).
+* **Zero Repository Pollution**: No `.bak` files are placed inside your git working directory or source tree.
+* **Manual Override**: To disable automatic file backups, hand-edit `~/.config/chatybot/tools_config.toml` (or `src/chatybot/tools_config.toml`) and set:
+  ```toml
+  [config]
+  backup_file_on_write = false
+  ```
+
 
 ### **Macro System (New!)**
 Chatybot now features a powerful macro system based on Parsley. Macros allow you to define reusable prompt templates with parameters.
