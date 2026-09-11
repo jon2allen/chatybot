@@ -339,6 +339,41 @@ endproc
 
 **Variations:** return a value by `set`-ting a script variable the caller reads after the call.
 
+### 2.6 Interactive user prompts (/ask)
+- **Goal:** prompt the user interactively for decisions (yes/no, multiple choice, free-text) and branch execution.
+- **Commands:** `/ask`, `${ASK_RESULT}`, `if`, `set`.
+- **Script:** `cookbook/02_6_interactive_ask.chatdsl`
+- **Run:** `/source doc/cookbook/02_6_interactive_ask.chatdsl`
+
+```dsl
+# Set default fallback in case script is run in non-interactive / batch mode
+set proceed = "yes"
+set chosen_model = "mistral_1"
+
+# 1. Ask yes/no confirmation (stores into proceed and reserved $ASK_RESULT)
+/ask yesno "Proceed with analysis?" -> proceed
+
+/echo "Decision: ${proceed} (recorded in ASK_RESULT: ${ASK_RESULT})"
+
+if "${proceed}" == "no" then /echo "Aborted by user."
+if "${proceed}" == "no" then break
+
+# 2. Ask multiple-choice model selection
+/ask choice "Which model would you like to run?" mistral_1 gemini_flash devstral_1 -> chosen_model
+
+/echo "Using model: ${chosen_model}"
+/model ${chosen_model}
+
+Explain the concept of speculative decoding in two clear sentences.
+/echo "Finished completion."
+```
+
+**Walkthrough**
+1. `/ask` pauses execution to prompt the user directly via keyboard (TTY).
+2. The user's response is **always** saved to the protected reserved variable `${ASK_RESULT}`, and optionally copied into a target variable via `-> VARNAME`.
+3. In non-interactive batch runs (`/script` execution or redirected stdin/CI), `/ask` is skipped without blocking, allowing scripts to continue safely using default fallback variables.
+4. Subsequent lines can branch using standard `if "${proceed}" == "..."` or inspect `${ASK_RESULT}`.
+
 ---
 
 ## Chapter 3 — Context & Buffer Patterns
@@ -1813,6 +1848,7 @@ Summarize the consensus algorithms mentioned and who discussed them.
 | 2.3 | foreach over range | `foreach` `range()` `endfor` | for_test1 (range) |
 | 2.4 | foreach over lines + break | `lines()` `break` | new |
 | 2.5 | Procedures | `defproc` `local` `/proc` `endproc` | for_test1 (defproc) |
+| 2.6 | Interactive user prompts | `/ask` `${ASK_RESULT}` `if` `set` | new |
 | 3.1 | /clearfile discipline | `/clearfile` `/showfile` | new |
 | 3.2 | Five file banks | `/filebank1-5` | new |
 | 3.3 | Sparse-context retrieval | `/rerank` `/setvar {LAST_RESPONSE}` | sparse_context_example |
