@@ -448,3 +448,171 @@ def test_v083_features_localization():
     assert rev_ar.get("نموذج") == "model"
     assert rev_ar.get("متغير") == "var"
     assert rev_ar.get("هدف") == "target"
+
+
+def test_v084_ask_command_localization():
+    """Verify /ask command aliases, keywords, help category, and help entry across all locales."""
+    # 1. English
+    mgr_en = LocalizationManager("en")
+    assert mgr_en.resolve_command("/ask") == "/ask"
+    rev_en = mgr_en.get_reverse_aliases()
+    assert rev_en.get("ask") == "ask"
+    assert rev_en.get("yesno") == "yesno"
+    assert rev_en.get("choice") == "choice"
+
+    # 2. Spanish
+    mgr_es = LocalizationManager("es")
+    assert mgr_es.resolve_command("/preguntar") == "/ask"
+    assert mgr_es.resolve_command("/ask") == "/ask"
+    rev_es = mgr_es.get_reverse_aliases()
+    assert rev_es.get("preguntar") == "ask"
+    assert rev_es.get("sino") == "yesno"
+    assert rev_es.get("opcion") == "choice"
+    assert rev_es.get("seleccion") == "choice"
+
+    # 3. French
+    mgr_fr = LocalizationManager("fr")
+    assert mgr_fr.resolve_command("/demander") == "/ask"
+    assert mgr_fr.resolve_command("/ask") == "/ask"
+    rev_fr = mgr_fr.get_reverse_aliases()
+    assert rev_fr.get("demander") == "ask"
+    assert rev_fr.get("ouinon") == "yesno"
+    assert rev_fr.get("choix") == "choice"
+
+    # 4. Chinese
+    mgr_zh = LocalizationManager("zh")
+    assert mgr_zh.resolve_command("/询问") == "/ask"
+    assert mgr_zh.resolve_command("/ask") == "/ask"
+    rev_zh = mgr_zh.get_reverse_aliases()
+    assert rev_zh.get("询问") == "ask"
+    assert rev_zh.get("是否") == "yesno"
+    assert rev_zh.get("选择") == "choice"
+
+    # 5. Italian
+    mgr_it = LocalizationManager("it")
+    assert mgr_it.resolve_command("/chiedi") == "/ask"
+    assert mgr_it.resolve_command("/ask") == "/ask"
+    rev_it = mgr_it.get_reverse_aliases()
+    assert rev_it.get("chiedi") == "ask"
+    assert rev_it.get("sino") == "yesno"
+    assert rev_it.get("scelta") == "choice"
+
+    # 6. Arabic
+    mgr_ar = LocalizationManager("ar")
+    assert mgr_ar.resolve_command("/اسأل") == "/ask"
+    assert mgr_ar.resolve_command("/ask") == "/ask"
+    rev_ar = mgr_ar.get_reverse_aliases()
+    assert rev_ar.get("اسأل") == "ask"
+    assert rev_ar.get("نعم_لا") == "yesno"
+    assert rev_ar.get("خيار") == "choice"
+
+    # 7. Help category "interact" exists in all locales
+    for loc in ["en", "es", "fr", "zh", "it", "ar"]:
+        mgr = LocalizationManager(loc)
+        cat = mgr.catalog.get(loc, {}).get("help", {}).get("categories", {})
+        assert "interact" in cat, f"interact category missing in {loc}"
+
+    # 8. Help command entry for /ask exists in all locales
+    for loc in ["en", "es", "fr", "zh", "it", "ar"]:
+        mgr = LocalizationManager(loc)
+        cmd_info = mgr.get_help_string("commands", "/ask")
+        assert cmd_info is not None, f"/ask help entry missing in {loc}"
+
+
+def test_v084_docs_command_localization():
+    """Verify /docs command aliases, keywords, and help entry across all locales."""
+    # 1. English
+    mgr_en = LocalizationManager("en")
+    assert mgr_en.resolve_command("/docs") == "/docs"
+    assert mgr_en.resolve_command("/doc") == "/docs"
+    rev_en = mgr_en.get_reverse_aliases()
+    assert rev_en.get("search") == "search"
+    assert rev_en.get("cookbook") == "cookbook"
+    assert rev_en.get("path") == "path"
+    assert rev_en.get("page") == "page"
+
+    # 2. Spanish
+    mgr_es = LocalizationManager("es")
+    assert mgr_es.resolve_command("/docs") == "/docs"
+    assert mgr_es.resolve_command("/doc") == "/docs"
+    rev_es = mgr_es.get_reverse_aliases()
+    assert rev_es.get("buscar") == "search"
+    assert rev_es.get("recetario") == "cookbook"
+    assert rev_es.get("ruta") == "path"
+    assert rev_es.get("pagina") == "page"
+
+    # 3. French
+    mgr_fr = LocalizationManager("fr")
+    assert mgr_fr.resolve_command("/docs") == "/docs"
+    assert mgr_fr.resolve_command("/doc") == "/docs"
+    rev_fr = mgr_fr.get_reverse_aliases()
+    assert rev_fr.get("rechercher") == "search"
+    assert rev_fr.get("recettes") == "cookbook"
+    assert rev_fr.get("chemin") == "path"
+
+    # 4. Chinese
+    mgr_zh = LocalizationManager("zh")
+    assert mgr_zh.resolve_command("/文档") == "/docs"
+    assert mgr_zh.resolve_command("/docs") == "/docs"
+    assert mgr_zh.resolve_command("/doc") == "/docs"
+    rev_zh = mgr_zh.get_reverse_aliases()
+    assert rev_zh.get("搜索") == "search"
+    assert rev_zh.get("食谱") == "cookbook"
+    assert rev_zh.get("路径") == "path"
+    assert rev_zh.get("页面") == "page"
+
+    # 5. Italian
+    mgr_it = LocalizationManager("it")
+    assert mgr_it.resolve_command("/docs") == "/docs"
+    assert mgr_it.resolve_command("/doc") == "/docs"
+    rev_it = mgr_it.get_reverse_aliases()
+    assert rev_it.get("cerca") == "search"
+    assert rev_it.get("ricettario") == "cookbook"
+    assert rev_it.get("percorso") == "path"
+    assert rev_it.get("pagina") == "page"
+
+    # 6. Arabic
+    mgr_ar = LocalizationManager("ar")
+    assert mgr_ar.resolve_command("/وثائق") == "/docs"
+    assert mgr_ar.resolve_command("/docs") == "/docs"
+    assert mgr_ar.resolve_command("/doc") == "/docs"
+    rev_ar = mgr_ar.get_reverse_aliases()
+    assert rev_ar.get("ابحث") == "search"
+    assert rev_ar.get("دليل_الوصفات") == "cookbook"
+    assert rev_ar.get("مسار") == "path"
+    assert rev_ar.get("صفحة") == "page"
+    # Verify no conflict: بحث still maps to query, not search
+    assert rev_ar.get("بحث") == "query"
+
+    # 7. Help command entry for /docs exists in all locales
+    for loc in ["en", "es", "fr", "zh", "it", "ar"]:
+        mgr = LocalizationManager(loc)
+        cmd_info = mgr.get_help_string("commands", "/docs")
+        assert cmd_info is not None, f"/docs help entry missing in {loc}"
+
+
+def test_v084_session_ids_full_keywords():
+    """Verify ids and full keywords for /session query across all locales."""
+    for loc in ["en", "es", "fr", "zh", "it", "ar"]:
+        mgr = LocalizationManager(loc)
+        rev = mgr.get_reverse_aliases()
+        assert rev.get("ids") == "ids", f"ids keyword missing in {loc}"
+        assert rev.get("full") == "full", f"full keyword missing in {loc}"
+
+    # Localized variants
+    mgr_es = LocalizationManager("es")
+    assert mgr_es.get_reverse_aliases().get("completo") == "full"
+
+    mgr_fr = LocalizationManager("fr")
+    assert mgr_fr.get_reverse_aliases().get("complet") == "full"
+
+    mgr_zh = LocalizationManager("zh")
+    assert mgr_zh.get_reverse_aliases().get("标识") == "ids"
+    assert mgr_zh.get_reverse_aliases().get("完整") == "full"
+
+    mgr_it = LocalizationManager("it")
+    assert mgr_it.get_reverse_aliases().get("completo") == "full"
+
+    mgr_ar = LocalizationManager("ar")
+    assert mgr_ar.get_reverse_aliases().get("معرفات") == "ids"
+    assert mgr_ar.get_reverse_aliases().get("كامل") == "full"
