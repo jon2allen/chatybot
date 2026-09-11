@@ -169,6 +169,7 @@ class ChatybotApp:
         self.tool_auto: bool = False
         self.tool_scratch: bool = False
         self._tool_scratch_user_set: bool = False
+        self.backup_file_on_write: bool = True
         self.max_turns: int = 25
         self.max_tool_calls_per_turn: int = 10
         self.agentic_instructions: str = ""
@@ -4331,6 +4332,15 @@ class ChatybotApp:
                 self.tool_scratch = True
             elif str(val).lower() in ('false', '0', 'no', 'off'):
                 self.tool_scratch = False
+
+        if 'backup_file_on_write' in config_section:
+            val = config_section.get('backup_file_on_write')
+            if isinstance(val, bool):
+                self.backup_file_on_write = val
+            elif str(val).lower() in ('true', '1', 'yes', 'on'):
+                self.backup_file_on_write = True
+            elif str(val).lower() in ('false', '0', 'no', 'off'):
+                self.backup_file_on_write = False
 
         tools = config.get('tools', {})
         

@@ -253,3 +253,63 @@ def test_replace_file_content():
         assert "Error: File" in result_no_file
 
 
+def test_write_file_and_replace_backup_preservation():
+    """Verify write_file and replace_file_content preserve backups in session directory."""
+    from src.chatybot.tools.file_utils import write_file, replace_file_content
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        session_root = os.path.join(tmpdir, "sessions")
+        active_sess_id = "test_session_123"
+        
+        # Mock app object with session context
+        class MockApp:
+            def __init__(self):
+                self.session_dir = session_root
+                self.active_session_id = active_sess_id
+                self.backup_file_on_write = True
+
+        mock_app = MockApp()
+
+        target_file = os.path.join(tmpdir, "workdir", "target.txt")
+
+        # 1. First write on nonexistent file should not create backup
+        res1 = write_file(target_file, "version 1 content", app=mock_app)
+        assert "Success: Wrote to file" in res1
+        assert "backup saved" not in res1
+        assert os.path.exists(target_file)
+
+        # 2. Overwriting existing file should create a backup in session backups dir
+        res2 = write_file(target_file, "version 2 content", app=mock_app)
+        assert "Success: Wrote to file" in res2
+        assert "pre-edit backup saved" in res2
+
+        # Check backup content
+        expected_backup_dir = os.path.join(session_root, active_sess_id, "backups")
+        assert os.path.exists(expected_backup_dir)
+        
+        # Find the backup file in backup dir tree
+        backup_files = []
+        for root, dirs, files in os.walk(expected_backup_dir):
+            for f in files:
+                backup_files.append(os.path.join(root, f))
+        
+        assert len(backup_files) == 1
+        with open(backup_files[0], "r", encoding="utf-8") as bf:
+            assert bf.read() == "version 1 content"
+
+        # 3. replace_file_content should also create a backup
+        res3 = replace_file_content(target_file, "version 2", "version 3", app=mock_app)
+        assert "Success: Replaced 1 occurrence(s)" in res3
+        assert "pre-edit backup saved" in res3
+
+        with open(backup_files[0], "r", encoding="utf-8") as bf:
+            assert bf.read() == "version 2 content"
+
+        # 4. When backup_file_on_write is False, no backup is made
+        mock_app.backup_file_on_write = False
+        res4 = write_file(target_file, "version 4 content", app=mock_app)
+        assert "Success: Wrote to file" in res4
+        assert "backup saved" not in res4
+
+
+
