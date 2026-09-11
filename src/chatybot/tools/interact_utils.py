@@ -7,14 +7,10 @@ Provides a single ask_user() entry point that is shared by:
 
 Batch-mode guard
 ----------------
-The function returns {"status": "skipped"} without blocking when either of the
-following conditions is true:
-
-  1. app.script_context is True  — a .chatdsl file is being executed via
-     execute_script() / the --script CLI flag.
-  2. sys.stdin.isatty() is False — stdin has been redirected (pipe, CI runner,
-     etc.).  This covers cases where the script context flag is not set but the
-     process is clearly non-interactive.
+The function returns {"status": "skipped"} without blocking only when
+sys.stdin.isatty() is False (redirected input, piped stdin, CI runner,
+etc.). When stdin is attached to a real TTY, interactive prompts will
+always prompt the user, even during script execution.
 
 Supported question types
 ------------------------
@@ -64,12 +60,15 @@ def ask_user(
         ``{"status": "skipped", "reason": <str>}``
         or
         ``{"status": "error",   "reason": <str>}``
+    Batch-mode guard
+    ----------------
+    The function returns {"status": "skipped"} without blocking only when
+    sys.stdin.isatty() is False (non-interactive stdin, pipes, CI runners,
+    redirected input, etc.). If stdin is a TTY, it prompts the user even
+    during script execution.
     """
     if not _is_interactive(app):
-        reason = (
-            "running in script/batch mode" if _in_script(app) else "non-interactive stdin"
-        )
-        return {"status": "skipped", "reason": reason}
+        return {"status": "skipped", "reason": "non-interactive stdin (no TTY)"}
 
     try:
         answer = _prompt_user(prompt, choices, question_type)
@@ -106,10 +105,8 @@ def _in_script(app: Any) -> bool:
     return bool(app and getattr(app, "script_context", False))
 
 
-def _is_interactive(app: Any) -> bool:
-    """Return True only when a human is likely at the keyboard."""
-    if _in_script(app):
-        return False
+def _is_interactive(app: Any = None) -> bool:
+    """Return True only when stdin is a real TTY with a user present."""
     if not sys.stdin.isatty():
         return False
     return True

@@ -24,9 +24,11 @@ def _make_app(script_context: bool = False) -> MagicMock:
 # ---------------------------------------------------------------------------
 
 class TestIsInteractive(unittest.TestCase):
-    def test_script_context_blocks(self):
+    def test_interactive_when_tty_even_with_script_context(self):
         app = _make_app(script_context=True)
-        self.assertFalse(_is_interactive(app))
+        with patch("sys.stdin") as mock_stdin:
+            mock_stdin.isatty.return_value = True
+            self.assertTrue(_is_interactive(app))
 
     def test_no_tty_blocks(self):
         app = _make_app(script_context=False)
@@ -51,14 +53,17 @@ class TestIsInteractive(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestAskUserSkip(unittest.TestCase):
-    def test_skipped_in_script_context(self):
+    def test_prompts_when_tty_even_in_script_context(self):
         app = _make_app(script_context=True)
-        result = ask_user(prompt="Continue?", question_type="yesno", app=app)
-        self.assertEqual(result["status"], "skipped")
-        self.assertIn("script", result["reason"])
+        with patch("sys.stdin") as mock_stdin:
+            mock_stdin.isatty.return_value = True
+            with patch("builtins.input", return_value="yes"):
+                result = ask_user(prompt="Continue?", question_type="yesno", app=app)
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["answer"], "yes")
 
     def test_skipped_when_not_a_tty(self):
-        app = _make_app(script_context=False)
+        app = _make_app(script_context=True)
         with patch("sys.stdin") as mock_stdin:
             mock_stdin.isatty.return_value = False
             result = ask_user(prompt="Continue?", question_type="yesno", app=app)
@@ -67,7 +72,9 @@ class TestAskUserSkip(unittest.TestCase):
 
     def test_no_set_script_var_when_skipped(self):
         app = _make_app(script_context=True)
-        ask_user(prompt="Q?", target_variable="ANSWER", app=app)
+        with patch("sys.stdin") as mock_stdin:
+            mock_stdin.isatty.return_value = False
+            ask_user(prompt="Q?", target_variable="ANSWER", app=app)
         app.buffer_manager.set_script_var.assert_not_called()
 
 

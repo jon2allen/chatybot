@@ -369,9 +369,9 @@ Explain the concept of speculative decoding in two clear sentences.
 ```
 
 **Walkthrough**
-1. `/ask` pauses execution to prompt the user directly via keyboard (TTY).
+1. `/ask` pauses execution to prompt the user directly via keyboard when a TTY is available.
 2. The user's response is **always** saved to the protected reserved variable `${ASK_RESULT}`, and optionally copied into a target variable via `-> VARNAME`.
-3. In non-interactive batch runs (`/script` execution or redirected stdin/CI), `/ask` is skipped without blocking, allowing scripts to continue safely using default fallback variables.
+3. In non-interactive batch runs without a TTY (pipes, background cron, CI runners), `/ask` is skipped without blocking, allowing scripts to continue safely using default fallback variables. When run interactively via `/script` or `/source` with a terminal TTY, it will prompt the user directly.
 4. Subsequent lines can branch using standard `if "${proceed}" == "..."` or inspect `${ASK_RESULT}`.
 
 ---

@@ -633,12 +633,13 @@ class HelpSystem:
         self.register_command(CommandHelp(
             name="/ask",
             category="interact",
-            short_desc="Prompt user for input (skipped in batch/script mode)",
+            short_desc="Prompt user for input (skipped if stdin is not a TTY)",
             usage='/ask [yesno|choice] "<question>" [opt1 opt2 ...] [-> VARNAME]',
             long_desc="Interactively prompt the user for yes/no, multiple-choice, or free-text input. "
                       "The answer is always saved to the protected script variable 'ASK_RESULT' and optionally "
                       "to a user-specified variable via '-> VARNAME'. "
-                      "Silently skipped (with a notice) in non-interactive environments (batch scripts or non-TTY stdin).",
+                      "Silently skipped (with a notice) only when stdin is not a TTY (pipes, background runs, CI runners). "
+                      "In scripts attached to a TTY, the user is interactively prompted.",
             examples=[
                 '/ask "Continue?"',
                 '/ask "Continue?" -> CONTINUE',
