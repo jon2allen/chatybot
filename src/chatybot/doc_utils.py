@@ -189,8 +189,23 @@ def display_doc(
 
     highlighted = highlight_content(content, filename)
     try:
+        import os
         import pydoc
-        pydoc.pager(highlighted)
+
+        # Ensure less passes through raw ANSI color sequences (-R)
+        old_less = os.environ.get("LESS")
+        if old_less is None:
+            os.environ["LESS"] = "-R"
+        elif "-R" not in old_less and "-r" not in old_less:
+            os.environ["LESS"] = f"{old_less} -R"
+
+        try:
+            pydoc.pager(highlighted)
+        finally:
+            if old_less is None:
+                os.environ.pop("LESS", None)
+            else:
+                os.environ["LESS"] = old_less
     except Exception:
         print(highlighted)
 

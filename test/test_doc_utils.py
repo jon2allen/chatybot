@@ -254,4 +254,38 @@ async def test_cmd_docs_readme(capsys):
     assert "ChatyBot" in out or "chatybot" in out.lower()
 
 
+def test_display_doc_less_flag(monkeypatch):
+    """Verify display_doc ensures LESS contains -R for ANSI passthrough."""
+    from chatybot.doc_utils import display_doc
+    import sys
+
+    captured_less = None
+
+    def fake_pager(text):
+        nonlocal captured_less
+        captured_less = os.environ.get("LESS")
+
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: True)
+    monkeypatch.setattr("pydoc.pager", fake_pager)
+
+    # 1. When LESS is unset
+    monkeypatch.delenv("LESS", raising=False)
+    display_doc("# Hello World", "test.md", in_script=False)
+    assert captured_less == "-R"
+    assert "LESS" not in os.environ  # Restored
+
+    # 2. When LESS is set without -R
+    monkeypatch.setenv("LESS", "-F -X")
+    display_doc("# Hello World", "test.md", in_script=False)
+    assert captured_less == "-F -X -R"
+    assert os.environ.get("LESS") == "-F -X"  # Restored
+
+    # 3. When LESS already has -R
+    monkeypatch.setenv("LESS", "-R")
+    display_doc("# Hello World", "test.md", in_script=False)
+    assert captured_less == "-R"
+    assert os.environ.get("LESS") == "-R"
+
+
+
 
