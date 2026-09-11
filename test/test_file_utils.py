@@ -388,8 +388,21 @@ def test_backup_unnamed_session_and_history_off():
             os.environ.pop("CHATYBOT_SESSION_DIR", None)
             os.environ.pop("CHATYBOT_ACTIVE_SESSION_ID", None)
             os.environ.pop("CHATYBOT_ENABLE_CHAT_HISTORY", None)
-            os.environ.pop("CHATYBOT_BACKUP_ON_WRITE", None)
 
+def test_get_relative_backup_target():
+    """Verify _get_relative_backup_target handles drive letters and normal POSIX paths without losing colons."""
+    from src.chatybot.tools.file_utils import _get_relative_backup_target
 
+    # Standard POSIX absolute path
+    posix_path = "/Users/jon/project/file.txt"
+    assert _get_relative_backup_target(posix_path) == "Users/jon/project/file.txt"
 
+    # Windows-style path with drive letter
+    win_path = "C:\\Users\\jon\\project\\file.txt"
+    rel_win = _get_relative_backup_target(win_path)
+    assert "C:" not in rel_win
+    assert rel_win.startswith("C")
 
+    # POSIX path with colon in filename should NOT strip the colon
+    posix_colon = "/tmp/my:file.txt"
+    assert _get_relative_backup_target(posix_colon) == "tmp/my:file.txt"
