@@ -709,9 +709,9 @@ async def cmd_listmacros(ctx: CommandContext, parts: list, command: str) -> Comm
     return CommandResult.ok()
 
 
-@command("/docs", help="List or open bundled documentation and guides", args="[filename|subpath] [page=N]", category="debug", aliases=["/doc"])
+@command("/docs", help="List, view, or search bundled documentation and guides", args="[filename|search <terms...>|cookbook|path] [page=N] [var=<varname>]", category="debug", aliases=["/doc"])
 async def cmd_docs(ctx: CommandContext, parts: list, command: str) -> CommandResult:
-    from chatybot.doc_utils import get_doc_dir, get_doc_path, list_docs, display_doc
+    from chatybot.doc_utils import get_doc_dir, get_doc_path, list_docs, display_doc, search_docs
     
     app = ctx.app
     in_script = bool(getattr(app, "script_context", False))
@@ -720,10 +720,18 @@ async def cmd_docs(ctx: CommandContext, parts: list, command: str) -> CommandRes
     sub = ""
     page_num = 1
     target_var = None
+    search_terms = []
+    search_op = "AND"
+    search_limit = 20
+    is_search = False
     
-    for arg in raw_args:
+    i = 0
+    while i < len(raw_args):
+        arg = raw_args[i]
         arg_lower = arg.lower()
-        if arg_lower.startswith("page="):
+        if arg_lower == "search" and not sub and not is_search:
+            is_search = True
+        elif arg_lower.startswith("page="):
             try:
                 page_num = max(1, int(arg.split("=", 1)[1]))
             except ValueError:
@@ -732,8 +740,56 @@ async def cmd_docs(ctx: CommandContext, parts: list, command: str) -> CommandRes
             target_var = arg.split("=", 1)[1].strip().lstrip("$")
         elif arg_lower.startswith("target="):
             target_var = arg.split("=", 1)[1].strip().lstrip("$")
+        elif arg_lower.startswith("limit="):
+            try:
+                search_limit = max(1, int(arg.split("=", 1)[1]))
+            except ValueError:
+                search_limit = 20
+        elif is_search:
+            if arg_lower in ("or", "and"):
+                search_op = arg_lower.upper()
+            else:
+                search_terms.append(arg.strip("\"'"))
         elif not sub:
             sub = arg.strip("\"'")
+        i += 1
+
+    if is_search:
+        if not search_terms:
+            print("Usage: /docs search <terms...> [or|and] [limit=N] [var=<varname>]")
+            return CommandResult.ok()
+
+        matches = search_docs(terms=search_terms, op=search_op, limit=search_limit)
+
+        if not matches:
+            op_desc = f" ({search_op})" if len(search_terms) > 1 else ""
+            print(f"\nNo documentation matches found for '{' '.join(search_terms)}'{op_desc}.")
+            return CommandResult.ok()
+
+        # Group matches by file
+        file_counts = set(m.filename for m in matches)
+        op_desc = f" [{search_op}]" if len(search_terms) > 1 else ""
+        print(f"\nFound {len(matches)} match(es) across {len(file_counts)} file(s){op_desc}:")
+        print("=" * 60)
+
+        formatted_lines = []
+        for idx, m in enumerate(matches, 1):
+            header = f"{idx}. {m.filename}:{m.line_number}"
+            body = f"   {m.snippet}"
+            print(f"{header}\n{body}")
+            formatted_lines.append(f"{header}\n{body}")
+
+        print(f"\nView full document with: /docs <filename> [page=N]\n")
+
+        if target_var:
+            saved_data = [m.to_dict() for m in matches]
+            if hasattr(app, "buffer_manager") and app.buffer_manager:
+                app.buffer_manager.set_script_var(target_var, saved_data, allow_protected=True)
+                print(f"Saved {len(matches)} search result(s) to script_var '${target_var}'")
+            else:
+                print(f"Error: Buffer manager not available to set script_var '${target_var}'")
+
+        return CommandResult.ok()
 
     if not sub:
         doc_dir = get_doc_dir()
@@ -763,6 +819,7 @@ async def cmd_docs(ctx: CommandContext, parts: list, command: str) -> CommandRes
         print("  /docs <filename>       - View documentation file (REPL: highlighted pager, Script: chunked)")
         print("  /docs <filename> page=N - View specific page (40 lines/page in script context)")
         print("  /docs <filename> var=<name> - Load full doc content into a script variable")
+        print("  /docs search <terms...> - Search documentation with Grep engine matching")
         print("  /docs cookbook         - List all cookbook recipes")
         print("  /docs path             - Print full path to documentation directory\n")
         return CommandResult.ok()
