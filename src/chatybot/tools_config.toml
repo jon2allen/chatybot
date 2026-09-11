@@ -330,5 +330,28 @@ type = "string"
 description = "Optional script variable name to save the extracted text into"
 optional = true
 
+[tools.ask_user]
+enabled = true
+description = "Prompt the user interactively for input (choice, yesno, or text)."
+module = "chatybot.tools.interact_utils"
+function = "ask_user"
 
+[tools.ask_user.parameters.prompt]
+type = "string"
+description = "The question or message to display to the user"
+optional = false
 
+[tools.ask_user.parameters.choices]
+type = "array"
+description = "List of choices for multiple choice questions"
+optional = true
+
+[tools.ask_user.parameters.question_type]
+type = "string"
+description = "Question type: 'yesno', 'choice', or 'text' (default: 'text')"
+optional = true
+
+[tools.ask_user.parameters.target_variable]
+type = "string"
+description = "Optional script variable name to save the answer into (answer is also always saved to ASK_RESULT)"
+optional = true

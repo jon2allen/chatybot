@@ -631,6 +631,24 @@ class HelpSystem:
         ))
         
         self.register_command(CommandHelp(
+            name="/ask",
+            category="interact",
+            short_desc="Prompt user for input (skipped in batch/script mode)",
+            usage='/ask [yesno|choice] "<question>" [opt1 opt2 ...] [-> VARNAME]',
+            long_desc="Interactively prompt the user for yes/no, multiple-choice, or free-text input. "
+                      "The answer is always saved to the protected script variable 'ASK_RESULT' and optionally "
+                      "to a user-specified variable via '-> VARNAME'. "
+                      "Silently skipped (with a notice) in non-interactive environments (batch scripts or non-TTY stdin).",
+            examples=[
+                '/ask "Continue?"',
+                '/ask "Continue?" -> CONTINUE',
+                '/ask yesno "Overwrite existing file?" -> OVERWRITE',
+                '/ask choice "Select model:" gpt-4 claude gemini -> MODEL',
+            ],
+            see_also=["/setvar", "/echo"]
+        ))
+        
+        self.register_command(CommandHelp(
             name="/mem",
             category="debug",
             short_desc="Show size of buffers and variables",

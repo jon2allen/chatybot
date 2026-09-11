@@ -76,13 +76,25 @@ def ask_user(
     except (EOFError, KeyboardInterrupt):
         return {"status": "error", "reason": "input interrupted"}
 
+    # Always set the reserved/protected script variable ASK_RESULT
+    if app is not None and hasattr(app, "buffer_manager") and app.buffer_manager:
+        try:
+            app.buffer_manager.set_script_var("ASK_RESULT", answer, allow_protected=True)
+        except Exception:  # pragma: no cover
+            pass
+
     if target_variable and app is not None:
         try:
             app.buffer_manager.set_script_var(target_variable, answer)
         except Exception as exc:  # pragma: no cover
             return {"status": "error", "reason": f"Failed to set variable: {exc}"}
 
-    return {"status": "success", "answer": answer, "target_variable": target_variable}
+    return {
+        "status": "success",
+        "answer": answer,
+        "target_variable": target_variable,
+        "reserved_variable": "ASK_RESULT",
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -113,15 +125,17 @@ def _prompt_user(prompt: str, choices: Optional[List[str]], question_type: str) 
         return _prompt_choice(prompt, choices)
 
     # Free-text
-    return input(f"{prompt}: ").strip()
+    print(f"\n{prompt}")
+    return input("Answer: ").strip()
 
 
 def _prompt_choice(prompt: str, choices: List[str]) -> str:
     """Display a numbered menu and return the chosen text value."""
-    print(f"\n{prompt}")
+    print(f"\n{prompt}\n")
     for i, option in enumerate(choices, 1):
-        print(f"  {i}. {option}")
+        print(f"  [{i}] {option}")
 
+    print()
     choices_lower = [c.lower() for c in choices]
     while True:
         raw = input(f"Enter choice (1-{len(choices)}): ").strip().lower()
@@ -133,3 +147,4 @@ def _prompt_choice(prompt: str, choices: List[str]) -> str:
             # Return with the original casing
             return choices[choices_lower.index(raw)]
         print(f"  Invalid — enter a number (1-{len(choices)}) or one of: {', '.join(choices)}")
+

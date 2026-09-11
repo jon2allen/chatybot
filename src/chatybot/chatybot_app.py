@@ -3431,6 +3431,13 @@ class ChatybotApp:
                 try:
                     from .tools.interact_utils import ask_user
                     args = tool_call.get("arguments", {}) or {}
+                    # Some LLMs wrap arguments inside a "parameters" or "arguments" sub-dictionary
+                    if isinstance(args, dict):
+                        if "parameters" in args and isinstance(args["parameters"], dict):
+                            args = args["parameters"]
+                        elif "arguments" in args and isinstance(args["arguments"], dict):
+                            args = args["arguments"]
+
                     res = ask_user(
                         prompt=args.get("prompt", ""),
                         choices=args.get("choices") or None,
@@ -3446,7 +3453,10 @@ class ChatybotApp:
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', result_str)
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', '')
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '0')
-                    print(f"Tool dispatched successfully (in-process ask_user)")
+                    if res["status"] == "success":
+                        print(f"\n[ask_user] Recorded answer: {res['answer']!r}")
+                    elif res["status"] == "skipped":
+                        print(f"\n[ask_user] Skipped: {res.get('reason', '')}")
                     return result_str
                 except Exception as e:
                     err_msg = f"Error: ask_user tool execution failed: {e}"
@@ -4046,8 +4056,11 @@ class ChatybotApp:
             for tc in tool_calls:
                 tool_name = tc.get("tool")
                 tool_args = tc.get("arguments", {})
-                print(f"[Turn {turn_count+1}/{max_turns}] LLM requested tool: {tool_name}")
-                print(f"   Arguments: {safe_json_dumps(tool_args, ensure_ascii=False)}")
+                if tool_name == "ask_user":
+                    print(f"\n[Turn {turn_count+1}/{max_turns}] Prompting user for input...")
+                else:
+                    print(f"[Turn {turn_count+1}/{max_turns}] LLM requested tool: {tool_name}")
+                    print(f"   Arguments: {safe_json_dumps(tool_args, ensure_ascii=False)}")
                 
                 # Execute the tool and capture result
                 self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
@@ -4066,7 +4079,8 @@ class ChatybotApp:
                 if self._is_permanent_capability_error(result_str) and "[PERMANENT CAPABILITY ERROR]" not in result_str:
                     result_str = self._format_capability_error(tool_name, result_str)
                     
-                print(f"Tool Result: {result_str}")
+                if tool_name != "ask_user":
+                    print(f"Tool Result: {result_str}")
                 results.append(f"Tool: {tool_name}\nArguments: {safe_json_dumps(tool_args, ensure_ascii=False)}\nResult: {result_str}")
 
                 # Monitor tool output size and issue warnings in the loop
@@ -4877,6 +4891,7 @@ class ChatybotApp:
         print("  /setvar <varname> <value> - Set a script variable. Supports {CHAT_HISTORY} and {LAST_RESPONSE} placeholders.")
         print('  /calc "<expr>" [varname] - Evaluate a math expression using mathparse and store in a variable (default CALC).')
         print('  /str_search "<pattern>" <var> [flags] [varname] - Search for substring in a text variable (flags: c=count, m=positions, i=case-insensitive).')
+        print('  /ask [yesno|choice] "<question>" [opt1 opt2 ...] [-> VAR] - Prompt user for input, stored in ASK_RESULT (and optional VAR).')
         print("  /documents <src>=<id> - Set the active rerank source: db=<name>, var=<name> (or CHAT_HISTORY or file), filebank=<1-5>, or dir=\"<path>\"")
         print("  /rerank \"<query>\" [, top_n=<n>] [, items=<n>] [, split=<sentence|line|paragraph>] - Semantically rerank source sentences/chunks.")
         print("  /mem [detail|debug] - Show size of buffers and script variables. Use 'detail' for element breakdowns, or 'debug' for metadata.")
