@@ -11,8 +11,7 @@ Syntax
   /ask choice "Pick one:" opt1 opt2 -> VARNAME -> numbered list of choices
 
 The command is silently skipped (with a notice) when:
-  - A .chatdsl script is currently executing (app.script_context is True)
-  - stdin is not a TTY (pipe, CI runner, --script flag, etc.)
+  - stdin is not a TTY (pipe, CI runner, redirected file, etc.)
 """
 
 import re
@@ -30,7 +29,7 @@ from chatybot.tools.interact_utils import ask_user
 
 @command(
     "/ask",
-    help="Prompt user for input (skipped in batch/script mode)",
+    help="Prompt user for input (skipped if stdin is not a TTY)",
     args='[yesno|choice] "<question>" [opt1 opt2 ...] [-> VARNAME]',
     category="interact",
 )
