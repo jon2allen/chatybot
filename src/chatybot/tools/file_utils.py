@@ -392,6 +392,10 @@ def create_file_backup(file_path: str, app: Any = None) -> Optional[str]:
             backup_base = os.path.join(session_dir, active_session_id, "backups")
 
         backup_file_path = os.path.join(backup_base, rel_target)
+        # Ensure only a single initial copy backup is kept per file
+        if os.path.exists(backup_file_path):
+            return backup_file_path
+
         os.makedirs(os.path.dirname(backup_file_path), exist_ok=True)
 
         import shutil
@@ -504,8 +508,102 @@ def grep_search(
 
     return enforce_list_payload_limits(results, "grep_search", max_items=max_matches)
 
+def save_file_diff(file_path: str, original_content: str, modified_content: str, app: Any = None) -> Optional[str]:
+    """
+    Generate and save a re-applicable unified diff patch for file modifications.
+    Stored inside the active session's diff directory:
+    ~/.local/share/chatybot/sessions/<session_id>/diffs/<relative_path>.<timestamp>.patch
+    If chat history is off, saved under ~/.local/share/chatybot/diffs/<relative_path>.<timestamp>.patch.
+    Returns the patch file path if saved, or None on failure/skip.
+    """
+    import difflib
+    from datetime import datetime
+
+    try:
+        # Check if backup is enabled in config, app, or env
+        backup_enabled = True
+        enable_chat_history = True
+        session_dir = os.path.expanduser("~/.local/share/chatybot/sessions")
+        active_session_id = None
+
+        if app is not None:
+            backup_enabled = getattr(app, "backup_file_on_write", True)
+            enable_chat_history = getattr(app, "enable_chat_history", True)
+            session_dir = getattr(app, "session_dir", session_dir)
+            active_session_id = getattr(app, "active_session_id", None)
+            if enable_chat_history and not active_session_id:
+                if hasattr(app, "_ensure_active_session"):
+                    try:
+                        app._ensure_active_session()
+                        active_session_id = getattr(app, "active_session_id", None)
+                    except Exception:
+                        pass
+        else:
+            if "CHATYBOT_ENABLE_CHAT_HISTORY" in os.environ:
+                enable_chat_history = os.environ.get("CHATYBOT_ENABLE_CHAT_HISTORY", "1") != "0"
+            if "CHATYBOT_BACKUP_ON_WRITE" in os.environ:
+                backup_enabled = os.environ.get("CHATYBOT_BACKUP_ON_WRITE", "1") != "0"
+            if os.environ.get("CHATYBOT_SESSION_DIR"):
+                session_dir = os.environ["CHATYBOT_SESSION_DIR"]
+            if os.environ.get("CHATYBOT_ACTIVE_SESSION_ID"):
+                active_session_id = os.environ["CHATYBOT_ACTIVE_SESSION_ID"]
+
+            try:
+                import tomllib
+                cfg_path = os.path.expanduser("~/.config/chatybot/tools_config.toml")
+                if not os.path.exists(cfg_path):
+                    cfg_path = os.path.join(os.path.dirname(__file__), "..", "tools_config.toml")
+                if os.path.exists(cfg_path):
+                    with open(cfg_path, "rb") as f:
+                        cfg = tomllib.load(f)
+                    cfg_sec = cfg.get("config", {})
+                    if "backup_file_on_write" in cfg_sec and "CHATYBOT_BACKUP_ON_WRITE" not in os.environ:
+                        backup_enabled = cfg_sec.get("backup_file_on_write", True)
+                    if "session_dir" in cfg_sec and not os.environ.get("CHATYBOT_SESSION_DIR"):
+                        session_dir = os.path.expanduser(str(cfg_sec.get("session_dir")))
+            except Exception:
+                pass
+
+        if not backup_enabled:
+            return None
+
+        abs_target = os.path.abspath(file_path)
+        rel_target = abs_target.lstrip(os.path.sep).replace(":", "")
+
+        if not enable_chat_history:
+            diff_base = os.path.join(os.path.dirname(session_dir), "diffs")
+        else:
+            if not active_session_id:
+                active_session_id = f"default_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            diff_base = os.path.join(session_dir, active_session_id, "diffs")
+
+        timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        patch_file_path = os.path.join(diff_base, f"{rel_target}.{timestamp_str}.patch")
+        os.makedirs(os.path.dirname(patch_file_path), exist_ok=True)
+
+        orig_lines = original_content.splitlines(keepends=True)
+        mod_lines = modified_content.splitlines(keepends=True)
+        diff_lines = list(difflib.unified_diff(
+            orig_lines,
+            mod_lines,
+            fromfile=f"a/{rel_target}",
+            tofile=f"b/{rel_target}",
+            lineterm="\n"
+        ))
+
+        if not diff_lines:
+            return None
+
+        with open(patch_file_path, "w", encoding="utf-8") as pf:
+            pf.writelines(diff_lines)
+
+        return patch_file_path
+    except Exception:
+        return None
+
+
 def replace_file_content(path: str, target: str, replacement: str, app: Any = None) -> str:
-    """Replace target content with replacement content in the file at path, preserving a backup."""
+    """Replace target content with replacement content in the file at path, saving a re-applicable diff patch."""
     path = normalize_path(path)
     try:
         if not os.path.exists(path):
@@ -517,17 +615,17 @@ def replace_file_content(path: str, target: str, replacement: str, app: Any = No
         if target not in content:
             return f"Error: Target content not found in file '{path}'."
 
-        backup_path = create_file_backup(path, app=app)
-        
         occurrences = content.count(target)
         new_content = content.replace(target, replacement)
+
+        diff_path = save_file_diff(path, content, new_content, app=app)
         
         with open(path, 'w', encoding='utf-8') as f:
             f.write(new_content)
             
         msg = f"Success: Replaced {occurrences} occurrence(s) of target in '{path}'"
-        if backup_path:
-            msg += f" (pre-edit backup saved: '{backup_path}')"
+        if diff_path:
+            msg += f" (diff patch saved: '{diff_path}')"
         return msg
     except Exception as e:
         return f"Error replacing file content: {e}"

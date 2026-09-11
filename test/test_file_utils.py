@@ -297,19 +297,37 @@ def test_write_file_and_replace_backup_preservation():
         with open(backup_files[0], "r", encoding="utf-8") as bf:
             assert bf.read() == "version 1 content"
 
-        # 3. replace_file_content should also create a backup
+        # 3. replace_file_content should save an applicable diff patch
         res3 = replace_file_content(target_file, "version 2", "version 3", app=mock_app)
         assert "Success: Replaced 1 occurrence(s)" in res3
-        assert "pre-edit backup saved" in res3
+        assert "diff patch saved" in res3
 
-        with open(backup_files[0], "r", encoding="utf-8") as bf:
-            assert bf.read() == "version 2 content"
+        expected_diff_dir = os.path.join(session_root, active_sess_id, "diffs")
+        assert os.path.exists(expected_diff_dir)
+        diff_files = []
+        for root, dirs, files in os.walk(expected_diff_dir):
+            for f in files:
+                if f.endswith(".patch"):
+                    diff_files.append(os.path.join(root, f))
+        assert len(diff_files) == 1
+        with open(diff_files[0], "r", encoding="utf-8") as df:
+            diff_content = df.read()
+            assert "--- a/" in diff_content
+            assert "+++ b/" in diff_content
+            assert "-version 2 content" in diff_content
+            assert "+version 3 content" in diff_content
 
-        # 4. When backup_file_on_write is False, no backup is made
-        mock_app.backup_file_on_write = False
+        # 4. A second write_file preserves the single initial full-copy backup (does not overwrite initial backup)
         res4 = write_file(target_file, "version 4 content", app=mock_app)
         assert "Success: Wrote to file" in res4
-        assert "backup saved" not in res4
+        with open(backup_files[0], "r", encoding="utf-8") as bf:
+            assert bf.read() == "version 1 content"
+
+        # 5. When backup_file_on_write is False, no backup or diff is made
+        mock_app.backup_file_on_write = False
+        res5 = replace_file_content(target_file, "version 4", "version 5", app=mock_app)
+        assert "Success: Replaced 1 occurrence(s)" in res5
+        assert "diff patch saved" not in res5
 
 
 def test_backup_unnamed_session_and_history_off():
