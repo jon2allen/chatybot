@@ -1,0 +1,10 @@
+# Recipe 8.4 - User interaction during tool loops (ask_user) and batch feedback
+# Goal: Allow autonomous tool loops to prompt the user interactively when needed, or receive structured skip feedback in batch mode.
+# Run: /source src/chatybot/doc/cookbook/08_4_ask_user_tool.chatdsl
+
+/model devstral_1
+/tool on
+/tool auto on
+
+# Prompt the agent to inspect files and ask before making modifications
+chat --> Check the markdown files in docs/ and ask me which one should be refactored first.

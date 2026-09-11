@@ -979,6 +979,47 @@ chat --> Write a quick python script in scratch to compute first 15 fibonacci nu
 3. `/tool scratch status` lists the generated scripts and file counts.
 4. `/tool scratch clean` deletes disposable artifacts from the scratch directory.
 
+### 8.4 User interaction during tool loops (ask_user) and batch mode feedback
+- **Goal:** allow the model to pause during an autonomous agentic loop to ask the user a clarifying or confirmation question, and handle headless/batch execution gracefully.
+- **Commands:** `/tool on`, `/tool auto on`, `ask_user`.
+- **Script:** `cookbook/08_4_ask_user_tool.chatdsl`
+
+```dsl
+/model devstral_1
+/tool on
+/tool auto on
+
+# Prompt the agent to inspect files and ask before making modifications
+chat --> Check the markdown files in docs/ and ask me which one should be refactored first.
+```
+
+**Walkthrough**
+1. When the model needs clarification or user confirmation, it calls the `ask_user` tool:
+   ```json
+   {
+     "tool": "ask_user",
+     "arguments": {
+       "prompt": "Which file should I refactor first?",
+       "question_type": "choice",
+       "choices": ["guide.md", "api.md", "tutorial.md"]
+     }
+   }
+   ```
+2. **Interactive Terminal (Foreground TTY):** The tool loop pauses, displays a clean formatted menu, and waits for keyboard input. The user's answer is returned to the model as a success result, and also saved to `${ASK_RESULT}`.
+3. **Headless / Batch Mode Feedback:** If the tool loop is executing in a non-interactive environment (pipes, background job with `&`, cron, or CI runners), `ask_user` **never hangs or throws an unhandled error**. Instead, it returns a structured JSON skip payload back to the LLM:
+   ```json
+   {
+     "status": "skipped",
+     "tool": "ask_user",
+     "result": {
+       "status": "skipped",
+       "reason": "non-interactive stdin"
+     }
+   }
+   ```
+   *(or `"reason": "background process"` if placed in the background).*
+4. The model observes this payload in its tool result and understands no human operator is available to answer; it will either fall back to a safe default action autonomously or report its recommendation in natural language.
+
 ---
 
 
@@ -1870,6 +1911,8 @@ Summarize the consensus algorithms mentioned and who discussed them.
 | 7.3 | Data pipeline | `/run` + prompt | new |
 | 8.1 | Enabling tools | `/tool on/enable/auto/max_turns` | new |
 | 8.2 | Autonomous loop & live edit | `/tool loop` `/tool prompt [live_edit]` | new |
+| 8.3 | Scratchpad execution | `/tool scratch on/status/clean` | new |
+| 8.4 | User interaction during tool loops | `ask_user` `/tool auto` `${ASK_RESULT}` | new |
 | 9.1 | Generate & save image | `/imagine` `/saveimage` | new |
 | 9.2 | Image banks (vision) | `/loadimage` `{imagebankN}` | new |
 | 9.3 | Batch images | `foreach` + `/imagine` | new |
