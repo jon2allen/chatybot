@@ -5,7 +5,7 @@ Provides access to bundled package documentation and guides.
 
 import sys
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 if sys.version_info >= (3, 11):
     from importlib.resources import files
@@ -143,3 +143,108 @@ def display_doc(
         pydoc.pager(highlighted)
     except Exception:
         print(highlighted)
+
+
+def check_text_match(text: str, terms: List[str], op: str = "AND") -> Tuple[bool, List[str]]:
+    """
+    Check if text matches terms using AND/OR logic.
+    Reuses the exact matching logic from GrepQueryEngine.
+    """
+    if not terms:
+        return True, []
+    text_lower = text.lower()
+    matched = [t for t in terms if t.lower() in text_lower]
+    if op.upper() == "AND":
+        return len(matched) == len(terms), matched
+    else:  # OR
+        return len(matched) > 0, matched
+
+
+def make_snippet(text: str, matched_terms: List[str], max_len: int = 120) -> str:
+    """
+    Create a contextual snippet around matched terms.
+    Reuses the exact snippet generator from GrepQueryEngine.
+    """
+    clean_text = " ".join(text.split())
+    if not matched_terms or not clean_text:
+        return clean_text[:max_len] + ("..." if len(clean_text) > max_len else "")
+
+    first_idx = -1
+    clean_lower = clean_text.lower()
+    for t in matched_terms:
+        idx = clean_lower.find(t.lower())
+        if idx != -1 and (first_idx == -1 or idx < first_idx):
+            first_idx = idx
+
+    if first_idx == -1:
+        first_idx = 0
+
+    start = max(0, first_idx - 40)
+    end = min(len(clean_text), first_idx + max_len - 40)
+    prefix = "..." if start > 0 else ""
+    suffix = "..." if end < len(clean_text) else ""
+    return f"{prefix}{clean_text[start:end]}{suffix}"
+
+
+class DocSearchMatch:
+    """Represents a matched documentation line/entry."""
+
+    def __init__(self, filename: str, line_number: int, line_text: str, matched_terms: List[str], snippet: str):
+        self.filename = filename
+        self.line_number = line_number
+        self.line_text = line_text
+        self.matched_terms = matched_terms
+        self.snippet = snippet
+
+    def to_dict(self) -> dict:
+        return {
+            "filename": self.filename,
+            "line_number": self.line_number,
+            "line_text": self.line_text,
+            "matched_terms": self.matched_terms,
+            "snippet": self.snippet,
+        }
+
+
+def search_docs(
+    terms: List[str],
+    op: str = "AND",
+    limit: int = 20,
+    subpath: str = "",
+) -> List[DocSearchMatch]:
+    """
+    Search across bundled documentation files for terms matching AND/OR boolean logic.
+    Reuses GrepQueryEngine matching and snippet semantics.
+    """
+    clean_terms = [t.strip().lower() for t in terms if t.strip()]
+    if not clean_terms:
+        return []
+
+    doc_files = list_docs(subpath)
+    matches: List[DocSearchMatch] = []
+
+    for rel_path in doc_files:
+        full_path = get_doc_path(rel_path)
+        if not full_path.is_file():
+            continue
+
+        try:
+            content = full_path.read_text(encoding="utf-8", errors="replace")
+        except Exception:
+            continue
+
+        for line_num, line in enumerate(content.splitlines(), start=1):
+            is_match, matched = check_text_match(line, clean_terms, op=op)
+            if is_match:
+                snippet = make_snippet(line, matched, max_len=120)
+                matches.append(DocSearchMatch(
+                    filename=rel_path,
+                    line_number=line_num,
+                    line_text=line.strip(),
+                    matched_terms=matched,
+                    snippet=snippet,
+                ))
+                if len(matches) >= limit:
+                    return matches
+
+    return matches

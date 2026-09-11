@@ -185,3 +185,46 @@ async def test_cmd_docs_load_to_script_var(capsys):
     assert val2 is not None
     assert "ChatDSL" in val2
 
+
+def test_search_docs_utility():
+    """Test search_docs matching and snippet generation."""
+    from chatybot.doc_utils import search_docs
+
+    # Single term search
+    matches = search_docs(["cookbook"], limit=10)
+    assert len(matches) > 0
+    assert any("cookbook" in m.snippet.lower() for m in matches)
+
+    # Multi-term AND search
+    matches_and = search_docs(["model", "prompt"], op="AND", limit=5)
+    for m in matches_and:
+        assert "model" in m.line_text.lower() and "prompt" in m.line_text.lower()
+
+    # Multi-term OR search
+    matches_or = search_docs(["foreach", "nonexistenttermxyz"], op="OR", limit=5)
+    assert len(matches_or) > 0
+    assert any("foreach" in m.line_text.lower() for m in matches_or)
+
+
+@pytest.mark.anyio
+async def test_cmd_docs_search(capsys):
+    """Test /docs search command with snippets and script_var saving."""
+    app = _make_app(capsys)
+
+    # Search with output
+    await app.handle_escape_command("/docs search model prompt limit=5")
+    out = capsys.readouterr().out
+    assert "match(es) across" in out
+    assert ":" in out
+
+    # Search with var= saving
+    await app.handle_escape_command("/docs search cookbook var=search_res limit=3")
+    out2 = capsys.readouterr().out
+    assert "Saved 3 search result(s) to script_var '$search_res'" in out2
+    res_var = app.buffer_manager.get_script_var("search_res")
+    assert isinstance(res_var, list)
+    assert len(res_var) == 3
+    assert "filename" in res_var[0]
+    assert "snippet" in res_var[0]
+
+
