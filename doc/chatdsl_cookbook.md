@@ -1058,7 +1058,7 @@ A narrative recipe (no script). Chatybot ships three profiles in
 |---------|-------|-------|-----------|--------|----------|
 | `general` | `mistral_1` | off | off | — | General assistance, no tools |
 | `coding` | `devstral_1` | auto on, max_turns 75 | on | none | Coding, debugging |
-| `explorer` | (current) | run/run_safe/setdb **disabled** | off | — | Read-only codebase exploration |
+| `explorer` | (current) | run_command/write_file/replace_file_content/setdb **disabled** | off | — | Read-only codebase exploration |
 
 **Commands:** `/profile list`, `/profile use <name>`, `/profile clone <name>`,
 `/profile delete <name>`, `/profile export <name> <path>`, `/profile import <path>`,

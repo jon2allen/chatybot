@@ -96,7 +96,7 @@ PROFILE_PRESETS: Dict[str, Dict[str, Any]] = {
         "trace_rerank": False,
         "trace_tps_perf": False,
         "trace_imagedbg": False,
-        "disabled_tools": ["run_command", "run_safe", "run_unsafe", "setdb"],
+        "disabled_tools": ["run_command", "write_file", "replace_file_content", "setdb"],
     },
 }
 

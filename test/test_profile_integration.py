@@ -110,5 +110,28 @@ class TestProfileIntegration:
         reloaded_profile = Profile.from_chatdsl_string(generated_dsl)
         assert reloaded_profile.config.trace_settings.imagedbg is True
 
+    def test_explorer_profile_read_only_tools(self):
+        """Verify explorer profile disables write and execution tools."""
+        from src.chatybot.profile_manager import PROFILE_PRESETS, ProfileManager
+        from src.chatybot.profile_model import Profile
+
+        # Check preset dictionary
+        explorer_preset = PROFILE_PRESETS["explorer"]
+        disabled = explorer_preset["disabled_tools"]
+        assert "run_command" in disabled
+        assert "write_file" in disabled
+        assert "replace_file_content" in disabled
+        assert "setdb" in disabled
+
+        # Check bundled explorer.chatdsl file
+        explorer_path = os.path.join(os.path.dirname(__file__), "..", "src", "chatybot", "profiles", "explorer.chatdsl")
+        profile = Profile.from_file(explorer_path)
+        dsl_disabled = profile.config.tool_settings.disabled_tools
+        assert "run_command" in dsl_disabled
+        assert "write_file" in dsl_disabled
+        assert "replace_file_content" in dsl_disabled
+        assert "setdb" in dsl_disabled
+
+
 
 
