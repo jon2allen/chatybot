@@ -1,0 +1,24 @@
+# Recipe 2.6 - Interactive Prompting with /ask and ${ASK_RESULT}
+# Goal: Prompt user for interactive decision, branch on answer, with batch-mode default fallback.
+# Run: /source src/chatybot/doc/cookbook/02_6_interactive_ask.chatdsl
+
+# Set default fallback in case script is run in non-interactive / batch mode
+set proceed = "yes"
+set chosen_model = "mistral_1"
+
+# 1. Ask yes/no confirmation (stores into PROCEED and reserved $ASK_RESULT)
+/ask yesno "Proceed with analysis?" -> proceed
+
+/echo "Decision: ${proceed} (recorded in ASK_RESULT: ${ASK_RESULT})"
+
+if "${proceed}" == "no" then /echo "Aborted by user."
+if "${proceed}" == "no" then break
+
+# 2. Ask multiple-choice model selection
+/ask choice "Which model would you like to run?" mistral_1 gemini_flash devstral_1 -> chosen_model
+
+/echo "Using model: ${chosen_model}"
+/model ${chosen_model}
+
+Explain the concept of speculative decoding in two clear sentences.
+/echo "Finished completion."
