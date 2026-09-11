@@ -228,3 +228,30 @@ async def test_cmd_docs_search(capsys):
     assert "snippet" in res_var[0]
 
 
+def test_readme_doc_sync():
+    """Verify src/chatybot/doc/README.md is byte-for-byte in sync with repo root README.md."""
+    from pathlib import Path
+    root_readme = Path(__file__).resolve().parent.parent / "README.md"
+    doc_readme = Path(__file__).resolve().parent.parent / "src" / "chatybot" / "doc" / "README.md"
+    
+    assert doc_readme.exists(), "src/chatybot/doc/README.md is missing!"
+    assert root_readme.exists(), "Root README.md is missing!"
+    assert doc_readme.read_text(encoding="utf-8") == root_readme.read_text(encoding="utf-8"), (
+        "src/chatybot/doc/README.md is out of sync with root README.md! Run: cp README.md src/chatybot/doc/README.md"
+    )
+
+
+@pytest.mark.anyio
+async def test_cmd_docs_readme(capsys):
+    """Test /docs README.md displays the synced README."""
+    app = _make_app(capsys)
+    app.script_context = True
+
+    await app.handle_escape_command("/docs README.md page=1")
+    out = capsys.readouterr().out
+    assert "README.md" in out
+    assert "Page 1/" in out
+    assert "ChatyBot" in out or "chatybot" in out.lower()
+
+
+

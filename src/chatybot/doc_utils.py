@@ -43,6 +43,47 @@ def get_doc_dir() -> Path:
     return Path(__file__).resolve().parent / "doc"
 
 
+def get_readme_content() -> Optional[str]:
+    """
+    Retrieve the canonical README.md content.
+    Checks:
+    1. src/chatybot/doc/README.md or local doc_dir/README.md
+    2. Repository root README.md
+    3. Package distribution metadata ('Description' field in importlib.metadata)
+    """
+    # 1. Bundled or local doc directory
+    doc_file = get_doc_path("README.md")
+    if doc_file.exists() and doc_file.is_file():
+        try:
+            return doc_file.read_text(encoding="utf-8")
+        except Exception:
+            pass
+
+    # 2. Repo root README.md
+    repo_readme = Path(__file__).resolve().parent.parent.parent / "README.md"
+    if repo_readme.exists() and repo_readme.is_file():
+        try:
+            return repo_readme.read_text(encoding="utf-8")
+        except Exception:
+            pass
+
+    # 3. Installed package metadata fallback
+    try:
+        if sys.version_info >= (3, 10):
+            from importlib.metadata import metadata
+        else:
+            from importlib_metadata import metadata
+
+        meta = metadata("chatybot")
+        desc = meta.get("Description")
+        if desc:
+            return desc
+    except Exception:
+        pass
+
+    return None
+
+
 def get_doc_path(rel_path: str = "") -> Path:
     """
     Resolve a specific document or subdirectory within the documentation.
@@ -56,7 +97,16 @@ def get_doc_path(rel_path: str = "") -> Path:
     doc_root = get_doc_dir()
     if not rel_path:
         return doc_root
-    return doc_root / rel_path.lstrip("/\\")
+    clean = rel_path.lstrip("/\\")
+    target = doc_root / clean
+
+    # If asking for README.md and not found in doc_root, fallback to repo root if available
+    if clean.lower() in ("readme.md", "readme") and not target.exists():
+        repo_readme = Path(__file__).resolve().parent.parent.parent / "README.md"
+        if repo_readme.exists():
+            return repo_readme
+
+    return target
 
 
 def list_docs(subpath: str = "") -> List[str]:
