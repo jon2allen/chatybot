@@ -621,3 +621,53 @@ def test_session_creation_oserror_graceful_degradation(app, capsys):
         assert app.session_mode == "off"
         assert app.active_session_id is None
 
+
+@pytest.mark.anyio
+async def test_session_delete_removes_backups_and_diffs(app, tmp_path):
+    """Verify /session delete cleans up the session file as well as backups and diffs."""
+    from chatybot.tools.file_utils import write_file, replace_file_content
+    from chatybot.session_store_monolithic import MonolithicJsonSessionStore
+
+    # Test with default JSONL store
+    await app.handle_escape_command("/session start backup_diff_del_test")
+    sid = app.active_session_id
+    assert sid is not None
+
+    test_file = str(tmp_path / "target_doc.txt")
+    write_file(test_file, "initial content", app=app)
+    write_file(test_file, "updated content", app=app)
+    replace_file_content(test_file, "updated", "modified", app=app)
+
+    session_dir = os.path.join(app.get_sessions_dir(), sid)
+    backups_dir = os.path.join(session_dir, "backups")
+    diffs_dir = os.path.join(session_dir, "diffs")
+
+    assert os.path.isdir(backups_dir)
+    assert os.path.isdir(diffs_dir)
+
+    # Now delete the session
+    await app.handle_escape_command(f"/session delete {sid}")
+
+    assert not os.path.exists(session_dir)
+    assert not os.path.exists(backups_dir)
+    assert not os.path.exists(diffs_dir)
+
+    # Test MonolithicJsonSessionStore delete removes sid dir (backups & diffs)
+    mono_dir = str(tmp_path / "mono_sessions")
+    mono_store = MonolithicJsonSessionStore(mono_dir)
+    mono_sid = "mono_test_123"
+    mono_store.create_session(mono_sid, model_alias="test_model")
+    mono_sdir = os.path.join(mono_dir, mono_sid)
+    os.makedirs(os.path.join(mono_sdir, "backups"), exist_ok=True)
+    os.makedirs(os.path.join(mono_sdir, "diffs"), exist_ok=True)
+
+    assert os.path.exists(os.path.join(mono_dir, f"{mono_sid}.json"))
+    assert os.path.isdir(os.path.join(mono_sdir, "backups"))
+    assert os.path.isdir(os.path.join(mono_sdir, "diffs"))
+
+    deleted = mono_store.delete_session(mono_sid)
+    assert deleted is True
+    assert not os.path.exists(os.path.join(mono_dir, f"{mono_sid}.json"))
+    assert not os.path.exists(mono_sdir)
+
+
