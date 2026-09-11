@@ -1775,6 +1775,7 @@ This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) f
 ## **Known Issues**
 
 - **`nanbeige_code` Generation**: When using `/thoughtstyle nanbeige_code`, the model may only generate thinking tokens without producing the final output. This is a known artifact/quirk of the `nanbeige` model itself.
+- **Session Auto-Creation on Pre-Prompt File Modification**: When session mode is active (`auto` or `on`) and a file is modified via `write_file` or `replace_file_content` before the user enters their first prompt, an active session is initialized on disk to anchor the pre-edit backup and diff patch under `~/.local/share/chatybot/sessions/<session_id>/`. When chat history or sessions are disabled (`/session history off` or `/session off`), file backups fall back to the global backup path (`~/.local/share/chatybot/backups/`) and no session is created.
 
 ---
 
