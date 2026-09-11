@@ -27,7 +27,10 @@
       "/env": "/env",
       "/max_tokens": "/maxtokens",
       "/effort": "/effort",
-      "/chatdsl": "/chatdsl"
+      "/chatdsl": "/chatdsl",
+      "/ask": "/ask",
+      "/docs": "/docs",
+      "/doc": "/docs"
     },
     "keywords": {
       "set": "set",
@@ -89,7 +92,16 @@
       "model": "model",
       "var": "var",
       "target": "target",
-      "since": "since"
+      "since": "since",
+      "ask": "ask",
+      "yesno": "yesno",
+      "choice": "choice",
+      "search": "search",
+      "cookbook": "cookbook",
+      "path": "path",
+      "page": "page",
+      "ids": "ids",
+      "full": "full"
     },
     "ui": {
       "language_changed": "Language set to: {lang}",
@@ -127,7 +139,8 @@
         "script": "script",
         "scripting": "scripting",
         "utility": "utility",
-        "variable": "variable"
+        "variable": "variable",
+        "interact": "interact"
       },
       "commands": {
         "/env": {
@@ -138,6 +151,12 @@
         },
         "/context": {
           "short_desc": "Display active prompt context breakdown and token budget usage"
+        },
+        "/ask": {
+          "short_desc": "Prompt user for input (skipped if stdin is not a TTY)"
+        },
+        "/docs": {
+          "short_desc": "List, view, search, or load bundled documentation, guides, and cookbook examples"
         }
       }
     }
@@ -222,7 +241,11 @@
       "/auto_truncar": "/auto_truncate",
       "/autotruncar": "/auto_truncate",
       "/auto_truncate": "/auto_truncate",
-      "/chatdsl": "/chatdsl"
+      "/chatdsl": "/chatdsl",
+      "/preguntar": "/ask",
+      "/ask": "/ask",
+      "/docs": "/docs",
+      "/doc": "/docs"
     },
     "keywords": {
       "informacion": "info",
@@ -349,7 +372,25 @@
       "target": "target",
       "since": "since",
       "desde": "since",
-      "a_partir_de": "since"
+      "a_partir_de": "since",
+      "ask": "ask",
+      "preguntar": "ask",
+      "yesno": "yesno",
+      "sino": "yesno",
+      "choice": "choice",
+      "opcion": "choice",
+      "seleccion": "choice",
+      "search": "search",
+      "buscar": "search",
+      "cookbook": "cookbook",
+      "recetario": "cookbook",
+      "path": "path",
+      "ruta": "path",
+      "page": "page",
+      "pagina": "page",
+      "ids": "ids",
+      "full": "full",
+      "completo": "full"
     },
     "ui": {
       "language_changed": "Idioma establecido en: {lang}",
@@ -387,7 +428,8 @@
         "script": "Script",
         "scripting": "Scripting",
         "utility": "Utilidad",
-        "variable": "Variable"
+        "variable": "Variable",
+        "interact": "interacción"
       },
       "commands": {
         "/help": {
@@ -623,6 +665,12 @@
         },
         "/context": {
           "short_desc": "Muestra el desglose del uso del contexto y el presupuesto de tokens"
+        },
+        "/ask": {
+          "short_desc": "Pide entrada del usuario (se omite si stdin no es un TTY)"
+        },
+        "/docs": {
+          "short_desc": "Lista, muestra, busca o carga documentación, guías y ejemplos del recetario"
         }
       }
     }
@@ -705,7 +753,11 @@
       "/auto_tronquer": "/auto_truncate",
       "/autotronquer": "/auto_truncate",
       "/auto_truncate": "/auto_truncate",
-      "/chatdsl": "/chatdsl"
+      "/chatdsl": "/chatdsl",
+      "/demander": "/ask",
+      "/ask": "/ask",
+      "/docs": "/docs",
+      "/doc": "/docs"
     },
     "keywords": {
       "informations": "info",
@@ -724,7 +776,7 @@
       "fusionner": "merge",
       "compresser": "compress",
       "purger": "prune",
-      "nettoyer": "prune",
+      "nettoyer": "clean",
       "prune": "prune",
       "note": "note",
       "remarque": "note",
@@ -824,7 +876,6 @@
       "limite": "limit",
       "scratch": "scratch",
       "brouillon": "scratch",
-      "nettoyer": "clean",
       "actuel": "current",
       "courant": "current",
       "current": "current",
@@ -837,7 +888,24 @@
       "target": "target",
       "since": "since",
       "depuis": "since",
-      "a_partir_de": "since"
+      "a_partir_de": "since",
+      "ask": "ask",
+      "demander": "ask",
+      "yesno": "yesno",
+      "ouinon": "yesno",
+      "choice": "choice",
+      "choix": "choice",
+      "search": "search",
+      "rechercher": "search",
+      "chercher": "search",
+      "cookbook": "cookbook",
+      "recettes": "cookbook",
+      "path": "path",
+      "chemin": "path",
+      "page": "page",
+      "ids": "ids",
+      "full": "full",
+      "complet": "full"
     },
     "ui": {
       "language_changed": "Langue définie sur : {lang}",
@@ -875,7 +943,8 @@
         "script": "Script",
         "scripting": "Scripting",
         "utility": "Utilitaires",
-        "variable": "Variable"
+        "variable": "Variable",
+        "interact": "interaction"
       },
       "commands": {
         "/help": {
@@ -1111,6 +1180,12 @@
         },
         "/context": {
           "short_desc": "Affiche la décomposition de l'utilisation du contexte et le budget de jetons"
+        },
+        "/ask": {
+          "short_desc": "Demande une saisie utilisateur (ignoré si stdin n'est pas un TTY)"
+        },
+        "/docs": {
+          "short_desc": "Liste, affiche, recherche ou charge la documentation, les guides et les exemples"
         }
       }
     }
@@ -1195,7 +1270,12 @@
       "/context_limit": "/context_limit",
       "/自动截断": "/auto_truncate",
       "/auto_truncate": "/auto_truncate",
-      "/chatdsl": "/chatdsl"
+      "/chatdsl": "/chatdsl",
+      "/询问": "/ask",
+      "/ask": "/ask",
+      "/文档": "/docs",
+      "/docs": "/docs",
+      "/doc": "/docs"
     },
     "keywords": {
       "信息": "info",
@@ -1318,7 +1398,25 @@
       "target": "target",
       "since": "since",
       "自从": "since",
-      "从": "since"
+      "从": "since",
+      "ask": "ask",
+      "询问": "ask",
+      "yesno": "yesno",
+      "是否": "yesno",
+      "choice": "choice",
+      "选择": "choice",
+      "search": "search",
+      "搜索": "search",
+      "cookbook": "cookbook",
+      "食谱": "cookbook",
+      "path": "path",
+      "路径": "path",
+      "page": "page",
+      "页面": "page",
+      "ids": "ids",
+      "标识": "ids",
+      "full": "full",
+      "完整": "full"
     },
     "ui": {
       "language_changed": "语言设置为: {lang}",
@@ -1356,7 +1454,8 @@
         "script": "脚本",
         "scripting": "编程",
         "utility": "实用工具",
-        "variable": "变量"
+        "variable": "变量",
+        "interact": "交互"
       },
       "commands": {
         "/help": {
@@ -1592,6 +1691,12 @@
         },
         "/context": {
           "short_desc": "显示当前上下文使用详情和 Token 预算"
+        },
+        "/ask": {
+          "short_desc": "提示用户输入（非TTY标准输入时自动跳过）"
+        },
+        "/docs": {
+          "short_desc": "列出、查看、搜索或加载内置文档、指南和示例手册"
         }
       }
     }
@@ -1674,7 +1779,11 @@
       "/auto_tronca": "/auto_truncate",
       "/autotronca": "/auto_truncate",
       "/auto_truncate": "/auto_truncate",
-      "/chatdsl": "/chatdsl"
+      "/chatdsl": "/chatdsl",
+      "/chiedi": "/ask",
+      "/ask": "/ask",
+      "/docs": "/docs",
+      "/doc": "/docs"
     },
     "keywords": {
       "informazioni": "info",
@@ -1792,7 +1901,25 @@
       "target": "target",
       "since": "since",
       "da": "since",
-      "dal": "since"
+      "dal": "since",
+      "ask": "ask",
+      "chiedi": "ask",
+      "yesno": "yesno",
+      "sino": "yesno",
+      "choice": "choice",
+      "scelta": "choice",
+      "search": "search",
+      "cerca": "search",
+      "ricerca": "search",
+      "cookbook": "cookbook",
+      "ricettario": "cookbook",
+      "path": "path",
+      "percorso": "path",
+      "page": "page",
+      "pagina": "page",
+      "ids": "ids",
+      "full": "full",
+      "completo": "full"
     },
     "ui": {
       "language_changed": "Lingua impostata su: {lang}",
@@ -1830,7 +1957,8 @@
         "script": "Script",
         "scripting": "Scripting",
         "utility": "Utilità",
-        "variable": "Variabili"
+        "variable": "Variabili",
+        "interact": "interazione"
       },
       "commands": {
         "/help": {
@@ -2066,6 +2194,12 @@
         },
         "/context": {
           "short_desc": "Mostra la suddivisione dell'utilizzo del contesto e il budget di token"
+        },
+        "/ask": {
+          "short_desc": "Richiede input all'utente (saltato se stdin non è un TTY)"
+        },
+        "/docs": {
+          "short_desc": "Elenca, visualizza, cerca o carica documentazione, guide ed esempi"
         }
       }
     }
@@ -2148,7 +2282,12 @@
       "/context_limit": "/context_limit",
       "/اقتطاع_تلقائي": "/auto_truncate",
       "/auto_truncate": "/auto_truncate",
-      "/chatdsl": "/chatdsl"
+      "/chatdsl": "/chatdsl",
+      "/اسأل": "/ask",
+      "/ask": "/ask",
+      "/وثائق": "/docs",
+      "/docs": "/docs",
+      "/doc": "/docs"
     },
     "keywords": {
       "معلومات": "info",
@@ -2270,7 +2409,25 @@
       "target": "target",
       "since": "since",
       "منذ": "since",
-      "من": "since"
+      "من": "since",
+      "ask": "ask",
+      "اسأل": "ask",
+      "yesno": "yesno",
+      "نعم_لا": "yesno",
+      "choice": "choice",
+      "خيار": "choice",
+      "search": "search",
+      "ابحث": "search",
+      "cookbook": "cookbook",
+      "دليل_الوصفات": "cookbook",
+      "path": "path",
+      "مسار": "path",
+      "page": "page",
+      "صفحة": "page",
+      "ids": "ids",
+      "معرفات": "ids",
+      "full": "full",
+      "كامل": "full"
     },
     "ui": {
       "language_changed": "تغيرت اللغة لـ: {lang}",
@@ -2308,7 +2465,8 @@
         "script": "سيناريو",
         "scripting": "برمجة",
         "utility": "أدوات مساعدة",
-        "variable": "متغير"
+        "variable": "متغير",
+        "interact": "تفاعل"
       },
       "commands": {
         "/help": {
@@ -2544,6 +2702,12 @@
         },
         "/context": {
           "short_desc": "عرض تفاصيل استخدام السياق وميزانية الرموز"
+        },
+        "/ask": {
+          "short_desc": "بيطلب إدخال من المستخدم (بيتخطى إذا stdin مش TTY)"
+        },
+        "/docs": {
+          "short_desc": "بيعرض، بفتح، ببحث أو بيحمل الوثائق، الأدلة وأمثلة الدليل"
         }
       }
     }
