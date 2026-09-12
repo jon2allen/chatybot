@@ -147,9 +147,11 @@ class ChatybotApp:
         self.last_reasoning_tokens: int = 0
         self.multi_line_mode: bool = False
         self.auto_exit_pending: bool = False
+        self.should_exit: bool = False
         self.script_context: bool = False
         self.thoughtstyle: str = "none"
         self.default_profile: Optional[str] = None
+        self._openai_clients: Dict[str, Any] = {}
         
         # Context limit settings
         from .context_limit import ContextLimiter
@@ -1184,7 +1186,16 @@ class ChatybotApp:
 
         base_url = model_config.get("base_url")
 
-        return AsyncOpenAI(api_key=api_key, base_url=base_url if base_url else None)
+        if not hasattr(self, "_openai_clients"):
+            self._openai_clients = {}
+
+        client_key = f"{model_alias}:{api_key}:{base_url}"
+        if client_key in self._openai_clients:
+            return self._openai_clients[client_key]
+
+        client = AsyncOpenAI(api_key=api_key, base_url=base_url if base_url else None)
+        self._openai_clients[client_key] = client
+        return client
 
     async def chat_completion(self, prompt: str, stream: bool = False) -> str:
         """
@@ -4576,7 +4587,8 @@ class ChatybotApp:
             print(self.i18n.get_ui_string("goodbye_message", "Goodbye! Thanks for chatting."))
             self.logging_manager.stop_logging()
             self.save_input_history()
-            exit(0)
+            self.should_exit = True
+            return True
 
         else:
             print(f"Error: Unknown command '{cmd}'. Type /help for available commands.")
@@ -5000,6 +5012,8 @@ class ChatybotApp:
             self.buffer_manager.set_script_var('TOOL_CONTEXT', '')
 
         while True:
+            if self.should_exit:
+                break
             try:
                 # Check for interrupt flag at start of each loop iteration
                 if self.interrupt_requested:
@@ -5053,6 +5067,8 @@ class ChatybotApp:
                     continue
 
                 await self.execute_line(prompt)
+                if self.should_exit:
+                    break
 
             except KeyboardInterrupt:
                 # Reset tool loop state if interrupted during tool operations
@@ -5077,6 +5093,25 @@ class ChatybotApp:
                     raise
                 print(f"Error: {str(e)}")
 
+    async def shutdown(self) -> None:
+        """Gracefully close all background resources, MCP servers, and HTTP client sessions."""
+        if getattr(self, "mcp_manager", None):
+            try:
+                await self.mcp_manager.shutdown()
+            except Exception:
+                pass
+
+        if hasattr(self, "_openai_clients") and self._openai_clients:
+            for client in list(self._openai_clients.values()):
+                try:
+                    await client.close()
+                except Exception:
+                    pass
+            self._openai_clients.clear()
+
+        # Let the event loop finish any scheduled cleanups
+        await asyncio.sleep(0)
+
     def run(self) -> None:
         """Run the application."""
         self.initialize()
@@ -5086,8 +5121,7 @@ class ChatybotApp:
             try:
                 await self.main_loop()
             finally:
-                if self.mcp_manager:
-                    await self.mcp_manager.shutdown()
+                await self.shutdown()
         asyncio.run(start_and_loop())
 
 
@@ -5201,8 +5235,7 @@ def run():
             try:
                 await app.execute_script(args.script)
             finally:
-                if app.mcp_manager:
-                    await app.mcp_manager.shutdown()
+                await app.shutdown()
                 app.logging_manager.stop_logging()
                 app.save_input_history()
         try:
@@ -5220,8 +5253,7 @@ def run():
             try:
                 await app.execute_line(args.run)
             finally:
-                if app.mcp_manager:
-                    await app.mcp_manager.shutdown()
+                await app.shutdown()
                 app.logging_manager.stop_logging()
                 app.save_input_history()
         try:
