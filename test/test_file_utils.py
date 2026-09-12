@@ -253,6 +253,68 @@ def test_replace_file_content():
         assert "Error: File" in result_no_file
 
 
+def test_read_file_slice_absolute_line_numbering():
+    """Verify reading a slice with start_line retains absolute file line numbers."""
+    with tempfile.NamedTemporaryFile(mode='w', delete=False, encoding='utf-8') as f:
+        for i in range(1, 21):
+            f.write(f"Line number {i}\n")
+        f.flush()
+        temp_name = f.name
+    try:
+        content = read_file(temp_name, start_line=10, end_line=13)
+        assert "10: Line number 10\n" in content
+        assert "11: Line number 11\n" in content
+        assert "12: Line number 12\n" in content
+        assert "13: Line number 13\n" in content
+        # Ensure it does NOT start from 1:
+        assert not content.startswith("1: ")
+    finally:
+        os.unlink(temp_name)
+
+
+def test_replace_file_content_with_line_bounds():
+    """Verify replace_file_content with start_line and end_line bounds."""
+    with tempfile.NamedTemporaryFile(mode='w', delete=False, encoding='utf-8') as f:
+        f.write("target\nmiddle\ntarget\n")
+        f.flush()
+        temp_name = f.name
+    try:
+        # Replacing within lines 1-2 only changes the first occurrence
+        res = replace_file_content(temp_name, "target", "REPLACED", start_line=1, end_line=2)
+        assert "Success: Replaced 1 occurrence(s)" in res
+        assert "(within lines 1-2)" in res
+
+        with open(temp_name, "r", encoding="utf-8") as f:
+            updated = f.read()
+        assert updated == "REPLACED\nmiddle\ntarget\n"
+
+        # Searching for 'middle' in lines 1-1 fails with range diagnosis
+        fail_res = replace_file_content(temp_name, "middle", "NEW", start_line=1, end_line=1)
+        assert "within lines 1-1" in fail_res
+    finally:
+        os.unlink(temp_name)
+
+
+def test_replace_file_content_indentation_diagnosis():
+    """Verify replace_file_content provides diagnostic message on indentation mismatch."""
+    with tempfile.NamedTemporaryFile(mode='w', delete=False, encoding='utf-8') as f:
+        f.write("    def my_function():\n        return True\n")
+        f.flush()
+        temp_name = f.name
+    try:
+        # Off by one leading space (5 spaces instead of 4)
+        mismatched_target = "     def my_function():\n        return True"
+        res = replace_file_content(temp_name, mismatched_target, "    def updated():\n        return True")
+        assert "Error: Target content not found" in res
+        assert "Diagnosis:" in res
+        assert "indentation/whitespace discrepancy" in res
+        assert "Target (line 1): 5 leading spaces" in res
+        assert "File   (line 1): 4 leading spaces" in res
+    finally:
+        os.unlink(temp_name)
+
+
+
 def test_write_file_and_replace_backup_preservation():
     """Verify write_file and replace_file_content preserve backups in session directory."""
     from src.chatybot.tools.file_utils import write_file, replace_file_content

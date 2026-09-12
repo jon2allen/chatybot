@@ -89,6 +89,7 @@ def read_file(path: str, start_line: int = None, end_line: int = None) -> str:
         with open(path, 'r', encoding='utf-8', errors='ignore') as f:
             lines = f.readlines()
             
+            start = 1
             # Apply line range filtering if specified
             if start_line is not None or end_line is not None:
                 start = 1 if start_line is None else max(1, int(start_line))
@@ -96,7 +97,7 @@ def read_file(path: str, start_line: int = None, end_line: int = None) -> str:
                 lines = lines[start-1:end]
             
             numbered_lines = []
-            for i, line in enumerate(lines, 1):
+            for i, line in enumerate(lines, start=start):
                 stripped_line = line.rstrip('\r\n')
                 numbered_lines.append(f"{i}: {stripped_line}\n")
             return ''.join(numbered_lines)
@@ -586,28 +587,127 @@ def save_file_diff(file_path: str, original_content: str, modified_content: str,
         return None
 
 
-def replace_file_content(path: str, target: str, replacement: str, app: Any = None) -> str:
-    """Replace target content with replacement content in the file at path, saving a re-applicable diff patch."""
+def diagnose_target_mismatch(content: str, target: str, search_start_line: int = 1) -> str:
+    """
+    Diagnose why a target string was not found in content, checking for indentation,
+    whitespace differences, or surrounding line context mismatches.
+    """
+    target_lines = target.splitlines()
+    if not target_lines:
+        return ""
+
+    file_lines = content.splitlines()
+    target_stripped = [l.strip() for l in target_lines if l.strip()]
+    if not target_stripped:
+        return ""
+
+    first_target_stripped = target_stripped[0]
+
+    # 1. Search for matching sequence of stripped lines (accounting for intermediate blank lines)
+    matches = []
+    for idx, f_line in enumerate(file_lines):
+        if f_line.strip() == first_target_stripped:
+            f_idx = idx
+            t_idx = 0
+            all_matched = True
+            matched_file_lines = []
+            while t_idx < len(target_stripped) and f_idx < len(file_lines):
+                if not file_lines[f_idx].strip():
+                    f_idx += 1
+                    continue
+                if file_lines[f_idx].strip() == target_stripped[t_idx]:
+                    matched_file_lines.append((search_start_line + f_idx, file_lines[f_idx]))
+                    f_idx += 1
+                    t_idx += 1
+                else:
+                    all_matched = False
+                    break
+            if all_matched and t_idx == len(target_stripped):
+                matches.append((search_start_line + idx, matched_file_lines))
+
+    if matches:
+        line_num, matched_lines = matches[0]
+        actual_first_line = matched_lines[0][1]
+        target_first_line = [l for l in target_lines if l.strip()][0]
+        target_spaces = len(target_first_line) - len(target_first_line.lstrip(" "))
+        actual_spaces = len(actual_first_line) - len(actual_first_line.lstrip(" "))
+
+        hint = (
+            f"\nDiagnosis: Target text matches line {line_num} but failed due to an indentation/whitespace discrepancy.\n"
+            f"  Target (line 1): {target_spaces} leading spaces: {repr(target_first_line)}\n"
+            f"  File   (line {line_num}): {actual_spaces} leading spaces: {repr(actual_first_line)}"
+        )
+        return hint
+
+    # 2. Check if the first line exists in the file with different surrounding context
+    single_line_matches = [
+        search_start_line + idx for idx, l in enumerate(file_lines) if l.strip() == first_target_stripped
+    ]
+    if single_line_matches:
+        lines_str = ", ".join(str(ln) for ln in single_line_matches[:5])
+        return (
+            f"\nDiagnosis: First line {repr(first_target_stripped)} exists at line(s) [{lines_str}], "
+            f"but surrounding lines or block indentation did not match."
+        )
+
+    return ""
+
+
+def replace_file_content(
+    path: str,
+    target: str,
+    replacement: str,
+    start_line: int = None,
+    end_line: int = None,
+    app: Any = None,
+) -> str:
+    """
+    Replace target content with replacement content in the file at path, saving a re-applicable diff patch.
+    Optionally restrict search and replacement to lines between start_line and end_line (1-indexed).
+    """
     path = normalize_path(path)
     try:
         if not os.path.exists(path):
             return f"Error: File '{path}' does not exist."
-        
-        with open(path, 'r', encoding='utf-8', errors='ignore') as f:
-            content = f.read()
-        
-        if target not in content:
-            return f"Error: Target content not found in file '{path}'."
 
-        occurrences = content.count(target)
-        new_content = content.replace(target, replacement)
+        with open(path, "r", encoding="utf-8", errors="ignore") as f:
+            content = f.read()
+
+        file_lines = content.splitlines(keepends=True)
+        total_lines = len(file_lines)
+
+        # Handle line-bounded replacement if start_line or end_line is specified
+        if start_line is not None or end_line is not None:
+            start_idx = 0 if start_line is None else max(0, int(start_line) - 1)
+            end_idx = total_lines if end_line is None else min(total_lines, int(end_line))
+
+            bounded_segment = "".join(file_lines[start_idx:end_idx])
+            if target not in bounded_segment:
+                diag = diagnose_target_mismatch(bounded_segment, target, search_start_line=start_idx + 1)
+                return (
+                    f"Error: Target content not found in file '{path}' within lines {start_idx + 1}-{end_idx}."
+                    f"{diag}"
+                )
+
+            occurrences = bounded_segment.count(target)
+            new_bounded_segment = bounded_segment.replace(target, replacement, 1)
+            new_content = "".join(file_lines[:start_idx]) + new_bounded_segment + "".join(file_lines[end_idx:])
+        else:
+            if target not in content:
+                diag = diagnose_target_mismatch(content, target, search_start_line=1)
+                return f"Error: Target content not found in file '{path}'.{diag}"
+
+            occurrences = content.count(target)
+            new_content = content.replace(target, replacement)
 
         diff_path = save_file_diff(path, content, new_content, app=app)
-        
-        with open(path, 'w', encoding='utf-8') as f:
+
+        with open(path, "w", encoding="utf-8") as f:
             f.write(new_content)
-            
+
         msg = f"Success: Replaced {occurrences} occurrence(s) of target in '{path}'"
+        if start_line is not None or end_line is not None:
+            msg += f" (within lines {start_idx + 1}-{end_idx})"
         if diff_path:
             msg += f" (diff patch saved: '{diff_path}')"
         return msg
