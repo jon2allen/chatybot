@@ -1179,6 +1179,43 @@ true
         assert calls[0]["tool"] == "find_files"
         assert calls[0]["arguments"] == {"pattern": "*.chatdsl", "details": True}
 
+        # Test Anthropic / Gemini <tool_calls><invoke name="..."> format (e.g. dot_studio output)
+        invoke_xml = '''
+<tool_calls>
+<invoke name="run_command">
+<parameter name="command">git status
+</parameter>
+</invoke>
+<invoke name="run_command">
+<parameter name="command">git log --since="today" --oneline --all
+</parameter>
+</invoke>
+invoke<invoke name="run_command">
+<parameter name="command">git diff --since="today" --stat
+</parameter>
+</invoke>
+</tool_calls>
+'''
+        invoke_calls = app.extract_tool_calls(invoke_xml)
+        assert len(invoke_calls) == 3
+        assert invoke_calls[0]["tool"] == "run_command"
+        assert invoke_calls[0]["arguments"] == {"command": "git status"}
+        assert invoke_calls[1]["tool"] == "run_command"
+        assert invoke_calls[1]["arguments"] == {"command": 'git log --since="today" --oneline --all'}
+        assert invoke_calls[2]["tool"] == "run_command"
+        assert invoke_calls[2]["arguments"] == {"command": 'git diff --since="today" --stat'}
+
+        # Test self-closing param and tool tag
+        tag_xml = '''
+<tool name="read_file">
+<param name="path" value="test.py"/>
+</tool>
+'''
+        tag_calls = app.extract_tool_calls(tag_xml)
+        assert len(tag_calls) == 1
+        assert tag_calls[0]["tool"] == "read_file"
+        assert tag_calls[0]["arguments"] == {"path": "test.py"}
+
     @pytest.mark.anyio
     async def test_tool_translate_command(self, app):
         """Verifies /tool translate command converts XML tool calls into canonical JSON string"""

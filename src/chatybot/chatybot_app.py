@@ -3615,7 +3615,7 @@ class ChatybotApp:
         def extract_xml_tool_calls(s: str) -> List[Dict[str, Any]]:
             xml_calls = []
             fn_block_pattern = re.compile(
-                r'<function(?:[\s:=]+|[\s:=]*name\s*=\s*)["\']?([a-zA-Z0-9_\-\.]+)["\']?\s*>(.*?)</function[^>]*>',
+                r'<(?:function|invoke|call|tool)(?:[\s:=]+|[\s:=]*name\s*=\s*)["\']?([a-zA-Z0-9_\-\.]+)["\']?\s*>(.*?)</(?:function|invoke|call|tool)[^>]*>',
                 re.IGNORECASE | re.DOTALL
             )
             for fn_match in fn_block_pattern.finditer(s):
@@ -3625,7 +3625,7 @@ class ChatybotApp:
                 fn_body = fn_match.group(2)
                 args = {}
                 param_pattern = re.compile(
-                    r'<parameter(?:[\s:=]+|[\s:=]*name\s*=\s*)["\']?([a-zA-Z0-9_\-\.]+)["\']?\s*(?:value=["\']?(.*?)["\']?)?\s*>(.*?)</parameter[^>]*>',
+                    r'<(?:parameter|param|arg|argument)(?:[\s:=]+|[\s:=]*name\s*=\s*)["\']?([a-zA-Z0-9_\-\.]+)["\']?\s*(?:value=["\']?(.*?)["\']?)?\s*>(.*?)</(?:parameter|param|arg|argument)[^>]*>',
                     re.IGNORECASE | re.DOTALL
                 )
                 param_matches = list(param_pattern.finditer(fn_body))
@@ -3638,13 +3638,24 @@ class ChatybotApp:
                         args[p_name] = parse_xml_param_value(raw_val)
                 else:
                     self_closing_pattern = re.compile(
-                        r'<parameter(?:[\s:=]+|[\s:=]*name\s*=\s*)["\']?([a-zA-Z0-9_\-\.]+)["\']?\s+value=["\']?(.*?)["\']?\s*/>',
+                        r'<(?:parameter|param|arg|argument)(?:[\s:=]+|[\s:=]*name\s*=\s*)["\']?([a-zA-Z0-9_\-\.]+)["\']?\s+value=["\']?(.*?)["\']?\s*/>',
                         re.IGNORECASE
                     )
-                    for sc_match in self_closing_pattern.finditer(fn_body):
-                        p_name = sc_match.group(1).strip()
-                        raw_val = sc_match.group(2)
-                        args[p_name] = parse_xml_param_value(raw_val)
+                    sc_matches = list(self_closing_pattern.finditer(fn_body))
+                    if sc_matches:
+                        for sc_match in sc_matches:
+                            p_name = sc_match.group(1).strip()
+                            raw_val = sc_match.group(2)
+                            args[p_name] = parse_xml_param_value(raw_val)
+                    elif fn_body.strip():
+                        body_str = fn_body.strip()
+                        if (body_str.startswith("{") and body_str.endswith("}")):
+                            try:
+                                parsed = json.loads(body_str)
+                                if isinstance(parsed, dict):
+                                    args = parsed
+                            except Exception:
+                                pass
                 xml_calls.append({"tool": tool_name, "arguments": args})
             return xml_calls
 
