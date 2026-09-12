@@ -185,6 +185,16 @@ type = "string"
 description = "The new text to replace the target block with"
 optional = false
 
+[tools.replace_file_content.parameters.start_line]
+type = "integer"
+description = "Optional starting line number (1-indexed) to restrict replacement search"
+optional = true
+
+[tools.replace_file_content.parameters.end_line]
+type = "integer"
+description = "Optional ending line number (inclusive) to restrict replacement search"
+optional = true
+
 [tools.calculate]
 enabled = true
 description = "Safely evaluate a mathematical or natural language math expression using mathparse. Optionally save the calculated result into a script variable."

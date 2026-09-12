@@ -617,12 +617,12 @@ The following tools are packaged by default and can be enabled/disabled dynamica
 | Tool Name | Description | Key Parameters |
 |-----------|-------------|----------------|
 | `list_directory` | Lists the contents of a directory, optionally with detailed file metadata (size, mod time, etc.). | `path` (optional), `details` (optional) |
-| `read_file` | Reads the full text contents of a file on disk (rejects binary file patterns for safety). | `path` (required) |
+| `read_file` | Reads contents of a file on disk with optional line range filtering (retains absolute line numbers). | `path` (required), `start_line` (optional), `end_line` (optional) |
 | `find_files` | Finds files matching a glob pattern, optionally filtering by containing a literal search term. | `path` (optional), `pattern` (optional), `search_term` (optional), `details` (optional) |
 | `write_file` | Writes content to a file, or appends to it if the `append` parameter is `true`. | `path` (required), `content` (required), `append` (optional) |
 | `change_dir` | Changes the current working directory for subsequent tool executions. | `path` (required) |
 | `grep_search` | Searches for exact pattern matches or regular expressions within files or directories. | `query` (required), `path` (optional), `pattern` (optional), `case_insensitive` (optional), `is_regex` (optional), `max_matches` (optional) |
-| `replace_file_content` | Replaces a specific block of text in a file with new content. | `path` (required), `target` (required), `replacement` (required) |
+| `replace_file_content` | Replaces a specific block of text in a file with new content, with indentation diagnosis and optional line bounds. | `path` (required), `target` (required), `replacement` (required), `start_line` (optional), `end_line` (optional) |
 | `run_command` | Executes shell commands on the host machine using safe subprocess tokenization. | `command` (required) |
 
 #### **Supported Tool Calling Formats**
