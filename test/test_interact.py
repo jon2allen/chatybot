@@ -343,6 +343,30 @@ class TestDispatchAskUser(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(data["result"]["answer"], "Alpha")
 
 
+class TestGracefulExit(unittest.IsolatedAsyncioTestCase):
+    async def test_graceful_exit_and_shutdown(self):
+        from chatybot.chatybot_app import ChatybotApp
+        from unittest.mock import AsyncMock
+
+        app = ChatybotApp()
+        app.initialize()
+
+        # Simulate cached AsyncOpenAI client
+        mock_client = MagicMock()
+        mock_client.close = AsyncMock()
+        app._openai_clients["mock_key"] = mock_client
+
+        # /exit should signal should_exit without abrupt process termination
+        handled = await app.handle_escape_command("/exit")
+        self.assertTrue(handled)
+        self.assertTrue(app.should_exit)
+
+        # shutdown() should close open HTTP/streaming clients and clear cache
+        await app.shutdown()
+        mock_client.close.assert_awaited_once()
+        self.assertEqual(len(app._openai_clients), 0)
+
+
 if __name__ == "__main__":
     unittest.main()
 
