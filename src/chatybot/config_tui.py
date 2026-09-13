@@ -1521,21 +1521,16 @@ class ConfigTUI:
                 key, label, y, x, width, f_type, _ = f
                 if f_type == "header":
                     win.addstr(y, x, label, curses.color_pair(3))
-                else:
+                elif f_type != "header" and not self.is_field_hidden(key, form_data):
                     win.addstr(y, 4, label)
                     
             # Draw values
             for idx, f in enumerate(interactive_fields):
                 key, label, y, x, width, f_type, opts = f
                 val = form_data[key]
-                
-                # Check visibility for image generation parameters if chat is disabled or type is reranker
-                if key in ("image_generation", "image_endpoint", "image_modalities") and form_data["type"] == "reranker":
-                    # Gray out / hide
-                    win.addstr(y, x, " " * width)
-                    continue
-                if key in ("image_endpoint", "image_modalities") and form_data["image_generation"] == "false":
-                    # Gray out / hide
+
+                # Check visibility via is_field_hidden (covers reranker, apple_fm, image gen)
+                if self.is_field_hidden(key, form_data):
                     win.addstr(y, x, " " * width)
                     continue
                     

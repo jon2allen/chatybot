@@ -39,6 +39,9 @@ async def cmd_model(ctx: CommandContext, parts: list, command: str) -> CommandRe
         if model_config.get("context_limit"):
             context_window = model_config.get("context_limit")
             source = "Config (Override)"
+        elif model_config.get("type") == "apple_fm":
+            context_window = 4096
+            source = "Default (Apple FM)"
         else:
             try:
                 client = app.get_openai_client(model_alias)
