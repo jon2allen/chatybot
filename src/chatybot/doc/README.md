@@ -640,6 +640,8 @@ Chatybot's extraction engine automatically recognizes, parses, and normalizes al
 | **8. Unquoted Key JSON** | `{tool: list_directory, arguments: {path: "src/project"}}` | Auto-repaired and normalized |
 | **9. YAML / Key-Value Blocks** | `tool: read_file\npath: src/project/file.py` | LangChain ReAct, HuggingFace, Google AI Studio / Gemini |
 | **10. Unescaped Inner Quotes JSON** | `{"tool": "run_command", "arguments": {"command": "echo "hello""}}` | Auto-repaired by inner quote delimiter detection |
+| **11. Special-Token Native Instruction Syntax** | `<\|tool_calls_section_begin\|><\|tool_call_begin\|>functions.run_command:0<\|tool_call_argument_begin\|>{"command": "which fpc"}<\|tool_call_end\|><\|tool_calls_section_end\|>` | Moonshot AI / Kimi K2 (`Kimi_k2_0711`), Kimi-Chat |
+| **12. DeepSeek Markup Language (DSML)** | `<｜｜DSML｜｜ calls><｜｜DSML｜｜ invoke name="run_command"><｜｜DSML｜｜ parameter name="arguments" string="false">{"command": "pwd"}</｜｜DSML｜｜ parameter></｜｜DSML｜｜ invoke></｜｜DSML｜｜ calls>` | DeepSeek-V3, DeepSeek-R1, DeepSeek-Coder-V2 (Hugging Face / vLLM / raw) |
 
 #### **3. Tool Configuration (`tools_config.toml`)**
 All agentic tools and execution configurations are managed in `src/chatybot/tools_config.toml` (which is copied to `~/.config/chatybot/tools_config.toml` upon initialization).
