@@ -1286,9 +1286,78 @@ timeout: 30
         assert unescaped_calls[0]["tool"] == "run_command"
         assert unescaped_calls[0]["arguments"]["command"] == 'cd pascal_3 && echo "1\n5\n4" | ./stack_simulator'
 
+        # Test Moonshot / Kimi K2 native instruction special-token syntax
+        kimi_turn2 = '''
+I haven't recompiled the code yet. Let me first check if there's a Pascal compiler available and then compile the fixed code.<|tool_calls_section_begin|><|tool_call_begin|>functions.run_command:0<|tool_call_argument_begin|>{"command": "which fpc"}<|tool_call_end|><|tool_call_begin|>functions.run_command:1<|tool_call_argument_begin|>{"command": "which gpc"}<|tool_call_end|><|tool_calls_section_end|>
+'''
+        kimi_calls = app.extract_tool_calls(kimi_turn2)
+        assert len(kimi_calls) == 2
+        assert kimi_calls[0]["tool"] == "run_command"
+        assert kimi_calls[0]["arguments"] == {"command": "which fpc"}
+        assert kimi_calls[1]["tool"] == "run_command"
+        assert kimi_calls[1]["arguments"] == {"command": "which gpc"}
+
+        kimi_turn4 = '''
+<|tool_calls_section_begin|><|tool_call_begin|>functions.read_file:0<|tool_call_argument_begin|>{"path": "pascal_3/stack_simulator.pas", "start_line": 1, "end_line": 60}<|tool_call_end|><|tool_calls_section_end|>
+'''
+        kimi_read_calls = app.extract_tool_calls(kimi_turn4)
+        assert len(kimi_read_calls) == 1
+        assert kimi_read_calls[0]["tool"] == "read_file"
+        assert kimi_read_calls[0]["arguments"] == {"path": "pascal_3/stack_simulator.pas", "start_line": 1, "end_line": 60}
+
+        # Test DeepSeek Markup Language (DSML) tool call syntax
+        dsml_turn3 = '''
+<｜｜DSML｜｜ calls>
+<｜｜DSML｜｜ invoke name="str_search">
+<｜｜DSML｜｜ parameter name="arguments" string="false">{"pattern": "─", "text": "┌─────────────────────────────────────────────────────────────┐", "mode": "c"}</｜｜DSML｜｜ parameter>
+</｜｜DSML｜｜ invoke>
+<｜｜DSML｜｜ invoke name="str_search">
+<｜｜DSML｜｜ parameter name="arguments" string="false">{"pattern": "─", "text": "└─────────────────────────────────────────────────────────────┘", "mode": "c"}</｜｜DSML｜｜ parameter>
+</｜｜DSML｜｜ invoke>
+</｜｜DSML｜｜ calls>
+'''
+        dsml_calls = app.extract_tool_calls(dsml_turn3)
+        assert len(dsml_calls) == 2
+        assert dsml_calls[0]["tool"] == "str_search"
+        assert dsml_calls[0]["arguments"] == {"pattern": "─", "text": "┌─────────────────────────────────────────────────────────────┐", "mode": "c"}
+        assert dsml_calls[1]["tool"] == "str_search"
+        assert dsml_calls[1]["arguments"] == {"pattern": "─", "text": "└─────────────────────────────────────────────────────────────┘", "mode": "c"}
+
+        dsml_turn6 = '''
+<｜｜DSML｜｜ calls>
+<｜｜DSML｜｜ invoke name="run_command">
+<｜｜DSML｜｜ parameter name="arguments" string="false">{"command": "pwd"}</｜｜DSML｜｜ parameter>
+</｜｜DSML｜｜ invoke>
+<｜｜DSML｜｜ invoke name="run_command">
+<｜｜DSML｜｜ parameter name="arguments" string="false">{"command": "python3 --version"}</｜｜DSML｜｜ parameter>
+</｜｜DSML｜｜ invoke>
+</｜｜DSML｜｜ calls>
+'''
+        dsml_run_calls = app.extract_tool_calls(dsml_turn6)
+        assert len(dsml_run_calls) == 2
+        assert dsml_run_calls[0]["tool"] == "run_command"
+        assert dsml_run_calls[0]["arguments"] == {"command": "pwd"}
+        assert dsml_run_calls[1]["tool"] == "run_command"
+        assert dsml_run_calls[1]["arguments"] == {"command": "python3 --version"}
+
+        # Test DSML with individual named parameters and ASCII pipes
+        dsml_ascii = '''
+<||DSML|| calls>
+<||DSML|| invoke name="read_file">
+<||DSML|| parameter name="path">pascal_3/stack_simulator.pas</||DSML|| parameter>
+<||DSML|| parameter name="start_line" string="false">1</||DSML|| parameter>
+<||DSML|| parameter name="end_line" string="false">50</||DSML|| parameter>
+</||DSML|| invoke>
+</||DSML|| calls>
+'''
+        dsml_ascii_calls = app.extract_tool_calls(dsml_ascii)
+        assert len(dsml_ascii_calls) == 1
+        assert dsml_ascii_calls[0]["tool"] == "read_file"
+        assert dsml_ascii_calls[0]["arguments"] == {"path": "pascal_3/stack_simulator.pas", "start_line": 1, "end_line": 50}
+
     @pytest.mark.anyio
     async def test_tool_translate_command(self, app):
-        """Verifies /tool translate command converts XML tool calls into canonical JSON string"""
+        """Verifies /tool translate command converts XML, Kimi, and DSML tool calls into canonical JSON string"""
         raw_xml = '''
 <tool_call>
 <function=find_files>
@@ -1311,6 +1380,40 @@ timeout: 30
         assert '"tool": "find_files"' in output
         assert '"pattern": "*.chatdsl"' in output
         assert '"details": true' in output
+
+        # Test /tool translate with Kimi K2 tokens
+        raw_kimi = '<|tool_calls_section_begin|><|tool_call_begin|>functions.run_command:0<|tool_call_argument_begin|>{"command": "which fpc"}<|tool_call_end|><|tool_calls_section_end|>'
+        app.buffer_manager.set_script_var('LAST_COMPLETION', raw_kimi)
+        captured = io.StringIO()
+        sys.stdout = captured
+        try:
+            res = await app.handle_escape_command("/tool translate")
+            assert res is True
+        finally:
+            sys.stdout = sys.__stdout__
+
+        output_kimi = captured.getvalue()
+        assert '"tool": "run_command"' in output_kimi
+        assert '"command": "which fpc"' in output_kimi
+
+        # Test /tool translate with DSML markup
+        raw_dsml = '''<｜｜DSML｜｜ calls>
+<｜｜DSML｜｜ invoke name="run_command">
+<｜｜DSML｜｜ parameter name="arguments" string="false">{"command": "pwd"}</｜｜DSML｜｜ parameter>
+</｜｜DSML｜｜ invoke>
+</｜｜DSML｜｜ calls>'''
+        app.buffer_manager.set_script_var('LAST_COMPLETION', raw_dsml)
+        captured = io.StringIO()
+        sys.stdout = captured
+        try:
+            res = await app.handle_escape_command("/tool translate")
+            assert res is True
+        finally:
+            sys.stdout = sys.__stdout__
+
+        output_dsml = captured.getvalue()
+        assert '"tool": "run_command"' in output_dsml
+        assert '"command": "pwd"' in output_dsml
 
     def test_payload_limits_string_enforcement(self):
         """Verifies soft warning and hard truncation on run_command string outputs."""

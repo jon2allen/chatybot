@@ -3580,207 +3580,15 @@ class ChatybotApp:
         Extract all tool call JSON blocks from conversational text.
         Supports standard JSON blocks, Gemma 4 native tool call syntax (<|tool_call>call:tool_name{...}<tool_call|>),
         FunctionGemma syntax, XML-style function/parameter syntax (<tool_call><function=name><parameter=key>val</parameter></function></tool_call>),
-        unquoted keys, and single-quoted dictionaries.
+        Anthropic/MCP <tool_use> container blocks, YAML/key-value blocks, Kimi K2 special-token instruction syntax
+        (<|tool_calls_section_begin|><|tool_call_begin|>functions.tool_name:id<|tool_call_argument_begin|>{...}<|tool_call_end|><|tool_calls_section_end|>),
+        DeepSeek DSML markup (<｜｜DSML｜｜ calls><｜｜DSML｜｜ invoke name="...">...),
+        unquoted keys, unescaped inner quotes, and single-quoted dictionaries.
         Returns a list of dictionaries for all valid tool calls found.
         """
         import json
         import re
         from typing import Any, Dict, List, Optional
-
-        def parse_xml_param_value(val_str: str) -> Any:
-            val_str = val_str.strip()
-            if not val_str:
-                return ""
-            if val_str.lower() == "true":
-                return True
-            if val_str.lower() == "false":
-                return False
-            if val_str.lower() in ("null", "none"):
-                return None
-            try:
-                if "." in val_str:
-                    return float(val_str)
-                return int(val_str)
-            except ValueError:
-                pass
-            if (val_str.startswith("{") and val_str.endswith("}")) or (val_str.startswith("[") and val_str.endswith("]")):
-                try:
-                    return json.loads(val_str)
-                except Exception:
-                    pass
-            if (val_str.startswith('"') and val_str.endswith('"')) or (val_str.startswith("'") and val_str.endswith("'")):
-                return val_str[1:-1]
-            return val_str
-
-        def extract_xml_tool_calls(s: str) -> List[Dict[str, Any]]:
-            xml_calls = []
-
-            # 1. Container tags with child elements: <tool_use> or <tool_call> with <tool_name> / <name>
-            container_pattern = re.compile(
-                r'<(?:tool_use|tool_call)[^>]*>(.*?)</(?:tool_use|tool_call)>',
-                re.IGNORECASE | re.DOTALL
-            )
-            for c_match in container_pattern.finditer(s):
-                c_body = c_match.group(1)
-                name_match = re.search(
-                    r'<(?:tool_name|name)[^>]*>(.*?)</(?:tool_name|name)>',
-                    c_body,
-                    re.IGNORECASE | re.DOTALL
-                )
-                if name_match:
-                    t_name = name_match.group(1).strip()
-                    server_match = re.search(
-                        r'<server_name[^>]*>(.*?)</server_name>',
-                        c_body,
-                        re.IGNORECASE | re.DOTALL
-                    )
-                    if server_match:
-                        s_name = server_match.group(1).strip()
-                        if s_name.lower() not in ("", "none", "null", "local") and not t_name.startswith("mcp__"):
-                            t_name = f"mcp__{s_name}__{t_name}"
-                    if "." in t_name:
-                        t_name = t_name.split(".")[-1]
-
-                    args = {}
-                    args_match = re.search(
-                        r'<(?:arguments|parameters|args)[^>]*>(.*?)</(?:arguments|parameters|args)>',
-                        c_body,
-                        re.IGNORECASE | re.DOTALL
-                    )
-                    args_body = args_match.group(1).strip() if args_match else ""
-                    if args_body:
-                        if args_body.startswith("{") and args_body.endswith("}"):
-                            try:
-                                parsed = json.loads(args_body)
-                                if isinstance(parsed, dict):
-                                    args = parsed
-                            except Exception:
-                                pass
-                        if not args:
-                            param_pattern = re.compile(
-                                r'<(?:parameter|param|arg|argument)(?:[\s:=]+|[\s:=]*name\s*=\s*)["\']?([a-zA-Z0-9_\-\.]+)["\']?\s*(?:value=["\']?(.*?)["\']?)?\s*>(.*?)</(?:parameter|param|arg|argument)[^>]*>',
-                                re.IGNORECASE | re.DOTALL
-                            )
-                            for p_match in param_pattern.finditer(args_body):
-                                p_name = p_match.group(1).strip()
-                                raw_val = p_match.group(2) if p_match.group(2) is not None else p_match.group(3)
-                                args[p_name] = parse_xml_param_value(raw_val)
-                    xml_calls.append({"tool": t_name, "arguments": args})
-
-            # 2. Inline tag pattern: <function=...>, <invoke name="...">, etc.
-            fn_block_pattern = re.compile(
-                r'<(?:function|invoke|call|tool)(?:[\s:=]+|[\s:=]*name\s*=\s*)["\']?([a-zA-Z0-9_\-\.]+)["\']?\s*>(.*?)</(?:function|invoke|call|tool)[^>]*>',
-                re.IGNORECASE | re.DOTALL
-            )
-            for fn_match in fn_block_pattern.finditer(s):
-                tool_name = fn_match.group(1).strip()
-                if "." in tool_name:
-                    tool_name = tool_name.split(".")[-1]
-                fn_body = fn_match.group(2)
-                args = {}
-                param_pattern = re.compile(
-                    r'<(?:parameter|param|arg|argument)(?:[\s:=]+|[\s:=]*name\s*=\s*)["\']?([a-zA-Z0-9_\-\.]+)["\']?\s*(?:value=["\']?(.*?)["\']?)?\s*>(.*?)</(?:parameter|param|arg|argument)[^>]*>',
-                    re.IGNORECASE | re.DOTALL
-                )
-                param_matches = list(param_pattern.finditer(fn_body))
-                if param_matches:
-                    for p_match in param_matches:
-                        p_name = p_match.group(1).strip()
-                        p_val_attr = p_match.group(2)
-                        p_val_body = p_match.group(3)
-                        raw_val = p_val_attr if p_val_attr is not None else p_val_body
-                        args[p_name] = parse_xml_param_value(raw_val)
-                else:
-                    self_closing_pattern = re.compile(
-                        r'<(?:parameter|param|arg|argument)(?:[\s:=]+|[\s:=]*name\s*=\s*)["\']?([a-zA-Z0-9_\-\.]+)["\']?\s+value=["\']?(.*?)["\']?\s*/>',
-                        re.IGNORECASE
-                    )
-                    sc_matches = list(self_closing_pattern.finditer(fn_body))
-                    if sc_matches:
-                        for sc_match in sc_matches:
-                            p_name = sc_match.group(1).strip()
-                            raw_val = sc_match.group(2)
-                            args[p_name] = parse_xml_param_value(raw_val)
-                    elif fn_body.strip():
-                        body_str = fn_body.strip()
-                        if (body_str.startswith("{") and body_str.endswith("}")):
-                            try:
-                                parsed = json.loads(body_str)
-                                if isinstance(parsed, dict):
-                                    args = parsed
-                            except Exception:
-                                pass
-                call_obj = {"tool": tool_name, "arguments": args}
-                if call_obj not in xml_calls:
-                    xml_calls.append(call_obj)
-            return xml_calls
-
-        def extract_kv_tool_calls(s: str) -> List[Dict[str, Any]]:
-            calls = []
-            blocks = []
-            fence_pattern = re.compile(
-                r'```(?:yaml|yml|text|tool|)?\s*\n(.*?)\n```',
-                re.DOTALL | re.IGNORECASE
-            )
-            for m in fence_pattern.finditer(s):
-                blocks.append(m.group(1))
-            if not blocks:
-                blocks.append(s)
-
-            for block in blocks:
-                lines = [line.rstrip() for line in block.splitlines()]
-                tool_name = None
-                args = {}
-                for line in lines:
-                    if not line.strip():
-                        continue
-                    m_tool = re.match(
-                        r'^\s*(?:tool|tool_name|function)\s*:\s*["\']?([a-zA-Z0-9_\-\.]+)["\']?\s*$',
-                        line,
-                        re.IGNORECASE
-                    )
-                    if m_tool:
-                        if tool_name:
-                            calls.append({"tool": tool_name, "arguments": args})
-                            args = {}
-                        tool_name = m_tool.group(1).strip()
-                        if "." in tool_name:
-                            tool_name = tool_name.split(".")[-1]
-                        continue
-                    if tool_name:
-                        m_args_header = re.match(
-                            r'^\s*(?:arguments|parameters|args)\s*:\s*(.*)$',
-                            line,
-                            re.IGNORECASE
-                        )
-                        if m_args_header:
-                            rest = m_args_header.group(1).strip()
-                            if rest.startswith("{") and rest.endswith("}"):
-                                try:
-                                    args = json.loads(rest)
-                                except Exception:
-                                    pass
-                            continue
-                        m_param = re.match(r'^\s*([a-zA-Z0-9_\-\.]+)\s*:\s*(.*)$', line)
-                        if m_param:
-                            p_name = m_param.group(1).strip()
-                            p_val = m_param.group(2).strip()
-                            args[p_name] = parse_xml_param_value(p_val)
-                if tool_name:
-                    calls.append({"tool": tool_name, "arguments": args})
-            return calls
-
-        # Clean JSON strings and helper procedures
-        xml_tool_calls = extract_xml_tool_calls(text)
-        tool_calls = []
-        for xcall in xml_tool_calls:
-            if xcall not in tool_calls:
-                tool_calls.append(xcall)
-
-        kv_tool_calls = extract_kv_tool_calls(text)
-        for kvcall in kv_tool_calls:
-            if kvcall not in tool_calls:
-                tool_calls.append(kvcall)
 
         def clean_json_string(s: str) -> str:
             # Remove single line comments starting with // or #, respecting quotes across newlines
@@ -3816,12 +3624,7 @@ class ChatybotApp:
                     continue
                 
                 if not in_quote:
-                    if char == '#':
-                        # Skip until next newline or end of string
-                        while i < n and s[i] != '\n':
-                            i += 1
-                        continue
-                    elif s[i:i+2] == '//':
+                    if char == '#' or s[i:i+2] == '//':
                         # Skip until next newline or end of string
                         while i < n and s[i] != '\n':
                             i += 1
@@ -3834,6 +3637,58 @@ class ChatybotApp:
             # Remove trailing commas before closing braces/brackets
             cleaned = re.sub(r',\s*([\]}])', r'\1', cleaned)
             return cleaned
+
+        def repair_json_unescaped_quotes(s: str) -> str:
+            out = []
+            i = 0
+            n = len(s)
+            in_string = False
+            expecting_key = True
+
+            while i < n:
+                c = s[i]
+                if c == "\\":
+                    out.append(c)
+                    if i + 1 < n:
+                        out.append(s[i + 1])
+                        i += 2
+                    else:
+                        i += 1
+                    continue
+
+                if c == '"':
+                    if not in_string:
+                        in_string = True
+                        out.append(c)
+                        i += 1
+                    else:
+                        peek = i + 1
+                        while peek < n and s[peek] in " \t\r\n":
+                            peek += 1
+                        if expecting_key and peek < n and s[peek] == ':':
+                            in_string = False
+                            expecting_key = False
+                            out.append(c)
+                            i += 1
+                        elif not expecting_key and peek < n and s[peek] in (',', '}', ']'):
+                            in_string = False
+                            if s[peek] == ',':
+                                expecting_key = True
+                            out.append(c)
+                            i += 1
+                        else:
+                            out.append('\\"')
+                            i += 1
+                else:
+                    if not in_string:
+                        if c in ('{', ','):
+                            expecting_key = True
+                        elif c == ':':
+                            expecting_key = False
+                    out.append(c)
+                    i += 1
+
+            return "".join(out)
 
         def fix_unquoted_json(s: str) -> str:
             buf = []
@@ -3934,58 +3789,6 @@ class ChatybotApp:
                 return [sanitize_json_types(item) for item in obj]
             return obj
 
-        def repair_json_unescaped_quotes(s: str) -> str:
-            out = []
-            i = 0
-            n = len(s)
-            in_string = False
-            expecting_key = True
-
-            while i < n:
-                c = s[i]
-                if c == "\\":
-                    out.append(c)
-                    if i + 1 < n:
-                        out.append(s[i + 1])
-                        i += 2
-                    else:
-                        i += 1
-                    continue
-
-                if c == '"':
-                    if not in_string:
-                        in_string = True
-                        out.append(c)
-                        i += 1
-                    else:
-                        peek = i + 1
-                        while peek < n and s[peek] in " \t\r\n":
-                            peek += 1
-                        if expecting_key and peek < n and s[peek] == ':':
-                            in_string = False
-                            expecting_key = False
-                            out.append(c)
-                            i += 1
-                        elif not expecting_key and peek < n and s[peek] in (',', '}', ']'):
-                            in_string = False
-                            if s[peek] == ',':
-                                expecting_key = True
-                            out.append(c)
-                            i += 1
-                        else:
-                            out.append('\\"')
-                            i += 1
-                else:
-                    if not in_string:
-                        if c in ('{', ','):
-                            expecting_key = True
-                        elif c == ':':
-                            expecting_key = False
-                    out.append(c)
-                    i += 1
-
-            return "".join(out)
-
         def parse_json_or_dict(s: str) -> Optional[Dict[str, Any]]:
             try:
                 cleaned = clean_json_string(s)
@@ -4059,15 +3862,444 @@ class ChatybotApp:
                         return {"tool": tool_name, "arguments": v}
             return None
 
+        def parse_xml_param_value(val_str: str) -> Any:
+            val_str = val_str.strip()
+            if not val_str:
+                return ""
+            if val_str.lower() == "true":
+                return True
+            if val_str.lower() == "false":
+                return False
+            if val_str.lower() in ("null", "none"):
+                return None
+            try:
+                if "." in val_str:
+                    return float(val_str)
+                return int(val_str)
+            except ValueError:
+                pass
+            if (val_str.startswith("{") and val_str.endswith("}")) or (val_str.startswith("[") and val_str.endswith("]")):
+                try:
+                    parsed = parse_json_or_dict(val_str)
+                    if parsed is not None:
+                        return parsed
+                except Exception:
+                    pass
+            if (val_str.startswith('"') and val_str.endswith('"')) or (val_str.startswith("'") and val_str.endswith("'")):
+                return val_str[1:-1]
+            return val_str
+
+        def extract_xml_tool_calls(s: str) -> List[Dict[str, Any]]:
+            xml_calls = []
+
+            # 1. Container tags with child elements: <tool_use> or <tool_call> with <tool_name> / <name>
+            container_pattern = re.compile(
+                r'<(?:tool_use|tool_call)[^>]*>(.*?)</(?:tool_use|tool_call)>',
+                re.IGNORECASE | re.DOTALL
+            )
+            for c_match in container_pattern.finditer(s):
+                c_body = c_match.group(1)
+                name_match = re.search(
+                    r'<(?:tool_name|name)[^>]*>(.*?)</(?:tool_name|name)>',
+                    c_body,
+                    re.IGNORECASE | re.DOTALL
+                )
+                if name_match:
+                    t_name = name_match.group(1).strip()
+                    server_match = re.search(
+                        r'<server_name[^>]*>(.*?)</server_name>',
+                        c_body,
+                        re.IGNORECASE | re.DOTALL
+                    )
+                    if server_match:
+                        s_name = server_match.group(1).strip()
+                        if s_name.lower() not in ("", "none", "null", "local") and not t_name.startswith("mcp__"):
+                            t_name = f"mcp__{s_name}__{t_name}"
+                    if "." in t_name:
+                        t_name = t_name.split(".")[-1]
+
+                    args = {}
+                    args_match = re.search(
+                        r'<(?:arguments|parameters|args)[^>]*>(.*?)</(?:arguments|parameters|args)>',
+                        c_body,
+                        re.IGNORECASE | re.DOTALL
+                    )
+                    args_body = args_match.group(1).strip() if args_match else ""
+                    if args_body:
+                        # Try parsing as JSON first
+                        parsed_args = parse_json_or_dict(args_body)
+                        if isinstance(parsed_args, dict):
+                            args = parsed_args
+                        else:
+                            param_pattern = re.compile(
+                                r'<(?:parameter|param)\s+name=["\']([^"\']+)["\'][^>]*>(.*?)</(?:parameter|param)>',
+                                re.IGNORECASE | re.DOTALL
+                            )
+                            param_matches = list(param_pattern.finditer(args_body))
+                            if param_matches:
+                                for p_match in param_matches:
+                                    p_name = p_match.group(1).strip()
+                                    raw_val = p_match.group(2)
+                                    args[p_name] = parse_xml_param_value(raw_val)
+                            else:
+                                sc_param_pattern = re.compile(
+                                    r'<(?:parameter|param)\s+name=["\']([^"\']+)["\']\s+value=["\']([^"\']*)["\'][^>]*/?>',
+                                    re.IGNORECASE
+                                )
+                                for sc_match in sc_param_pattern.finditer(args_body):
+                                    p_name = sc_match.group(1).strip()
+                                    raw_val = sc_match.group(2)
+                                    args[p_name] = parse_xml_param_value(raw_val)
+                    else:
+                        param_pattern = re.compile(
+                            r'<(?:parameter|param)\s+name=["\']([^"\']+)["\'][^>]*>(.*?)</(?:parameter|param)>',
+                            re.IGNORECASE | re.DOTALL
+                        )
+                        for p_match in param_pattern.finditer(c_body):
+                            p_name = p_match.group(1).strip()
+                            raw_val = p_match.group(2)
+                            args[p_name] = parse_xml_param_value(raw_val)
+                    call_obj = {"tool": t_name, "arguments": args}
+                    if call_obj not in xml_calls:
+                        xml_calls.append(call_obj)
+
+            # 2. Tag attribute syntax: <tool name="..." ...> or <tool_call name="..."> or <call name="...">
+            tag_pattern = re.compile(
+                r'<(?:tool|tool_call|call)\s+name=["\']([^"\']+)["\'][^>]*>(.*?)</(?:tool|tool_call|call)>',
+                re.IGNORECASE | re.DOTALL
+            )
+            for t_match in tag_pattern.finditer(s):
+                tool_name = t_match.group(1).strip()
+                if "." in tool_name:
+                    tool_name = tool_name.split(".")[-1]
+                t_body = t_match.group(2)
+                args = {}
+                param_pattern = re.compile(
+                    r'<(?:parameter|param)\s+name=["\']([^"\']+)["\'][^>]*>(.*?)</(?:parameter|param)>',
+                    re.IGNORECASE | re.DOTALL
+                )
+                param_matches = list(param_pattern.finditer(t_body))
+                if param_matches:
+                    for p_match in param_matches:
+                        p_name = p_match.group(1).strip()
+                        raw_val = p_match.group(2)
+                        args[p_name] = parse_xml_param_value(raw_val)
+                else:
+                    sc_param_pattern = re.compile(
+                        r'<(?:parameter|param)\s+name=["\']([^"\']+)["\']\s+value=["\']([^"\']*)["\'][^>]*/?>',
+                        re.IGNORECASE
+                    )
+                    for sc_match in sc_param_pattern.finditer(t_body):
+                        p_name = sc_match.group(1).strip()
+                        raw_val = sc_match.group(2)
+                        args[p_name] = parse_xml_param_value(raw_val)
+                call_obj = {"tool": tool_name, "arguments": args}
+                if call_obj not in xml_calls:
+                    xml_calls.append(call_obj)
+
+            # 3. Anthropic invoke style: <invoke name="...">
+            invoke_pattern = re.compile(
+                r'<invoke\s+name=["\']([^"\']+)["\'][^>]*>(.*?)</invoke>',
+                re.IGNORECASE | re.DOTALL
+            )
+            for inv_match in invoke_pattern.finditer(s):
+                tool_name = inv_match.group(1).strip()
+                if "." in tool_name:
+                    tool_name = tool_name.split(".")[-1]
+                inv_body = inv_match.group(2)
+                args = {}
+                param_pattern = re.compile(
+                    r'<(?:parameter|param)\s+name=["\']([^"\']+)["\'][^>]*>(.*?)</(?:parameter|param)>',
+                    re.IGNORECASE | re.DOTALL
+                )
+                param_matches = list(param_pattern.finditer(inv_body))
+                if param_matches:
+                    for p_match in param_matches:
+                        p_name = p_match.group(1).strip()
+                        raw_val = p_match.group(2)
+                        args[p_name] = parse_xml_param_value(raw_val)
+                else:
+                    sc_param_pattern = re.compile(
+                        r'<(?:parameter|param)\s+name=["\']([^"\']+)["\']\s+value=["\']([^"\']*)["\'][^>]*/?>',
+                        re.IGNORECASE
+                    )
+                    for sc_match in sc_param_pattern.finditer(inv_body):
+                        p_name = sc_match.group(1).strip()
+                        raw_val = sc_match.group(2)
+                        args[p_name] = parse_xml_param_value(raw_val)
+                call_obj = {"tool": tool_name, "arguments": args}
+                if call_obj not in xml_calls:
+                    xml_calls.append(call_obj)
+
+            # 4. Standard XML function= style: <function=name>
+            fn_pattern = re.compile(
+                r'<(?:function|tool|call)=([a-zA-Z0-9_\-\.]+)[^>]*>(.*?)</(?:function|tool|call)>',
+                re.IGNORECASE | re.DOTALL
+            )
+            for match in fn_pattern.finditer(s):
+                tool_name = match.group(1).strip()
+                if "." in tool_name:
+                    tool_name = tool_name.split(".")[-1]
+                fn_body = match.group(2)
+                args = {}
+                param_pattern = re.compile(
+                    r'<(?:parameter|param)=([a-zA-Z0-9_\-\.]+)[^>]*>(.*?)</(?:parameter|param)>',
+                    re.IGNORECASE | re.DOTALL
+                )
+                param_matches = list(param_pattern.finditer(fn_body))
+                if param_matches:
+                    for p_match in param_matches:
+                        p_name = p_match.group(1).strip()
+                        raw_val = p_match.group(2)
+                        args[p_name] = parse_xml_param_value(raw_val)
+                else:
+                    sc_pattern = re.compile(
+                        r'<(?:parameter|param)=([a-zA-Z0-9_\-\.]+)\s+value=["\']([^"\']*)["\'][^>]*/?>',
+                        re.IGNORECASE
+                    )
+                    sc_matches = list(sc_pattern.finditer(fn_body))
+                    if sc_matches:
+                        for sc_match in sc_matches:
+                            p_name = sc_match.group(1).strip()
+                            raw_val = sc_match.group(2)
+                            args[p_name] = parse_xml_param_value(raw_val)
+                    elif fn_body.strip():
+                        body_str = fn_body.strip()
+                        if (body_str.startswith("{") and body_str.endswith("}")):
+                            try:
+                                parsed = parse_json_or_dict(body_str)
+                                if isinstance(parsed, dict):
+                                    args = parsed
+                            except Exception:
+                                pass
+                call_obj = {"tool": tool_name, "arguments": args}
+                if call_obj not in xml_calls:
+                    xml_calls.append(call_obj)
+            return xml_calls
+
+        def extract_kv_tool_calls(s: str) -> List[Dict[str, Any]]:
+            calls = []
+            blocks = []
+            fence_pattern = re.compile(
+                r'```(?:yaml|yml|text|tool|)?\s*\n(.*?)\n```',
+                re.DOTALL | re.IGNORECASE
+            )
+            for m in fence_pattern.finditer(s):
+                blocks.append(m.group(1))
+            if not blocks:
+                blocks.append(s)
+
+            for block in blocks:
+                lines = [line.rstrip() for line in block.splitlines()]
+                tool_name = None
+                args = {}
+                for line in lines:
+                    if not line.strip():
+                        continue
+                    m_tool = re.match(
+                        r'^\s*(?:tool|tool_name|function)\s*:\s*["\']?([a-zA-Z0-9_\-\.]+)["\']?\s*$',
+                        line,
+                        re.IGNORECASE
+                    )
+                    if m_tool:
+                        if tool_name:
+                            call_obj = {"tool": tool_name, "arguments": args}
+                            if call_obj not in calls:
+                                calls.append(call_obj)
+                            args = {}
+                        tool_name = m_tool.group(1).strip()
+                        if "." in tool_name:
+                            tool_name = tool_name.split(".")[-1]
+                        continue
+                    if tool_name:
+                        m_args_header = re.match(
+                            r'^\s*(?:arguments|parameters|args)\s*:\s*(.*)$',
+                            line,
+                            re.IGNORECASE
+                        )
+                        if m_args_header:
+                            rest = m_args_header.group(1).strip()
+                            if rest.startswith("{") and rest.endswith("}"):
+                                parsed = parse_json_or_dict(rest)
+                                if isinstance(parsed, dict):
+                                    args = parsed
+                            continue
+                        m_param = re.match(r'^\s*([a-zA-Z0-9_\-\.]+)\s*:\s*(.*)$', line)
+                        if m_param:
+                            p_name = m_param.group(1).strip()
+                            p_val = m_param.group(2).strip()
+                            args[p_name] = parse_xml_param_value(p_val)
+                if tool_name:
+                    call_obj = {"tool": tool_name, "arguments": args}
+                    if call_obj not in calls:
+                        calls.append(call_obj)
+            return calls
+
+        def extract_kimi_tool_calls(s: str) -> List[Dict[str, Any]]:
+            """
+            Extract tool calls formatted using Moonshot / Kimi K2 native special tokens:
+            <|tool_calls_section_begin|><|tool_call_begin|>functions.tool_name:id<|tool_call_argument_begin|>{...}<|tool_call_end|><|tool_calls_section_end|>
+            """
+            calls = []
+            pattern = re.compile(
+                r'<\|tool_call_begin\|>(?:functions?\.)?([a-zA-Z0-9_\-\.]+?)(?::\d+)?<\|tool_call_argument_begin\|>(.*?)(?:<\|tool_call_end\|>|(?=<\|tool_call_begin\|>)|<\|tool_calls_section_end\|>|$)',
+                re.IGNORECASE | re.DOTALL
+            )
+            for m in pattern.finditer(s):
+                tool_name = m.group(1).strip()
+                if "." in tool_name:
+                    tool_name = tool_name.split(".")[-1]
+                arg_body = m.group(2).strip()
+                args = {}
+                if arg_body:
+                    parsed = parse_json_or_dict(arg_body)
+                    if isinstance(parsed, dict):
+                        args = parsed
+                    else:
+                        first_brace = arg_body.find("{")
+                        if first_brace != -1:
+                            sub = arg_body[first_brace:]
+                            bc = 0
+                            end_idx = -1
+                            in_q = False
+                            esc = False
+                            for idx, ch in enumerate(sub):
+                                if esc:
+                                    esc = False
+                                    continue
+                                if ch == "\\":
+                                    esc = True
+                                    continue
+                                if ch == '"':
+                                    in_q = not in_q
+                                    continue
+                                if not in_q:
+                                    if ch == '{':
+                                        bc += 1
+                                    elif ch == '}':
+                                        bc -= 1
+                                        if bc == 0:
+                                            end_idx = idx + 1
+                                            break
+                            if end_idx != -1:
+                                parsed = parse_json_or_dict(sub[:end_idx])
+                                if isinstance(parsed, dict):
+                                    args = parsed
+                call_obj = {"tool": tool_name, "arguments": args}
+                if call_obj not in calls:
+                    calls.append(call_obj)
+            return calls
+
+        def extract_dsml_tool_calls(s: str) -> List[Dict[str, Any]]:
+            """
+            Extract tool calls formatted using DeepSeek Markup Language (DSML):
+            <｜｜DSML｜｜ calls>
+            <｜｜DSML｜｜ invoke name="tool_name">
+            <｜｜DSML｜｜ parameter name="arguments" string="false">{"key": "val"}</｜｜DSML｜｜ parameter>
+            </｜｜DSML｜｜ invoke>
+            </｜｜DSML｜｜ calls>
+            """
+            calls = []
+            invoke_pattern = re.compile(
+                r'<[｜\|]+DSML[｜\|]+\s*invoke\s+name=["\']([^"\']+)["\'][^>]*>(.*?)(?:</[｜\|]+DSML[｜\|]+\s*invoke>|(?=<[｜\|]+DSML[｜\|]+\s*invoke)|$)',
+                re.IGNORECASE | re.DOTALL
+            )
+            for inv_match in invoke_pattern.finditer(s):
+                tool_name = inv_match.group(1).strip()
+                if "." in tool_name:
+                    tool_name = tool_name.split(".")[-1]
+                inv_body = inv_match.group(2).strip()
+                args = {}
+
+                param_pattern = re.compile(
+                    r'<[｜\|]+DSML[｜\|]+\s*parameter\s+name=["\']([^"\']+)["\'](?:\s+string=["\']([^"\']*)["\'])?(?:\s+value=["\']([^"\']*)["\'])?[^>]*>(.*?)</[｜\|]+DSML[｜\|]+\s*parameter>',
+                    re.IGNORECASE | re.DOTALL
+                )
+                sc_param_pattern = re.compile(
+                    r'<[｜\|]+DSML[｜\|]+\s*parameter\s+name=["\']([^"\']+)["\'](?:\s+value=["\']([^"\']*)["\'])?[^>]*/?>',
+                    re.IGNORECASE
+                )
+                param_matches = list(param_pattern.finditer(inv_body))
+                if param_matches:
+                    for p_match in param_matches:
+                        p_name = p_match.group(1).strip()
+                        is_string_attr = p_match.group(2)
+                        val_attr = p_match.group(3)
+                        p_body = p_match.group(4).strip() if p_match.group(4) is not None else ""
+                        raw_val = val_attr if val_attr is not None else p_body
+                        if p_name in ("arguments", "parameters", "args"):
+                            parsed_args = parse_json_or_dict(raw_val)
+                            if isinstance(parsed_args, dict):
+                                args.update(parsed_args)
+                            else:
+                                args[p_name] = raw_val
+                        else:
+                            if is_string_attr and is_string_attr.lower() == "false":
+                                parsed_val = parse_json_or_dict(raw_val)
+                                args[p_name] = parsed_val if parsed_val is not None else parse_xml_param_value(raw_val)
+                            else:
+                                args[p_name] = parse_xml_param_value(raw_val)
+                else:
+                    sc_matches = list(sc_param_pattern.finditer(inv_body))
+                    if sc_matches:
+                        for sc_match in sc_matches:
+                            p_name = sc_match.group(1).strip()
+                            val_attr = sc_match.group(2) if sc_match.group(2) is not None else ""
+                            args[p_name] = parse_xml_param_value(val_attr)
+                    elif inv_body:
+                        parsed_args = parse_json_or_dict(inv_body)
+                        if isinstance(parsed_args, dict):
+                            args = parsed_args
+                call_obj = {"tool": tool_name, "arguments": args}
+                if call_obj not in calls:
+                    calls.append(call_obj)
+            return calls
+
+        tool_calls = []
+
+        xml_tool_calls = extract_xml_tool_calls(text)
+        for xcall in xml_tool_calls:
+            if xcall not in tool_calls:
+                tool_calls.append(xcall)
+
+        kv_tool_calls = extract_kv_tool_calls(text)
+        for kvcall in kv_tool_calls:
+            if kvcall not in tool_calls:
+                tool_calls.append(kvcall)
+
+        kimi_tool_calls = extract_kimi_tool_calls(text)
+        for kcall in kimi_tool_calls:
+            if kcall not in tool_calls:
+                tool_calls.append(kcall)
+
+        dsml_tool_calls = extract_dsml_tool_calls(text)
+        for dcall in dsml_tool_calls:
+            if dcall not in tool_calls:
+                tool_calls.append(dcall)
+
+        # Remove extracted Kimi and DSML tool call tokens before JSON scanner loop to avoid duplicates
+        text_for_json = re.sub(
+            r'<\|tool_call_begin\|>(?:functions?\.)?([a-zA-Z0-9_\-\.]+?)(?::\d+)?<\|tool_call_argument_begin\|>(.*?)(?:<\|tool_call_end\|>|(?=<\|tool_call_begin\|>)|<\|tool_calls_section_end\|>|$)',
+            ' ',
+            text,
+            flags=re.IGNORECASE | re.DOTALL
+        )
+        text_for_json = re.sub(
+            r'<[｜\|]+DSML[｜\|]+\s*invoke\s+name=["\']([^"\']+)["\'][^>]*>(.*?)(?:</[｜\|]+DSML[｜\|]+\s*invoke>|(?=<[｜\|]+DSML[｜\|]+\s*invoke)|$)',
+            ' ',
+            text_for_json,
+            flags=re.IGNORECASE | re.DOTALL
+        )
+
         # Parse to find all tool calls in the text
         i = 0
-        n = len(text)
+        n = len(text_for_json)
         while i < n:
-            if text[i] == '{':
-                prefix = text[:i].rstrip()
-                # Match tool header before '{' if present (e.g. <|tool_call>call:run_command, call:run_command, <start_function_call>call:run_command)
+            if text_for_json[i] == '{':
+                prefix = text_for_json[:i].rstrip()
+                # Match tool header before '{' if present (e.g. <|tool_call>call:run_command, call:run_command, <start_function_call>call:run_command, <|tool_call_begin|>functions.run_command:0<|tool_call_argument_begin|>, <｜｜DSML｜｜ invoke name="run_command">)
                 header_match = re.search(
-                    r'(?:<\|?tool_call\|?>|<start_function_call>|<tool_call>|\bcall:)\s*(?:call:)?\s*([a-zA-Z0-9_\-\.]+)\s*\(?\s*$',
+                    r'(?:<\|?tool_call\|?>|<start_function_call>|<tool_call>|<\|tool_call_begin\|>(?:functions?\.)?|<[｜\|]+DSML[｜\|]+\s*invoke\s+name=["\']?|\bcall:)\s*(?:call:)?\s*([a-zA-Z0-9_\-\.]+?)(?::\d+)?(?:<\|tool_call_argument_begin\|>)?["\']?\s*\(?\s*$',
                     prefix,
                     re.IGNORECASE
                 )
@@ -4079,7 +4311,7 @@ class ChatybotApp:
                 escaped = False
                 quote_char = None
                 while j < n and brace_count > 0:
-                    char = text[j]
+                    char = text_for_json[j]
                     if escaped:
                         escaped = False
                     elif char == '\\':
@@ -4098,24 +4330,26 @@ class ChatybotApp:
                     j += 1
 
                 if brace_count == 0:
-                    candidate = text[i:j]
+                    candidate = text_for_json[i:j]
                     if explicit_tool_name:
                         if "." in explicit_tool_name:
                             explicit_tool_name = explicit_tool_name.split(".")[-1]
                         args = parse_json_or_dict(candidate)
                         if args is None:
                             args = {}
-                        tool_calls.append({"tool": explicit_tool_name, "arguments": args})
+                        call_obj = {"tool": explicit_tool_name, "arguments": args}
+                        if call_obj not in tool_calls:
+                            tool_calls.append(call_obj)
                         i = j - 1
                     else:
                         data = parse_json_or_dict(candidate)
                         if data:
                             res = normalize_tool_call(data)
-                            if res:
+                            if res and res not in tool_calls:
                                 tool_calls.append(res)
                                 i = j - 1
                 elif brace_count > 0 and j == n:
-                    candidate = text[i:j].rstrip("`\n\r \t")
+                    candidate = text_for_json[i:j].rstrip("`\n\r \t")
                     cand_in_quote = False
                     cand_escaped = False
                     cand_brace_count = 0
@@ -4146,13 +4380,15 @@ class ChatybotApp:
                         args = parse_json_or_dict(candidate)
                         if args is None:
                             args = {}
-                        tool_calls.append({"tool": explicit_tool_name, "arguments": args})
+                        call_obj = {"tool": explicit_tool_name, "arguments": args}
+                        if call_obj not in tool_calls:
+                            tool_calls.append(call_obj)
                         i = j - 1
                     else:
                         data = parse_json_or_dict(candidate)
                         if data:
                             res = normalize_tool_call(data)
-                            if res:
+                            if res and res not in tool_calls:
                                 tool_calls.append(res)
                                 i = j - 1
             i += 1
