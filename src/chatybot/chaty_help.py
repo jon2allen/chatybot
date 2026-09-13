@@ -383,11 +383,27 @@ class HelpSystem:
         self.register_command(CommandHelp(
             name="/save",
             category="output",
-            short_desc="Save last chat completion to a file",
-            usage="/save <file>",
-            long_desc="Save the last chat completion response to a file. Only the most recent completion can be saved.",
-            examples=["/save output.txt", "/save response.md"],
-            see_also=["/notemode"]
+            short_desc="Save response or chat history to a file (omits thinking by default)",
+            usage="/save <file> [all] [withthink|raw|nothink]",
+            long_desc=(
+                "Save the last chat completion response or full conversation history to a file. "
+                "By default, internal reasoning blocks (<think>, <thought>, <thinking>) are stripped "
+                "to produce clean output. If chat history collection is disabled via '/session history off', "
+                "/save automatically falls back to saving the single latest response."
+            ),
+            examples=[
+                "/save output.txt",
+                "/save report.md all",
+                "/save reasoning_trace.txt withthink",
+                "/save full_session.txt all raw",
+            ],
+            parameters={
+                "<file>": "Path to the destination file to save (parent directories created automatically)",
+                "all": "Optional flag to save all conversation history turns instead of just the latest response",
+                "withthink": "Optional modifier to preserve internal thinking blocks (alias: 'raw')",
+                "nothink": "Optional modifier to explicitly strip thinking blocks (default behavior, alias: 'clean')",
+            },
+            see_also=["/notemode", "/savevar", "/session export"]
         ))
         
         self.register_command(CommandHelp(
