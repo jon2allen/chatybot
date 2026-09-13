@@ -261,7 +261,13 @@ async def cmd_save(ctx: CommandContext, parts: list, command: str) -> CommandRes
 
     file_path = " ".join(words[1:]).strip(" \"'")
 
-    if not app.chat_history:
+    last_completion_fallback = (
+        app.chat_history[-1][1]
+        if app.chat_history
+        else (getattr(app, "last_response", None) or app.buffer_manager.get_script_var("LAST_COMPLETION") or "")
+    )
+
+    if not app.chat_history and not last_completion_fallback:
         print("No chat history to save.")
         return CommandResult.ok()
 
@@ -278,16 +284,21 @@ async def cmd_save(ctx: CommandContext, parts: list, command: str) -> CommandRes
             print(f"Created directory path: '{directory}'")
 
         if save_all:
+            history_entries = (
+                app.chat_history
+                if app.chat_history
+                else ([(getattr(app, "last_prompt", "User Prompt") or "User Prompt", last_completion_fallback)] if last_completion_fallback else [])
+            )
             with open(file_path, "w") as f:
-                for i, (prompt, response) in enumerate(app.chat_history, 1):
+                for i, (prompt, response) in enumerate(history_entries, 1):
                     res_to_save = clean_thinking(response) if strip_thinking else response
                     f.write(f"=== Conversation {i} ===\n")
                     f.write(f"PROMPT: {prompt}\n\n")
                     f.write(f"RESPONSE: {res_to_save}\n\n")
                     f.write("---\n\n")
-            print(f"All chat history ({len(app.chat_history)} conversations) saved to '{file_path}'.")
+            print(f"All chat history ({len(history_entries)} conversations) saved to '{file_path}'.")
         else:
-            last_response = app.chat_history[-1][1]
+            last_response = last_completion_fallback
             res_to_save = clean_thinking(last_response) if strip_thinking else last_response
             with open(file_path, "w") as f:
                 f.write(res_to_save)
