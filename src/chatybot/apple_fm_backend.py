@@ -25,6 +25,8 @@ def is_platform_supported() -> bool:
     """True only on macOS 26+ on Apple Silicon."""
     if sys.platform != "darwin":
         return False
+    if platform.machine().lower() not in ("arm64", "aarch64"):
+        return False
     try:
         version_str = platform.mac_ver()[0]
         parts = tuple(int(x) for x in version_str.split(".")[:2])
@@ -153,7 +155,11 @@ async def respond(session, prompt: str, options=None) -> str:
 
 
 async def stream_response(session, prompt: str, options=None):
-    """Yield text chunks from the model as they are generated.
+    """Yield text deltas from the model as they are generated.
+
+    The SDK's stream_response() yields complete text snapshots (not deltas).
+    This function converts snapshots to deltas so callers can print each
+    chunk exactly once.
 
     Args:
         session: A LanguageModelSession.
@@ -167,8 +173,16 @@ async def stream_response(session, prompt: str, options=None):
     kwargs = {"prompt": prompt}
     if options is not None:
         kwargs["options"] = options
-    async for chunk in session.stream_response(**kwargs):
-        yield chunk
+    last_text = ""
+    async for snapshot in session.stream_response(**kwargs):
+        text = str(snapshot)
+        if text.startswith(last_text):
+            delta = text[len(last_text):]
+        else:
+            delta = text
+        last_text = text
+        if delta:
+            yield delta
 
 
 def build_sampling_mode(top_k=None, top_p=None, seed=None):
@@ -310,7 +324,14 @@ def _create_tool_wrapper(tool_name: str, tool_meta: dict, app) -> type:
 
             try:
                 result = await app.dispatch_tool(invocation)
-                return str(result) if result else ""
+                result_str = str(result) if result else ""
+                # Truncate to prevent ExceededContextWindowSizeError.
+                # The on-device model has a 4096-token context window;
+                # tool results share that budget with everything else.
+                max_chars = 4000
+                if len(result_str) > max_chars:
+                    result_str = result_str[:max_chars] + "\n...[truncated]"
+                return result_str
             except Exception as e:
                 return f"Error: {e}"
 

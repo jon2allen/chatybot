@@ -1222,23 +1222,13 @@ class ChatybotApp:
         model_alias = self.config_manager.active_model_alias
         model_config = self.config_manager.get_model_config(model_alias)
 
-        # Apple Foundation Model — on-device, non-OpenAI path
-        if model_config.get("type") == "apple_fm":
-            return await self._apple_fm_completion(prompt, stream=stream)
-
-        client = self.get_openai_client(model_alias)
-        model_name = model_config["name"]
-        
-        if isinstance(prompt, list):
-            messages = copy.deepcopy(prompt)
-        else:
+        # Command verb validation for string prompts (applies to all model types)
+        if not isinstance(prompt, list):
             stripped_prompt = prompt.lstrip()
-            # Check if prompt starts with a command verb without leading '/' or quotes
-            if stripped_prompt and not stripped_prompt.startswith(("/", '"', "'", "“", "‘")):
+            if stripped_prompt and not stripped_prompt.startswith(("/", '"', "'", "\u201c", "\u2018")):
                 match = re.match(r"^([a-zA-Z0-9_]+)", stripped_prompt)
                 if match:
                     first_word = match.group(1)
-                    # Resolve localized commands to canonical English commands before matching
                     canonical_word = first_word.lower()
                     if hasattr(self, "i18n"):
                         resolved = self.i18n.resolve_command("/" + canonical_word)
@@ -1249,6 +1239,17 @@ class ChatybotApp:
                             f"Error command verb at beginning:  {first_word} - use escape / sequence or use quotes around command verb to send to LLM"
                         )
                         return ""
+
+        # Apple Foundation Model — on-device, non-OpenAI path
+        if model_config.get("type") == "apple_fm":
+            return await self._apple_fm_completion(prompt, stream=stream)
+
+        client = self.get_openai_client(model_alias)
+        model_name = model_config["name"]
+
+        if isinstance(prompt, list):
+            messages = copy.deepcopy(prompt)
+        else:
             # Replace placeholders in the prompt - returns (text, image_list)
             full_prompt, image_list = self.buffer_manager.replace_placeholders(prompt)
 
@@ -2204,9 +2205,8 @@ class ChatybotApp:
             if self.buffer_manager.file_buffer:
                 full_prompt = f"File:\n{self.buffer_manager.file_buffer}\n\n{full_prompt}"
 
-            effective_tool_context = self.live_tool_context or self.tool_context
-            if self.tool_mode and effective_tool_context:
-                full_prompt = effective_tool_context + "\n\n" + full_prompt
+            # Tool context injection is deferred to after build_tools() check
+            # to avoid double-injecting schemas when native tools are active.
 
             if self.code_only_flag:
                 full_prompt = (
@@ -2246,6 +2246,9 @@ class ChatybotApp:
                             system_message = effective_tool_context + "\n\n" + system_message
                         else:
                             system_message = effective_tool_context
+                    else:
+                        # String prompt: inject into full_prompt
+                        full_prompt = effective_tool_context + "\n\n" + full_prompt
                     instr = (
                         self.live_agentic_instructions
                         or self.agentic_instructions
@@ -2291,6 +2294,17 @@ class ChatybotApp:
             tp = self.top_p
         else:
             tp = model_config.get("top_p")
+
+        # User live overrides take precedence over config defaults.
+        # If user explicitly set /top_p but top_k only comes from config,
+        # drop config top_k so user's top_p is respected (SDK allows only one).
+        if self.top_p is not None and self.top_p not in ("off", "none", "disable", False):
+            if self.top_k is None:
+                tk = None
+        # Conversely, if user explicitly set /top_k but top_p only comes from config.
+        if self.top_k is not None and self.top_k not in ("off", "none", "disable", False):
+            if self.top_p is None:
+                tp = None
 
         # Resolve seed: /seed override
         current_seed = None
@@ -2374,13 +2388,14 @@ class ChatybotApp:
 
             return full_response
         except Exception as e:
-            import traceback
-            traceback.print_exc()
             error_msg = f"Error during Apple FM completion: {str(e)}"
             print(error_msg)
             if self.logging_manager.logging_active:
                 self.logging_manager.log_message(error_msg)
             return f"Error: {str(e)}"
+        finally:
+            self.debug_response_mode = False
+            self.debug_response_raw = False
 
     async def execute_script_command(
         self, command: str, original_handler: Callable[[str], Union[bool, str]]
