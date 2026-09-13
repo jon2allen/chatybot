@@ -111,7 +111,11 @@ async def cmd_model(ctx: CommandContext, parts: list, command: str) -> CommandRe
         print(f"\nModel Information: {model_name} (alias: {model_alias})")
         print("-" * (20 + len(model_name) + len(model_alias)))
         print(f"Provider:        {model_config.get('vendor', 'Unknown')}")
-        print(f"Base URL:        {model_config.get('base_url', 'Default')}")
+        base_url = model_config.get('base_url', 'Default')
+        if base_url == "on-device":
+            print(f"Base URL:        (on-device, no network)")
+        else:
+            print(f"Base URL:        {base_url}")
 
         if context_window:
             if context_window >= 1000:

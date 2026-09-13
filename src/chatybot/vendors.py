@@ -31,6 +31,7 @@ VENDOR_PRESETS: dict[str, VendorPreset] = {
                                 "HF_API_KEY"),
     "ollama":     VendorPreset("ollama",     "http://localhost:11434/v1"),
     "llama_cpp":  VendorPreset("llama_cpp",  "http://localhost:8080/v1"),
+    "apple_fm":   VendorPreset("apple_fm",   "on-device", None, image_support=False),
     "jina":       VendorPreset("jina",       "https://api.jina.ai/v1/rerank",
                                "JINA_API_KEY", default_type="reranker"),
 }

@@ -25,6 +25,9 @@ dependencies = [
     "windows-curses; sys_platform == 'win32'"
 ]
 
+[project.optional-dependencies]
+apple_fm = ["apple-fm-sdk"]
+
 [project.urls]
 "Homepage" = "https://github.com/jon2allen/chatybot"
 "Documentation" = "https://github.com/jon2allen/chatybot/tree/master/doc"
