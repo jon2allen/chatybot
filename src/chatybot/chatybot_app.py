@@ -840,12 +840,21 @@ class ChatybotApp:
         return candidate
 
     def _extract_thinking_tokens(self, response_text: str) -> Tuple[Optional[str], str]:
-        """Extract reasoning traces (<think>...</think>) from response text."""
-        matches = re.findall(r"<think>(.*?)</think>|<thought>(.*?)</thought>", response_text, flags=re.DOTALL)
+        """Extract reasoning traces (<think>...</think>, <thought>...</thought>, <thinking>...</thinking>) from response text."""
+        matches = re.findall(
+            r"<(?:think|thought|thinking)>(.*?)</(?:think|thought|thinking)>",
+            response_text,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
         if matches:
-            thinking_parts = [(m[0] or m[1] or "").strip() for m in matches]
-            thinking_content = "\n\n".join(p for p in thinking_parts if p)
-            clean_text = re.sub(r"<think>.*?</think>\s*|<thought>.*?</thought>\s*", "", response_text, flags=re.DOTALL).strip()
+            thinking_parts = [m.strip() for m in matches if m.strip()]
+            thinking_content = "\n\n".join(thinking_parts)
+            clean_text = re.sub(
+                r"<(?:think|thought|thinking)>.*?</(?:think|thought|thinking)>\s*",
+                "",
+                response_text,
+                flags=re.DOTALL | re.IGNORECASE,
+            ).strip()
             return (thinking_content or None), clean_text
         return None, response_text
 
@@ -1262,7 +1271,7 @@ class ChatybotApp:
                 for past_p, past_r in self.chat_history:
                     messages.append({"role": "user", "content": past_p})
                     # Strip thinking tags from past assistant responses for token efficiency
-                    clean_r = re.sub(r"<think>.*?</think>\s*|<thought>.*?</thought>\s*", "", past_r, flags=re.DOTALL).strip()
+                    clean_r = re.sub(r"<(?:think|thought|thinking)>.*?</(?:think|thought|thinking)>\s*", "", past_r, flags=re.DOTALL | re.IGNORECASE).strip()
                     if not clean_r and past_r:
                         clean_r = past_r
                     messages.append({"role": "assistant", "content": clean_r})
@@ -3586,6 +3595,29 @@ class ChatybotApp:
         calls = self.extract_tool_calls(text)
         return calls[0] if calls else None
 
+    def get_known_tool_names(self) -> set:
+        """Return the set of all known/registered tool names including built-in and MCP tools."""
+        names = {
+            "run_command", "read_file", "write_file", "list_directory", "find_files",
+            "replace_file_content", "patch_file", "file_info", "delete_file",
+            "make_directory", "remove_directory", "read_url", "extract_code",
+            "ask_user", "get_context_metrics", "session_search", "session_get"
+        }
+        try:
+            cfg = self._load_tools_config()
+            if cfg and "tools" in cfg:
+                names.update(cfg["tools"].keys())
+        except Exception:
+            pass
+        if getattr(self, "mcp_manager", None) and getattr(self.mcp_manager, "cached_schemas", None):
+            for server, tlist in self.mcp_manager.cached_schemas.items():
+                for t in tlist:
+                    names.add(f"mcp__{server}__{t.name}")
+                    names.add(t.name)
+        if hasattr(self, "tool_overrides"):
+            names.update(self.tool_overrides.keys())
+        return names
+
     def extract_tool_calls(self, text: str) -> List[Dict[str, Any]]:
         """
         Extract all tool call JSON blocks from conversational text.
@@ -3600,6 +3632,8 @@ class ChatybotApp:
         import json
         import re
         from typing import Any, Dict, List, Optional
+
+        known_tools = self.get_known_tool_names()
 
         def clean_json_string(s: str) -> str:
             # Remove single line comments starting with // or #, respecting quotes across newlines
@@ -3870,7 +3904,8 @@ class ChatybotApp:
                         tool_name = str(k)
                         if "." in tool_name:
                             tool_name = tool_name.split(".")[-1]
-                        return {"tool": tool_name, "arguments": v}
+                        if tool_name in known_tools or tool_name.startswith("mcp__"):
+                            return {"tool": tool_name, "arguments": v}
             return None
 
         def parse_xml_param_value(val_str: str) -> Any:
@@ -4097,8 +4132,6 @@ class ChatybotApp:
             )
             for m in fence_pattern.finditer(s):
                 blocks.append(m.group(1))
-            if not blocks:
-                blocks.append(s)
 
             for block in blocks:
                 lines = [line.rstrip() for line in block.splitlines()]
@@ -4113,7 +4146,7 @@ class ChatybotApp:
                         re.IGNORECASE
                     )
                     if m_tool:
-                        if tool_name:
+                        if tool_name and (tool_name in known_tools or tool_name.startswith("mcp__")):
                             call_obj = {"tool": tool_name, "arguments": args}
                             if call_obj not in calls:
                                 calls.append(call_obj)
@@ -4140,7 +4173,7 @@ class ChatybotApp:
                             p_name = m_param.group(1).strip()
                             p_val = m_param.group(2).strip()
                             args[p_name] = parse_xml_param_value(p_val)
-                if tool_name:
+                if tool_name and (tool_name in known_tools or tool_name.startswith("mcp__")):
                     call_obj = {"tool": tool_name, "arguments": args}
                     if call_obj not in calls:
                         calls.append(call_obj)
@@ -4297,6 +4330,31 @@ class ChatybotApp:
         )
         text_for_json = re.sub(
             r'<[｜\|]+DSML[｜\|]+\s*invoke\s+name=["\']([^"\']+)["\'][^>]*>(.*?)(?:</[｜\|]+DSML[｜\|]+\s*invoke>|(?=<[｜\|]+DSML[｜\|]+\s*invoke)|$)',
+            ' ',
+            text_for_json,
+            flags=re.IGNORECASE | re.DOTALL
+        )
+        # Remove extracted XML tool call blocks before JSON scanner loop to avoid duplicates
+        text_for_json = re.sub(
+            r'<(?:tool_call|function_call|action|tool)>.*?</(?:tool_call|function_call|action|tool)>',
+            ' ',
+            text_for_json,
+            flags=re.IGNORECASE | re.DOTALL
+        )
+        text_for_json = re.sub(
+            r'<(?:tool|tool_call|call)\s+name=["\'][^"\']+["\'][^>]*>.*?</(?:tool|tool_call|call)>',
+            ' ',
+            text_for_json,
+            flags=re.IGNORECASE | re.DOTALL
+        )
+        text_for_json = re.sub(
+            r'<invoke\s+name=["\'][^"\']+["\'][^>]*>.*?</invoke>',
+            ' ',
+            text_for_json,
+            flags=re.IGNORECASE | re.DOTALL
+        )
+        text_for_json = re.sub(
+            r'<(?:function|tool|call)=[a-zA-Z0-9_\-\.]+[^>]*>.*?</(?:function|tool|call)>',
             ' ',
             text_for_json,
             flags=re.IGNORECASE | re.DOTALL

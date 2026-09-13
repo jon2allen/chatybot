@@ -102,11 +102,6 @@ def ask_user(
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-def _in_script(app: Any) -> bool:
-    """Return True when a .chatdsl script is currently executing."""
-    return bool(app and getattr(app, "script_context", False))
-
-
 def _is_interactive(app: Any = None) -> bool:
     """Return True only when stdin is a TTY and the process is in the foreground.
 

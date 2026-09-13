@@ -460,7 +460,7 @@ class BufferManager:
                 
                 if strip_thinking:
                     import re
-                    content = re.sub(r"<think>.*?</think>\s*|<thought>.*?</thought>\s*", "", content, flags=re.DOTALL)
+                    content = re.sub(r"<(?:think|thought|thinking)>.*?</(?:think|thought|thinking)>\s*", "", content, flags=re.DOTALL | re.IGNORECASE)
             return content
             
         # Script variables
