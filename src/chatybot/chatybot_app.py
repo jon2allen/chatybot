@@ -3614,6 +3614,60 @@ class ChatybotApp:
 
         def extract_xml_tool_calls(s: str) -> List[Dict[str, Any]]:
             xml_calls = []
+
+            # 1. Container tags with child elements: <tool_use> or <tool_call> with <tool_name> / <name>
+            container_pattern = re.compile(
+                r'<(?:tool_use|tool_call)[^>]*>(.*?)</(?:tool_use|tool_call)>',
+                re.IGNORECASE | re.DOTALL
+            )
+            for c_match in container_pattern.finditer(s):
+                c_body = c_match.group(1)
+                name_match = re.search(
+                    r'<(?:tool_name|name)[^>]*>(.*?)</(?:tool_name|name)>',
+                    c_body,
+                    re.IGNORECASE | re.DOTALL
+                )
+                if name_match:
+                    t_name = name_match.group(1).strip()
+                    server_match = re.search(
+                        r'<server_name[^>]*>(.*?)</server_name>',
+                        c_body,
+                        re.IGNORECASE | re.DOTALL
+                    )
+                    if server_match:
+                        s_name = server_match.group(1).strip()
+                        if s_name.lower() not in ("", "none", "null", "local") and not t_name.startswith("mcp__"):
+                            t_name = f"mcp__{s_name}__{t_name}"
+                    if "." in t_name:
+                        t_name = t_name.split(".")[-1]
+
+                    args = {}
+                    args_match = re.search(
+                        r'<(?:arguments|parameters|args)[^>]*>(.*?)</(?:arguments|parameters|args)>',
+                        c_body,
+                        re.IGNORECASE | re.DOTALL
+                    )
+                    args_body = args_match.group(1).strip() if args_match else ""
+                    if args_body:
+                        if args_body.startswith("{") and args_body.endswith("}"):
+                            try:
+                                parsed = json.loads(args_body)
+                                if isinstance(parsed, dict):
+                                    args = parsed
+                            except Exception:
+                                pass
+                        if not args:
+                            param_pattern = re.compile(
+                                r'<(?:parameter|param|arg|argument)(?:[\s:=]+|[\s:=]*name\s*=\s*)["\']?([a-zA-Z0-9_\-\.]+)["\']?\s*(?:value=["\']?(.*?)["\']?)?\s*>(.*?)</(?:parameter|param|arg|argument)[^>]*>',
+                                re.IGNORECASE | re.DOTALL
+                            )
+                            for p_match in param_pattern.finditer(args_body):
+                                p_name = p_match.group(1).strip()
+                                raw_val = p_match.group(2) if p_match.group(2) is not None else p_match.group(3)
+                                args[p_name] = parse_xml_param_value(raw_val)
+                    xml_calls.append({"tool": t_name, "arguments": args})
+
+            # 2. Inline tag pattern: <function=...>, <invoke name="...">, etc.
             fn_block_pattern = re.compile(
                 r'<(?:function|invoke|call|tool)(?:[\s:=]+|[\s:=]*name\s*=\s*)["\']?([a-zA-Z0-9_\-\.]+)["\']?\s*>(.*?)</(?:function|invoke|call|tool)[^>]*>',
                 re.IGNORECASE | re.DOTALL
@@ -3656,7 +3710,9 @@ class ChatybotApp:
                                     args = parsed
                             except Exception:
                                 pass
-                xml_calls.append({"tool": tool_name, "arguments": args})
+                call_obj = {"tool": tool_name, "arguments": args}
+                if call_obj not in xml_calls:
+                    xml_calls.append(call_obj)
             return xml_calls
 
         # Clean JSON strings and helper procedures

@@ -1216,6 +1216,38 @@ invoke<invoke name="run_command">
         assert tag_calls[0]["tool"] == "read_file"
         assert tag_calls[0]["arguments"] == {"path": "test.py"}
 
+        # Test MCP/Anthropic container <tool_use> with <tool_name> and JSON <arguments>
+        mcp_xml = '''
+I'll find the file and replace "generic" with "general" in the code.
+
+<tool_use>
+<server_name>none</server_name>
+<tool_name>find_files</tool_name>
+<arguments>
+{"path": "pascal_2", "pattern": "*.pas"}
+</arguments>
+</tool_use>
+'''
+        mcp_calls = app.extract_tool_calls(mcp_xml)
+        assert len(mcp_calls) == 1
+        assert mcp_calls[0]["tool"] == "find_files"
+        assert mcp_calls[0]["arguments"] == {"path": "pascal_2", "pattern": "*.pas"}
+
+        # Test MCP container with active server name and XML parameters
+        mcp_server_xml = '''
+<tool_use>
+<server_name>git_server</server_name>
+<tool_name>status</tool_name>
+<arguments>
+<parameter name="verbose">true</parameter>
+</arguments>
+</tool_use>
+'''
+        mcp_server_calls = app.extract_tool_calls(mcp_server_xml)
+        assert len(mcp_server_calls) == 1
+        assert mcp_server_calls[0]["tool"] == "mcp__git_server__status"
+        assert mcp_server_calls[0]["arguments"] == {"verbose": True}
+
     @pytest.mark.anyio
     async def test_tool_translate_command(self, app):
         """Verifies /tool translate command converts XML tool calls into canonical JSON string"""
