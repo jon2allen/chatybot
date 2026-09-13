@@ -3715,12 +3715,72 @@ class ChatybotApp:
                     xml_calls.append(call_obj)
             return xml_calls
 
+        def extract_kv_tool_calls(s: str) -> List[Dict[str, Any]]:
+            calls = []
+            blocks = []
+            fence_pattern = re.compile(
+                r'```(?:yaml|yml|text|tool|)?\s*\n(.*?)\n```',
+                re.DOTALL | re.IGNORECASE
+            )
+            for m in fence_pattern.finditer(s):
+                blocks.append(m.group(1))
+            if not blocks:
+                blocks.append(s)
+
+            for block in blocks:
+                lines = [line.rstrip() for line in block.splitlines()]
+                tool_name = None
+                args = {}
+                for line in lines:
+                    if not line.strip():
+                        continue
+                    m_tool = re.match(
+                        r'^\s*(?:tool|tool_name|function)\s*:\s*["\']?([a-zA-Z0-9_\-\.]+)["\']?\s*$',
+                        line,
+                        re.IGNORECASE
+                    )
+                    if m_tool:
+                        if tool_name:
+                            calls.append({"tool": tool_name, "arguments": args})
+                            args = {}
+                        tool_name = m_tool.group(1).strip()
+                        if "." in tool_name:
+                            tool_name = tool_name.split(".")[-1]
+                        continue
+                    if tool_name:
+                        m_args_header = re.match(
+                            r'^\s*(?:arguments|parameters|args)\s*:\s*(.*)$',
+                            line,
+                            re.IGNORECASE
+                        )
+                        if m_args_header:
+                            rest = m_args_header.group(1).strip()
+                            if rest.startswith("{") and rest.endswith("}"):
+                                try:
+                                    args = json.loads(rest)
+                                except Exception:
+                                    pass
+                            continue
+                        m_param = re.match(r'^\s*([a-zA-Z0-9_\-\.]+)\s*:\s*(.*)$', line)
+                        if m_param:
+                            p_name = m_param.group(1).strip()
+                            p_val = m_param.group(2).strip()
+                            args[p_name] = parse_xml_param_value(p_val)
+                if tool_name:
+                    calls.append({"tool": tool_name, "arguments": args})
+            return calls
+
         # Clean JSON strings and helper procedures
         xml_tool_calls = extract_xml_tool_calls(text)
         tool_calls = []
         for xcall in xml_tool_calls:
             if xcall not in tool_calls:
                 tool_calls.append(xcall)
+
+        kv_tool_calls = extract_kv_tool_calls(text)
+        for kvcall in kv_tool_calls:
+            if kvcall not in tool_calls:
+                tool_calls.append(kvcall)
 
         def clean_json_string(s: str) -> str:
             # Remove single line comments starting with // or #, respecting quotes across newlines
@@ -3874,10 +3934,70 @@ class ChatybotApp:
                 return [sanitize_json_types(item) for item in obj]
             return obj
 
+        def repair_json_unescaped_quotes(s: str) -> str:
+            out = []
+            i = 0
+            n = len(s)
+            in_string = False
+            expecting_key = True
+
+            while i < n:
+                c = s[i]
+                if c == "\\":
+                    out.append(c)
+                    if i + 1 < n:
+                        out.append(s[i + 1])
+                        i += 2
+                    else:
+                        i += 1
+                    continue
+
+                if c == '"':
+                    if not in_string:
+                        in_string = True
+                        out.append(c)
+                        i += 1
+                    else:
+                        peek = i + 1
+                        while peek < n and s[peek] in " \t\r\n":
+                            peek += 1
+                        if expecting_key and peek < n and s[peek] == ':':
+                            in_string = False
+                            expecting_key = False
+                            out.append(c)
+                            i += 1
+                        elif not expecting_key and peek < n and s[peek] in (',', '}', ']'):
+                            in_string = False
+                            if s[peek] == ',':
+                                expecting_key = True
+                            out.append(c)
+                            i += 1
+                        else:
+                            out.append('\\"')
+                            i += 1
+                else:
+                    if not in_string:
+                        if c in ('{', ','):
+                            expecting_key = True
+                        elif c == ':':
+                            expecting_key = False
+                    out.append(c)
+                    i += 1
+
+            return "".join(out)
+
         def parse_json_or_dict(s: str) -> Optional[Dict[str, Any]]:
             try:
                 cleaned = clean_json_string(s)
                 data = json.loads(cleaned)
+                if isinstance(data, dict):
+                    return sanitize_json_types(data)
+            except Exception:
+                pass
+
+            try:
+                repaired = repair_json_unescaped_quotes(cleaned if 'cleaned' in locals() else s)
+                data = json.loads(repaired)
                 if isinstance(data, dict):
                     return sanitize_json_types(data)
             except Exception:

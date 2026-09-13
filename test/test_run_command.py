@@ -1248,6 +1248,44 @@ I'll find the file and replace "generic" with "general" in the code.
         assert mcp_server_calls[0]["tool"] == "mcp__git_server__status"
         assert mcp_server_calls[0]["arguments"] == {"verbose": True}
 
+        # Test YAML/Key-Value block format (Turns 17 & 18)
+        kv_yaml = '''
+I'll read the current Pascal file and fix the box alignment issues.
+
+```
+tool: read_file
+path: pascal_3/stack_simulator.pas
+```
+'''
+        kv_calls = app.extract_tool_calls(kv_yaml)
+        assert len(kv_calls) == 1
+        assert kv_calls[0]["tool"] == "read_file"
+        assert kv_calls[0]["arguments"] == {"path": "pascal_3/stack_simulator.pas"}
+
+        # Test YAML block with arguments mapping
+        kv_yaml_args = '''
+```yaml
+tool: run_command
+command: ls -la
+timeout: 30
+```
+'''
+        kv_args_calls = app.extract_tool_calls(kv_yaml_args)
+        assert len(kv_args_calls) == 1
+        assert kv_args_calls[0]["tool"] == "run_command"
+        assert kv_args_calls[0]["arguments"] == {"command": "ls -la", "timeout": 30}
+
+        # Test JSON with unescaped inner quotes (Turn 19)
+        json_unescaped = '''
+```json
+{"tool": "run_command", "arguments": {"command": "cd pascal_3 && echo "1\\n5\\n4" | ./stack_simulator"}}
+```
+'''
+        unescaped_calls = app.extract_tool_calls(json_unescaped)
+        assert len(unescaped_calls) == 1
+        assert unescaped_calls[0]["tool"] == "run_command"
+        assert unescaped_calls[0]["arguments"]["command"] == 'cd pascal_3 && echo "1\n5\n4" | ./stack_simulator'
+
     @pytest.mark.anyio
     async def test_tool_translate_command(self, app):
         """Verifies /tool translate command converts XML tool calls into canonical JSON string"""
