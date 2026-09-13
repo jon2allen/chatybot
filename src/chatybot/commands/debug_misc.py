@@ -230,30 +230,30 @@ async def cmd_logging(ctx: CommandContext, parts: list, command: str) -> Command
     return CommandResult.ok()
 
 
-@command("/save", help="Save chat history to a file", args="<file> [all] [nothink|withthink]", category="debug")
+@command("/save", help="Save response or chat history (omits thinking by default)", args="<file> [all] [withthink|raw|nothink]", category="debug")
 async def cmd_save(ctx: CommandContext, parts: list, command: str) -> CommandResult:
     app = ctx.app
     if len(parts) < 2:
-        print("Usage: /save <file> [all] [nothink]")
-        print("  /save file.txt - Save last response (omits thinking if /thinking is OFF)")
-        print("  /save file.txt all - Save all chat history")
-        print("  /save file.txt nothink - Force exclude thinking blocks")
-        print("  /save file.txt withthink - Force include thinking blocks")
+        print("Usage: /save <file> [all] [withthink|raw|nothink]")
+        print("  /save file.txt           - Save last response (omits thinking blocks by default)")
+        print("  /save file.txt all       - Save all chat history (omits thinking blocks by default)")
+        print("  /save file.txt withthink - Force include thinking blocks (or 'raw')")
+        print("  /save file.txt nothink   - Force exclude thinking blocks (default, or 'clean')")
         return CommandResult.ok()
 
     save_all = False
-    strip_thinking = not app.show_thinking
+    strip_thinking = True
 
     words = command.split()
     while len(words) > 2:
         last_word = words[-1].lower().strip(" \"'")
-        if last_word == "all":
+        if last_word in ("all", "todo", "todos", "tous", "tout", "全部", "所有", "tutti", "tutto", "الكل", "كل"):
             save_all = True
             words.pop()
-        elif last_word in ("nothink", "no-think", "nothinking", "no-thinking"):
+        elif last_word in ("nothink", "no-think", "nothinking", "no-thinking", "clean", "sinpensar", "sanspenser", "无思考", "senzapensare", "بدون_تفكير"):
             strip_thinking = True
             words.pop()
-        elif last_word in ("withthink", "with-think", "withthinking", "with-thinking"):
+        elif last_word in ("withthink", "with-think", "withthinking", "with-thinking", "raw", "conpensar", "avecpenser", "含思考", "conpensare", "مع_تفكير", "crudo", "brut", "原始内容", "grezzo", "خام"):
             strip_thinking = False
             words.pop()
         else:
@@ -266,9 +266,10 @@ async def cmd_save(ctx: CommandContext, parts: list, command: str) -> CommandRes
         return CommandResult.ok()
 
     def clean_thinking(text: str) -> str:
-        return re.sub(
-            r"<think>.*?</think>\s*|<thought>.*?</thought>\s*", "", text, flags=re.DOTALL
+        cleaned = re.sub(
+            r"<(think|thought|thinking)>.*?(</\1>|$)\s*", "", text, flags=re.DOTALL | re.IGNORECASE
         )
+        return cleaned.lstrip("\r\n")
 
     try:
         directory = os.path.dirname(file_path)

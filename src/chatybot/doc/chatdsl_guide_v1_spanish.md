@@ -758,7 +758,7 @@ src/chatybot/profiles/          # Perfiles preestablecidos
 | `/solo_codigo` | Archivo | `/solo_codigo` | Habilitar formato de salida de solo código |
 | `/codigo_desact` | Archivo | `/codigo_desact` | Deshabilitar formato de salida de solo código |
 | `/multilinea` | Archivo | `/multilinea` | Alternar modo de entrada multilinea |
-| `/guardar` | Archivo | `/guardar archivo [all] [nothink\|withthink]` | Guardar última respuesta del LLM |
+| `/guardar` | Archivo | `/guardar archivo [all] [withthink\|raw\|nothink]` | Guardar última respuesta del LLM (omite razonamiento por defecto; withthink/raw lo incluye) |
 | `/prompt` | Archivo | `/prompt archivo` | Cargar y ejecutar archivo de prompt |
 
 ### Comandos de Generación de Imágenes
@@ -1073,7 +1073,7 @@ Write Python code to solve this problem.
 ### Archivo
 - `/archivo ruta` - Cargar a búfer
 - `/banco_arch1-5` - Gestión de bancos de archivos
-- `/guardar archivo [all] [nothink|withthink]` - Guardar respuesta
+- `/guardar archivo [all] [withthink|raw|nothink]` - Guardar respuesta (omite razonamiento por defecto)
 - `/multilinea` - Prompts complejos
 - `/prompt archivo` - Ejecutar archivo de prompt
 

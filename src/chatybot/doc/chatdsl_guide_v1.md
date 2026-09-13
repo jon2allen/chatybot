@@ -888,7 +888,7 @@ set my_limit = 16000
 | `/codeonly` | File | `/codeonly` | Enable code-only formatting |
 | `/codeoff` | File | `/codeoff` | Disable code-only formatting |
 | `/multiline` | File | `/multiline` | Toggle multiline input mode |
-| `/save` | File | `/save file [all] [nothink\|withthink]` | Save last LLM response |
+| `/save` | File | `/save file [all] [withthink\|raw\|nothink]` | Save last LLM response (omits thinking by default; withthink/raw includes) |
 | `/prompt` | File | `/prompt file` | Load and execute prompt file |
 
 > **Note:** Interactively, `/prompt` shows the file content and asks for confirmation before executing. In script context, it auto-executes without confirmation.
@@ -1210,7 +1210,7 @@ Write Python code to solve this problem.
 ### File
 - `/file path` - Load to buffer
 - `/filebank1-5` - File bank management
-- `/save file [all] [nothink|withthink]` - Save response
+- `/save file [all] [withthink|raw|nothink]` - Save response (omits thinking by default)
 - `/multiline` - Complex prompts
 - `/prompt file` - Execute prompt file
 

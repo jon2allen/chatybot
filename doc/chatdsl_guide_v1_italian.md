@@ -758,7 +758,7 @@ src/chatybot/profiles/          # Profili predefiniti
 | `/solo_codice` | File | `/solo_codice` | Abilita la formattazione solo codice |
 | `/codice_off` | File | `/codice_off` | Disabilita la formattazione solo codice |
 | `/multilinea` | File | `/multilinea` | Attiva/disattiva la modalità input multilinea |
-| `/salva` | File | `/salva file [all] [nothink\|withthink]` | Salva l'ultima risposta del LLM |
+| `/salva` | File | `/salva file [all] [withthink\|raw\|nothink]` | Salva l'ultima risposta del LLM (omette i pensieri per impostazione predefinita; withthink/raw li include) |
 | `/prompt` | File | `/prompt file` | Carica ed esegue il file di prompt |
 
 ### Comandi di Generazione delle Immagini
@@ -1073,7 +1073,7 @@ Write Python code to solve this problem.
 ### File
 - `/file percorso` - Carica nel buffer
 - `/archivio_file1-5` - Gestione archivi file
-- `/salva file [all] [nothink|withthink]` - Salva risposta
+- `/salva file [all] [withthink|raw|nothink]` - Salva risposta (omette i pensieri per impostazione predefinita)
 - `/multilinea` - Prompt complessi
 - `/prompt file` - Esegui file di prompt
 
