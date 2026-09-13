@@ -758,7 +758,7 @@ src/chatybot/profiles/          # Profils prédéfinis
 | `/code_uniquement` | Fichier | `/code_uniquement` | Activer le formatage de sortie de code uniquement |
 | `/code_desactive` | Fichier | `/code_desactive` | Désactiver le formatage de sortie de code uniquement |
 | `/multiligne` | Fichier | `/multiligne` | Alterner le mode d'entrée multiligne |
-| `/sauvegarder` | Fichier | `/sauvegarder fichier [all] [nothink\|withthink]` | Sauvegarder la dernière réponse du LLM |
+| `/sauvegarder` | Fichier | `/sauvegarder fichier [all] [withthink\|raw\|nothink]` | Sauvegarder la dernière réponse du LLM (omet la réflexion par défaut; withthink/raw l'inclut) |
 | `/prompt` | Fichier | `/prompt fichier` | Charger et exécuter un fichier de prompt |
 
 ### Commandes de Génération d'Images
@@ -1073,7 +1073,7 @@ Write Python code to solve this problem.
 ### Fichier
 - `/fichier chemin` - Charger dans le tampon
 - `/banque_fich1-5` - Gestion des banques de fichiers
-- `/sauvegarder fichier [all] [nothink|withthink]` - Enregistrer la réponse
+- `/sauvegarder fichier [all] [withthink|raw|nothink]` - Enregistrer la réponse (omet la réflexion par défaut)
 - `/multiligne` - Prompts complexes
 - `/prompt fichier` - Exécuter le fichier de prompt
 

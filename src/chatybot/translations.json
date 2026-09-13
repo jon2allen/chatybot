@@ -88,6 +88,9 @@
       "limit": "limit",
       "scratch": "scratch",
       "clean": "clean",
+      "nothink": "nothink",
+      "withthink": "withthink",
+      "raw": "raw",
       "current": "current",
       "model": "model",
       "var": "var",
@@ -361,6 +364,9 @@
       "scratch": "scratch",
       "borrador": "scratch",
       "limpiar": "clean",
+      "sinpensar": "nothink",
+      "conpensar": "withthink",
+      "crudo": "raw",
       "actual": "current",
       "corriente": "current",
       "current": "current",
@@ -574,7 +580,7 @@
           "short_desc": "Carga un prompt desde un archivo de texto"
         },
         "/save": {
-          "short_desc": "Guarda la última respuesta de chat en un archivo"
+          "short_desc": "Guarda la respuesta o historial en un archivo (omite razonamiento por defecto)"
         },
         "/notemode": {
           "short_desc": "Alterna el modo de notas para guardar respuestas"
@@ -876,6 +882,9 @@
       "limite": "limit",
       "scratch": "scratch",
       "brouillon": "scratch",
+      "sanspenser": "nothink",
+      "avecpenser": "withthink",
+      "brut": "raw",
       "actuel": "current",
       "courant": "current",
       "current": "current",
@@ -1089,7 +1098,7 @@
           "short_desc": "Charge une invite de prompt depuis un fichier"
         },
         "/save": {
-          "short_desc": "Sauvegarde la dernière réponse dans un fichier externe"
+          "short_desc": "Sauvegarde la réponse ou l'historique dans un fichier (omet la réflexion par défaut)"
         },
         "/notemode": {
           "short_desc": "Bascule le format de prise de notes lors de la sauvegarde"
@@ -1387,6 +1396,9 @@
       "暂存": "scratch",
       "清空": "clean",
       "清除": "clean",
+      "无思考": "nothink",
+      "含思考": "withthink",
+      "原始内容": "raw",
       "当前": "current",
       "最近": "current",
       "current": "current",
@@ -1600,7 +1612,7 @@
           "short_desc": "从指定文本文件中读取提示词"
         },
         "/save": {
-          "short_desc": "将最后一次的聊天生成内容保存至文件"
+          "short_desc": "将回复或历史保存到文件（默认忽略思考过程）"
         },
         "/notemode": {
           "short_desc": "切换是否以笔记格式保存内容"
@@ -1890,6 +1902,9 @@
       "scratch": "scratch",
       "bozza": "scratch",
       "pulire": "clean",
+      "senzapensare": "nothink",
+      "conpensare": "withthink",
+      "grezzo": "raw",
       "attuale": "current",
       "corrente": "current",
       "current": "current",
@@ -2103,7 +2118,7 @@
           "short_desc": "Carica un prompt da un file di testo"
         },
         "/save": {
-          "short_desc": "Salva l'ultima risposta ricevuta in un file"
+          "short_desc": "Salva la risposta o la cronologia su file (omette i pensieri per impostazione predefinita)"
         },
         "/notemode": {
           "short_desc": "Alterna la formattazione a blocco note per i file salvati"
@@ -2399,6 +2414,9 @@
       "scratch": "scratch",
       "مسودة": "scratch",
       "مسح": "clean",
+      "بدون_تفكير": "nothink",
+      "مع_تفكير": "withthink",
+      "خام": "raw",
       "حالي": "current",
       "current": "current",
       "نموذج": "model",
@@ -2611,7 +2629,7 @@
           "short_desc": "بيحمل موجه من ملف نصي"
         },
         "/save": {
-          "short_desc": "بيحفظ آخر رد بملف خارجي"
+          "short_desc": "حفظ الرد أو سجل المحادثة في ملف (يحذف كتل التفكير افتراضياً)"
         },
         "/notemode": {
           "short_desc": "بيفعل وضع الملاحظات عند الحفظ"

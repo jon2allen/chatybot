@@ -75,7 +75,7 @@ This table lists all available slash commands in ChatyBot, providing localized c
 | `/codeonly` | `/solo_codigo` | `/code_uniquement`| `/仅代码` | `/solo_codice` | Enable output-only code formatting |
 | `/codeoff` | `/codigo_desact` | `/code_desactive` | `/关闭仅代码` | `/codice_off` | Disable code-only formatting |
 | `/multiline` | `/multilinea` | `/multiligne` | `/多行输入` | `/multilinea` | Toggle block input mode ending with `;;` |
-| `/save` | `/guardar` | `/sauvegarder` | `/保存` | `/salva` | Save response (all, nothink, withthink) |
+| `/save` | `/guardar` | `/sauvegarder` | `/保存` | `/salva` | Save response without thinking by default (all, withthink/raw, nothink) |
 
 ### E. Image Generation Controls
 | Canonical (EN) | Spanish (ES) | French (FR) | Chinese (ZH) | Italian (IT) | Purpose / Description |

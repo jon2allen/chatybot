@@ -306,7 +306,7 @@ chat --> Hello!           # Start chatting!
 | `/notemode <on\|off>` | Toggle note block separation | `/notemode on` |
 | `/multiline` | Enter multi-line input | `/multiline` |
 | `/logging <start [hex]\|end\|hex [on\|off]>` | Start (with optional hex escaping) or stop logging | `/logging start hex` |
-| `/save <file> [all] [nothink\|withthink]` | Save last response or all history, with optional thinking stripping | `/save output.txt all nothink` |
+| `/save <file> [all] [withthink|raw|nothink]` | Save last response or all history (omits thinking by default; withthink/raw includes) | `/save output.txt` |
 | `/script <path>` | Execute a script | `/script setup.dsl` |
 | `/source <path>` | Execute a script dynamically in the current session | `/source ~/.chatybot_profile` |
 | `/profile [subcommand]` | Manage session profiles dynamically (list, use, clone, delete, export, import, show, edit) | `/profile use coding` |
@@ -1117,6 +1117,15 @@ September 10th, 2026 (v0.8.5)
 - **Cookbook & Documentation**:
   - Added Recipe 10.6 (*Non-Destructive Session Query and Turn Extraction*) to `doc/chatdsl_cookbook.md` and runnable script `doc/cookbook/10_6_session_query_and_extraction.chatdsl`.
   - Updated `README.md` with complete command specifications, tool calling configurations, and workflow recipes.
+
+September 13th, 2026 (v0.8.5)
+----------------------------
+- **Clean Output Saving by Default (`/save`)**:
+  - Refactored `/save` to strip `<think>`, `<thought>`, and `<thinking>` blocks by default, saving clean LLM outputs directly without leaking chain-of-thought traces.
+  - Decoupled `/save` behavior from `app.show_thinking` so saved files are clean regardless of whether interactive thinking is displayed in the terminal.
+  - Added explicit modifiers: `withthink` (or `raw`) to include thinking tags in saved files, and `nothink` (or `clean`) to explicitly exclude them.
+  - Enhanced thinking tag cleaning regex to support `<thinking>` tags and case-insensitivity, cleanly handling multiline reasoning and unclosed tags.
+  - Added full multilingual alias support (`conpensar`/`sinpensar`, `avecpenser`/`sanspenser`, `含思考`/`无思考`, `conpensare`/`senzapensare`, `مع_تفكير`/`بدون_تفكير`, `raw`/`crudo`/`brut`/`原始内容`/`grezzo`/`خام`).
 
 September 8th, 2026 (v0.8.4)
 ---------------------------

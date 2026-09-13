@@ -5277,7 +5277,7 @@ class ChatybotApp:
         print("  /listmodels - List available models from toml.")
         print("  /env [filter] - Display defined API keys and environment variables (set | grep -i api).")
         print("  /logging <start [hex]|end|hex [on|off]> - Start (with optional hex mode) or stop logging.")
-        print("  /save <file> [all] [nothink|withthink] - Save last completion or all history to a file (respects /thinking state by default).")
+        print("  /save <file> [all] [withthink|raw|nothink] - Save last completion or all history to a file (omits thinking by default; use withthink/raw to include).")
         print("  /notemode <on|off> - Toggle note mode for /save command.")
         print("  /codeonly - Set flag to generate code only without explanations.")
         print("  /codeoff - Reverse the code-only flag.")
