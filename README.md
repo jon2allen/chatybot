@@ -635,7 +635,7 @@ Chatybot's extraction engine automatically recognizes, parses, and normalizes al
 | **3. Named Function Object** | `{"name": "list_directory", "arguments": {"path": "src/project"}}` | OpenAI Function Calling, Qwen |
 | **4. Function Call Object** | `{"function": "list_directory", "arguments": {"path": "src/project"}}` | Llama-3-Groq-ToolUse, Hermes |
 | **5. Header-Prefixed Tool Call** | `<\|tool_call\|>call:list_directory{"path": "src/project"}<\|tool_call\|>` | Gemma 4, FunctionGemma, Granite |
-| **6. XML / Function & Invoke Tag Syntax** | `<tool_calls><invoke name="run_command"><parameter name="command">git status</parameter></invoke></tool_calls>` or `<tool_call><function name="list_directory"><parameter name="path">src/project</parameter></function></tool_call>` | Anthropic XML, Google AI Studio / Gemini, DeepSeek, Command-R+ |
+| **6. XML / Function, Invoke & Tool-Use Syntax** | `<tool_use><tool_name>find_files</tool_name><arguments>{"path": "dir"}</arguments></tool_use>` or `<invoke name="run_command"><parameter name="command">git status</parameter></invoke>` | Anthropic XML, MCP, Google AI Studio / Gemini, DeepSeek, Command-R+ |
 | **7. Python-style / Single-Quoted Dicts** | `{'tool': 'list_directory', 'arguments': {'path': 'src/project'}}` | Python literal output (auto-repaired via AST / JSON repair) |
 | **8. Unquoted Key JSON** | `{tool: list_directory, arguments: {path: "src/project"}}` | Auto-repaired and normalized |
 
