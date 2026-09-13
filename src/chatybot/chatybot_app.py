@@ -1220,8 +1220,13 @@ class ChatybotApp:
             The model's response
         """
         model_alias = self.config_manager.active_model_alias
-        client = self.get_openai_client(model_alias)
         model_config = self.config_manager.get_model_config(model_alias)
+
+        # Apple Foundation Model — on-device, non-OpenAI path
+        if model_config.get("type") == "apple_fm":
+            return await self._apple_fm_completion(prompt, stream=stream)
+
+        client = self.get_openai_client(model_alias)
         model_name = model_config["name"]
         
         if isinstance(prompt, list):
@@ -2147,6 +2152,187 @@ class ChatybotApp:
             # even when the API call raises before the flags are consumed.
             self.debug_response_mode = False
             self.debug_response_raw = False
+
+    async def _apple_fm_completion(self, prompt, stream: bool = False) -> str:
+        """
+        Handle chat completion via Apple's on-device Foundation Model.
+
+        This is a parallel path to ``chat_completion`` for the ``apple_fm``
+        model type. It bypasses the OpenAI client entirely and uses the
+        ``apple-fm-sdk`` package for on-device inference.
+
+        Supports the same post-processing as ``chat_completion``: logging,
+        chat history, session activity, and tool auto-launch.
+        """
+        from .apple_fm_backend import check_available, create_session, respond, stream_response, build_tools
+
+        ready, reason = check_available()
+        if not ready:
+            print(f"Error: {reason}")
+            return ""
+
+        model_alias = self.config_manager.active_model_alias
+        model_config = self.config_manager.get_model_config(model_alias)
+        model_name = model_config.get("name", "Apple Foundation Model")
+
+        # --- Build the full prompt text ---
+        if isinstance(prompt, list):
+            # Messages list (from tool loop) — concatenate into text
+            parts = []
+            for msg in prompt:
+                role = msg.get("role", "user")
+                content = msg.get("content", "")
+                if isinstance(content, list):
+                    text_parts = []
+                    for item in content:
+                        if isinstance(item, dict) and item.get("type") == "text":
+                            text_parts.append(item.get("text", ""))
+                    content = "".join(text_parts)
+                if role == "system":
+                    parts.append(content)
+                elif role == "user":
+                    parts.append(f"User: {content}")
+                elif role == "assistant":
+                    parts.append(f"Assistant: {content}")
+            full_prompt = "\n\n".join(parts)
+        else:
+            # String prompt — do buffer/tool_context prep
+            full_prompt, image_list = self.buffer_manager.replace_placeholders(prompt)
+
+            if self.buffer_manager.prompt_buffer:
+                full_prompt = self.buffer_manager.prompt_buffer + "\n\n" + full_prompt
+            if self.buffer_manager.file_buffer:
+                full_prompt = f"File:\n{self.buffer_manager.file_buffer}\n\n{full_prompt}"
+
+            effective_tool_context = self.live_tool_context or self.tool_context
+            if self.tool_mode and effective_tool_context:
+                full_prompt = effective_tool_context + "\n\n" + full_prompt
+
+            if self.code_only_flag:
+                full_prompt = (
+                    "Do not explain or describe the code - generate the code requested only. "
+                    + full_prompt
+                )
+
+            # Include chat history
+            if self.enable_chat_history and self.chat_history:
+                history_parts = []
+                for past_p, past_r in self.chat_history:
+                    clean_r = re.sub(
+                        r"<(?:think|thought|thinking)>.*?</(?:think|thought|thinking)>\s*",
+                        "",
+                        past_r,
+                        flags=re.DOTALL | re.IGNORECASE,
+                    ).strip()
+                    if not clean_r and past_r:
+                        clean_r = past_r
+                    history_parts.append(f"User: {past_p}")
+                    history_parts.append(f"Assistant: {clean_r}")
+                full_prompt = "\n\n".join(history_parts) + "\n\n" + full_prompt
+
+        # --- Build system message / instructions ---
+        system_message = self.config_manager.system_message
+
+        # --- Build native tools (when tool_mode is enabled) ---
+        fm_tools = None
+        if self.tool_mode:
+            fm_tools = build_tools(self)
+            if not fm_tools:
+                # No tools built — fall back to prompt-injection approach
+                effective_tool_context = self.live_tool_context or self.tool_context
+                if effective_tool_context:
+                    if isinstance(prompt, list):
+                        if system_message:
+                            system_message = effective_tool_context + "\n\n" + system_message
+                        else:
+                            system_message = effective_tool_context
+                    instr = (
+                        self.live_agentic_instructions
+                        or self.agentic_instructions
+                        or self.default_agentic_instructions
+                    )
+                    if system_message:
+                        system_message += f"\n\n{instr}"
+                    else:
+                        system_message = instr
+            # If fm_tools were built, the SDK handles tool calling natively.
+            # No prompt injection needed — tools are registered with the session.
+
+        # --- Create session and generate ---
+        session, err = create_session(instructions=system_message, tools=fm_tools)
+        if err:
+            print(f"Error: {err}")
+            return ""
+
+        try:
+            start_time = time.time()
+            print("Assistant: ", end="", flush=True)
+
+            if stream:
+                full_response = ""
+                async for chunk in stream_response(session, full_prompt):
+                    print(chunk, end="", flush=True)
+                    full_response += chunk
+            else:
+                full_response = await respond(session, full_prompt)
+                print(full_response, end="")
+
+            elapsed_time = time.time() - start_time
+            print(f"\nExecution time: {elapsed_time:.2f} seconds")
+
+            # --- Post-processing (mirrors chat_completion) ---
+            if self.logging_manager.logging_active:
+                current_time = self.logging_manager.format_datetime(datetime.now())
+                self.logging_manager.log_message(f"Datetime: {current_time}")
+                self.logging_manager.log_message(f"Model: {model_alias} ({model_name})")
+                self.logging_manager.log_message(f"User: {prompt}")
+
+            if not self.in_tool_loop:
+                self.session_activity.append({
+                    "type": "prompt",
+                    "text": prompt,
+                    "model": model_alias,
+                    "timestamp": datetime.now().isoformat(),
+                })
+                self.last_prompt = prompt
+                self.last_response = full_response
+                self.buffer_manager.set_script_var('LAST_RESPONSE', full_response)
+                self.buffer_manager.set_script_var('LAST_COMPLETION', full_response)
+
+            if not self.in_tool_loop and self.enable_chat_history:
+                self.chat_history.append((prompt, full_response))
+                if self.session_mode != "off":
+                    _completion_timing = {
+                        "timestamp": datetime.now().isoformat(),
+                        "elapsed_ms": round(elapsed_time * 1000, 1),
+                    }
+                    self.append_session_turn(prompt, full_response, timing=_completion_timing)
+                if self.tool_auto and self.extract_tool_calls(full_response):
+                    print("Tool call detected in response. Auto-launching agentic tool loop...")
+                    await self.execute_tool_loop(max_turns=self.max_turns)
+                    if self.chat_history:
+                        _, final_resp = self.chat_history[-1]
+                        return final_resp
+            elif not self.in_tool_loop and not self.enable_chat_history:
+                self.chat_history = [(prompt, full_response)]
+                if self.extract_tool_calls(full_response):
+                    print("Notice: Agentic tool loop skipped (chat history is disabled).")
+
+            if self.logging_manager.logging_active:
+                self.logging_manager.log_message(
+                    f"\nExecution time: {elapsed_time:.2f} seconds"
+                )
+                self.logging_manager.log_message(f"Assistant: {full_response}\n")
+
+            return full_response
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            error_msg = f"Error during Apple FM completion: {str(e)}"
+            print(error_msg)
+            if self.logging_manager.logging_active:
+                self.logging_manager.log_message(error_msg)
+            return f"Error: {str(e)}"
 
     async def execute_script_command(
         self, command: str, original_handler: Callable[[str], Union[bool, str]]

@@ -6,7 +6,8 @@ Provides Pydantic v2 models for loading and validating chat_config.toml.
 Model hierarchy:
     BaseModelConfig
     ├── ChatModelConfig    (type = "chat")    — standard LLM chat + optional image generation
-    └── RerankerModelConfig (type = "reranker") — re-ranking API endpoints
+    ├── RerankerModelConfig (type = "reranker") — re-ranking API endpoints
+    └── AppleFMModelConfig  (type = "apple_fm") — Apple on-device Foundation Model
 
 Top-level container: ChatConfig
     - image_generation: ImageGenerationSettings
@@ -174,11 +175,35 @@ class RerankerModelConfig(BaseModelConfig):
 
 
 # ============================================================================
+# APPLE FOUNDATION MODEL CONFIG
+# ============================================================================
+
+class AppleFMModelConfig(BaseModelConfig):
+    """
+    Configuration for Apple's on-device Foundation Model (Apple Intelligence).
+
+    This model type runs locally on macOS 26+ via the ``apple-fm-sdk`` Python
+    package. It does not use ``base_url`` or ``api_key`` — inference is fully
+    on-device with no network required.
+    """
+
+    type: Literal["apple_fm"] = "apple_fm"
+    """Discriminator field — always 'apple_fm' for this class."""
+
+    base_url: str = "on-device"
+    """Sentinel value; not used for any HTTP request. Overridden from the base
+    class to make it optional with a default."""
+
+    vendor: Optional[str] = "apple"
+    """Vendor identifier — always 'apple' for this model type."""
+
+
+# ============================================================================
 # DISCRIMINATED UNION
 # ============================================================================
 
 ModelConfig = Annotated[
-    Union[ChatModelConfig, RerankerModelConfig],
+    Union[ChatModelConfig, RerankerModelConfig, AppleFMModelConfig],
     Field(discriminator="type"),
 ]
 """Union of all supported model config types, discriminated on the ``type`` field."""
@@ -365,6 +390,10 @@ class ChatConfig(BaseModel):
         """Return all models of type 'reranker'."""
         return [m for m in self.models.values() if isinstance(m, RerankerModelConfig)]
 
+    def apple_fm_models(self) -> list[AppleFMModelConfig]:
+        """Return all models of type 'apple_fm'."""
+        return [m for m in self.models.values() if isinstance(m, AppleFMModelConfig)]
+
     def image_capable_models(self) -> list[ChatModelConfig]:
         """Return chat models that have ``image_generation = True``."""
         return [m for m in self.chat_models() if m.image_generation]
@@ -489,6 +518,7 @@ class ChatConfig(BaseModel):
             "PUBLICAI MODELS": [],
             "BYTEZ MODELS": [],
             "OLLAMA MODELS": [],
+            "APPLE FM MODELS": [],
             "JINA RERANKER MODELS": [],
         }
 
@@ -509,6 +539,8 @@ class ChatConfig(BaseModel):
                 categories["BYTEZ MODELS"].append((alias, model))
             elif "11434" in base_url or "localhost" in base_url:
                 categories["OLLAMA MODELS"].append((alias, model))
+            elif model.type == "apple_fm" or "on-device" in base_url:
+                categories["APPLE FM MODELS"].append((alias, model))
             else:
                 categories["CHAT MODELS"].append((alias, model))
 

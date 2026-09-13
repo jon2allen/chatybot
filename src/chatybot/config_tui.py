@@ -15,7 +15,7 @@ except ImportError:
     curses = None
 from typing import Optional, List, Tuple, Dict, Any
 
-from .config_model import ChatConfig, ChatModelConfig, RerankerModelConfig, MAX_MODEL_ALIAS_LEN
+from .config_model import ChatConfig, ChatModelConfig, RerankerModelConfig, AppleFMModelConfig, MAX_MODEL_ALIAS_LEN
 from .vendors import VENDOR_PRESETS, vendor_names, get_env_status
 
 
@@ -1415,7 +1415,14 @@ class ConfigTUI:
         if vendor_name in VENDOR_PRESETS:
             p = VENDOR_PRESETS[vendor_name]
             
-            if p.default_type == "reranker":
+            if vendor_name == "apple_fm":
+                model = AppleFMModelConfig(
+                    alias=alias,
+                    name="Apple Foundation Model",
+                    base_url="on-device",
+                    vendor="apple",
+                )
+            elif p.default_type == "reranker":
                 model = RerankerModelConfig(
                     alias=alias,
                     name="reranker-model-name",
@@ -1482,7 +1489,7 @@ class ConfigTUI:
         fields = [
             ("alias",            "Alias:",           2,  16, 34, "text", None),
             ("name",             "Model Name:",      3,  16, 42, "text", None),
-            ("type",             "Type:",            4,  16, 16, "cycle", ["chat", "reranker"]),
+            ("type",             "Type:",            4,  16, 16, "cycle", ["chat", "reranker", "apple_fm"]),
             
             # Endpoint section
             ("section_ep",       "── Endpoint ────────────────────────", 6, 4, 0, "header", None),
@@ -1631,6 +1638,11 @@ class ConfigTUI:
                 break
 
     def is_field_hidden(self, key: str, form_data: dict) -> bool:
+        if form_data["type"] == "apple_fm":
+            # apple_fm has no base_url, api_key, or image generation
+            if key in ("base_url", "api_key", "image_generation", "image_endpoint", "image_modalities"):
+                return True
+            return False
         if key in ("image_generation", "image_endpoint", "image_modalities") and form_data["type"] == "reranker":
             return True
         if key in ("image_endpoint", "image_modalities") and form_data["image_generation"] == "false":
@@ -1660,7 +1672,12 @@ class ConfigTUI:
             if p.image_support:
                 form_data["image_endpoint"] = "/images/generations"
         elif changed_key == "type":
-            if form_data["type"] == "reranker":
+            if form_data["type"] == "apple_fm":
+                form_data["base_url"] = "on-device"
+                form_data["api_key"] = ""
+                form_data["vendor"] = "apple"
+                form_data["image_generation"] = "false"
+            elif form_data["type"] == "reranker":
                 form_data["image_generation"] = "false"
                 # If switching to reranker, jina is a good default preset
                 if form_data["vendor"] == "":
@@ -1724,7 +1741,19 @@ class ConfigTUI:
                 "top_k": top_k_val,
             }
 
-            if m_type == "reranker":
+            if m_type == "apple_fm":
+                update["base_url"] = "on-device"
+                update["api_key"] = None
+                update["vendor"] = "apple"
+
+                if isinstance(existing, AppleFMModelConfig):
+                    updated_model = existing.model_copy(update=update)
+                else:
+                    # Switching from chat/reranker -> apple_fm
+                    if hasattr(existing, "context_limit"):
+                        update["context_limit"] = existing.context_limit
+                    updated_model = AppleFMModelConfig(**update)
+            elif m_type == "reranker":
                 if isinstance(existing, RerankerModelConfig):
                     updated_model = existing.model_copy(update=update)
                 else:

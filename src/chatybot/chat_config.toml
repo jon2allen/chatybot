@@ -267,3 +267,16 @@ top_k = 1
 base_url = "https://router.huggingface.co/v1"
 api_key = "HF_API_KEY"
 vendor = "huggingface"
+
+# ============================================================================
+# APPLE FOUNDATION MODEL (on-device)
+# ============================================================================
+# Requires macOS 26+, Apple Silicon, Apple Intelligence enabled, and the
+# apple-fm-sdk Python package (pip install chatybot[apple_fm]).
+# No base_url or api_key needed — inference runs fully on-device.
+
+[models.apple_fm]
+type = "apple_fm"
+name = "Apple Foundation Model"
+context_limit = 4096
+temperature = 0.7
