@@ -9,6 +9,9 @@ set judge = "gemini_flash"
 set out = "04_1_compare"
 
 # Phase A: run model 1
+# Disable session history to prevent cross-model context accumulation
+/session history off
+
 /model ${model1}
 /multiline
 Generate 5 quiz questions about photosynthesis with answers.

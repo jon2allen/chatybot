@@ -1,18 +1,15 @@
-#  Street Food Knowledge Comparison Script
-# This script evaluates two models' knowledge of  street food
+# Bulgaria Street Food Knowledge Comparison Script
+# This script evaluates two models' knowledge of Bulgarian street food
 
 # Initialize variables
 set model1 = "mistral_1"
 set model2 = "nvidia_1"
-set city = "Naples"
-set county = "Italy"
-set output_dir = ${city}_food_comparison
-set question_file = ${city}_questions.txt
-set results1 = "mistral_results.txt"
-set results2 = "nvidia_results.txt"
-set comparison = "comparison_report.txt"
-/dump all
-#/quit
+set city = "Bulgaria"
+set output_dir = "${city}_food_comparison"
+set question_file = "${output_dir}/${city}_questions.txt"
+set results1 = "${output_dir}/mistral_results.txt"
+set results2 = "${output_dir}/nvidia_results.txt"
+set comparison = "${output_dir}/comparison_report.txt"
 
 # Create question file
 # Disable session history to prevent cross-model context accumulation
@@ -20,7 +17,7 @@ set comparison = "comparison_report.txt"
 
 /clearfile
 /multiline
-Please create a comprehensive set of 10 questions about ${city}  street food that would test an AI's knowledge depth and accuracy. Include questions about:
+Please create a comprehensive set of 10 questions about Bulgarian street food and traditional cuisine that would test an AI's knowledge depth and accuracy. Include questions about:
 
 1. Historical origins of famous dishes
 2. Regional variations within ${city}
@@ -31,32 +28,35 @@ Please create a comprehensive set of 10 questions about ${city}  street food tha
 7. Unique utensils or serving methods
 8. Modern adaptations of traditional foods
 9. Common misconceptions
-10. Comparison with other regional ${county} street foods
+10. Comparison with other regional Balkan street foods
 
 Format as numbered questions, one per line.
 ;;
 /multiline
-/save ${output_dir}/${question_file}
+/save ${question_file}
 
 # Set up output directory (simulated by using different filenames)
 /clearfile
 
 # Test Model 1 (mistral_1)
 /model ${model1}
-/prompt ${output_dir}/${question_file}
-/save ${output_dir}/${results1}
-/filebank1 ${output_dir}/${results1}
+/prompt ${question_file}
+/save ${results1}
 
 # Test Model 2 (nvidia_1)
 /model ${model2}
-/prompt ${output_dir}/${question_file}
-/save ${output_dir}/${results2}
-/filebank2 ${output_dir}/${results2}
+/prompt ${question_file}
+/save ${results2}
 
 # Generate comparison report
 /clearfile
 /multiline
-Analyze the following two sets of responses about ${city} street food from different AI models.
+
+# Load the questions and responses into file banks for the comparison
+/filebank1 ${results1}
+/filebank2 ${results2}
+
+Analyze the following two sets of responses about Bulgarian street food and traditional cuisine from different AI models.
 Compare them for:
 
 1. Accuracy of information
@@ -74,19 +74,17 @@ Model 1 (${model1}) responses:
 
 Model 2 (${model2}) responses:
 ---
-{filebank2} 
+
+{filebank2}
 ---
 
 Provide a detailed comparison with specific examples from each model's responses.
 Also give an overall assessment of which model demonstrates better knowledge of ${city} street food and why.
 ;;
 /multiline
- 
-# Load the questions and responses into file banks for the comparison
-/filebank1 ${output_dir}/${results1}
-/filebank2 ${output_dir}/${results2}
-/save ${output_dir}/${comparison}
-/filebank3 ${output_dir}/${comparison}
+
+/save ${comparison}
+/filebank3 ${comparison}
 
 /clearfile
 /multiline
@@ -97,7 +95,7 @@ Create a scoring table (1-10 scale) for each model across these categories:
 4. Regional expertise
 5. Overall knowledge depth
 
-Based on the comparison report in {filebank3}, \n fill in the scores and calculate totals.
+Based on the comparison report in {filebank3}, fill in the scores and calculate totals.
 ;;
 /multiline
 /save ${output_dir}/scores_${model1}_vs_${model2}.txt
@@ -106,10 +104,9 @@ Based on the comparison report in {filebank3}, \n fill in the scores and calcula
 /clearfile
 /multiline
 Based on all the previous analysis, provide a final verdict:
-Which model (${model1} or ${model2}) has superior knowledge of ${city} street food?
+Which model (${model1} or ${model2}) has superior knowledge of Bulgarian street food?
 What are the key strengths of each model's responses?
-What recommendations would you make for someone seeking information about ${city} street food?
+What recommendations would you make for someone seeking information about Bulgarian street food?
 ;;
 /multiline
-/save ${output_dir}/final_verdict.txt
-
+/save "${output_dir}/final_verdict.txt"

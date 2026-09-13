@@ -1,0 +1,153 @@
+# Logic Problems Generation and Evaluation Script
+# This script generates logic problems for models to solve and evaluates their performance
+
+# Configuration
+set model1 = "gemma4_llamacpp_1"
+set model2 = "qwen3_llamacpp_1"
+set judge_model = "mistral_1"
+set output_dir = "logic_problems"
+set problem_count = 4
+
+# Create output directory (simulated)
+set problems_file = "${output_dir}/generated_problems.txt"
+set model1_solutions = "${output_dir}/gemma4_solutions.txt"
+set model2_solutions = "${output_dir}/qwen3_solutions.txt"
+set evaluation_report = "${output_dir}/evaluation_report.txt"
+set final_scores = "${output_dir}/final_scores.txt"
+
+# Generate logic problems using the judge model
+# Disable session history to prevent cross-model context accumulation
+/session history off
+
+/model ${judge_model}
+/multiline
+Generate ${problem_count} challenging logic problems for AI models to solve. Each problem should include:
+1. Problem Title
+2. Problem Description (clear and concise)
+3. Input Format (if applicable)
+4. Output Format (expected answer format)
+5. Example (if helpful for clarification)
+
+The problems should cover different types of logical reasoning:
+- Deduction puzzles
+- Mathematical logic
+- Syllogisms
+- Constraint satisfaction
+- Logical fallacies identification
+
+Make the problems progressively more difficult. Ensure each problem has a clear, unambiguous solution.
+;;
+/multiline
+/save ${problems_file}
+/filebank1 ${problems_file}
+
+# Ask Model 1 (Gemma4) to solve the problems
+/model ${model1}
+/multiline
+Solve the following logic problems. Provide your solutions with clear reasoning:
+
+{filebank1}
+
+For each problem, provide:
+1. Your final answer
+2. Step-by-step reasoning that led to your answer
+3. Confidence level (High/Medium/Low)
+;;
+/multiline
+/save ${model1_solutions}
+/filebank2 ${model1_solutions}
+
+# Ask Model 2 (Qwen3) to solve the problems
+/model ${model2}
+/multiline
+Solve the following logic problems. Provide your solutions with clear reasoning:
+
+{filebank1}
+
+For each problem, provide:
+1. Your final answer
+2. Step-by-step reasoning that led to your answer
+3. Confidence level (High/Medium/Low)
+;;
+/multiline
+/save ${model2_solutions}
+/filebank3 ${model2_solutions}
+
+# Evaluate both models' performance
+/model ${judge_model}
+/multiline
+Evaluate and compare the solutions provided by two AI models for the logic problems.
+
+Generated Problems:
+{filebank1}
+
+Model 1 (${model1}) Solutions:
+{filebank2}
+
+Model 2 (${model2}) Solutions:
+{filebank3}
+
+Please provide a comprehensive evaluation covering:
+
+1. **Correctness** (0-10): Accuracy of final answers for each problem
+2. **Reasoning Quality** (0-10): Clarity and logical soundness of step-by-step reasoning
+3. **Confidence Calibration** (0-10): Appropriateness of stated confidence levels
+4. **Problem-Solving Approach** (0-10): Effectiveness and efficiency of solving methods
+5. **Overall Performance** (0-10): Comprehensive assessment of logic problem-solving ability
+
+For each category:
+- Analyze each model's performance on individual problems
+- Provide specific examples of strengths and weaknesses
+- Assign scores to each model
+- Identify which model performed better and why
+
+Then provide:
+- Detailed breakdown of which problems each model solved correctly/incorrectly
+- Analysis of reasoning patterns and common errors
+- Assessment of which types of logic problems each model handles best
+- Recommendations for improvement for each model
+;;
+/multiline
+/save ${evaluation_report}
+/filebank4 ${evaluation_report}
+
+# Generate final scoring table
+/multiline
+Based on the evaluation in {filebank4}, create a final scoring table:
+
+| Category               | ${model1} Score | ${model2} Score | Winner   |
+|------------------------|----------------|----------------|----------|
+| Correctness            |                |                |          |
+| Reasoning Quality       |                |                |          |
+| Confidence Calibration  |                |                |          |
+| Problem-Solving Approach |              |                |          |
+| Overall Performance    |                |                |          |
+| **TOTAL**              |                |                |          |
+
+Include:
+1. Final scores from the evaluation
+2. Clear indication of which model won each category
+3. Overall winner and margin of victory
+4. Brief summary of key factors that determined the outcome
+;;
+/multiline
+/save ${final_scores}
+/filebank5 ${final_scores}
+# Final verdict
+/multiline
+Based on all the analysis, provide a final verdict:
+
+analyis:
+{filebank4}
+{filebank5}
+
+1. Which model (${model1} or ${model2}) demonstrated superior logic problem-solving skills?
+2. What specific aspects of logical reasoning did the winning model excel at?
+3. What types of logic problems proved most challenging for each model?
+4. Overall assessment of both models' logical reasoning capabilities
+5. Recommendations for improving each model's logic problem-solving abilities
+;;
+/multiline
+/save "${output_dir}/final_verdict.txt"
+
+/echo "Logic problems evaluation complete! Results saved in ${output_dir}/"

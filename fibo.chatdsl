@@ -7,6 +7,9 @@ set output_file = "fibonacci_c.txt"
 set prompt_intro = "Create a complete, well-commented program in"
 
 # Load the Fibonacci specification into filebank1
+# Disable session history to prevent cross-model context accumulation
+/session history off
+
 /filebank1 fibonacci_spec.txt
 /multiline
 Please create a specification for a Fibonacci sequence generator program that meets these requirements:

@@ -102,38 +102,108 @@ Tutorial cookbook recipes demonstrating multi-model comparisons and edge-case fu
 
 ---
 
-## Remediation Options
+## Remediation Status: Option 1 Implemented Across All 33 Files
 
-### Option 1: Script-Level Fix (Explicit `/session history off`)
-Add `/session history off` near the top of affected scripts (e.g. after variable declarations).
-- **Pros:** Completely non-breaking; explicitly declares script intent; works identically across all versions.
-- **Example:**
-  ```chatdsl
-  # Initialize variables
-  set model1 = "mistral_1"
-  set model2 = "nvidia_1"
-  /session history off
-  ```
-
-### Option 2: Script-Level Clear (`/clearhistory` between model switches)
-Keep session history active, but inject `/clearhistory` prior to each `/model` switch or test phase.
-- **Pros:** Keeps history active within each model's individual sub-conversation if multi-turn interaction is needed.
-- **Cons:** More invasive to edit; requires multiple insertions per script.
-
-### Option 3: Engine-Level Automatic Reset on Model Switch (`chat_config.toml` or CLI flag)
-Introduce an engine-level setting (e.g. `auto_clear_on_model_switch = true` or `/model --clean`) that automatically resets chat history when a script or interactive user switches models.
-- **Pros:** Solves the problem automatically for all current and future scripts without having to edit individual files.
-- **Cons:** Might surprise users who legitimately want multi-turn conversations across model switches (e.g. asking Model B to critique Model A's previous turn directly in conversation).
+All 27 unique scripts (33 files including cookbook mirrors) have been remediated with `/session history off`:
+- Category 1: 7 comparison suites (`nanjing5`, `beijing5`, `bulgaria5`, `london5`, `rome5`, `rome52`, `nvme`)
+- Category 2: 7 algorithm, poetry, and logic suites (`cpp_algorithms`, `pascal_algorithms`, `dufu_poetry_analysis`, `dufu_tang_poems2`, `logic_problems`, legacy copy, `fibo`)
+- Category 3: 6 benchmark suites (`test_think_dsl`, `test_vortex_dsl`, `test_vortex_dsl_advanced`, `vietnam_war_1968`, `ww1_battles_1917`, `civil_war_1865`)
+- Category 4: 1 image accuracy suite (`test_images/accuracytest`)
+- Category 5: 6 cookbook comparison & fuzz recipes (12 files under `doc/cookbook/` and `src/chatybot/doc/cookbook/`)
 
 ---
 
-## Candidate Inventory Summary
+## Deep Dive: What Scripts Benefit from `/session` vs What Cannot
 
-| Category | Candidate Scripts |
-| :--- | :---: |
-| Category 1: City & Tech Comparison Suite | 7 scripts |
-| Category 2: Algorithm, Poetry & Logic Generation | 7 scripts |
-| Category 3: Multi-Model Benchmark Suites | 6 scripts |
-| Category 4: Image & Vision Test Suite | 1 script |
-| Category 5: Cookbook Multi-Model & Fuzz Recipes | 6 recipes (12 files) |
-| **Total Candidates Identified** | **27 unique scripts (33 files)** |
+### 1. Scripts That BENEFIT from `/session` (History ON)
+
+These scripts fundamentally require conversational state accumulation, multi-turn decision making, and feedback loops.
+
+#### A. Autonomous Agentic Tool Loops (`/tool loop`)
+In an agentic workflow, the model calls tools (e.g. `list_directory`, `read_file`, `write_file`, `run_command`). The tool execution output is sent back as a tool result message. The model must see the prior prompt, its own tool invocation, and the tool execution output in conversation history to decide what tool to invoke next or finalize its answer.
+
+**Concrete Example:**
+```chatdsl
+# Agentic tool use MUST have session history enabled:
+/tools enable list_directory,read_file,write_file,run_command
+/tool loop 10
+
+/multiline
+Inspect test_auth.py, read the implementation in auth.py, fix the failing token validation test, and verify by running pytest.
+;;
+```
+*Why `/session` is needed here:* Without session history, each turn in the tool loop would forget the previous tool call and its stdout/stderr, causing an infinite loop or immediate failure.
+
+#### B. Multi-Turn Interactive Refinement (Single Model)
+Scripts orchestrating an iterative interview, progressive elaboration, or conversational debugging with a single model.
+
+**Concrete Example:**
+```chatdsl
+# Single-model multi-turn reasoning:
+/model devstral_1
+Design a high-throughput event processing architecture for IoT telemetry.
+;;
+
+# Turn 2 relies on Turn 1 context:
+Now identify the top 3 failure modes in that architecture and provide Kafka configuration settings to mitigate each.
+;;
+```
+
+---
+
+### 2. Scripts That CANNOT Benefit from `/session` (Require `/session history off`)
+
+These scripts require pure, stateless, independent evaluation of each prompt.
+
+#### A. Multi-Model Comparisons and A/B Benchmarks
+Scripts that evaluate Model A and Model B on the exact same task, followed by an evaluation judge.
+
+**Concrete Example:**
+```chatdsl
+# MUST disable session history:
+/session history off
+
+set prompt = "Implement an LRU Cache in Python with O(1) get and put operations."
+
+/model gemma4_llamacpp_1
+${prompt}
+/save gemma_lru.txt
+
+# Model switch:
+/model qwen3_llamacpp_1
+${prompt}
+/save qwen_lru.txt
+
+# Judge evaluation via clean filebanks:
+/model mistral_1
+/filebank1 gemma_lru.txt
+/filebank2 qwen_lru.txt
+Compare the performance, cleanliness, and edge-case handling of Candidate A and Candidate B:
+Candidate A: {filebank1}
+Candidate B: {filebank2}
+/save judge_verdict.txt
+```
+*Why `/session` fails here:* If history were ON, Qwen would receive Gemma's implementation in its prompt context. Qwen would either copy Gemma's approach or critique Gemma rather than generating its own independent solution.
+
+#### B. Synthetic Rule-Compliance Benchmarks (e.g. Vortex DSL)
+Evaluating zero-shot reasoning against synthetic, unseen state machines. If Model B sees Model A's state trace table, the test ceases to be zero-shot.
+
+#### C. Batch Test Matrices & Prompt Fuzzing (`foreach`)
+Loops that fuzz an API gateway or prompt template with varying attack payloads or test cases. Leaking Payload $N-1$ into Payload $N$ ruins test isolation.
+
+#### D. Database Persistence Pipelines (`/dblog`)
+Scripts querying 5 different models on historical facts and saving records into TinyDB. History retention causes subsequent models to see previous models' database entries.
+
+---
+
+## Summary Checklist for Script Authors
+
+| Script Type | Recommended Setting | Rationale |
+| :--- | :---: | :--- |
+| `/tool loop` & Agentic Tool Execution | `/session history on` | Model must see previous tool calls & outputs |
+| Multi-Turn Conversational Refinement | `/session history on` | Turn $N$ references ideas from Turn $N-1$ |
+| Multi-Model Comparative Benchmarking | `/session history off` | Prevents cross-model context contamination |
+| LLM-as-a-Judge Workflows | `/session history off` | Judge should only see filebanks, not generation history |
+| `foreach` Test Loops & Fuzzing | `/session history off` | Ensures test case isolation across iterations |
+| Batch `/dblog` Multi-Model Surveys | `/session history off` | Ensures pure answers from each engine |
+

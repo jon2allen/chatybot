@@ -5,6 +5,9 @@
 
 set q = "Explain why the sky is blue, concisely."
 
+# Disable session history to prevent cross-model context accumulation
+/session history off
+
 /model mistral_1
 ${q}
 /save 14_3_a.txt

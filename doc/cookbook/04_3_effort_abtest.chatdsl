@@ -2,6 +2,9 @@
 # Goal: same prompt under different /effort levels, compare quality.
 # Run: /script doc/cookbook/04_3_effort_abtest.chatdsl
 
+# Disable session history to prevent cross-model context accumulation
+/session history off
+
 /model devstral_1
 /reasoning on
 /effort low

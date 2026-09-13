@@ -1,0 +1,114 @@
+# NVMe Disk Knowledge Comparison Script
+# This script evaluates two models' knowledge of NVMe storage technology
+
+# Initialize variables
+set model1 = "mistral_1"
+set model2 = "nvidia_1"
+set technology = "NVMe"
+set interface = "PCIe"
+set output_dir = ${technology}_storage_comparison
+set question_file = ${technology}_questions.txt
+set results1 = "mistral_results.txt"
+set results2 = "nvidia_results.txt"
+set comparison = "comparison_report.txt"
+/dump all
+#/quit
+
+# Create question file
+# Disable session history to prevent cross-model context accumulation
+/session history off
+
+/clearfile
+/multiline
+Please create a comprehensive set of 10 questions about ${technology} disks that would test an AI's knowledge depth and accuracy. Include questions about:
+
+1. Technical specifications and architecture
+2. Performance characteristics compared to ${interface} versions
+3. Protocol differences from SATA/AHCI
+4. Form factor standards (M.2, U.2, EDSFF)
+5. NAND flash technology used in ${technology} SSDs
+6. Thermal management and power consumption
+7. Enterprise vs consumer ${technology} implementations
+8. Common performance bottlenecks
+9. Security features (TCG Opal, AES encryption)
+10. Emerging technologies (CXL, ZNS, KV-SSDs)
+
+Format as numbered questions, one per line.
+;;
+/multiline
+/save ${output_dir}/${question_file}
+
+# Set up output directory (simulated by using different filenames)
+/clearfile
+
+# Test Model 1 (mistral_1)
+/model ${model1}
+/prompt ${output_dir}/${question_file}
+/save ${output_dir}/${results1}
+/filebank1 ${output_dir}/${results1}
+
+# Test Model 2 (nvidia_1)
+/model ${model2}
+/prompt ${output_dir}/${question_file}
+/save ${output_dir}/${results2}
+/filebank2 ${output_dir}/${results2}
+
+# Generate comparison report
+/clearfile
+/multiline
+Analyze the following two sets of responses about ${technology} disks from different AI models.
+Compare them for:
+
+1. Technical accuracy of information
+2. Depth of engineering knowledge
+3. Understanding of protocol specifications
+4. Specificity of performance details
+5. Recognition of industry standards
+6. Handling of form factor differences
+7. Any factual errors or omissions
+
+Model 1 (${model1}) responses:
+---
+{filebank1}
+---
+
+Model 2 (${model2}) responses:
+---
+{filebank2}
+---
+
+Provide a detailed comparison with specific examples from each model's responses.
+Also give an overall assessment of which model demonstrates better knowledge of ${technology} storage technology and why.
+;;
+/multiline
+
+# Load the questions and responses into file banks for the comparison
+/filebank1 ${output_dir}/${results1}
+/filebank2 ${output_dir}/${results2}
+/save ${output_dir}/${comparison}
+/filebank3 ${output_dir}/${comparison}
+
+/clearfile
+/multiline
+Create a scoring table (1-10 scale) for each model across these categories:
+1. Technical accuracy
+2. Protocol knowledge
+3. Performance understanding
+4. Industry standards expertise
+5. Overall technical depth
+
+Based on the comparison report in {filebank3}, fill in the scores and calculate totals.
+;;
+/multiline
+/save ${output_dir}/scores_${model1}_vs_${model2}.txt
+
+# Final summary
+/clearfile
+/multiline
+Based on all the previous analysis, provide a final verdict:
+Which model (${model1} or ${model2}) has superior knowledge of ${technology} storage technology?
+What are the key strengths of each model's responses?
+What recommendations would you make for someone seeking technical information about ${technology} disks?
+;;
+/multiline
+/save ${output_dir}/final_verdict.txt

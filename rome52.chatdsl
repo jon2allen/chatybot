@@ -3,13 +3,13 @@
 
 # Initialize variables
 set model1 = "mistral_1"
-set model2 = "nvidia_1"
-set city = "Naples"
-set county = "Italy"
+set model2 = "nanbeige_local"
+set city = "London"
+set county = "England"
 set output_dir = ${city}_food_comparison
 set question_file = ${city}_questions.txt
-set results1 = "mistral_results.txt"
-set results2 = "nvidia_results.txt"
+set results1 = "${model1}_results.txt"
+set results2 = "${model2}_results.txt"
 set comparison = "comparison_report.txt"
 /dump all
 #/quit
@@ -103,7 +103,7 @@ Based on the comparison report in {filebank3}, \n fill in the scores and calcula
 /save ${output_dir}/scores_${model1}_vs_${model2}.txt
 
 # Final summary
-/clearfile
+/clearfle
 /multiline
 Based on all the previous analysis, provide a final verdict:
 Which model (${model1} or ${model2}) has superior knowledge of ${city} street food?

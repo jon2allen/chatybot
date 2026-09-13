@@ -10,6 +10,9 @@ if ${z} != "" then set model2 = ${z}
 if ${model2} == "" then set model2 = "gemma_3"
 set judge = "gemini_flash"
 
+# Disable session history to prevent cross-model context accumulation
+/session history off
+
 /model ${model1}
 Generate a study guide on ${topic}.
 /save 04_2_a.txt

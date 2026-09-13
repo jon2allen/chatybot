@@ -1,0 +1,235 @@
+# Advanced Vortex DSL Test Suite
+# Usage: /script test_vortex_dsl_advanced.chatdsl
+# Tests: mistral_1 vs qwen123b across multiple Vortex DSL scenarios
+# Judge: mistral_1
+# Purpose: Comprehensive evaluation of zero-shot reasoning with novel DSL rules
+
+# Configuration
+set test_name = "Vortex_DSL_Advanced"
+set model_a = "mistral_35"
+set model_b = "qwen123b"
+set judge_model = "mistral_1"
+set output_dir = "dsl_test/vortex_results"
+
+# Disable session history to prevent cross-model context accumulation
+/session history off
+
+# ============================================
+# Test Scenario 1: Basic Decay Mechanics
+# ============================================
+set test1_prompt = "
+You are an interpreter for the Vortex language. Registers X, Y, Z start at 0.
+
+Commands:
+* `ADD [reg] [val]`: Adds val to reg
+* `SHIFT [reg1] [reg2]`: Moves reg1 value to reg2, reg1 becomes 0
+* `MIRROR [reg]`: Multiplies reg by -1
+* `PULL [reg]`: Yields reg value
+
+**Universal Axiom**: Every time a register is targeted by ANY command, its value decreases by 1 AFTER the command executes.
+
+Execute:
+1. ADD X 5
+2. PULL X
+3. PULL X
+
+Provide trace table with X, Y, Z after each step and final PULL outputs.
+"
+
+# ============================================
+# Test Scenario 2: Complex State Tracking
+# ============================================
+set test2_prompt = "
+Vortex interpreter. Registers X, Y, Z start at 0.
+
+Commands:
+* `ADD [reg] [val]`: Adds val to reg
+* `SHIFT [reg1] [reg2]`: Moves reg1 value to reg2, reg1 becomes 0
+* `MIRROR [reg]`: Multiplies reg by -1
+* `PULL [reg]`: Yields reg value
+
+**Universal Axiom**: Every time a register is targeted by ANY command, its value decreases by 1 AFTER the command executes.
+
+Execute:
+1. ADD X 10
+2. SHIFT X Y
+3. ADD Y 3
+4. MIRROR X
+5. SHIFT Y Z
+6. PULL Z
+
+Provide trace table with X, Y, Z after each step and final PULL output.
+"
+
+# ============================================
+# Test Scenario 3: Nested Decay
+# ============================================
+set test3_prompt = "
+Vortex interpreter. Registers X, Y, Z start at 0.
+
+Commands:
+* `ADD [reg] [val]`: Adds val to reg
+* `SHIFT [reg1] [reg2]`: Moves reg1 value to reg2, reg1 becomes 0
+* `MIRROR [reg]`: Multiplies reg by -1
+* `PULL [reg]`: Yields reg value
+
+**Universal Axiom**: Every time a register is targeted by ANY command, its value decreases by 1 AFTER the command executes.
+
+Execute:
+1. ADD X 8
+2. ADD Y 5
+3. SHIFT X Y
+4. PULL Y
+5. MIRROR Y
+6. PULL Y
+
+Provide trace table with X, Y, Z after each step and final PULL outputs.
+"
+
+# ============================================
+# Execute all tests for Model A
+# ============================================
+/echo "=== Testing ${model_a} ==="
+/model ${model_a}
+
+# Test 1
+set current_test = "test1"
+set test1_file = "${output_dir}/${test_name}_${model_a}_${current_test}.txt"
+/savevar test1_prompt "${output_dir}/temp_test1.txt"
+/prompt ${output_dir}/temp_test1.txt
+/save ${test1_file}
+wait 2
+
+# Test 2
+set current_test = "test2"
+set test2_file = "${output_dir}/${test_name}_${model_a}_${current_test}.txt"
+/savevar test2_prompt "${output_dir}/temp_test2.txt"
+/prompt ${output_dir}/temp_test2.txt
+/save ${test2_file}
+wait 2
+
+# Test 3
+set current_test = "test3"
+set test3_file = "${output_dir}/${test_name}_${model_a}_${current_test}.txt"
+/savevar test3_prompt "${output_dir}/temp_test3.txt"
+/prompt ${output_dir}/temp_test3.txt
+/save ${test3_file}
+wait 2
+
+# ============================================
+# Execute all tests for Model B
+# ============================================
+/echo "=== Testing ${model_b} ==="
+/model ${model_b}
+
+# Test 1
+set current_test = "test1"
+set test1_file_b = "${output_dir}/${test_name}_${model_b}_${current_test}.txt"
+/prompt ${output_dir}/temp_test1.txt
+/save ${test1_file_b}
+wait 2
+
+# Test 2
+set current_test = "test2"
+set test2_file_b = "${output_dir}/${test_name}_${model_b}_${current_test}.txt"
+/prompt ${output_dir}/temp_test2.txt
+/save ${test2_file_b}
+wait 2
+
+# Test 3
+set current_test = "test3"
+set test3_file_b = "${output_dir}/${test_name}_${model_b}_${current_test}.txt"
+/prompt ${output_dir}/temp_test3.txt
+/save ${test3_file_b}
+wait 2
+
+# ============================================
+# Judge Evaluation
+# ============================================
+/echo "=== Judge Evaluation ==="
+/model ${judge_model}
+
+/filebank1 ${test1_file}
+/filebank2 ${test1_file_b}
+/filebank3 ${test2_file}
+/filebank4 ${test2_file_b}
+/filebank5 ${test3_file}
+
+/multiline
+You are an impartial judge evaluating two AI models (${model_a} and ${model_b}) on their ability to interpret the Vortex DSL with decay mechanics.
+
+**Vortex Rules Recap:**
+- Registers X, Y, Z start at 0
+- ADD [reg] [val]: Adds val to reg
+- SHIFT [reg1] [reg2]: Moves reg1 value to reg2, reg1 becomes 0
+- MIRROR [reg]: Multiplies reg by -1
+- PULL [reg]: Yields reg value
+- **Universal Axiom**: Every time a register is targeted by ANY command, its value decreases by 1 AFTER the command executes
+
+**Test 1 (Basic Decay):**
+1. ADD X 5
+2. PULL X
+3. PULL X
+
+${model_a} response:
+{filebank1}
+
+${model_b} response:
+{filebank2}
+
+**Test 2 (Complex State):**
+1. ADD X 10
+2. SHIFT X Y
+3. ADD Y 3
+4. MIRROR X
+5. SHIFT Y Z
+6. PULL Z
+
+${model_a} response:
+{filebank3}
+
+${model_b} response:
+{filebank4}
+
+**Test 3 (Nested Decay):**
+1. ADD X 8
+2. ADD Y 5
+3. SHIFT X Y
+4. PULL Y
+5. MIRROR Y
+6. PULL Y
+
+${model_a} response:
+{filebank5}
+
+${model_b} response:
+{filebank5}
+
+Evaluate each test separately and provide:
+1. For each test, determine the correct trace table and final outputs
+2. Score each model (0-100%) on each test for:
+   - Trace table accuracy
+   - Final output correctness
+   - Attention to decay mechanic
+3. Calculate overall scores for each model across all tests
+4. Identify patterns: Does one model consistently handle decay better?
+5. Final verdict: Which model demonstrates superior zero-shot reasoning for novel DSLs?
+
+Provide a detailed report with:
+- Individual test analysis
+- Per-model scores (table format)
+- Overall winner and rationale
+- Specific examples of where each model succeeded or failed
+;;
+/multiline
+
+/save ${output_dir}/${test_name}_comprehensive_judge_report.txt
+
+# ============================================
+# Cleanup
+# ============================================
+/echo "=== Advanced Test Suite Complete ==="
+/echo "Results saved to: ${output_dir}/"
+/echo "  - Test files for ${model_a} and ${model_b}"
+/echo "  - ${test_name}_comprehensive_judge_report.txt"
+

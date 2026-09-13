@@ -3,6 +3,9 @@
 # and logs responses to a database
 
 # Set up database
+# Disable session history to prevent cross-model context accumulation
+/session history off
+
 /setdb civil_war
 
 set query = "What battles of the USA occured in 1865 during civil war?"
