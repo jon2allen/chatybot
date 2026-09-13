@@ -171,6 +171,37 @@ async def stream_response(session, prompt: str, options=None):
         yield chunk
 
 
+def build_sampling_mode(top_k=None, top_p=None, seed=None):
+    """Build a SamplingMode from chatybot's top_k, top_p, and seed settings.
+
+    The SDK's SamplingMode.random() allows only one of top (top-k) or
+    probability_threshold (top-p). If both are set, top_k takes precedence.
+
+    Returns None if no sampling parameters are set (uses SDK default).
+    """
+    if not _SDK_AVAILABLE:
+        return None
+
+    has_top_k = top_k is not None and top_k not in ("off", "none", "disable", False)
+    has_top_p = top_p is not None and top_p not in ("off", "none", "disable", False)
+    has_seed = seed is not None
+
+    if not has_top_k and not has_top_p and not has_seed:
+        return None
+
+    # Build SamplingMode.random() kwargs
+    rand_kwargs = {}
+    if has_top_k:
+        rand_kwargs["top"] = int(top_k)
+    elif has_top_p:
+        rand_kwargs["probability_threshold"] = float(top_p)
+
+    if has_seed:
+        rand_kwargs["seed"] = int(seed)
+
+    return fm.SamplingMode.random(**rand_kwargs)
+
+
 def build_generation_options(temperature=None, maximum_response_tokens=None, sampling=None):
     """Build a GenerationOptions instance from chatybot parameters.
 

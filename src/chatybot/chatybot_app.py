@@ -2164,7 +2164,7 @@ class ChatybotApp:
         Supports the same post-processing as ``chat_completion``: logging,
         chat history, session activity, and tool auto-launch.
         """
-        from .apple_fm_backend import check_available, create_session, respond, stream_response, build_tools, build_generation_options
+        from .apple_fm_backend import check_available, create_session, respond, stream_response, build_tools, build_generation_options, build_sampling_mode
 
         ready, reason = check_available()
         if not ready:
@@ -2264,7 +2264,7 @@ class ChatybotApp:
             print(f"Error: {err}")
             return ""
 
-        # --- Build generation options (temperature, max_tokens) ---
+        # --- Build generation options (temperature, max_tokens, sampling) ---
         temp = (
             self.temperature
             if self.temperature is not None
@@ -2275,9 +2275,41 @@ class ChatybotApp:
             if self.config_manager.max_tokens is not None
             else model_config.get("max_tokens")
         )
+
+        # Resolve top_k: /top_k override, then model config
+        if self.top_k in ("off", "none", "disable", False):
+            tk = None
+        elif self.top_k is not None:
+            tk = self.top_k
+        else:
+            tk = model_config.get("top_k")
+
+        # Resolve top_p: /top_p override, then model config
+        if self.top_p in ("off", "none", "disable", False):
+            tp = None
+        elif self.top_p is not None:
+            tp = self.top_p
+        else:
+            tp = model_config.get("top_p")
+
+        # Resolve seed: /seed override
+        current_seed = None
+        if self.seed_config is not None:
+            if self.seed_config == "time":
+                current_seed = int(time.time())
+            elif isinstance(self.seed_config, tuple) and self.seed_config[0] == "random":
+                current_seed = random.randint(self.seed_config[1], self.seed_config[2])
+            else:
+                try:
+                    current_seed = int(self.seed_config)
+                except (ValueError, TypeError):
+                    current_seed = None
+
+        sampling_mode = build_sampling_mode(top_k=tk, top_p=tp, seed=current_seed)
         gen_options = build_generation_options(
             temperature=temp,
             maximum_response_tokens=mt,
+            sampling=sampling_mode,
         )
 
         try:
