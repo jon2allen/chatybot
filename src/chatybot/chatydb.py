@@ -231,11 +231,15 @@ def dblog(include_thinking: bool = False) -> None:
         )
         return
     if not CHAT_HISTORY:
-        print("Chat history is empty – nothing to log.")
-        return
-    last_response = CHAT_HISTORY[-1][1]
-
-    last_prompt = CHAT_HISTORY[-1][0]
+        if app_instance and getattr(app_instance, "last_response", None):
+            last_response = app_instance.last_response
+            last_prompt = getattr(app_instance, "last_prompt", "User Prompt") or "User Prompt"
+        else:
+            print("Chat history is empty – nothing to log.")
+            return
+    else:
+        last_response = CHAT_HISTORY[-1][1]
+        last_prompt = CHAT_HISTORY[-1][0]
     # Store with a simple metadata dict containing a timestamp
     metadata = {"timestamp": datetime.now().isoformat()}
 

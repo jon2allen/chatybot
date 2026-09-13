@@ -432,7 +432,15 @@ class BufferManager:
         if var_name.upper() == 'LAST_RESPONSE':
             if self.app and self.app.chat_history:
                 return self.app.chat_history[-1][1]
-            return ""
+            if self.app and getattr(self.app, 'last_response', None):
+                return self.app.last_response
+            return self.script_vars.get('LAST_RESPONSE', "")
+        if var_name.upper() == 'LAST_COMPLETION':
+            if self.app and getattr(self.app, 'last_response', None):
+                return self.app.last_response
+            if self.app and self.app.chat_history:
+                return self.app.chat_history[-1][1]
+            return self.script_vars.get('LAST_COMPLETION', "")
         if var_name.upper() == 'CHAT_HISTORY':
             if self.app and self.app.chat_history:
                 history_json = []

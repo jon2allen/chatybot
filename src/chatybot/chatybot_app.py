@@ -130,6 +130,8 @@ class ChatybotApp:
 
         # Chat state
         self.chat_history: List[Tuple[str, str]] = []
+        self.last_prompt: Optional[str] = None
+        self.last_response: Optional[str] = None
         self.input_history: List[str] = []
         self.input_history_index = -1
         self.input_history_matches: List[str] = []
@@ -1256,7 +1258,7 @@ class ChatybotApp:
 
             # Prepare messages for chat completion including past chat history
             messages = []
-            if self.chat_history:
+            if self.enable_chat_history and self.chat_history:
                 for past_p, past_r in self.chat_history:
                     messages.append({"role": "user", "content": past_p})
                     # Strip thinking tags from past assistant responses for token efficiency
@@ -2069,6 +2071,10 @@ class ChatybotApp:
                     "model": model_alias,
                     "timestamp": datetime.now().isoformat()
                 })
+                self.last_prompt = prompt
+                self.last_response = full_response
+                self.buffer_manager.set_script_var('LAST_RESPONSE', full_response)
+                self.buffer_manager.set_script_var('LAST_COMPLETION', full_response)
 
             if not self.in_tool_loop and self.enable_chat_history:
                 self.chat_history.append((prompt, full_response))
@@ -2090,8 +2096,13 @@ class ChatybotApp:
                     if self.chat_history:
                         _, final_resp = self.chat_history[-1]
                         return final_resp
-            elif not self.enable_chat_history and self.extract_tool_calls(full_response):
-                print("Notice: Agentic tool loop skipped (chat history is disabled).")
+            elif not self.in_tool_loop and not self.enable_chat_history:
+                # Maintain the single latest turn in chat_history so that
+                # /save, {LAST_RESPONSE}, /dblog can always access the last completion,
+                # while line 1261 ensures no past history is sent to future models.
+                self.chat_history = [(prompt, full_response)]
+                if self.extract_tool_calls(full_response):
+                    print("Notice: Agentic tool loop skipped (chat history is disabled).")
 
             # Log assistant entry with completion datetime and token count
             if self.logging_manager.logging_active:
