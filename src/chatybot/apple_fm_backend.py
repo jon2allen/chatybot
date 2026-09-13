@@ -137,21 +137,60 @@ def create_session(
     return session, ""
 
 
-async def respond(session, prompt: str) -> str:
-    """Send a prompt to the session and return the complete response text."""
-    response = await session.respond(prompt=prompt)
+async def respond(session, prompt: str, options=None) -> str:
+    """Send a prompt to the session and return the complete response text.
+
+    Args:
+        session: A LanguageModelSession.
+        prompt: The prompt string.
+        options: Optional GenerationOptions (temperature, max tokens, sampling).
+    """
+    kwargs = {"prompt": prompt}
+    if options is not None:
+        kwargs["options"] = options
+    response = await session.respond(**kwargs)
     return str(response)
 
 
-async def stream_response(session, prompt: str):
+async def stream_response(session, prompt: str, options=None):
     """Yield text chunks from the model as they are generated.
+
+    Args:
+        session: A LanguageModelSession.
+        prompt: The prompt string.
+        options: Optional GenerationOptions (temperature, max tokens, sampling).
 
     Usage:
         async for chunk in stream_response(session, prompt):
             print(chunk, end="", flush=True)
     """
-    async for chunk in session.stream_response(prompt=prompt):
+    kwargs = {"prompt": prompt}
+    if options is not None:
+        kwargs["options"] = options
+    async for chunk in session.stream_response(**kwargs):
         yield chunk
+
+
+def build_generation_options(temperature=None, maximum_response_tokens=None, sampling=None):
+    """Build a GenerationOptions instance from chatybot parameters.
+
+    Returns None if no options are set (uses SDK defaults).
+    """
+    if not _SDK_AVAILABLE:
+        return None
+
+    kwargs = {}
+    if temperature is not None:
+        kwargs["temperature"] = temperature
+    if maximum_response_tokens is not None:
+        kwargs["maximum_response_tokens"] = maximum_response_tokens
+    if sampling is not None:
+        kwargs["sampling"] = sampling
+
+    if not kwargs:
+        return None
+
+    return fm.GenerationOptions(**kwargs)
 
 
 # ---------------------------------------------------------------------------

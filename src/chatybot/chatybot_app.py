@@ -2164,7 +2164,7 @@ class ChatybotApp:
         Supports the same post-processing as ``chat_completion``: logging,
         chat history, session activity, and tool auto-launch.
         """
-        from .apple_fm_backend import check_available, create_session, respond, stream_response, build_tools
+        from .apple_fm_backend import check_available, create_session, respond, stream_response, build_tools, build_generation_options
 
         ready, reason = check_available()
         if not ready:
@@ -2264,17 +2264,33 @@ class ChatybotApp:
             print(f"Error: {err}")
             return ""
 
+        # --- Build generation options (temperature, max_tokens) ---
+        temp = (
+            self.temperature
+            if self.temperature is not None
+            else model_config.get("temperature")
+        )
+        mt = (
+            self.config_manager.max_tokens
+            if self.config_manager.max_tokens is not None
+            else model_config.get("max_tokens")
+        )
+        gen_options = build_generation_options(
+            temperature=temp,
+            maximum_response_tokens=mt,
+        )
+
         try:
             start_time = time.time()
             print("Assistant: ", end="", flush=True)
 
             if stream:
                 full_response = ""
-                async for chunk in stream_response(session, full_prompt):
+                async for chunk in stream_response(session, full_prompt, options=gen_options):
                     print(chunk, end="", flush=True)
                     full_response += chunk
             else:
-                full_response = await respond(session, full_prompt)
+                full_response = await respond(session, full_prompt, options=gen_options)
                 print(full_response, end="")
 
             elapsed_time = time.time() - start_time
