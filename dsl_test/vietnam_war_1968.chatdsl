@@ -3,6 +3,9 @@
 # and logs responses to a database
 
 # Set up database
+# Disable session history to prevent cross-model context accumulation
+/session history off
+
 /setdb viet_war
 
 set query = "What battles Vietnam war in 1968"

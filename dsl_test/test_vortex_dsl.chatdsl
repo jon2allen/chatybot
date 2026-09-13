@@ -1,0 +1,141 @@
+# Vortex DSL Dynamic State-Tracking Interpreter Test
+# Usage: /script test_vortex_dsl.chatdsl
+# Tests: mistral_1 vs qwen123b with mistral_1 as judge
+# Purpose: Evaluate zero-shot reasoning with novel DSL rules that bypass benchmark contamination
+
+# Configuration
+set test_name = "Vortex_DSL_Decaying_State"
+set model_a = "mistral_1"
+set model_b = "qwen123b"
+set judge_model = "mistral_1"
+set output_dir = "dsl_test/vortex_results"
+
+# Create output directory if needed
+!mkdir -p ${output_dir}
+
+# Save the Vortex DSL prompt to a file
+# Disable session history to prevent cross-model context accumulation
+/session history off
+
+/multiline
+You are an interpreter for a language called 'Vortex'. Vortex operates on three registers: X, Y, and Z. All registers start at 0.
+
+Here are the valid commands:
+* `ADD [reg] [val]`: Adds [val] to [reg].
+* `SHIFT [reg1] [reg2]`: Moves the value of [reg1] into [reg2]. [reg1] becomes 0.
+* `MIRROR [reg]`: Multiplies [reg] by -1.
+* `PULL [reg]`: Yields the current value of the register.
+
+**The Universal Axiom:** Every time a register is targeted by ANY command (including being read by `PULL` or `SHIFT`), its value automatically decreases by 1 *after* the command executes.
+
+Execute the following Vortex script step-by-step:
+1. ADD X 10
+2. SHIFT X Y
+3. ADD Z 5
+4. MIRROR Y
+5. SHIFT Z X
+6. PULL Y
+7. PULL X
+
+Provide a trace table showing the exact values of X, Y, and Z *after* each line of code executes. Then, state the final output of the two PULL commands.
+
+Format your response as:
+Step | Command | X | Y | Z | Notes
+---|---|---|---|---|---
+1 | ADD X 10 | ? | ? | ? | 
+2 | SHIFT X Y | ? | ? | ? | 
+3 | ADD Z 5 | ? | ? | ? | 
+4 | MIRROR Y | ? | ? | ? | 
+5 | SHIFT Z X | ? | ? | ? | 
+6 | PULL Y | ? | ? | ? | 
+7 | PULL X | ? | ? | ? | 
+
+Final PULL outputs: Y=?, X=?
+;;
+/multiline
+/save ${output_dir}/vortex_prompt.txt
+
+# ============================================
+# Phase 1: Model A (mistral_1) Execution
+# ============================================
+/echo "=== Testing ${model_a} ==="
+/model ${model_a}
+/prompt ${output_dir}/vortex_prompt.txt
+/save ${output_dir}/${test_name}_${model_a}.txt
+wait 3
+
+# ============================================
+# Phase 2: Model B (qwen123b) Execution
+# ============================================
+/echo "=== Testing ${model_b} ==="
+/model ${model_b}
+/prompt ${output_dir}/vortex_prompt.txt
+/save ${output_dir}/${test_name}_${model_b}.txt
+wait 3
+
+# ============================================
+# Phase 3: Load results into file banks for comparison
+# ============================================
+/filebank1 ${output_dir}/${test_name}_${model_a}.txt
+/filebank2 ${output_dir}/${test_name}_${model_b}.txt
+
+# ============================================
+# Phase 4: Judge Evaluation (using mistral_1)
+# ============================================
+/echo "=== Judge Evaluation ==="
+/model ${judge_model}
+
+/multiline
+You are an impartial judge evaluating two AI model responses to a novel DSL interpretation task.
+
+The task was to interpret a fictional "Vortex" language with a decay mechanic:
+- All registers (X, Y, Z) start at 0
+- ADD [reg] [val]: Adds val to reg
+- SHIFT [reg1] [reg2]: Moves reg1 value to reg2, reg1 becomes 0
+- MIRROR [reg]: Multiplies reg by -1
+- PULL [reg]: Yields reg value
+- **Universal Axiom**: Every time a register is targeted by ANY command, its value decreases by 1 AFTER the command executes
+
+The Vortex script to execute:
+1. ADD X 10
+2. SHIFT X Y
+3. ADD Z 5
+4. MIRROR Y
+5. SHIFT Z X
+6. PULL Y
+7. PULL X
+
+Model A (${model_a}) response:
+{filebank1}
+
+Model B (${model_b}) response:
+{filebank2}
+
+Evaluate both responses for:
+1. Correctness of the trace table (each step's X, Y, Z values)
+2. Correctness of final PULL outputs
+3. Attention to the Universal Axiom (decay after each access)
+4. Format compliance
+
+Provide:
+- Individual accuracy scores (0-100%) for each model
+- Step-by-step correction of any errors
+- Final verdict on which model performed better and why
+- Detailed analysis of where each model succeeded or failed
+;;
+/multiline
+
+/save ${output_dir}/${test_name}_judge_report.txt
+
+# ============================================
+# Phase 5: Summary
+# ============================================
+/echo "=== Test Complete ==="
+/echo "Results saved to: ${output_dir}/"
+/echo "  - ${test_name}_${model_a}.txt (Model A response)"
+/echo "  - ${test_name}_${model_b}.txt (Model B response)"
+/echo "  - ${test_name}_judge_report.txt (Judge evaluation)"
+/echo "  - vortex_prompt.txt (Original prompt)"
+
+# Cleanup
+/clearfile

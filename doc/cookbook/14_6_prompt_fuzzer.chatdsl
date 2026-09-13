@@ -3,6 +3,9 @@
 # Run: /script doc/cookbook/14_6_prompt_fuzzer.chatdsl
 # Combines: array payloads + foreach + variable injection (ties to doc/conditiona_error_injection.md)
 
+# Disable session history to prevent cross-model context accumulation
+/session history off
+
 /model mistral_1
 set cases[] = ["", "   ", "a]b{c}", "9999999999999999", "null", "undefined"]
 foreach payload in ${cases}

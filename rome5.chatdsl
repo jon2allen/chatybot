@@ -15,6 +15,9 @@ set comparison = "comparison_report.txt"
 #/quit
 
 # Create question file
+# Disable session history to prevent cross-model context accumulation
+/session history off
+
 /clearfile
 /multiline
 Please create a comprehensive set of 10 questions about ${city}  street food that would test an AI's knowledge depth and accuracy. Include questions about:

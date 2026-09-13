@@ -4,6 +4,9 @@
 # Combines: macros (def/%) + /reloadmacros + judge + filebank compare (no repo example invokes macros at all)
 # Requires: my_macros.chatdsl defining expert_answer(topic)
 
+# Disable session history to prevent cross-model context accumulation
+/session history off
+
 # Round 1: baseline macro
 /reloadmacros my_macros.chatdsl
 /model mistral_1

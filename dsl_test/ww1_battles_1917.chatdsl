@@ -3,6 +3,9 @@
 # and logs responses to a database
 
 # Set up database
+# Disable session history to prevent cross-model context accumulation
+/session history off
+
 /setdb ww1
 
 set query = "List the major World War One battles that took place in 1917, including dates and locations."

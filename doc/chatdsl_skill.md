@@ -849,8 +849,93 @@ From `chatdsl_bnf.txt`:
 5. **No functions** - but macros are supported with `%` syntax
 6. **Case-sensitive** string comparison
 7. **No floating point** in wait - use integers only
+8. **Session History Accumulation in Comparative Scripts** - Interactive chat retains conversation history by default. In multi-model comparison scripts, benchmarks, or evaluation loops, this causes cross-model contamination unless `/session history off` is declared.
 
 ---
+
+## Session Management: `/session` vs `/session history off`
+
+### Understanding the Difference
+- **Session History ON (Default)**: Every prompt and response is appended to conversation history and sent to the LLM on subsequent turns.
+- **Session History OFF (`/session history off`)**: Prompts execute statelessly without passing prior exchanges to the LLM. Only the single latest completion is retained in memory for `/save <file>`, `${LAST_RESPONSE}`, `${LAST_COMPLETION}`, and `/dblog`.
+
+### Scripts That Benefit from `/session` (History ON)
+Scripts that require multi-turn feedback and state accumulation:
+
+1. **Agentic Tool Loops (`/tool loop`)**:
+   Autonomous workflows where the model calls tools (`read_file`, `write_file`, `run_command`), inspects execution outputs, and self-corrects across turns require conversation history so the model sees the results of its previous tool actions:
+   ```chatdsl
+   # Agentic tool use requires history ON so tool outputs feed back into the model
+   /tools enable list_directory,read_file,write_file,run_command
+   /tool loop
+   Inspect the failing unit test in test_auth.py, read the implementation, and fix the bug.
+   ;;
+   ```
+
+2. **Iterative Conversational Refinement (Single Model)**:
+   Multi-step conversational flows where a single model builds upon its previous reasoning:
+   ```chatdsl
+   /model devstral_1
+   Draft an outline for a technical paper on distributed consensus.
+   ;;
+   Now expand section 3 (Raft vs Paxos) with code snippets.
+   ;;
+   ```
+
+### Scripts That CANNOT Benefit (Must Use `/session history off`)
+Scripts where cross-prompt or cross-model carryover pollutes the evaluation:
+
+1. **Multi-Model Comparisons & Benchmarks**:
+   When testing Model 1 and Model 2 on the same prompt, leaving history ON causes Model 2 to see Model 1's prompt and answers in its context window. Model 2 may comment on Model 1's answer, repeat its hallucinations, or refuse to answer:
+   ```chatdsl
+   # REQUIRED: Turn off history for multi-model comparisons
+   /session history off
+
+   set prompt = "Write a memory-safe string reverse in C++."
+
+   /model gemma4_llamacpp_1
+   ${prompt}
+   /save gemma_out.txt
+
+   /model qwen3_llamacpp_1
+   # Without '/session history off', Qwen would see Gemma's code in history!
+   ${prompt}
+   /save qwen_out.txt
+
+   # Judge compares both outputs via clean filebanks
+   /model mistral_1
+   /filebank1 gemma_out.txt
+   /filebank2 qwen_out.txt
+   Compare and score these two solutions:
+   Candidate A: {filebank1}
+   Candidate B: {filebank2}
+   /save score.txt
+   ```
+
+2. **Batch Test Matrices & Prompt Fuzzing**:
+   When looping through test cases with `foreach`, each test case must run independently. Leaking previous iterations into subsequent test cases breaks test isolation:
+   ```chatdsl
+   /session history off
+   set cases[] = ["valid_input", "empty_payload", "malformed_json", "sql_injection_attempt"]
+   foreach payload in ${cases}
+     /setvar cur ${payload}
+     Analyze security for payload: ${cur}
+     /save results_${cur}.txt
+   ```
+
+3. **Database Logging Pipelines (`/dblog`)**:
+   Querying multiple models on a question and logging to TinyDB:
+   ```chatdsl
+   /session history off
+   /setdb historical_events
+   set q = "What were the pivotal events of 1917 in WWI?"
+   /model nvidia_1
+   ${q}
+   /dblog
+   /model mistral_1
+   ${q}
+   /dblog
+   ```
 
 ## Macros (Advanced)
 

@@ -12,6 +12,9 @@ set results2 = "${output_dir}/nvidia_results.txt"
 set comparison = "${output_dir}/comparison_report.txt"
 
 # Create question file
+# Disable session history to prevent cross-model context accumulation
+/session history off
+
 /clearfile
 /multiline
 Please create a comprehensive set of 10 questions about Nanjing street food that would test an AI's knowledge depth and accuracy. Include questions about:

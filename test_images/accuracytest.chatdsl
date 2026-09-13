@@ -10,6 +10,9 @@ set output_dir = "test_images/accuracy_results"
 set vision_model = "openrouter_image"
 set judge_model = "elephant"
 set num_images = 15
+
+# Disable session history to prevent cross-model context accumulation
+/session history off
 set results_prefix = "${output_dir}/result_"
 set comparison_prefix = "${output_dir}/comparison_"
 set summary_file = "${output_dir}/final_summary.txt"
