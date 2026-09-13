@@ -3858,7 +3858,7 @@ class ChatybotApp:
                 names.update(cfg["tools"].keys())
         except Exception:
             pass
-        if getattr(self, "mcp_manager", None) and getattr(self.mcp_manager, "cached_schemas", None):
+        if getattr(self, "mcp_manager", None) and isinstance(getattr(self.mcp_manager, "cached_schemas", None), dict):
             for server, tlist in self.mcp_manager.cached_schemas.items():
                 for t in tlist:
                     names.add(f"mcp__{server}__{t.name}")
