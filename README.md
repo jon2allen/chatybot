@@ -244,6 +244,17 @@ Open `.env` in any text editor and paste your keys. Chatybot automatically detec
 | **Hugging Face** | `HF_API_KEY` | Optional (`hf_preset`) | [huggingface.co](https://huggingface.co/settings/tokens) |
 | **Jina AI** | `JINA_API_KEY` | Optional (Search & Reranking) | [jina.ai](https://jina.ai/) |
 | **Ollama** | *(None required)* | Local models (`ollama_llama3`) | Localhost (`http://localhost:11434/v1`) |
+| **Apple Foundation Model** | *(None required)* | On-device (`apple_fm`) | [Apple Foundation Models](https://developer.apple.com/documentation/foundationmodels) |
+
+> [!NOTE]
+> **Apple Foundation Model (Beta):** Chatybot supports Apple's on-device
+> Foundation Model on macOS 26+ with Apple Intelligence enabled. The model
+> runs locally with no API key and no network. The context window is
+> limited to 4096 tokens, which constrains conversation length, tool
+> usage, and file operations. Install with `pip install apple-fm-sdk`
+> (or `pip install 'chatybot[apple_fm]'` in zsh). See the full
+> [Apple FM Support Guide](chatybot_apple_fm_support.md) for details,
+> caveats, and recommended practices.
 
 ---
 
