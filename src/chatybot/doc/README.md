@@ -638,6 +638,8 @@ Chatybot's extraction engine automatically recognizes, parses, and normalizes al
 | **6. XML / Function, Invoke & Tool-Use Syntax** | `<tool_use><tool_name>find_files</tool_name><arguments>{"path": "dir"}</arguments></tool_use>` or `<invoke name="run_command"><parameter name="command">git status</parameter></invoke>` | Anthropic XML, MCP, Google AI Studio / Gemini, DeepSeek, Command-R+ |
 | **7. Python-style / Single-Quoted Dicts** | `{'tool': 'list_directory', 'arguments': {'path': 'src/project'}}` | Python literal output (auto-repaired via AST / JSON repair) |
 | **8. Unquoted Key JSON** | `{tool: list_directory, arguments: {path: "src/project"}}` | Auto-repaired and normalized |
+| **9. YAML / Key-Value Blocks** | `tool: read_file\npath: src/project/file.py` | LangChain ReAct, HuggingFace, Google AI Studio / Gemini |
+| **10. Unescaped Inner Quotes JSON** | `{"tool": "run_command", "arguments": {"command": "echo "hello""}}` | Auto-repaired by inner quote delimiter detection |
 
 #### **3. Tool Configuration (`tools_config.toml`)**
 All agentic tools and execution configurations are managed in `src/chatybot/tools_config.toml` (which is copied to `~/.config/chatybot/tools_config.toml` upon initialization).
