@@ -1095,17 +1095,8 @@ chat --> Create a blog post outline about ${topic}
 
 ### Change log
 
-September 11th, 2026
----------------------------
-- **File Write Backup & Re-applicable Diff Preservation**:
-  - `write_file` preserves a single initial full-copy backup of existing files before modification under `<session_dir>/<session_id>/backups/<relative_path>`.
-  - `replace_file_content` computes and saves standard, re-applicable unified diff patches (`<session_dir>/<session_id>/diffs/<relative_path>.<timestamp>.patch`).
-  - Backups and diffs are preserved within the session's own directory, even for unnamed sessions, and only fall back to the global directory when chat history is disabled via `/session history off`.
-  - Configurable via `backup_file_on_write = true` in `tools_config.toml` (can be disabled by hand-editing `backup_file_on_write = false`).
-  - Passed session directory, session ID, and history status across the tool dispatcher boundary via environment variables.
-
-September 10th, 2026 (v0.8.5)
----------------------------
+September 13th, 2026 (v0.8.5)
+----------------------------
 - **Non-Destructive Session Query & Extraction Engine (`/session query`, `/session get`)**:
   - Added `/session query` command and `session_search` tool to search session turns, conversation history, notes, and scratchpad files with boolean AND/OR matching.
   - Implemented rich date range and timestamp constraints (`since=`, `until=`, `range=`) supporting relative expressions (`today`, `yesterday`, `7d`, `24h`) and date ranges (`2026-03-01..2026-05-01`).
@@ -1114,18 +1105,26 @@ September 10th, 2026 (v0.8.5)
   - Added automated script variable assignment via `var=<name>` and protected variables `${SESSION_QUERY}` and `${SESSION_GET}`.
   - Implemented 3-tier session size caching (`_summary_cache`, lazy size evaluation during search, and per-query memoization) to report exact session storage sizes in bytes and formatted human units (`KB`/`MB`) with zero redundant disk reads.
   - Added dedicated `sessions` list to search responses with whole-session byte counts, eliminating turn-level size confusion.
-- **Cookbook & Documentation**:
-  - Added Recipe 10.6 (*Non-Destructive Session Query and Turn Extraction*) to `doc/chatdsl_cookbook.md` and runnable script `doc/cookbook/10_6_session_query_and_extraction.chatdsl`.
-  - Updated `README.md` with complete command specifications, tool calling configurations, and workflow recipes.
-
-September 13th, 2026 (v0.8.5)
-----------------------------
+- **Interactive Prompts & Agentic User Feedback (`/ask`, `ask_user`)**:
+  - Added `/ask` command to prompt the user interactively (`yesno`, `choice`, `text`) and store answers into `${ASK_RESULT}` or custom variables with `-> VARNAME`.
+  - Added `ask_user` tool enabling autonomous LLMs to pause and request clarifications or decisions during agentic tool loops.
+  - Added non-interactive and background process detection to prevent freezing or `SIGTTIN` suspension in headless runs, batch pipelines, and cron tasks, returning structured skip status payloads to LLMs.
+- **Multi-Format LLM Tool Call Normalization**:
+  - Expanded tool call extraction to recognize 12 standard formats without vendor adapters: Anthropic/MCP XML tags (`<tool_use>`, `<invoke>`, `<call>`, `<tool>`), YAML key-value blocks, DeepSeek DSML, Kimi K2 instruction syntax, unquoted key JSON, and unescaped inner quote repair.
 - **Clean Output Saving by Default (`/save`)**:
   - Refactored `/save` to strip `<think>`, `<thought>`, and `<thinking>` blocks by default, saving clean LLM outputs directly without leaking chain-of-thought traces.
   - Decoupled `/save` behavior from `app.show_thinking` so saved files are clean regardless of whether interactive thinking is displayed in the terminal.
   - Added explicit modifiers: `withthink` (or `raw`) to include thinking tags in saved files, and `nothink` (or `clean`) to explicitly exclude them.
-  - Enhanced thinking tag cleaning regex to support `<thinking>` tags and case-insensitivity, cleanly handling multiline reasoning and unclosed tags.
   - Added full multilingual alias support (`conpensar`/`sinpensar`, `avecpenser`/`sanspenser`, `含思考`/`无思考`, `conpensare`/`senzapensare`, `مع_تفكير`/`بدون_تفكير`, `raw`/`crudo`/`brut`/`原始内容`/`grezzo`/`خام`).
+  - Added single latest-turn fallback so `/save` succeeds even when `/session history off` is active in stateless benchmark scripts.
+- **File Write Backup & Re-applicable Diff Preservation**:
+  - `write_file` preserves a single initial full-copy backup of existing files before modification under `<session_dir>/<session_id>/backups/<relative_path>`.
+  - `replace_file_content` computes and saves standard, re-applicable unified diff patches (`<session_dir>/<session_id>/diffs/<relative_path>.<timestamp>.patch`).
+  - Configurable via `backup_file_on_write = true` in `tools_config.toml`.
+- **Cookbook, Documentation & CLI Polish**:
+  - Added Recipe 2.6 (*Interactive User Prompts with `/ask`*), Recipe 8.4 (*User Interaction During Tool Loops with `ask_user`*), and Recipe 10.6 (*Non-Destructive Session Query and Turn Extraction*) to `doc/chatdsl_cookbook.md`.
+  - Configured `LESS="-R"` in `display_doc` so syntax-highlighted ANSI sequences render in full color on Linux terminals without escaping as `ESC[...]`.
+  - Enforced 80-column terminal output standards across banners, tables, and session metrics.
 
 September 8th, 2026 (v0.8.4)
 ---------------------------
