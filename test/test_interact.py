@@ -4,7 +4,7 @@ import sys
 import unittest
 from unittest.mock import MagicMock, patch
 
-from chatybot.tools.interact_utils import ask_user, _is_interactive, _in_script
+from chatybot.tools.interact_utils import ask_user, _is_interactive
 from chatybot.commands.interact import _parse_ask_args
 
 
@@ -20,7 +20,7 @@ def _make_app(script_context: bool = False) -> MagicMock:
 
 
 # ---------------------------------------------------------------------------
-# _is_interactive / _in_script
+# _is_interactive
 # ---------------------------------------------------------------------------
 
 class TestIsInteractive(unittest.TestCase):

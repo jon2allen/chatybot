@@ -273,7 +273,7 @@ async def cmd_save(ctx: CommandContext, parts: list, command: str) -> CommandRes
 
     def clean_thinking(text: str) -> str:
         cleaned = re.sub(
-            r"<(think|thought|thinking)>.*?(</\1>|$)\s*", "", text, flags=re.DOTALL | re.IGNORECASE
+            r"<(?:think|thought|thinking)>.*?(?:</(?:think|thought|thinking)>|$)\s*", "", text, flags=re.DOTALL | re.IGNORECASE
         )
         return cleaned.lstrip("\r\n")
 

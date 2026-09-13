@@ -690,7 +690,7 @@ def replace_file_content(
                 )
 
             occurrences = bounded_segment.count(target)
-            new_bounded_segment = bounded_segment.replace(target, replacement, 1)
+            new_bounded_segment = bounded_segment.replace(target, replacement)
             new_content = "".join(file_lines[:start_idx]) + new_bounded_segment + "".join(file_lines[end_idx:])
         else:
             if target not in content:
