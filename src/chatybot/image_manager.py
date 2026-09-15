@@ -1,6 +1,6 @@
 # src/chatybot/image_manager.py
-import os
 import base64
+import os
 from pathlib import Path
 from typing import Optional, Tuple
 
@@ -17,7 +17,7 @@ class ImageManager:
         os.makedirs(self.image_dir, exist_ok=True)
         print(f"Image directory set to: {self.image_dir}")
     
-    def load_image_data(self, file_path: str) -> Tuple[str, str]:
+    def load_image_data(self, file_path: str) -> tuple[str, str]:
         """
         Load an image from disk and return (mime_type, base64_data).
         

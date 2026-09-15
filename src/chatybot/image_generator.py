@@ -9,7 +9,8 @@ import json
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, Optional, Tuple, List
+from typing import Any, Dict, List, Optional, Tuple
+
 import aiohttp
 
 
@@ -25,11 +26,11 @@ class ImageGenerator:
         """
         self.config_manager = config_manager
         self.image_dir = os.path.expanduser("~/chatybot_images")
-        self.counters: Dict[str, int] = {}  # Track counter per date
-        self.session: Optional[aiohttp.ClientSession] = None
+        self.counters: dict[str, int] = {}  # Track counter per date
+        self.session: aiohttp.ClientSession | None = None
         
         # Per-session state
-        self.last_generated_image: Optional[Tuple[str, str]] = None  # (file_path, base64_data)
+        self.last_generated_image: tuple[str, str] | None = None  # (file_path, base64_data)
         
         # Load existing counters from index.json files to avoid overwriting on restart
         self._load_existing_counters()
@@ -72,16 +73,16 @@ class ImageGenerator:
     async def generate_image(
         self,
         prompt: str,
-        vendor: Optional[str] = None,
-        model_name: Optional[str] = None,
-        size: Optional[str] = None,
-        quality: Optional[str] = None,
-        endpoint: Optional[str] = None,
-        api_key: Optional[str] = None,
-        base_url: Optional[str] = None,
-        modalities: Optional[list] = None,
+        vendor: str | None = None,
+        model_name: str | None = None,
+        size: str | None = None,
+        quality: str | None = None,
+        endpoint: str | None = None,
+        api_key: str | None = None,
+        base_url: str | None = None,
+        modalities: list | None = None,
         size_manual: bool = False,
-    ) -> Tuple[str, str]:
+    ) -> tuple[str, str]:
         """
         Generate an image from a text prompt.
         
@@ -146,13 +147,13 @@ class ImageGenerator:
     async def _generate_openai(
         self,
         prompt: str,
-        model_name: Optional[str],
-        size: Optional[str],
-        quality: Optional[str],
-        endpoint: Optional[str],
-        api_key: Optional[str],
-        base_url: Optional[str],
-    ) -> Tuple[str, str]:
+        model_name: str | None,
+        size: str | None,
+        quality: str | None,
+        endpoint: str | None,
+        api_key: str | None,
+        base_url: str | None,
+    ) -> tuple[str, str]:
         """
         Generate image using OpenAI-compatible API (OpenAI, Mistral, NVIDIA, etc.).
         """
@@ -187,18 +188,18 @@ class ImageGenerator:
             return file_path, image_data
             
         except Exception as e:
-            raise ValueError(f"OpenAI image generation failed: {str(e)}")
+            raise ValueError(f"OpenAI image generation failed: {e!s}")
     
     async def _generate_mistral(
         self,
         prompt: str,
-        model_name: Optional[str],
-        size: Optional[str],
-        quality: Optional[str],
-        endpoint: Optional[str],
-        api_key: Optional[str],
-        base_url: Optional[str],
-    ) -> Tuple[str, str]:
+        model_name: str | None,
+        size: str | None,
+        quality: str | None,
+        endpoint: str | None,
+        api_key: str | None,
+        base_url: str | None,
+    ) -> tuple[str, str]:
         """
         Generate image using Mistral's image API.
         Mistral uses OpenAI-compatible format for images.
@@ -211,15 +212,15 @@ class ImageGenerator:
     async def _generate_openrouter(
         self,
         prompt: str,
-        model_name: Optional[str],
-        size: Optional[str],
-        quality: Optional[str],
-        endpoint: Optional[str],
-        api_key: Optional[str],
-        base_url: Optional[str],
-        modalities: Optional[list] = None,
+        model_name: str | None,
+        size: str | None,
+        quality: str | None,
+        endpoint: str | None,
+        api_key: str | None,
+        base_url: str | None,
+        modalities: list | None = None,
         size_manual: bool = False,
-    ) -> Tuple[str, str]:
+    ) -> tuple[str, str]:
         """
         Generate image using OpenRouter's API with direct HTTP calls.
         OpenRouter uses /chat/completions for image generation with modalities.
@@ -367,18 +368,18 @@ class ImageGenerator:
                     raise ValueError(f"No image data found in OpenRouter response: {data}")
         
         except Exception as e:
-            raise ValueError(f"OpenRouter image generation failed: {str(e)}")
+            raise ValueError(f"OpenRouter image generation failed: {e!s}")
     
     async def _generate_ollama(
         self,
         prompt: str,
-        model_name: Optional[str],
-        size: Optional[str],
-        quality: Optional[str],
-        endpoint: Optional[str],
-        api_key: Optional[str],
-        base_url: Optional[str],
-    ) -> Tuple[str, str]:
+        model_name: str | None,
+        size: str | None,
+        quality: str | None,
+        endpoint: str | None,
+        api_key: str | None,
+        base_url: str | None,
+    ) -> tuple[str, str]:
         """
         Generate image using Ollama's local API.
         """
@@ -430,7 +431,7 @@ class ImageGenerator:
                         raise ValueError(f"Unexpected response from Ollama: {data}")
                         
         except Exception as e:
-            raise ValueError(f"Ollama image generation failed: {str(e)}")
+            raise ValueError(f"Ollama image generation failed: {e!s}")
     
     def _save_image(
         self,
@@ -438,8 +439,8 @@ class ImageGenerator:
         prompt: str,
         vendor: str,
         model: str,
-        size: Optional[str] = None,
-        quality: Optional[str] = None,
+        size: str | None = None,
+        quality: str | None = None,
     ) -> str:
         """
         Save image to disk with auto-naming convention.
@@ -506,13 +507,13 @@ class ImageGenerator:
         prompt: str,
         vendor: str,
         model: str,
-        size: Optional[str] = None,
-        quality: Optional[str] = None,
+        size: str | None = None,
+        quality: str | None = None,
     ) -> None:
         """Update the index.json for a date."""
         index_path = os.path.join(self.image_dir, date_str, "index.json")
         
-        data: Dict[str, Any] = {}
+        data: dict[str, Any] = {}
         if os.path.exists(index_path):
             with open(index_path, "r") as f:
                 data = json.load(f)
@@ -536,7 +537,7 @@ class ImageGenerator:
         with open(index_path, "w") as f:
             json.dump(data, f, indent=2)
     
-    def list_images(self, date: Optional[str] = None) -> Dict[str, Any]:
+    def list_images(self, date: str | None = None) -> dict[str, Any]:
         """
         List all images, optionally filtered by date.
         
@@ -546,7 +547,7 @@ class ImageGenerator:
         Returns:
             Dictionary mapping dates to image metadata
         """
-        results: Dict[str, Any] = {}
+        results: dict[str, Any] = {}
         
         image_dir = Path(self.image_dir)
         if not image_dir.exists():
@@ -566,7 +567,7 @@ class ImageGenerator:
         
         return results
     
-    def get_image_info(self, date: str, filename: str) -> Optional[Dict[str, Any]]:
+    def get_image_info(self, date: str, filename: str) -> dict[str, Any] | None:
         """
         Get info about a specific image.
         

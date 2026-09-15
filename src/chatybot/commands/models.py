@@ -7,8 +7,8 @@ Migrated from chatybot.handle_escape_command elif chain:
   /listmodels
 """
 
-from chatybot.commands.registry import command, CommandResult, registry
 from chatybot.commands.context import CommandContext
+from chatybot.commands.registry import CommandResult, command, registry
 
 
 @command("/model", help="Switch or view the active chat model", args="[alias|info [alias]]", category="models")
@@ -116,7 +116,7 @@ async def cmd_model(ctx: CommandContext, parts: list, command: str) -> CommandRe
         print(f"Provider:        {model_config.get('vendor', 'Unknown')}")
         base_url = model_config.get('base_url', 'Default')
         if base_url == "on-device":
-            print(f"Base URL:        (on-device, no network)")
+            print("Base URL:        (on-device, no network)")
         else:
             print(f"Base URL:        {base_url}")
 
@@ -127,7 +127,7 @@ async def cmd_model(ctx: CommandContext, parts: list, command: str) -> CommandRe
                 cw_str = f"{context_window} tokens"
             print(f"Context Limit:   {cw_str} [{source}]")
         else:
-            print(f"Context Limit:   Unknown")
+            print("Context Limit:   Unknown")
 
         max_tok = model_config.get("max_tokens")
         if max_tok:

@@ -24,7 +24,7 @@ from chatybot.context_limit import ContextLimiter, TruncationDiagnostic
 from chatybot.session_replayer import SessionReplayer, clean_thinking_tokens
 
 
-def _format_tool_call_message(tool: str, arguments: Dict[str, Any]) -> str:
+def _format_tool_call_message(tool: str, arguments: dict[str, Any]) -> str:
     """Approximate the assistant tool-call message the model produced.
 
     The exact text the model emitted (markdown fences, Gemma XML syntax, etc.)
@@ -33,18 +33,18 @@ def _format_tool_call_message(tool: str, arguments: Dict[str, Any]) -> str:
     return f"```json\n{json.dumps({'tool': tool, 'arguments': arguments}, ensure_ascii=False)}\n```"
 
 
-def _format_tool_result_message(tool: str, arguments: Dict[str, Any], result: str) -> str:
+def _format_tool_result_message(tool: str, arguments: dict[str, Any], result: str) -> str:
     """Reconstruct the tool-result user message exactly as execute_tool_loop builds it."""
     args_str = json.dumps(arguments, ensure_ascii=False)
     return f"Tool execution results:\nTool: {tool}\nArguments: {args_str}\nResult: {result}"
 
 
 def reconstruct_agentic_messages(
-    session_turns: List[Dict[str, Any]],
+    session_turns: list[dict[str, Any]],
     agentic_turn_id: int,
     system_prompt: str,
     up_to_step: int,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Reconstruct the temp_history message array the agentic loop saw at ``up_to_step``.
 
     Args:
@@ -60,12 +60,12 @@ def reconstruct_agentic_messages(
       3. the agentic turn's prompt (chat_history[-1][0])
       4. for each step 1..up_to_step: assistant tool-call + tool-result user msg
     """
-    messages: List[Dict[str, Any]] = []
+    messages: list[dict[str, Any]] = []
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
 
     # Locate the agentic turn
-    agentic_turn: Optional[Dict[str, Any]] = None
+    agentic_turn: dict[str, Any] | None = None
     for t in session_turns:
         if t.get("turn_id") == agentic_turn_id:
             agentic_turn = t
@@ -116,10 +116,10 @@ class AgenticStepSnapshot:
     total_tokens: int          # before truncation
     truncated_tokens: int      # after truncation
     did_truncate: bool
-    evicted_indices: List[int]
+    evicted_indices: list[int]
     anchors_alone_exceed_limit: bool
-    messages: List[Dict[str, Any]]
-    truncated_messages: List[Dict[str, Any]]
+    messages: list[dict[str, Any]]
+    truncated_messages: list[dict[str, Any]]
     duration_ms: float
 
 
@@ -128,8 +128,8 @@ class AgenticStepDiff:
     """Comparison between two steps within an agentic loop."""
     step_a: int
     step_b: int
-    added_messages: List[Dict[str, Any]]
-    newly_evicted: List[Dict[str, Any]]
+    added_messages: list[dict[str, Any]]
+    newly_evicted: list[dict[str, Any]]
     token_delta: int
     truncation_evicted_delta: int
     anchor_overflow_changed: bool
@@ -151,12 +151,12 @@ class AgenticReplayer:
 
     # -- session / turn resolution --------------------------------------
 
-    def _load_turns(self, target: str) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
+    def _load_turns(self, target: str) -> tuple[dict[str, Any], list[dict[str, Any]]]:
         return self._session_replayer.load(target)
 
     def _find_agentic_turn(
-        self, turns: List[Dict[str, Any]], turn_id: Optional[int]
-    ) -> Optional[Dict[str, Any]]:
+        self, turns: list[dict[str, Any]], turn_id: int | None
+    ) -> dict[str, Any] | None:
         llm_turns = [t for t in turns if t.get("type") != "command" and "prompt" in t]
         if turn_id is not None:
             for t in llm_turns:
@@ -177,12 +177,12 @@ class AgenticReplayer:
 
     def snapshot_at_step(
         self,
-        turns: List[Dict[str, Any]],
+        turns: list[dict[str, Any]],
         agentic_turn_id: int,
         system_prompt: str,
         step: int,
-        limit: Optional[int] = None,
-    ) -> Optional[AgenticStepSnapshot]:
+        limit: int | None = None,
+    ) -> AgenticStepSnapshot | None:
         """Build an AgenticStepSnapshot for the given step (0 = pre-loop baseline)."""
         agentic_turn = self._find_agentic_turn(turns, agentic_turn_id)
         if agentic_turn is None:
@@ -225,11 +225,11 @@ class AgenticReplayer:
     def replay_loop(
         self,
         target: str,
-        turn_id: Optional[int] = None,
-        limit: Optional[int] = None,
-        turns: Optional[List[Dict[str, Any]]] = None,
-        system_prompt: Optional[str] = None,
-    ) -> List[AgenticStepSnapshot]:
+        turn_id: int | None = None,
+        limit: int | None = None,
+        turns: list[dict[str, Any]] | None = None,
+        system_prompt: str | None = None,
+    ) -> list[AgenticStepSnapshot]:
         """Produce a snapshot for every step of the loop (including step 0 baseline)."""
         if turns is None:
             meta, turns = self._load_turns(target)
@@ -245,7 +245,7 @@ class AgenticReplayer:
         if not isinstance(loop, list):
             loop = []
 
-        snapshots: List[AgenticStepSnapshot] = []
+        snapshots: list[AgenticStepSnapshot] = []
         # Step 0 = pre-loop baseline (system + prior turns + prompt, no tool steps)
         snap0 = self.snapshot_at_step(turns, agentic_turn_id, system_prompt, 0, limit=limit)
         if snap0 is not None:
@@ -259,13 +259,13 @@ class AgenticReplayer:
     def diff_steps(
         self,
         target: str,
-        turn_id: Optional[int],
+        turn_id: int | None,
         step_a: int,
         step_b: int,
-        limit: Optional[int] = None,
-        turns: Optional[List[Dict[str, Any]]] = None,
-        system_prompt: Optional[str] = None,
-    ) -> Optional[AgenticStepDiff]:
+        limit: int | None = None,
+        turns: list[dict[str, Any]] | None = None,
+        system_prompt: str | None = None,
+    ) -> AgenticStepDiff | None:
         """Compare the reconstructed context at step_a vs step_b of a loop."""
         if turns is None:
             meta, turns = self._load_turns(target)

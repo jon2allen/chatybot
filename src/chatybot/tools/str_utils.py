@@ -4,8 +4,8 @@ Searches for substring patterns in text with optional case-insensitive matching.
 Returns match count or match positions, and optionally stores the result in a script variable.
 """
 
-from typing import Dict, Any, Optional, List, Tuple
 import re
+from typing import Any, Dict, List, Optional, Tuple
 
 
 def str_search(
@@ -13,9 +13,9 @@ def str_search(
     text: str,
     mode: str = "c",
     case_sensitive: bool = True,
-    target_variable: Optional[str] = None,
+    target_variable: str | None = None,
     app: Any = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Search for a substring pattern in text.
 
@@ -57,17 +57,17 @@ def str_search(
             return response
 
         re_flags = 0 if case_sensitive else re.IGNORECASE
-        matches: List[re.Match] = list(re.finditer(re.escape(pattern), text, re_flags))
+        matches: list[re.Match] = list(re.finditer(re.escape(pattern), text, re_flags))
 
         if mode == "m":
-            positions: List[Tuple[int, int]] = [(m.start(), m.end()) for m in matches]
+            positions: list[tuple[int, int]] = [(m.start(), m.end()) for m in matches]
             result: Any = positions
         else:
             result = len(matches)
 
         count = len(matches)
 
-        response: Dict[str, Any] = {
+        response: dict[str, Any] = {
             "status": "success",
             "pattern": pattern,
             "result": result,
@@ -88,6 +88,6 @@ def str_search(
     except Exception as e:
         return {
             "status": "error",
-            "message": f"Error searching for pattern '{pattern}': {str(e)}",
+            "message": f"Error searching for pattern '{pattern}': {e!s}",
             "result": None,
         }

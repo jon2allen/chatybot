@@ -5,11 +5,17 @@ Non-code content is saved to a file prefixed with "notes_".
 Only processes files that are detected as code files.
 """
 
+import argparse
 import os
 import re
 import sys
-import argparse
-from pygments.lexers import guess_lexer, get_lexer_for_filename, get_lexer_by_name, TextLexer
+
+from pygments.lexers import (
+    TextLexer,
+    get_lexer_by_name,
+    get_lexer_for_filename,
+    guess_lexer,
+)
 from pygments.lexers.markup import MarkdownLexer
 from pygments.util import ClassNotFound
 

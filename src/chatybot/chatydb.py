@@ -1,19 +1,19 @@
+import json
 import os
 import re
-import json
-from typing import List, Dict, Any, Optional
 from datetime import datetime
+from typing import Any, Dict, List, Optional
 
 # Import the CorpusManager from the provided tinydb implementation
 from .tinydb1.corpus_manager import CorpusManager
 
 # Global variables
-SEARCHBUFFER: List[Dict[str, Any]] = []  # Holds the last search results
+SEARCHBUFFER: list[dict[str, Any]] = []  # Holds the last search results
 
 # Internal reference to the active CorpusManager instance
-_manager: Optional[CorpusManager] = None
+_manager: CorpusManager | None = None
 # Storage for the current database path
-_db_path: Optional[str] = None
+_db_path: str | None = None
 
 # A database name must be a single safe path component: no slashes, no "..",
 # no path separators, no empty/whitespace. This prevents path traversal and
@@ -451,7 +451,7 @@ def dbprint(target_file: str = None) -> None:
             # Move metadata to top
             metadata = item.get("metadata", {})
             if metadata:
-                report_lines.append(f"    Metadata:")
+                report_lines.append("    Metadata:")
                 for key, value in metadata.items():
                     # Skip the verbose thinking_content here; it gets its own
                     # styled section below when present.
@@ -459,7 +459,7 @@ def dbprint(target_file: str = None) -> None:
                         continue
                     report_lines.append(f"      {key}: {value}")
             else:
-                report_lines.append(f"    Metadata: [None]")
+                report_lines.append("    Metadata: [None]")
 
             report_lines.append(f"    Type: {item.get('type', 'N/A')}")
             report_lines.append(f"    Name: {item.get('name', 'N/A')}")
@@ -467,7 +467,7 @@ def dbprint(target_file: str = None) -> None:
             # Styled thinking section (only when thinking was logged)
             thinking = metadata.get("thinking_content") if metadata else None
             if thinking:
-                report_lines.append(f"    -- Thinking --")
+                report_lines.append("    -- Thinking --")
                 formatted_thinking = duplicate_linefeeds(thinking)
                 for part in formatted_thinking.split("\n\n"):
                     if part.strip():
@@ -475,7 +475,7 @@ def dbprint(target_file: str = None) -> None:
                 tok = metadata.get("thinking_tokens", 0) if metadata else 0
                 if tok:
                     report_lines.append(f"    [thinking tokens: {tok}]")
-                report_lines.append(f"    -- End Thinking --")
+                report_lines.append("    -- End Thinking --")
 
             content = item.get("content", "")
             if content:
@@ -487,7 +487,7 @@ def dbprint(target_file: str = None) -> None:
                     if part.strip():  # Only add non-empty parts
                         report_lines.append(f"    {part}")
             else:
-                report_lines.append(f"    Content: [Empty]")
+                report_lines.append("    Content: [Empty]")
             report_lines.append("")
     else:
         report_lines.append("No items found.")

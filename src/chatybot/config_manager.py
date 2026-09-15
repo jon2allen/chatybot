@@ -6,23 +6,23 @@ Handles loading and managing application configuration
 
 import os
 import tomllib
-from typing import Dict, Any, Optional, List
+from typing import Any, Dict, List, Optional
 
 
 class ConfigManager:
     """Manages application configuration from TOML files."""
     
-    def __init__(self, config_path: Optional[str] = None):
+    def __init__(self, config_path: str | None = None):
         self.config_path = config_path
-        self.config: Dict[str, Any] = {}
-        self.default_model_alias: Optional[str] = None
-        self.active_model_alias: Optional[str] = None
+        self.config: dict[str, Any] = {}
+        self.default_model_alias: str | None = None
+        self.active_model_alias: str | None = None
         self.system_message: str = "You are a helpful assistant."
-        self.max_tokens: Optional[int] = None
-        self.top_p: Optional[float] = None
-        self.top_k: Optional[int] = None
-        self.freq_penalty: Optional[float] = None
-        self.pres_penalty: Optional[float] = None
+        self.max_tokens: int | None = None
+        self.top_p: float | None = None
+        self.top_k: int | None = None
+        self.freq_penalty: float | None = None
+        self.pres_penalty: float | None = None
         self.enable_chat_history: bool = True
         self.auto_truncate: bool = False
         self.auto_truncate_pct: float = 100.0
@@ -41,7 +41,7 @@ class ConfigManager:
             from .config_sync import sync_toml_file
             sync_toml_file(local_config, config_path, "chat_config.toml")
         
-        from .config_model import ChatConfig, MAX_MODEL_ALIAS_LEN
+        from .config_model import MAX_MODEL_ALIAS_LEN, ChatConfig
         try:
             chat_config = ChatConfig.from_toml(config_path)
             self.config = chat_config.model_dump(exclude_none=True)
@@ -105,7 +105,7 @@ class ConfigManager:
             if "default_quality" in image_config:
                 self.image_quality = image_config["default_quality"]
     
-    def get_model_config(self, model_alias: str) -> Dict[str, Any]:
+    def get_model_config(self, model_alias: str) -> dict[str, Any]:
         """
         Get configuration for a specific model.
         
@@ -162,11 +162,11 @@ class ConfigManager:
             top_k = config.get("top_k", "Def")
             freq_p = config.get("frequency_penalty", "Def")
             pres_p = config.get("presence_penalty", "Def")
-            print(f"{alias:<{alias_width}} {config['name']:<{name_width}} {base_url:<{url_width}} {temp:<6.2f} {str(max_tokens):<6} {str(top_p):<6} {str(top_k):<6} {str(freq_p):<6} {str(pres_p):<6}")
+            print(f"{alias:<{alias_width}} {config['name']:<{name_width}} {base_url:<{url_width}} {temp:<6.2f} {max_tokens!s:<6} {top_p!s:<6} {top_k!s:<6} {freq_p!s:<6} {pres_p!s:<6}")
         
         print()
     
-    def list_image_capable_models(self) -> List[str]:
+    def list_image_capable_models(self) -> list[str]:
         """
         List all models that support image generation.
         
@@ -179,7 +179,7 @@ class ConfigManager:
                 image_models.append(alias)
         return image_models
     
-    def get_image_config(self) -> Dict[str, Any]:
+    def get_image_config(self) -> dict[str, Any]:
         """
         Get image generation configuration.
         

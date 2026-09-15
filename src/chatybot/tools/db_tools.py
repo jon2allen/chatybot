@@ -11,7 +11,7 @@ from typing import Any, Optional
 
 def db_search(
     query: str,
-    db_name: Optional[str] = None,
+    db_name: str | None = None,
     limit: int = 20,
     app: Any = None,
 ) -> str:

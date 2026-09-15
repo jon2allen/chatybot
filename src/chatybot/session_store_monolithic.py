@@ -3,15 +3,15 @@ session_store_monolithic.py - Flat JSON implementation of BaseSessionStore for b
 Stores each session as a single monolithic JSON file (<session_id>.json or <session_id>.json.gz).
 """
 
+import gzip
+import json
 import os
 import re
-import json
-import gzip
-import time
 import shutil
 import sys
+import time
 from datetime import datetime
-from typing import Dict, Any, List, Tuple, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from .session_interface import BaseSessionStore
 
@@ -26,7 +26,7 @@ class MonolithicJsonSessionStore(BaseSessionStore):
         super().__init__(sessions_dir)
         os.makedirs(self.sessions_dir, exist_ok=True)
         self._cache_dir_mtime: float = -1.0
-        self._summary_cache: List[Dict[str, Any]] = []
+        self._summary_cache: list[dict[str, Any]] = []
 
     def _session_file(self, session_id: str) -> str:
         return os.path.join(self.sessions_dir, f"{session_id}.json")
@@ -104,7 +104,7 @@ class MonolithicJsonSessionStore(BaseSessionStore):
         except IOError:
             return False
 
-    def release_lock(self, session_id: Optional[str] = None) -> None:
+    def release_lock(self, session_id: str | None = None) -> None:
         if not session_id:
             return
         lock_path = self._session_lock_path(session_id)
@@ -122,10 +122,10 @@ class MonolithicJsonSessionStore(BaseSessionStore):
         self,
         session_id: str,
         model_alias: str,
-        custom_name: Optional[str] = None,
+        custom_name: str | None = None,
         initial_prompt: str = "",
-        notes: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        notes: str | None = None,
+    ) -> dict[str, Any]:
         with self._thread_lock:
             now = datetime.now().isoformat()
             slug = self._slugify_text(initial_prompt) if initial_prompt else "untitled_session"
@@ -150,7 +150,7 @@ class MonolithicJsonSessionStore(BaseSessionStore):
             self._invalidate_cache()
             return payload
 
-    def save_meta(self, session_id: str, meta_dict: Dict[str, Any]) -> None:
+    def save_meta(self, session_id: str, meta_dict: dict[str, Any]) -> None:
         with self._thread_lock:
             # Preserve existing turns if already present on disk
             current_turns = []
@@ -183,7 +183,7 @@ class MonolithicJsonSessionStore(BaseSessionStore):
             os.replace(tmp_path, filepath)
             self._invalidate_cache()
 
-    def append_turn(self, session_id: str, turn_data: Dict[str, Any]) -> None:
+    def append_turn(self, session_id: str, turn_data: dict[str, Any]) -> None:
         with self._thread_lock:
             filepath = self._session_file(session_id)
             gz_path = self._session_gz_file(session_id)
@@ -222,7 +222,7 @@ class MonolithicJsonSessionStore(BaseSessionStore):
             os.replace(tmp_path, filepath)
             self._invalidate_cache()
 
-    def replace_turns(self, session_id: str, turns: List[Dict[str, Any]]) -> None:
+    def replace_turns(self, session_id: str, turns: list[dict[str, Any]]) -> None:
         """Atomically overwrite or replace all turns in the monolithic JSON storage."""
         with self._thread_lock:
             filepath = self._session_file(session_id)
@@ -259,7 +259,7 @@ class MonolithicJsonSessionStore(BaseSessionStore):
             os.replace(tmp_path, filepath)
             self._invalidate_cache()
 
-    def load_session(self, target: str) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
+    def load_session(self, target: str) -> tuple[dict[str, Any], list[dict[str, Any]]]:
         sid = self.resolve_session(target)
         if not sid:
             raise FileNotFoundError(f"Session '{target}' not found.")
@@ -281,7 +281,7 @@ class MonolithicJsonSessionStore(BaseSessionStore):
         data["turn_count"] = len(turns)
         return data, turns
 
-    def resolve_session(self, target: str) -> Optional[str]:
+    def resolve_session(self, target: str) -> str | None:
         target = target.strip(" \"'")
         clean_target = target.removesuffix(".json.gz").removesuffix(".json")
 
@@ -310,7 +310,7 @@ class MonolithicJsonSessionStore(BaseSessionStore):
                         pass
         return None
 
-    def _get_all_summaries(self) -> List[Dict[str, Any]]:
+    def _get_all_summaries(self) -> list[dict[str, Any]]:
         """Single-pass cache loader across all monolithic session files."""
         if not os.path.exists(self.sessions_dir):
             return []
@@ -323,8 +323,8 @@ class MonolithicJsonSessionStore(BaseSessionStore):
         if self._cache_dir_mtime == current_mtime and self._summary_cache:
             return list(self._summary_cache)
 
-        summaries: List[Dict[str, Any]] = []
-        corrupted_files: List[str] = []
+        summaries: list[dict[str, Any]] = []
+        corrupted_files: list[str] = []
 
         files = [
             f
@@ -373,18 +373,18 @@ class MonolithicJsonSessionStore(BaseSessionStore):
     def list_sessions(
         self,
         offset: int = 0,
-        limit: Optional[int] = 10,
-        model_filter: Optional[str] = None,
-        compressed_filter: Optional[bool] = None,
+        limit: int | None = 10,
+        model_filter: str | None = None,
+        compressed_filter: bool | None = None,
         since_dt: Optional["datetime"] = None,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         summaries = self._get_all_summaries()
 
-        since_ts: Optional[float] = None
+        since_ts: float | None = None
         if since_dt is not None:
             since_ts = since_dt.timestamp()
 
-        parsed: List[Dict[str, Any]] = []
+        parsed: list[dict[str, Any]] = []
         for s in summaries:
             if model_filter and model_filter not in (s.get("model_alias") or "").lower():
                 continue
@@ -458,12 +458,12 @@ class MonolithicJsonSessionStore(BaseSessionStore):
             self._invalidate_cache()
             return count
 
-    def merge_sessions(self, target_name: str, source_targets: List[str]) -> str:
+    def merge_sessions(self, target_name: str, source_targets: list[str]) -> str:
         with self._thread_lock:
-            merged_turns: List[Dict[str, Any]] = []
-            merged_models: List[str] = []
-            first_slug: Optional[str] = None
-            source_notes: List[str] = []
+            merged_turns: list[dict[str, Any]] = []
+            merged_models: list[str] = []
+            first_slug: str | None = None
+            source_notes: list[str] = []
 
             for st in source_targets:
                 sid = self.resolve_session(st)
@@ -525,7 +525,7 @@ class MonolithicJsonSessionStore(BaseSessionStore):
                         pass
                 raise RuntimeError(f"Merge sessions failed: {e}") from e
 
-    def _parse_iso_timestamp(self, ts_str: Optional[str]) -> Optional[float]:
+    def _parse_iso_timestamp(self, ts_str: str | None) -> float | None:
         if not ts_str:
             return None
         try:
@@ -548,10 +548,10 @@ class MonolithicJsonSessionStore(BaseSessionStore):
 
     def compress_sessions(
         self,
-        older_than_days: Optional[float] = None,
-        target: Optional[str] = None,
-        active_session_id: Optional[str] = None,
-    ) -> Tuple[int, int]:
+        older_than_days: float | None = None,
+        target: str | None = None,
+        active_session_id: str | None = None,
+    ) -> tuple[int, int]:
         with self._thread_lock:
             if not os.path.exists(self.sessions_dir):
                 return 0, 0
@@ -591,7 +591,7 @@ class MonolithicJsonSessionStore(BaseSessionStore):
             self._invalidate_cache()
             return count, saved_bytes
 
-    def uncompress_sessions(self, target: Optional[str] = None) -> int:
+    def uncompress_sessions(self, target: str | None = None) -> int:
         with self._thread_lock:
             if not os.path.exists(self.sessions_dir):
                 return 0
@@ -634,10 +634,10 @@ class MonolithicJsonSessionStore(BaseSessionStore):
 
     def prune_sessions(
         self,
-        keep_n: Optional[int] = None,
-        max_days: Optional[float] = None,
-        max_size_mb: Optional[float] = None,
-        active_session_id: Optional[str] = None,
+        keep_n: int | None = None,
+        max_days: float | None = None,
+        max_size_mb: float | None = None,
+        active_session_id: str | None = None,
     ) -> int:
         with self._thread_lock:
             if not os.path.exists(self.sessions_dir):
@@ -648,7 +648,7 @@ class MonolithicJsonSessionStore(BaseSessionStore):
                 active_names.add(f"{active_session_id}.json")
                 active_names.add(f"{active_session_id}.json.gz")
 
-            entries: List[Tuple[str, float, int]] = []
+            entries: list[tuple[str, float, int]] = []
             now_ts = time.time()
 
             for fname in os.listdir(self.sessions_dir):
@@ -698,7 +698,7 @@ class MonolithicJsonSessionStore(BaseSessionStore):
             self._invalidate_cache()
             return count
 
-    def get_workspace_metrics(self) -> Dict[str, Any]:
+    def get_workspace_metrics(self) -> dict[str, Any]:
         if not os.path.exists(self.sessions_dir):
             return {
                 "total_count": 0,

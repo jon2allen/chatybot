@@ -7,14 +7,14 @@ and automatic conversation history truncation.
 
 import math
 from dataclasses import dataclass, field
-from typing import Dict, Any, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 
 @dataclass
 class TruncationDiagnostic:
     """Comprehensive diagnostic struct produced by truncate_messages_verbose."""
-    original_messages: List[Dict[str, Any]]
-    truncated_messages: List[Dict[str, Any]]
+    original_messages: list[dict[str, Any]]
+    truncated_messages: list[dict[str, Any]]
     did_truncate: bool
     original_tokens: int
     truncated_tokens: int
@@ -22,7 +22,7 @@ class TruncationDiagnostic:
     target_limit: int             # pct-adjusted limit actually enforced
     anchor_count: int
     evicted_count: int             # how many messages were dropped
-    evicted_indices: List[int]     # original 0-based indices that were removed
+    evicted_indices: list[int]     # original 0-based indices that were removed
     content_truncated: bool        # True if string truncation fired on a message
     anchors_alone_exceed_limit: bool  # infinite-loop warning condition
 
@@ -33,8 +33,8 @@ class ContextLimiter:
     warning triggers, and automatic conversation history truncation.
     """
 
-    def __init__(self, default_limit: Optional[int] = None, auto_truncate: bool = False, truncate_pct: float = 100.0):
-        self.context_limit: Optional[int] = default_limit
+    def __init__(self, default_limit: int | None = None, auto_truncate: bool = False, truncate_pct: float = 100.0):
+        self.context_limit: int | None = default_limit
         self.auto_truncate: bool = auto_truncate
         self.truncate_pct: float = truncate_pct
         self._user_set_limit: bool = False
@@ -48,7 +48,7 @@ class ContextLimiter:
         byte_count = len(text.encode("utf-8"))
         return max(1, math.ceil(byte_count / 4)) if byte_count > 0 else 0
 
-    def count_tokens_message(self, message: Dict[str, Any]) -> int:
+    def count_tokens_message(self, message: dict[str, Any]) -> int:
         """
         Count tokens in a single message dictionary ({role, content}).
         Includes standard message format overhead (3 tokens).
@@ -93,7 +93,7 @@ class ContextLimiter:
 
         return tokens
 
-    def count_tokens_messages(self, messages: List[Dict[str, Any]]) -> int:
+    def count_tokens_messages(self, messages: list[dict[str, Any]]) -> int:
         """
         Count total tokens across a list of message dictionaries.
         Includes 3 assistant reply priming tokens.
@@ -103,7 +103,7 @@ class ContextLimiter:
             total += self.count_tokens_message(msg)
         return total
 
-    def set_limit(self, limit: Optional[int], from_user: bool = True) -> None:
+    def set_limit(self, limit: int | None, from_user: bool = True) -> None:
         """
         Set or update the context limit.
         """
@@ -114,7 +114,7 @@ class ContextLimiter:
         if from_user:
             self._user_set_limit = (self.context_limit is not None)
 
-    def set_auto_truncate(self, enabled: bool, pct: Optional[float] = None) -> None:
+    def set_auto_truncate(self, enabled: bool, pct: float | None = None) -> None:
         """
         Enable or disable auto-truncation and set the trigger percentage (10.0 - 100.0).
         """
@@ -122,7 +122,7 @@ class ContextLimiter:
         if pct is not None:
             self.truncate_pct = float(pct)
 
-    def check_warnings(self, total_tokens: int, limit: Optional[int] = None) -> Optional[str]:
+    def check_warnings(self, total_tokens: int, limit: int | None = None) -> str | None:
         """
         Check if total token usage approaches or exceeds warning thresholds (70%, 90%, 100%+).
         Returns warning message string if threshold reached, else None.
@@ -142,12 +142,12 @@ class ContextLimiter:
         return None
 
     @staticmethod
-    def partition_anchors(messages: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    def partition_anchors(messages: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         """
         Partition messages into anchors (system prompt + initial user prompt) and evictable turns.
         Returns: (anchors, evictable)
         """
-        anchors: List[Dict[str, Any]] = []
+        anchors: list[dict[str, Any]] = []
         if len(messages) > 0 and messages[0].get("role") == "system":
             anchors.append(messages[0])
             remaining = messages[1:]
@@ -164,10 +164,10 @@ class ContextLimiter:
 
     def truncate_messages(
         self,
-        messages: List[Dict[str, Any]],
-        limit: Optional[int] = None,
-        target_pct: Optional[float] = None
-    ) -> Tuple[List[Dict[str, Any]], bool]:
+        messages: list[dict[str, Any]],
+        limit: int | None = None,
+        target_pct: float | None = None
+    ) -> tuple[list[dict[str, Any]], bool]:
         """
         Truncate oldest intermediate messages and/or oversized message content until total tokens fit within target limit.
         Preserves the system prompt (if index 0) and the initial user goal/prompt, dropping intermediate turns first.
@@ -287,9 +287,9 @@ class ContextLimiter:
 
     def truncate_messages_verbose(
         self,
-        messages: List[Dict[str, Any]],
-        limit: Optional[int] = None,
-        target_pct: Optional[float] = None,
+        messages: list[dict[str, Any]],
+        limit: int | None = None,
+        target_pct: float | None = None,
     ) -> "TruncationDiagnostic":
         """Run truncate_messages and return a comprehensive diagnostic struct.
 
@@ -311,7 +311,7 @@ class ContextLimiter:
             )
 
         # Attach monotonic tracking tags to avoid content collision
-        tagged_messages: List[Dict[str, Any]] = [
+        tagged_messages: list[dict[str, Any]] = [
             {"_orig_idx": i, **m} for i, m in enumerate(messages)
         ]
         orig_tokens = self.count_tokens_messages(messages)

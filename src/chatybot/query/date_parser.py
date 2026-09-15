@@ -2,13 +2,13 @@
 Flexible date parser supporting relative offsets, human relative words, standard dates, and ranges.
 """
 
-from datetime import datetime, timedelta
 import calendar
 import re
+from datetime import datetime, timedelta
 from typing import Optional, Tuple
 
 
-def parse_datetime_expr(val: str, now: Optional[datetime] = None) -> Optional[datetime]:
+def parse_datetime_expr(val: str, now: datetime | None = None) -> datetime | None:
     """
     Parse a single date or relative time string into a naive datetime.
     
@@ -119,7 +119,7 @@ def parse_datetime_expr(val: str, now: Optional[datetime] = None) -> Optional[da
     return None
 
 
-def parse_date_range(range_expr: str, now: Optional[datetime] = None) -> Tuple[Optional[datetime], Optional[datetime]]:
+def parse_date_range(range_expr: str, now: datetime | None = None) -> tuple[datetime | None, datetime | None]:
     """
     Parse a range expression into (start_dt, end_dt).
     Supports:

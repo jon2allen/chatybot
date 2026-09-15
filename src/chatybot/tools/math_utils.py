@@ -4,10 +4,12 @@ Evaluates mathematical expressions using mathparse, with options to return the c
 or store it in a target script variable.
 """
 
-from typing import Dict, Any, Optional
-from decimal import Decimal
 import re
+from decimal import Decimal
+from typing import Any, Dict, Optional
+
 import mathparse.mathparse as mp
+
 
 def ensure_mathparse_patched():
     """
@@ -118,7 +120,7 @@ def preprocess_multilingual_expression(expr: str, locale: str) -> str:
     return expr
 
 
-def calculate(expression: str, target_variable: Optional[str] = None, app: Any = None) -> Dict[str, Any]:
+def calculate(expression: str, target_variable: str | None = None, app: Any = None) -> dict[str, Any]:
     """
     Evaluates a mathematical or natural language math expression.
 
@@ -197,6 +199,6 @@ def calculate(expression: str, target_variable: Optional[str] = None, app: Any =
         hint_msg = "\n\n[TOOL USAGE HINT]: Supported scalar operations: +, -, *, /, ^, sqrt, log, abs. For array/list statistics (mean, median, stddev, sum, min, max), use 'run_command' with Python."
         return {
             "status": "error",
-            "message": f"Error evaluating math expression '{expression}': {str(e)}.{hint_msg}",
+            "message": f"Error evaluating math expression '{expression}': {e!s}.{hint_msg}",
             "result": None
         }

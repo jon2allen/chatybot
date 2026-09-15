@@ -12,11 +12,11 @@ Requirements (all checked at runtime, not install time):
   - Apple Intelligence turned on in System Settings
 """
 
-import sys
-import platform
 import json
 import logging
-from typing import Optional, Tuple, List, Any
+import platform
+import sys
+from typing import Any, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -38,14 +38,14 @@ def is_platform_supported() -> bool:
 try:
     import apple_fm_sdk as fm
     _SDK_AVAILABLE = True
-    _IMPORT_ERROR: Optional[str] = None
+    _IMPORT_ERROR: str | None = None
 except ImportError as e:
     fm = None
     _SDK_AVAILABLE = False
     _IMPORT_ERROR = str(e)
 
 
-def check_available() -> Tuple[bool, str]:
+def check_available() -> tuple[bool, str]:
     """Check whether the Apple Foundation Model can be used on this system.
 
     Returns:
@@ -89,7 +89,7 @@ def _format_unavailable_reason(reason) -> str:
     return _UNAVAILABLE_MESSAGES.get(name, f"Apple Foundation Model is not available: {name}")
 
 
-def get_model() -> Tuple[Optional[object], str]:
+def get_model() -> tuple[object | None, str]:
     """Get or create the cached SystemLanguageModel.
 
     Returns:
@@ -110,9 +110,9 @@ def get_model() -> Tuple[Optional[object], str]:
 
 
 def create_session(
-    instructions: Optional[str] = None,
-    tools: Optional[List[Any]] = None,
-) -> Tuple[Optional[object], str]:
+    instructions: str | None = None,
+    tools: list[Any] | None = None,
+) -> tuple[object | None, str]:
     """Create a new LanguageModelSession for a single completion.
 
     A fresh session is created per call so that conversation history is
@@ -347,7 +347,7 @@ _ASK_USER_SCHEMA = {
 }
 
 
-def build_tools(app) -> List[Any]:
+def build_tools(app) -> list[Any]:
     """Build fm.Tool instances from chatybot's tool configuration.
 
     Reads tools_config.toml via app._load_tools_config(), creates an fm.Tool
@@ -366,7 +366,7 @@ def build_tools(app) -> List[Any]:
     tool_overrides = getattr(app, "tool_overrides", {})
     tools_section = tools_config.get("tools", {})
 
-    tool_instances: List[Any] = []
+    tool_instances: list[Any] = []
 
     for tool_name, tool_meta in tools_section.items():
         config_enabled = tool_meta.get("enabled", False)

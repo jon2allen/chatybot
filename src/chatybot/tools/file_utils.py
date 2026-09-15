@@ -1,10 +1,11 @@
-import os
-import fnmatch
-from typing import List, Dict, Any, Optional, Tuple
-import re
 import datetime
-import math
+import fnmatch
 import json
+import math
+import os
+import re
+from typing import Any, Dict, List, Optional, Tuple
+
 
 def normalize_path(path: str) -> str:
     """
@@ -32,7 +33,7 @@ def normalize_path(path: str) -> str:
 
     return path
 
-def list_directory(path: str = ".", details: bool = False) -> List[Any]:
+def list_directory(path: str = ".", details: bool = False) -> list[Any]:
     """List contents of a directory."""
     path = normalize_path(path)
     try:
@@ -158,7 +159,7 @@ def enforce_string_payload_limits(text: str, tool_name: str) -> str:
     return text + warning_notice
 
 
-def enforce_list_payload_limits(results: List[Any], tool_name: str, max_items: int = 100) -> List[Any]:
+def enforce_list_payload_limits(results: list[Any], tool_name: str, max_items: int = 100) -> list[Any]:
     """
     Enforces soft warning and hard truncation on list/structured tool outputs.
     """
@@ -199,7 +200,7 @@ def enforce_list_payload_limits(results: List[Any], tool_name: str, max_items: i
     return results
 
 
-def find_files(path: str = ".", pattern: str = "*", search_term: str = None, details: bool = False) -> List[Any]:
+def find_files(path: str = ".", pattern: str = "*", search_term: str = None, details: bool = False) -> list[Any]:
     """Find files and directories matching pattern, optionally containing search_term and metadata."""
     path = normalize_path(path)
     results = []
@@ -271,9 +272,9 @@ def find_files(path: str = ".", pattern: str = "*", search_term: str = None, det
 
 def run_command(command: str, shell: bool = True) -> str:
     """Execute a safe shell command and return its output."""
-    import subprocess
-    import shlex
     import re
+    import shlex
+    import subprocess
     try:
         # Prevent critical privilege escalations or system modifications
         DANGEROUS_PATTERNS = [
@@ -336,7 +337,7 @@ def _get_relative_backup_target(file_path: str) -> str:
         return os.path.join(clean_drive, clean_rest) if clean_drive else clean_rest
     return abs_target.lstrip(os.path.sep)
 
-def _resolve_backup_context(app: Any = None) -> Tuple[bool, bool, str, Optional[str]]:
+def _resolve_backup_context(app: Any = None) -> tuple[bool, bool, str, str | None]:
     """
     Resolve backup settings and session directory context.
     Returns:
@@ -389,7 +390,7 @@ def _resolve_backup_context(app: Any = None) -> Tuple[bool, bool, str, Optional[
 
     return backup_enabled, enable_chat_history, session_dir, active_session_id
 
-def create_file_backup(file_path: str, app: Any = None) -> Optional[str]:
+def create_file_backup(file_path: str, app: Any = None) -> str | None:
     """
     Create a backup of file_path inside the active session's backup directory:
     ~/.local/share/chatybot/sessions/<session_id>/backups/<relative_path>
@@ -472,7 +473,7 @@ def grep_search(
     is_regex: bool = False,
     max_matches: int = 100,
     max_line_length: int = 1000
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """
     Search for a literal string or regular expression in files.
     Returns a list of matches containing the filename, line number, and line content.
@@ -536,7 +537,7 @@ def grep_search(
 
     return enforce_list_payload_limits(results, "grep_search", max_items=max_matches)
 
-def save_file_diff(file_path: str, original_content: str, modified_content: str, app: Any = None) -> Optional[str]:
+def save_file_diff(file_path: str, original_content: str, modified_content: str, app: Any = None) -> str | None:
     """
     Generate and save a re-applicable unified diff patch for file modifications.
     Stored inside the active session's diff directory:
@@ -634,8 +635,8 @@ def diagnose_target_mismatch(content: str, target: str, search_start_line: int =
 
         hint = (
             f"\nDiagnosis: Target text matches line {line_num} but failed due to an indentation/whitespace discrepancy.\n"
-            f"  Target (line 1): {target_spaces} leading spaces: {repr(target_first_line)}\n"
-            f"  File   (line {line_num}): {actual_spaces} leading spaces: {repr(actual_first_line)}"
+            f"  Target (line 1): {target_spaces} leading spaces: {target_first_line!r}\n"
+            f"  File   (line {line_num}): {actual_spaces} leading spaces: {actual_first_line!r}"
         )
         return hint
 
@@ -646,7 +647,7 @@ def diagnose_target_mismatch(content: str, target: str, search_start_line: int =
     if single_line_matches:
         lines_str = ", ".join(str(ln) for ln in single_line_matches[:5])
         return (
-            f"\nDiagnosis: First line {repr(first_target_stripped)} exists at line(s) [{lines_str}], "
+            f"\nDiagnosis: First line {first_target_stripped!r} exists at line(s) [{lines_str}], "
             f"but surrounding lines or block indentation did not match."
         )
 

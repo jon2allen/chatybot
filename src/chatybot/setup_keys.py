@@ -5,13 +5,13 @@ Cross-platform interactive wizard to configure API keys on Windows, macOS, and L
 """
 
 import os
-import sys
 import subprocess
+import sys
 from pathlib import Path
-from typing import List, Tuple, Dict
+from typing import Dict, List, Tuple
 
 # Supported providers: (env_var_name, display_name, status, url)
-KEYS: List[Tuple[str, str, str, str]] = [
+KEYS: list[tuple[str, str, str, str]] = [
     ("MISTRAL_API_KEY", "Mistral AI", "Default Preset", "https://console.mistral.ai/"),
     ("OPENAI_API_KEY", "OpenAI (GPT-4o, o1, o3)", "Optional", "https://platform.openai.com/api-keys"),
     ("OPENROUTER_API_KEY", "OpenRouter (Claude, Llama, DeepSeek)", "Optional", "https://openrouter.ai/keys"),
@@ -47,7 +47,7 @@ def main():
     # Load existing .env in current working directory if present (without modifying os.environ)
     env_file_keys = load_env_file(Path(".env"), override=False)
 
-    collected: Dict[str, str] = {}
+    collected: dict[str, str] = {}
 
     print("Press [Enter] to keep current/blank value, or type a new key.\n")
 
@@ -158,7 +158,7 @@ def main():
     print("  chat --> /listmodels\n")
 
 
-def _write_env_file(path: Path, keys: Dict[str, str]):
+def _write_env_file(path: Path, keys: dict[str, str]):
     """Write key-value dictionary to a .env file with secure permissions."""
     lines = [
         "# Chatybot Environment Configuration",

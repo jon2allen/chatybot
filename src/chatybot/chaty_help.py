@@ -8,8 +8,8 @@ Provides structured help for commands with:
 - Expandable for future features
 """
 
-from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional
 
 
 @dataclass
@@ -20,10 +20,10 @@ class CommandHelp:
     short_desc: str
     usage: str = ""
     long_desc: str = ""
-    examples: List[str] = field(default_factory=list)
-    aliases: List[str] = field(default_factory=list)
-    see_also: List[str] = field(default_factory=list)
-    parameters: Dict[str, str] = field(default_factory=dict)
+    examples: list[str] = field(default_factory=list)
+    aliases: list[str] = field(default_factory=list)
+    see_also: list[str] = field(default_factory=list)
+    parameters: dict[str, str] = field(default_factory=dict)
     
     def matches_keyword(self, keyword: str) -> bool:
         """Check if this command matches the given keyword."""
@@ -49,8 +49,8 @@ class HelpSystem:
     """Central help system for ChatyBot commands."""
     
     def __init__(self):
-        self.commands: Dict[str, CommandHelp] = {}
-        self.categories: Dict[str, List[str]] = {}
+        self.commands: dict[str, CommandHelp] = {}
+        self.categories: dict[str, list[str]] = {}
         self._initialize_commands()
     
     def _initialize_commands(self) -> None:
@@ -850,21 +850,21 @@ class HelpSystem:
         if cmd_help.name not in self.categories[cmd_help.category]:
             self.categories[cmd_help.category].append(cmd_help.name)
     
-    def get_all_commands(self) -> List[CommandHelp]:
+    def get_all_commands(self) -> list[CommandHelp]:
         """Get all registered commands sorted alphabetically."""
         return sorted(self.commands.values(), key=lambda c: c.name)
     
-    def get_commands_by_category(self, category: str) -> List[CommandHelp]:
+    def get_commands_by_category(self, category: str) -> list[CommandHelp]:
         """Get all commands in a specific category."""
         if category not in self.categories:
             return []
         return [self.commands[name] for name in self.categories[category] if name in self.commands]
     
-    def get_all_categories(self) -> List[str]:
+    def get_all_categories(self) -> list[str]:
         """Get all available categories sorted alphabetically."""
         return sorted(self.categories.keys())
     
-    def get_command(self, name: str) -> Optional[CommandHelp]:
+    def get_command(self, name: str) -> CommandHelp | None:
         """Get help for a specific command, checking exact name then aliases."""
         if name in self.commands:
             return self.commands[name]
@@ -874,12 +874,12 @@ class HelpSystem:
                 return cmd
         return None
     
-    def filter_commands(self, keyword: str) -> List[CommandHelp]:
+    def filter_commands(self, keyword: str) -> list[CommandHelp]:
         """Filter commands by keyword."""
         keyword_lower = keyword.lower()
         return [cmd for cmd in self.commands.values() if cmd.matches_keyword(keyword_lower)]
     
-    def format_command_list(self, commands: List[CommandHelp], i18n: Optional[Any] = None) -> str:
+    def format_command_list(self, commands: list[CommandHelp], i18n: Any | None = None) -> str:
         """Format a list of commands for display."""
         if not commands:
             msg = "No commands found."
@@ -889,7 +889,7 @@ class HelpSystem:
         
         lines = []
         # Group by category for better organization
-        categorized: Dict[str, List[CommandHelp]] = {}
+        categorized: dict[str, list[CommandHelp]] = {}
         for cmd in commands:
             if cmd.category not in categorized:
                 categorized[cmd.category] = []
@@ -919,7 +919,7 @@ class HelpSystem:
         
         return "\n".join(lines)
     
-    def format_command_detail(self, cmd_help: CommandHelp, i18n: Optional[Any] = None) -> str:
+    def format_command_detail(self, cmd_help: CommandHelp, i18n: Any | None = None) -> str:
         """Format detailed help for a single command."""
         lines = []
         
@@ -1033,7 +1033,7 @@ class HelpSystem:
         
         return "\n".join(lines)
     
-    def get_help_text(self, query: Optional[str] = None, i18n: Optional[Any] = None) -> str:
+    def get_help_text(self, query: str | None = None, i18n: Any | None = None) -> str:
         """
          Get help text based on query.
         

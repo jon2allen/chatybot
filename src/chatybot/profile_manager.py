@@ -33,14 +33,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from .profile_model import Profile, ProfileMeta, ProfileConfig, PROFILE_VERSION
-
+from .profile_model import PROFILE_VERSION, Profile, ProfileConfig, ProfileMeta
 
 # ============================================================================
 # PROFILE PRESETS
 # ============================================================================
 
-PROFILE_PRESETS: Dict[str, Dict[str, Any]] = {
+PROFILE_PRESETS: dict[str, dict[str, Any]] = {
     "coding": {
         "name": "Development Profile",
         "description": "Optimized for coding, debugging, and technical assistance",
@@ -118,7 +117,7 @@ class ProfileManager:
                         Defaults to ~/.config/chatybot/profiles
         """
         self.profile_dir = os.path.expanduser(profile_dir)
-        self._profiles_cache: Optional[Dict[str, ProfileMeta]] = None
+        self._profiles_cache: dict[str, ProfileMeta] | None = None
 
     def ensure_dir(self) -> None:
         """Ensure the profile directory exists."""
@@ -135,7 +134,7 @@ class ProfileManager:
                     if not os.path.exists(dst):
                         shutil.copy2(os.path.join(preset_src, fname), dst)
 
-    def list_profiles(self) -> List[str]:
+    def list_profiles(self) -> list[str]:
         """
         Return sorted list of .chatdsl filenames in profile_dir.
 
@@ -151,7 +150,7 @@ class ProfileManager:
             if f.endswith(".chatdsl")
         )
 
-    def list_profile_meta(self) -> List[Tuple[str, ProfileMeta]]:
+    def list_profile_meta(self) -> list[tuple[str, ProfileMeta]]:
         """
         Return list of all profiles with their metadata.
 
@@ -246,7 +245,7 @@ class ProfileManager:
         meta.source_path = path
         return meta
 
-    def save_profile(self, profile: Profile, name: Optional[str] = None) -> str:
+    def save_profile(self, profile: Profile, name: str | None = None) -> str:
         """
         Save a profile to disk.
 
@@ -302,7 +301,7 @@ class ProfileManager:
         name: str,
         model_alias: str,
         description: str = "",
-        preset: Optional[str] = None,
+        preset: str | None = None,
         **config_overrides: Any,
     ) -> Profile:
         """
@@ -417,7 +416,7 @@ class ProfileManager:
         dest = os.path.expanduser(dest_path)
         shutil.copy2(src, dest)
 
-    def import_profile(self, src_path: str, name: Optional[str] = None) -> str:
+    def import_profile(self, src_path: str, name: str | None = None) -> str:
         """
         Import a profile from a file.
 
@@ -449,15 +448,15 @@ class ProfileManager:
         self._profiles_cache = None
         return dst
 
-    def get_preset_names(self) -> List[str]:
+    def get_preset_names(self) -> list[str]:
         """Return list of available preset names."""
         return list(PROFILE_PRESETS.keys())
 
-    def get_preset(self, name: str) -> Optional[Dict[str, Any]]:
+    def get_preset(self, name: str) -> dict[str, Any] | None:
         """Get preset configuration by name."""
         return PROFILE_PRESETS.get(name)
 
-    def upgrade_all_profiles(self) -> List[str]:
+    def upgrade_all_profiles(self) -> list[str]:
         """
         Upgrade all profiles to current version.
 

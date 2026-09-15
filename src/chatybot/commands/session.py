@@ -8,8 +8,8 @@ Migrated from chatybot_app.handle_escape_command elif chain:
 import re
 from datetime import datetime
 
-from chatybot.commands.registry import command, CommandResult
 from chatybot.commands.context import CommandContext
+from chatybot.commands.registry import CommandResult, command
 from chatybot.commands.replay import handle_replay_command
 
 MAX_SESSION_NAME_LEN: int = 128
@@ -695,8 +695,9 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
 
     elif subcmd == "query":
         import shlex
+
         from chatybot.query.base import QueryRequest, get_query_engine
-        from chatybot.query.date_parser import parse_datetime_expr, parse_date_range
+        from chatybot.query.date_parser import parse_date_range, parse_datetime_expr
 
         raw_str = parts[2].strip() if len(parts) > 2 else ""
         if not raw_str:
@@ -866,6 +867,7 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
 
     elif subcmd == "get":
         import shlex
+
         from chatybot.tools.context_query import session_get
 
         raw_str = parts[2].strip() if len(parts) > 2 else ""

@@ -1,18 +1,19 @@
 import asyncio
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
+
 import httpx
 
 logger = logging.getLogger(__name__)
 
 class MCPClientManager:
-    def __init__(self, config_data: Dict[str, Any]):
+    def __init__(self, config_data: dict[str, Any]):
         self.server_configs = config_data.get("mcp", {}).get("servers", {})
-        self.active_sessions: Dict[str, Any] = {}
-        self.active_transports: Dict[str, Any] = {}
-        self.cached_schemas: Dict[str, List[Any]] = {}
-        self.http_clients: Dict[str, httpx.AsyncClient] = {}
+        self.active_sessions: dict[str, Any] = {}
+        self.active_transports: dict[str, Any] = {}
+        self.cached_schemas: dict[str, list[Any]] = {}
+        self.http_clients: dict[str, httpx.AsyncClient] = {}
 
     async def startup(self):
         """Runs at Chatybot boot to launch persistent servers and discover tools."""
@@ -58,7 +59,7 @@ class MCPClientManager:
                     print(f"[MCP] Warning: Failed to initialize server '{server_name}': {e}")
                     self.cached_schemas[server_name] = []
 
-    async def _discover_tools_once(self, params: Any) -> List[Any]:
+    async def _discover_tools_once(self, params: Any) -> list[Any]:
         """Performs a single connection handshake to list tools on a stateless server."""
         from mcp import ClientSession, stdio_client
         async with stdio_client(params) as (read, write):
@@ -67,7 +68,7 @@ class MCPClientManager:
                 tools_result = await session.list_tools()
                 return tools_result.tools
 
-    async def _setup_fastmcp_http_server(self, server_name: str, cfg: Dict[str, Any]) -> None:
+    async def _setup_fastmcp_http_server(self, server_name: str, cfg: dict[str, Any]) -> None:
         """Setup FastMCP HTTP server connection."""
         server_url = cfg.get("url")
         if not server_url:
@@ -101,7 +102,7 @@ class MCPClientManager:
             if server_name in self.http_clients:
                 await self.http_clients[server_name].aclose()
 
-    async def _discover_fastmcp_tools(self, server_name: str, http_client: httpx.AsyncClient) -> List[Any]:
+    async def _discover_fastmcp_tools(self, server_name: str, http_client: httpx.AsyncClient) -> list[Any]:
         """Discover tools from a FastMCP HTTP server."""
         try:
             # Use the MCP protocol to list tools
@@ -130,7 +131,7 @@ class MCPClientManager:
         
         return []
 
-    async def execute_tool(self, server_name: str, tool_name: str, arguments: Dict[str, Any]) -> str:
+    async def execute_tool(self, server_name: str, tool_name: str, arguments: dict[str, Any]) -> str:
         """Invokes the tool depending on the server's configured persistence strategy."""
         cfg = self.server_configs.get(server_name)
         if not cfg:
@@ -144,7 +145,7 @@ class MCPClientManager:
             # Traditional stdio server (existing logic)
             return await self._execute_stdio_tool(server_name, cfg, tool_name, arguments)
 
-    async def _execute_fastmcp_tool(self, server_name: str, cfg: Dict[str, Any], tool_name: str, arguments: Dict[str, Any]) -> str:
+    async def _execute_fastmcp_tool(self, server_name: str, cfg: dict[str, Any], tool_name: str, arguments: dict[str, Any]) -> str:
         """Execute tool on FastMCP HTTP server."""
         http_client = self.http_clients.get(server_name)
         if not http_client:
@@ -176,9 +177,9 @@ class MCPClientManager:
                 
         except Exception as e:
             logger.error(f"Error calling FastMCP tool {tool_name} on {server_name}: {e}")
-            return f"Error: {str(e)}"
+            return f"Error: {e!s}"
 
-    async def _execute_stdio_tool(self, server_name: str, cfg: Dict[str, Any], tool_name: str, arguments: Dict[str, Any]) -> str:
+    async def _execute_stdio_tool(self, server_name: str, cfg: dict[str, Any], tool_name: str, arguments: dict[str, Any]) -> str:
         """Execute tool on traditional stdio MCP server (existing logic)."""
         is_persistent = cfg.get("persistent", False)
         

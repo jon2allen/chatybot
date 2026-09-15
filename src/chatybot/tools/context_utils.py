@@ -4,12 +4,12 @@ Returns the current size of context in characters, KB, and estimated average tok
 for session history, agentic tool loop, prompt buffers, and total payload context.
 """
 
-from typing import Dict, Any, Optional, List, Union
 import json
 import math
+from typing import Any, Dict, List, Optional, Union
 
 
-def calculate_metrics(text: str) -> Dict[str, Any]:
+def calculate_metrics(text: str) -> dict[str, Any]:
     """Calculate character count, byte size, KB size, and estimated tokens for a given string."""
     chars = len(text)
     encoded_bytes = text.encode("utf-8")
@@ -27,9 +27,9 @@ def calculate_metrics(text: str) -> Dict[str, Any]:
 
 def get_context_metrics(
     scope: str = "all",
-    target_variable: Optional[str] = None,
+    target_variable: str | None = None,
     app: Any = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Get the current size of the context in characters, KB, and estimated average tokens.
 
@@ -50,11 +50,11 @@ def get_context_metrics(
     in_loop = bool(getattr(app, "in_tool_loop", False)) if app else False
 
     # Default empty metrics
-    session_text_parts: List[str] = []
+    session_text_parts: list[str] = []
     session_turns = 0
-    loop_text_parts: List[str] = []
+    loop_text_parts: list[str] = []
     loop_turns = 0
-    buffer_text_parts: List[str] = []
+    buffer_text_parts: list[str] = []
 
     if app:
         # Extract Session context
@@ -128,13 +128,13 @@ def get_context_metrics(
     total_metrics["agentic_loop_turns"] = loop_turns
     total_metrics["in_loop"] = in_loop
 
-    response: Dict[str, Any] = {
+    response: dict[str, Any] = {
         "status": "success",
         "scope": norm_scope,
     }
 
     # Extract context limit settings if configured on app
-    context_limit_info: Optional[Dict[str, Any]] = None
+    context_limit_info: dict[str, Any] | None = None
     if app:
         effective_limit = None
         auto_truncate = False

@@ -74,19 +74,19 @@ class BaseModelConfig(BaseModel):
     base_url: str
     """Base URL of the API endpoint."""
 
-    api_key: Optional[str] = None
+    api_key: str | None = None
     """Name of the environment variable holding the actual API key."""
 
-    temperature: Optional[float] = None
+    temperature: float | None = None
     """Sampling temperature. None means 'use provider default'."""
 
-    top_k: Optional[int] = None
+    top_k: int | None = None
     """Top-K sampling parameter. None means 'use provider default'."""
 
-    context_limit: Optional[int] = None
+    context_limit: int | None = None
     """Hard token limit for input context."""
 
-    def resolve_api_key(self) -> Optional[str]:
+    def resolve_api_key(self) -> str | None:
         """Return the actual API key by reading the named environment variable or raw key string."""
         from .env_utils import resolve_api_key
         return resolve_api_key(self.api_key)
@@ -142,7 +142,7 @@ class ChatModelConfig(BaseModelConfig):
     type: Literal["chat"] = "chat"
     """Discriminator field — always 'chat' for this class."""
 
-    vendor: Optional[str] = None
+    vendor: str | None = None
     """Vendor identifier used to select the correct API adapter.
     Known values: 'mistral', 'google', 'openai', 'openrouter'.
     Required when image_generation is True."""
@@ -150,11 +150,11 @@ class ChatModelConfig(BaseModelConfig):
     image_generation: bool = False
     """Whether this model supports image generation requests."""
 
-    image_endpoint: Optional[str] = None
+    image_endpoint: str | None = None
     """Sub-path appended to base_url for image requests.
     e.g. '/images/generations' or '/chat/completions'."""
 
-    image_modalities: Optional[list[str]] = None
+    image_modalities: list[str] | None = None
     """OpenRouter-style modality list for image requests.
     e.g. ['image'] or ['image', 'text']."""
 
@@ -194,7 +194,7 @@ class AppleFMModelConfig(BaseModelConfig):
     """Sentinel value; not used for any HTTP request. Overridden from the base
     class to make it optional with a default."""
 
-    vendor: Optional[str] = "apple"
+    vendor: str | None = "apple"
     """Vendor identifier — always 'apple' for this model type."""
 
 
@@ -203,7 +203,7 @@ class AppleFMModelConfig(BaseModelConfig):
 # ============================================================================
 
 ModelConfig = Annotated[
-    Union[ChatModelConfig, RerankerModelConfig, AppleFMModelConfig],
+    ChatModelConfig | RerankerModelConfig | AppleFMModelConfig,
     Field(discriminator="type"),
 ]
 """Union of all supported model config types, discriminated on the ``type`` field."""
@@ -215,11 +215,11 @@ ModelConfig = Annotated[
 
 class MCPServerConfig(BaseModel):
     """Configuration for an individual MCP Server."""
-    command: Optional[str] = None
+    command: str | None = None
     args: list[str] = Field(default_factory=list)
     persistent: bool = False
-    env: Optional[dict[str, str]] = None
-    url: Optional[str] = None
+    env: dict[str, str] | None = None
+    url: str | None = None
     
     @property
     def is_http_server(self) -> bool:
@@ -244,7 +244,7 @@ class DefaultSettings(BaseModel):
     When unset, the first model in TOML order is used as the default.
     """
 
-    model: Optional[str] = None
+    model: str | None = None
     """Alias of the model to use as the default (e.g. 'mistral_1')."""
 
 
@@ -277,22 +277,22 @@ class ChatConfig(BaseModel):
     models: dict[str, ModelConfig] = {}
     """All model entries, keyed by their TOML alias (e.g. 'mistral_1')."""
 
-    system_message: Optional[str] = None
+    system_message: str | None = None
     """Global default system message."""
 
-    max_tokens: Optional[int] = None
+    max_tokens: int | None = None
     """Global default max tokens."""
 
-    top_p: Optional[float] = None
+    top_p: float | None = None
     """Global default top_p."""
 
-    top_k: Optional[int] = None
+    top_k: int | None = None
     """Global default top_k."""
 
-    frequency_penalty: Optional[float] = None
+    frequency_penalty: float | None = None
     """Global default frequency penalty."""
 
-    presence_penalty: Optional[float] = None
+    presence_penalty: float | None = None
     """Global default presence penalty."""
 
     enable_chat_history: bool = True
@@ -330,7 +330,7 @@ class ChatConfig(BaseModel):
         return raw
 
     @classmethod
-    def from_toml(cls, path: str | Path) -> "ChatConfig":
+    def from_toml(cls, path: str | Path) -> ChatConfig:
         """
         Load and validate a chat_config.toml file.
 
@@ -355,7 +355,7 @@ class ChatConfig(BaseModel):
         return cls.model_validate(cls._prepare_raw(raw))
 
     @classmethod
-    def from_toml_string(cls, toml_str: str) -> "ChatConfig":
+    def from_toml_string(cls, toml_str: str) -> ChatConfig:
         """
         Load and validate from a raw TOML string (useful for testing).
 
@@ -369,7 +369,7 @@ class ChatConfig(BaseModel):
         return cls.model_validate(cls._prepare_raw(raw))
 
     @model_validator(mode="after")
-    def _validate_default_model(self) -> "ChatConfig":
+    def _validate_default_model(self) -> ChatConfig:
         """Ensure ``default.model`` (if set) names an existing model alias."""
         if self.default.model is not None and self.default.model not in self.models:
             raise ValueError(
@@ -398,7 +398,7 @@ class ChatConfig(BaseModel):
         """Return chat models that have ``image_generation = True``."""
         return [m for m in self.chat_models() if m.image_generation]
 
-    def get_model(self, alias: str) -> Optional[ModelConfig]:
+    def get_model(self, alias: str) -> ModelConfig | None:
         """
         Look up a model by its alias.
 

@@ -6,7 +6,7 @@ Defines the contract for all pluggable session store implementations.
 import threading
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Dict, Any, List, Tuple, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 
 class BaseSessionStore(ABC):
@@ -21,55 +21,49 @@ class BaseSessionStore(ABC):
         self,
         session_id: str,
         model_alias: str,
-        custom_name: Optional[str] = None,
+        custom_name: str | None = None,
         initial_prompt: str = "",
-        notes: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        notes: str | None = None,
+    ) -> dict[str, Any]:
         """Initialize and persist initial session state."""
-        pass
 
     @abstractmethod
-    def append_turn(self, session_id: str, turn_data: Dict[str, Any]) -> None:
+    def append_turn(self, session_id: str, turn_data: dict[str, Any]) -> None:
         """Append a completed interaction turn to session storage."""
-        pass
 
     @abstractmethod
-    def replace_turns(self, session_id: str, turns: List[Dict[str, Any]]) -> None:
+    def replace_turns(self, session_id: str, turns: list[dict[str, Any]]) -> None:
         """Atomically overwrite or replace all turns in the session storage."""
-        pass
 
     @abstractmethod
-    def save_meta(self, session_id: str, meta_dict: Dict[str, Any]) -> None:
+    def save_meta(self, session_id: str, meta_dict: dict[str, Any]) -> None:
         """Update session-level metadata (custom_name, notes, updated_at, etc.)."""
-        pass
 
     @abstractmethod
-    def load_session(self, target: str) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
+    def load_session(self, target: str) -> tuple[dict[str, Any], list[dict[str, Any]]]:
         """
         Load session metadata and all associated turns.
         Returns:
             Tuple of (meta_dict, list_of_turns)
         """
-        pass
 
     @abstractmethod
-    def resolve_session(self, target: str) -> Optional[str]:
+    def resolve_session(self, target: str) -> str | None:
         """
         Resolve a session identifier, custom name, or path to a canonical session ID.
         Returns:
             Canonical session_id or None if not found.
         """
-        pass
 
     @abstractmethod
     def list_sessions(
         self,
         offset: int = 0,
-        limit: Optional[int] = 10,
-        model_filter: Optional[str] = None,
-        compressed_filter: Optional[bool] = None,
-        since_dt: Optional[datetime] = None,
-    ) -> List[Dict[str, Any]]:
+        limit: int | None = 10,
+        model_filter: str | None = None,
+        compressed_filter: bool | None = None,
+        since_dt: datetime | None = None,
+    ) -> list[dict[str, Any]]:
         """
         List all saved sessions sorted by most recently updated.
         Returns lightweight summaries:
@@ -79,7 +73,6 @@ class BaseSessionStore(ABC):
             since_dt: If provided, only include sessions whose updated_at >= this datetime.
                       Accepts a datetime object (naive = local time).
         """
-        pass
 
     def get_session_size(self, target: str) -> int:
         """
@@ -90,28 +83,25 @@ class BaseSessionStore(ABC):
     @abstractmethod
     def delete_session(self, target: str) -> bool:
         """Delete a single session by ID, custom name, or path. Returns True if deleted."""
-        pass
 
     @abstractmethod
     def delete_all_sessions(self) -> int:
         """Delete all saved sessions. Returns count of deleted sessions."""
-        pass
 
     @abstractmethod
-    def merge_sessions(self, target_name: str, source_targets: List[str]) -> str:
+    def merge_sessions(self, target_name: str, source_targets: list[str]) -> str:
         """
         Merge multiple source sessions sequentially into a new session.
         Returns the new session_id.
         """
-        pass
 
     @abstractmethod
     def compress_sessions(
         self,
-        older_than_days: Optional[float] = None,
-        target: Optional[str] = None,
-        active_session_id: Optional[str] = None,
-    ) -> Tuple[int, int]:
+        older_than_days: float | None = None,
+        target: str | None = None,
+        active_session_id: str | None = None,
+    ) -> tuple[int, int]:
         """
         Compress session turn files (e.g. gzip).
         Args:
@@ -121,10 +111,9 @@ class BaseSessionStore(ABC):
         Returns:
             Tuple of (compressed_count, saved_bytes)
         """
-        pass
 
     @abstractmethod
-    def uncompress_sessions(self, target: Optional[str] = None) -> int:
+    def uncompress_sessions(self, target: str | None = None) -> int:
         """
         Decompress compressed session files.
         Args:
@@ -132,30 +121,27 @@ class BaseSessionStore(ABC):
         Returns:
             Count of uncompressed sessions.
         """
-        pass
 
     @abstractmethod
     def prune_sessions(
         self,
-        keep_n: Optional[int] = None,
-        max_days: Optional[float] = None,
-        max_size_mb: Optional[float] = None,
-        active_session_id: Optional[str] = None,
+        keep_n: int | None = None,
+        max_days: float | None = None,
+        max_size_mb: float | None = None,
+        active_session_id: str | None = None,
     ) -> int:
         """
         Prune sessions by count, age, or storage quota.
         Returns count of pruned sessions.
         """
-        pass
 
     @abstractmethod
-    def get_workspace_metrics(self) -> Dict[str, Any]:
+    def get_workspace_metrics(self) -> dict[str, Any]:
         """
         Aggregate workspace metrics.
         Returns:
             {'total_count': int, 'total_bytes': int, 'oldest': tuple, 'newest': tuple, 'largest': tuple}
         """
-        pass
 
     @abstractmethod
     def acquire_lock(self, session_id: str) -> bool:
@@ -163,9 +149,7 @@ class BaseSessionStore(ABC):
         Attempt to acquire an advisory concurrency lock file for the session.
         Returns True if lock acquired or already owned, False if held by another active process.
         """
-        pass
 
     @abstractmethod
-    def release_lock(self, session_id: Optional[str] = None) -> None:
+    def release_lock(self, session_id: str | None = None) -> None:
         """Release the advisory concurrency lock file for the session."""
-        pass

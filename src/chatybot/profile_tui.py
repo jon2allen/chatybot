@@ -6,20 +6,28 @@ Allows browsing, editing, cloning, deleting profiles with preset templates.
 This follows the same pattern as config_tui.py for consistent look and feel.
 """
 
+import argparse
 import os
 import sys
-import argparse
+
 try:
     import curses
     import curses.textpad
 except ImportError:
     curses = None
 from datetime import datetime
-from typing import Optional, List, Tuple, Dict, Any
+from typing import Any, Dict, List, Optional, Tuple
 
-from .profile_manager import ProfileManager, PROFILE_PRESETS
-from .profile_model import Profile, ProfileConfig, ProfileMeta, ToolSettings, TraceSettings, ReasoningSettings, PROFILE_VERSION
-
+from .profile_manager import PROFILE_PRESETS, ProfileManager
+from .profile_model import (
+    PROFILE_VERSION,
+    Profile,
+    ProfileConfig,
+    ProfileMeta,
+    ReasoningSettings,
+    ToolSettings,
+    TraceSettings,
+)
 
 # ============================================================================
 # FIELD HELP DATABASE
@@ -142,7 +150,7 @@ FIELD_HELP_DATABASE = {
 class ProfileTUI:
     """Curses-based TUI for profile management."""
 
-    def show_help_dialog(self, stdscr, initial_key: Optional[str] = None):
+    def show_help_dialog(self, stdscr, initial_key: str | None = None):
         """
         Show a pageable help dialog with explanations of all profile parameters.
         
@@ -173,7 +181,7 @@ class ProfileTUI:
             self.draw_dialog_border(win, title)
 
             # Field key & Title header
-            win.addstr(2, 3, f"Field Setting: ", curses.A_BOLD)
+            win.addstr(2, 3, "Field Setting: ", curses.A_BOLD)
             win.addstr(2, 18, f"'{key}'", curses.color_pair(2) | curses.A_BOLD)
 
             # Description
@@ -230,7 +238,7 @@ class ProfileTUI:
             elif ch in (27, 10, 13, curses.KEY_F1, ord('?'), ord('q'), ord('Q')):
                 break
 
-    def __init__(self, profile_dir: Optional[str] = None, config_manager: Any = None, initial_profile: Optional[str] = None):
+    def __init__(self, profile_dir: str | None = None, config_manager: Any = None, initial_profile: str | None = None):
         self.pm = ProfileManager(profile_dir=profile_dir)
         self.config_manager = config_manager
         self.has_changes = False
@@ -238,7 +246,7 @@ class ProfileTUI:
         self._initial_profile_handled = False
 
         # Load models list from config manager
-        self.models_list: List[str] = []
+        self.models_list: list[str] = []
         if config_manager and hasattr(config_manager, 'config'):
             self.models_list = list(config_manager.config.get("models", {}).keys())
         if not self.models_list:
@@ -735,7 +743,7 @@ class ProfileTUI:
         meta: ProfileMeta,
         config: ProfileConfig,
         is_new: bool = False,
-        original_meta: Optional[ProfileMeta] = None
+        original_meta: ProfileMeta | None = None
     ):
         """Run form editor overlay for a profile."""
         h, w = stdscr.getmaxyx()
@@ -943,7 +951,7 @@ class ProfileTUI:
 
         stdscr.clear()
 
-    def show_save_preview(self, stdscr, profile_name: str, form_data: dict, is_new: bool, original_meta: Optional[ProfileMeta] = None) -> bool:
+    def show_save_preview(self, stdscr, profile_name: str, form_data: dict, is_new: bool, original_meta: ProfileMeta | None = None) -> bool:
         """
         Show a preview dialog with the chatdsl content before saving.
         
@@ -1170,7 +1178,7 @@ class ProfileTUI:
         # Currently no hidden fields in profile editor
         return False
 
-    def apply_form_edits(self, old_alias: str, form_data: dict, is_new: bool, original_meta: Optional[ProfileMeta] = None) -> bool:
+    def apply_form_edits(self, old_alias: str, form_data: dict, is_new: bool, original_meta: ProfileMeta | None = None) -> bool:
         """Validate form data and save the profile."""
         # Validate alias
         new_alias = form_data["alias"].strip()
@@ -1401,7 +1409,7 @@ class ProfileTUI:
         self._current_field_idx = value
 
 
-def run_profile_tui(profile_dir: Optional[str] = None, config_manager: Any = None, initial_profile: Optional[str] = None) -> int:
+def run_profile_tui(profile_dir: str | None = None, config_manager: Any = None, initial_profile: str | None = None) -> int:
     """
     Standalone entry point for TUI profile manager.
     
@@ -1429,7 +1437,7 @@ def run_profile_tui(profile_dir: Optional[str] = None, config_manager: Any = Non
     except KeyboardInterrupt:
         return 0
     except Exception as e:
-        print(f"\nFatal error in Profile TUI: {str(e)}", file=sys.stderr)
+        print(f"\nFatal error in Profile TUI: {e!s}", file=sys.stderr)
         return 1
 
 

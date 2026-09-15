@@ -7,16 +7,16 @@ Usage:
     python -m chatybot.migrate_sessions [--sessions-dir <path>] [--backup-dir <path>] [--dry-run] [--quiet]
 """
 
-import os
-import sys
-import json
-import gzip
-import shutil
 import argparse
-from typing import List, Dict, Any, Tuple, Optional
+import gzip
+import json
+import os
+import shutil
+import sys
+from typing import Any, Dict, List, Optional, Tuple
 
 
-def find_legacy_sessions(sessions_dir: str) -> List[str]:
+def find_legacy_sessions(sessions_dir: str) -> list[str]:
     """Find all top-level .json and .json.gz legacy session files in sessions_dir."""
     if not os.path.exists(sessions_dir):
         return []
@@ -38,7 +38,7 @@ def convert_single_session(
     sessions_dir: str,
     backup_dir: str,
     dry_run: bool = False,
-) -> Tuple[bool, str, int, str]:
+) -> tuple[bool, str, int, str]:
     """
     Convert a single legacy session file to directory-based JSONL.
 
@@ -166,10 +166,10 @@ def convert_single_session(
 
 def run_migration(
     sessions_dir: str,
-    backup_dir: Optional[str] = None,
+    backup_dir: str | None = None,
     dry_run: bool = False,
     quiet: bool = False,
-) -> Tuple[int, int]:
+) -> tuple[int, int]:
     """
     Run session migration on all discovered legacy session files.
 

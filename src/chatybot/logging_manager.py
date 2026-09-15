@@ -26,7 +26,7 @@ class LoggingManager:
     def __init__(self):
         self.logging_active: bool = False
         self.hex_mode: bool = False
-        self.log_file: Optional[object] = None
+        self.log_file: object | None = None
         self.buffer = []
         self._lock = threading.Lock()
         

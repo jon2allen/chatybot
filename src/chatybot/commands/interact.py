@@ -18,10 +18,9 @@ import re
 import shlex
 from typing import List, Optional, Tuple
 
-from chatybot.commands.registry import command, CommandResult
 from chatybot.commands.context import CommandContext
+from chatybot.commands.registry import CommandResult, command
 from chatybot.tools.interact_utils import ask_user
-
 
 # ---------------------------------------------------------------------------
 # Command handler
@@ -83,7 +82,7 @@ async def cmd_ask(ctx: CommandContext, parts: list, command: str) -> CommandResu
 # Argument parser
 # ---------------------------------------------------------------------------
 
-def _parse_ask_args(raw: str) -> Tuple[str, Optional[List[str]], Optional[str], str]:
+def _parse_ask_args(raw: str) -> tuple[str, list[str] | None, str | None, str]:
     """Parse /ask arguments into (prompt, choices, target_var, question_type).
 
     Grammar (informal):
@@ -97,7 +96,7 @@ def _parse_ask_args(raw: str) -> Tuple[str, Optional[List[str]], Optional[str], 
     question_type: "yesno" | "choice" | "text"
     """
     # Extract optional "-> VARNAME" at the end
-    target_var: Optional[str] = None
+    target_var: str | None = None
     arrow_match = re.search(r"->\s*([a-zA-Z_]\w*)\s*$", raw)
     if arrow_match:
         target_var = arrow_match.group(1)
@@ -126,7 +125,7 @@ def _parse_ask_args(raw: str) -> Tuple[str, Optional[List[str]], Optional[str], 
     extra_tokens = tokens[1:]
 
     # Remaining tokens become the choices list (overrides yesno if provided)
-    choices: Optional[List[str]] = None
+    choices: list[str] | None = None
     if extra_tokens:
         choices = extra_tokens
         if question_type == "text":

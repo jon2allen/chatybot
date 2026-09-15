@@ -4,28 +4,35 @@ Curses-based terminal UI (TUI) for managing chatybot configuration.
 Allows browsing, editing, cloning, deleting models with vendor presets.
 """
 
-import os
-import sys
-import re
 import argparse
+import os
+import re
+import sys
+
 try:
     import curses
     import curses.textpad
 except ImportError:
     curses = None
-from typing import Optional, List, Tuple, Dict, Any
+from typing import Any, Dict, List, Optional, Tuple
 
-from .config_model import ChatConfig, ChatModelConfig, RerankerModelConfig, AppleFMModelConfig, MAX_MODEL_ALIAS_LEN
-from .vendors import VENDOR_PRESETS, vendor_names, get_env_status
+from .config_model import (
+    MAX_MODEL_ALIAS_LEN,
+    AppleFMModelConfig,
+    ChatConfig,
+    ChatModelConfig,
+    RerankerModelConfig,
+)
+from .vendors import VENDOR_PRESETS, get_env_status, vendor_names
 
 
 class ConfigTUI:
-    def __init__(self, config_path: Optional[str] = None):
+    def __init__(self, config_path: str | None = None):
         self.config_path = config_path or "~/.config/chatybot/chat_config.toml"
         self.resolved_path = os.path.expanduser(self.config_path)
-        self.config: Optional[ChatConfig] = None
-        self.models_list: List[Tuple[str, Any]] = []  # List of (alias, model_object)
-        self.filtered_list: List[Tuple[str, Any]] = []
+        self.config: ChatConfig | None = None
+        self.models_list: list[tuple[str, Any]] = []  # List of (alias, model_object)
+        self.filtered_list: list[tuple[str, Any]] = []
         
         # UI State
         self.selected_idx = 0
@@ -58,7 +65,7 @@ class ConfigTUI:
             self.set_status(f"Loaded config from '{self.config_path}'")
             return True
         except Exception as e:
-            self.status_message = f"Error loading config: {str(e)}"
+            self.status_message = f"Error loading config: {e!s}"
             self.status_is_error = True
             return False
 
@@ -492,7 +499,7 @@ class ConfigTUI:
             self.has_changes = False
             self.set_status(f"Saved configuration to '{self.config_path}'")
         except Exception as e:
-            self.set_status(f"Error saving config: {str(e)}", is_error=True)
+            self.set_status(f"Error saving config: {e!s}", is_error=True)
 
     def delete_model_dialog(self, stdscr, alias: str, model: Any):
         h, w = stdscr.getmaxyx()
@@ -661,7 +668,7 @@ class ConfigTUI:
                             self.edit_model_form(stdscr, new_alias_str, cloned_model, is_new=True)
                             break
                         except Exception as e:
-                            self.set_status(f"Error preparing clone: {str(e)}", is_error=True)
+                            self.set_status(f"Error preparing clone: {e!s}", is_error=True)
                     else:  # Cancel
                         break
             elif ch == 27:  # Escape
@@ -717,7 +724,7 @@ class ConfigTUI:
             self.set_status(f"Cloned '{source_model.alias}' to '{new_alias}'")
             return True
         except Exception as e:
-            self.set_status(f"Error cloning model: {str(e)}", is_error=True)
+            self.set_status(f"Error cloning model: {e!s}", is_error=True)
             return False
 
     REPLACE_FIELDS = [
@@ -755,7 +762,7 @@ class ConfigTUI:
         mode: str,
         find_str: str,
         replace_str: str,
-    ) -> tuple[Optional[str], list[dict]]:
+    ) -> tuple[str | None, list[dict]]:
         """
         Calculate candidate changes for bulk find/replace.
         Returns (error_msg, candidate_changes).
@@ -1788,11 +1795,11 @@ class ConfigTUI:
             return True
             
         except Exception as e:
-            self.set_status(f"Validation warning/error: {str(e)}", is_error=True)
+            self.set_status(f"Validation warning/error: {e!s}", is_error=True)
             return False
 
 
-def main(config_path: Optional[str] = None) -> int:
+def main(config_path: str | None = None) -> int:
     """Standalone entry point for TUI config manager."""
     # If not called programmatically with a path, parse sys.argv
     if config_path is None:
@@ -1822,7 +1829,7 @@ def main(config_path: Optional[str] = None) -> int:
     except KeyboardInterrupt:
         return 0
     except Exception as e:
-        print(f"\nFatal error in Config TUI: {str(e)}", file=sys.stderr)
+        print(f"\nFatal error in Config TUI: {e!s}", file=sys.stderr)
         return 1
 
 

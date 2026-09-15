@@ -10,8 +10,8 @@ import re
 import traceback
 from urllib.parse import urlparse
 
-from chatybot.commands.registry import command, CommandResult
 from chatybot.commands.context import CommandContext
+from chatybot.commands.registry import CommandResult, command
 
 
 @command("/documents", help="Set the document source for reranking", args="db=<name> | var=<name> | var=file | filebank=<1-5> | dir=\"<path>\"", category="rerank")
@@ -214,7 +214,7 @@ async def cmd_rerank(ctx: CommandContext, parts: list, command: str) -> CommandR
                             "full_text": content
                         })
         except Exception as e:
-            print(f"Error reading database {source_id}: {str(e)}")
+            print(f"Error reading database {source_id}: {e!s}")
             return CommandResult.ok()
 
     elif source_type == "var":
@@ -496,6 +496,6 @@ async def cmd_rerank(ctx: CommandContext, parts: list, command: str) -> CommandR
         app.buffer_manager.script_vars["latest_rerank"] = "\n\n".join(rerank_blocks)
 
     except Exception as e:
-        print(f"Error executing reranking pipeline: {str(e)}")
+        print(f"Error executing reranking pipeline: {e!s}")
         traceback.print_exc()
     return CommandResult.ok()

@@ -14,8 +14,8 @@ import os
 import traceback
 from datetime import datetime
 
-from chatybot.commands.registry import command, CommandResult
 from chatybot.commands.context import CommandContext
+from chatybot.commands.registry import CommandResult, command
 
 
 @command("/imagine", help="Generate an image from a text prompt", args="<prompt>", category="image")
@@ -55,7 +55,7 @@ async def cmd_imagine(ctx: CommandContext, parts: list, command: str) -> Command
         try:
             model_config = app.config_manager.get_model_config(model_alias)
         except ValueError as e:
-            print(f"Error: {str(e)}")
+            print(f"Error: {e!s}")
             return CommandResult.ok()
 
         if debug_file:
@@ -88,11 +88,11 @@ async def cmd_imagine(ctx: CommandContext, parts: list, command: str) -> Command
             modalities = model_config.get("image_modalities", ["image", "text"])
 
             if debug_file:
-                print(f"[IMAGE_DEBUG] Starting image generation")
+                print("[IMAGE_DEBUG] Starting image generation")
                 print(f"[IMAGE_DEBUG] Vendor: {vendor}, Model: {model_name}")
                 print(f"[IMAGE_DEBUG] Size: {app.image_size}, Quality: {app.image_quality}")
                 print(f"[IMAGE_DEBUG] Modalities: {modalities}")
-                debug_fd.write(f"[IMAGE_DEBUG] Starting image generation\n")
+                debug_fd.write("[IMAGE_DEBUG] Starting image generation\n")
                 debug_fd.write(f"[IMAGE_DEBUG] Vendor: {vendor}, Model: {model_name}\n")
                 debug_fd.write(f"[IMAGE_DEBUG] Size: {app.image_size}, Quality: {app.image_quality}\n")
                 debug_fd.write(f"[IMAGE_DEBUG] Modalities: {modalities}\n")
@@ -113,10 +113,10 @@ async def cmd_imagine(ctx: CommandContext, parts: list, command: str) -> Command
             app.image_generator.last_generated_image = (file_path, image_data)
 
             if debug_file:
-                print(f"[IMAGE_DEBUG] Image generated successfully")
+                print("[IMAGE_DEBUG] Image generated successfully")
                 print(f"[IMAGE_DEBUG] File path: {file_path}")
                 print(f"[IMAGE_DEBUG] Image data length: {len(image_data)} bytes")
-                debug_fd.write(f"[IMAGE_DEBUG] Image generated successfully\n")
+                debug_fd.write("[IMAGE_DEBUG] Image generated successfully\n")
                 debug_fd.write(f"[IMAGE_DEBUG] File path: {file_path}\n")
                 debug_fd.write(f"[IMAGE_DEBUG] Image data length: {len(image_data)} bytes\n")
                 debug_fd.flush()
@@ -125,13 +125,13 @@ async def cmd_imagine(ctx: CommandContext, parts: list, command: str) -> Command
 
         except Exception as e:
             if debug_file:
-                print(f"[IMAGE_DEBUG] ERROR: {str(e)}")
-                debug_fd.write(f"[IMAGE_DEBUG] ERROR: {str(e)}\n")
+                print(f"[IMAGE_DEBUG] ERROR: {e!s}")
+                debug_fd.write(f"[IMAGE_DEBUG] ERROR: {e!s}\n")
                 traceback.print_exc()
-                debug_fd.write(f"[IMAGE_DEBUG] Traceback:\n")
+                debug_fd.write("[IMAGE_DEBUG] Traceback:\n")
                 traceback.print_exc(file=debug_fd)
                 debug_fd.flush()
-            print(f"Error generating image: {str(e)}")
+            print(f"Error generating image: {e!s}")
         finally:
             if debug_fd:
                 debug_fd.close()
@@ -142,7 +142,7 @@ async def cmd_imagine(ctx: CommandContext, parts: list, command: str) -> Command
             debug_fd.close()
         if debug_file:
             print(f"[IMAGE_DEBUG] Debug output saved to {os.path.abspath(debug_file)}")
-        print(f"Error generating image: {str(e)}")
+        print(f"Error generating image: {e!s}")
     return CommandResult.ok()
 
 
@@ -207,7 +207,7 @@ async def cmd_saveimage(ctx: CommandContext, parts: list, command: str) -> Comma
             # Update last_generated_image so future /saveimage without args works
             app.image_generator.last_generated_image = (custom_path, image_data)
         except Exception as e:
-            print(f"Error saving image: {str(e)}")
+            print(f"Error saving image: {e!s}")
     return CommandResult.ok()
 
 
@@ -338,5 +338,5 @@ async def cmd_loadimage(ctx: CommandContext, parts: list, command: str) -> Comma
         app.buffer_manager.image_banks[f"imagebank{bank_num}"] = data_url
         print(f"Image '{file_path}' loaded into {bank_name}.")
     except Exception as e:
-        print(f"Error loading image: {str(e)}")
+        print(f"Error loading image: {e!s}")
     return CommandResult.ok()

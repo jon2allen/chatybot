@@ -6,15 +6,15 @@ Layout:
         └── turns.jsonl       # Append-only turn records (or turns.jsonl.gz if compressed)
 """
 
+import gzip
+import json
 import os
 import re
-import json
-import gzip
-import time
 import shutil
 import sys
+import time
 from datetime import datetime
-from typing import Dict, Any, List, Tuple, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from .session_interface import BaseSessionStore
 
@@ -29,7 +29,7 @@ class JsonlSessionStore(BaseSessionStore):
         super().__init__(sessions_dir)
         os.makedirs(self.sessions_dir, exist_ok=True)
         self._cache_dir_mtime: float = -1.0
-        self._summary_cache: List[Dict[str, Any]] = []
+        self._summary_cache: list[dict[str, Any]] = []
 
     def _session_dir(self, session_id: str) -> str:
         return os.path.join(self.sessions_dir, session_id)
@@ -115,7 +115,7 @@ class JsonlSessionStore(BaseSessionStore):
         except IOError:
             return False
 
-    def release_lock(self, session_id: Optional[str] = None) -> None:
+    def release_lock(self, session_id: str | None = None) -> None:
         if not session_id:
             return
         lock_path = self._session_lock_path(session_id)
@@ -133,10 +133,10 @@ class JsonlSessionStore(BaseSessionStore):
         self,
         session_id: str,
         model_alias: str,
-        custom_name: Optional[str] = None,
+        custom_name: str | None = None,
         initial_prompt: str = "",
-        notes: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        notes: str | None = None,
+    ) -> dict[str, Any]:
         with self._thread_lock:
             s_dir = self._session_dir(session_id)
             os.makedirs(s_dir, exist_ok=True)
@@ -166,7 +166,7 @@ class JsonlSessionStore(BaseSessionStore):
             self._invalidate_cache()
             return meta
 
-    def save_meta(self, session_id: str, meta_dict: Dict[str, Any]) -> None:
+    def save_meta(self, session_id: str, meta_dict: dict[str, Any]) -> None:
         with self._thread_lock:
             s_dir = self._session_dir(session_id)
             os.makedirs(s_dir, exist_ok=True)
@@ -192,7 +192,7 @@ class JsonlSessionStore(BaseSessionStore):
                 self.save_meta(session_id, meta)
         return turns_file
 
-    def _read_meta(self, session_id: str) -> Optional[Dict[str, Any]]:
+    def _read_meta(self, session_id: str) -> dict[str, Any] | None:
         meta_file = self._meta_path(session_id)
         if os.path.exists(meta_file):
             try:
@@ -202,7 +202,7 @@ class JsonlSessionStore(BaseSessionStore):
                 pass
         return None
 
-    def append_turn(self, session_id: str, turn_data: Dict[str, Any]) -> None:
+    def append_turn(self, session_id: str, turn_data: dict[str, Any]) -> None:
         with self._thread_lock:
             turns_file = self._ensure_uncompressed_turns(session_id)
 
@@ -226,7 +226,7 @@ class JsonlSessionStore(BaseSessionStore):
             meta["format"] = "jsonl-v1"
             self.save_meta(session_id, meta)
 
-    def replace_turns(self, session_id: str, turns: List[Dict[str, Any]]) -> None:
+    def replace_turns(self, session_id: str, turns: list[dict[str, Any]]) -> None:
         """Atomically overwrite or replace all turns in the session storage."""
         with self._thread_lock:
             s_dir = self._session_dir(session_id)
@@ -258,7 +258,7 @@ class JsonlSessionStore(BaseSessionStore):
             meta["format"] = "jsonl-v1"
             self.save_meta(session_id, meta)
 
-    def load_session(self, target: str) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
+    def load_session(self, target: str) -> tuple[dict[str, Any], list[dict[str, Any]]]:
         sid = self.resolve_session(target)
         if not sid:
             raise FileNotFoundError(f"Session '{target}' not found.")
@@ -267,7 +267,7 @@ class JsonlSessionStore(BaseSessionStore):
         turns_file = self._turns_path(sid)
         gz_file = self._turns_gz_path(sid)
 
-        turns: List[Dict[str, Any]] = []
+        turns: list[dict[str, Any]] = []
         corrupted_lines = 0
 
         if os.path.exists(turns_file):
@@ -302,7 +302,7 @@ class JsonlSessionStore(BaseSessionStore):
 
         return meta, turns
 
-    def resolve_session(self, target: str) -> Optional[str]:
+    def resolve_session(self, target: str) -> str | None:
         target = target.strip(" \"'")
         # 1. Exact directory match
         direct_path = os.path.join(self.sessions_dir, target)
@@ -323,7 +323,7 @@ class JsonlSessionStore(BaseSessionStore):
                         return d
         return None
 
-    def _get_all_summaries(self) -> List[Dict[str, Any]]:
+    def _get_all_summaries(self) -> list[dict[str, Any]]:
         """Single-pass cache loader across all session directories."""
         if not os.path.exists(self.sessions_dir):
             return []
@@ -336,7 +336,7 @@ class JsonlSessionStore(BaseSessionStore):
         if self._cache_dir_mtime == current_mtime and self._summary_cache:
             return list(self._summary_cache)
 
-        summaries: List[Dict[str, Any]] = []
+        summaries: list[dict[str, Any]] = []
         for d in os.listdir(self.sessions_dir):
             dpath = os.path.join(self.sessions_dir, d)
             if os.path.isdir(dpath) and not d.startswith("."):
@@ -376,18 +376,18 @@ class JsonlSessionStore(BaseSessionStore):
     def list_sessions(
         self,
         offset: int = 0,
-        limit: Optional[int] = 10,
-        model_filter: Optional[str] = None,
-        compressed_filter: Optional[bool] = None,
+        limit: int | None = 10,
+        model_filter: str | None = None,
+        compressed_filter: bool | None = None,
         since_dt: Optional["datetime"] = None,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         summaries = self._get_all_summaries()
 
-        since_ts: Optional[float] = None
+        since_ts: float | None = None
         if since_dt is not None:
             since_ts = since_dt.timestamp()
 
-        parsed: List[Dict[str, Any]] = []
+        parsed: list[dict[str, Any]] = []
         for s in summaries:
             if model_filter and model_filter not in (s.get("model_alias") or "").lower():
                 continue
@@ -451,12 +451,12 @@ class JsonlSessionStore(BaseSessionStore):
             self._invalidate_cache()
             return count
 
-    def merge_sessions(self, target_name: str, source_targets: List[str]) -> str:
+    def merge_sessions(self, target_name: str, source_targets: list[str]) -> str:
         with self._thread_lock:
-            merged_turns: List[Dict[str, Any]] = []
-            merged_models: List[str] = []
-            first_slug: Optional[str] = None
-            source_notes: List[str] = []
+            merged_turns: list[dict[str, Any]] = []
+            merged_models: list[str] = []
+            first_slug: str | None = None
+            source_notes: list[str] = []
 
             for st in source_targets:
                 sid = self.resolve_session(st)
@@ -529,7 +529,7 @@ class JsonlSessionStore(BaseSessionStore):
                     shutil.rmtree(temp_dir, ignore_errors=True)
                 raise RuntimeError(f"Merge sessions failed: {e}") from e
 
-    def _parse_iso_timestamp(self, ts_str: Optional[str]) -> Optional[float]:
+    def _parse_iso_timestamp(self, ts_str: str | None) -> float | None:
         if not ts_str:
             return None
         try:
@@ -548,10 +548,10 @@ class JsonlSessionStore(BaseSessionStore):
 
     def compress_sessions(
         self,
-        older_than_days: Optional[float] = None,
-        target: Optional[str] = None,
-        active_session_id: Optional[str] = None,
-    ) -> Tuple[int, int]:
+        older_than_days: float | None = None,
+        target: str | None = None,
+        active_session_id: str | None = None,
+    ) -> tuple[int, int]:
         with self._thread_lock:
             if not os.path.exists(self.sessions_dir):
                 return 0, 0
@@ -597,7 +597,7 @@ class JsonlSessionStore(BaseSessionStore):
             self._invalidate_cache()
             return count, saved_bytes
 
-    def uncompress_sessions(self, target: Optional[str] = None) -> int:
+    def uncompress_sessions(self, target: str | None = None) -> int:
         with self._thread_lock:
             if not os.path.exists(self.sessions_dir):
                 return 0
@@ -646,16 +646,16 @@ class JsonlSessionStore(BaseSessionStore):
 
     def prune_sessions(
         self,
-        keep_n: Optional[int] = None,
-        max_days: Optional[float] = None,
-        max_size_mb: Optional[float] = None,
-        active_session_id: Optional[str] = None,
+        keep_n: int | None = None,
+        max_days: float | None = None,
+        max_size_mb: float | None = None,
+        active_session_id: str | None = None,
     ) -> int:
         with self._thread_lock:
             if not os.path.exists(self.sessions_dir):
                 return 0
 
-            entries: List[Tuple[str, float, int]] = []  # (dir_path, mtime, total_bytes)
+            entries: list[tuple[str, float, int]] = []  # (dir_path, mtime, total_bytes)
             now_ts = time.time()
 
             for d in os.listdir(self.sessions_dir):
@@ -714,7 +714,7 @@ class JsonlSessionStore(BaseSessionStore):
             self._invalidate_cache()
             return count
 
-    def get_workspace_metrics(self) -> Dict[str, Any]:
+    def get_workspace_metrics(self) -> dict[str, Any]:
         if not os.path.exists(self.sessions_dir):
             return {
                 "total_count": 0,

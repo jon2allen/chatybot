@@ -1,6 +1,7 @@
 import json
 import os
-from typing import Dict, Any
+from typing import Any, Dict
+
 
 class LocalizationManager:
     """Manages system command aliases, script keywords, and UI strings across multiple languages."""
@@ -18,7 +19,7 @@ class LocalizationManager:
         self.locale = self.LANG_MAP.get(locale.lower(), "en")
         self.catalog = self._load_catalog()
 
-    def _load_catalog(self) -> Dict[str, Any]:
+    def _load_catalog(self) -> dict[str, Any]:
         catalog_path = os.path.join(os.path.dirname(__file__), "translations.json")
         if os.path.exists(catalog_path):
             try:
@@ -70,7 +71,7 @@ class LocalizationManager:
                 return aliases[cmd_lower]
         return raw_cmd
 
-    def get_reverse_aliases(self) -> Dict[str, str]:
+    def get_reverse_aliases(self) -> dict[str, str]:
         """Return a mapping of localized commands and keywords to their English equivalents."""
         reverse_map = {}
         

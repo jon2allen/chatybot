@@ -23,18 +23,17 @@ import os
 import sys
 from typing import Any, Dict, List, Optional
 
-
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
 def ask_user(
     prompt: str,
-    choices: Optional[List[str]] = None,
+    choices: list[str] | None = None,
     question_type: str = "text",
-    target_variable: Optional[str] = None,
+    target_variable: str | None = None,
     app: Any = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Prompt the user for interactive input.
 
     Parameters
@@ -120,7 +119,7 @@ def _is_interactive(app: Any = None) -> bool:
         return True
 
 
-def _prompt_user(prompt: str, choices: Optional[List[str]], question_type: str) -> str:
+def _prompt_user(prompt: str, choices: list[str] | None, question_type: str) -> str:
     """Display the prompt and read a validated answer from stdin."""
     if question_type == "yesno":
         choices = ["yes", "no"]
@@ -134,7 +133,7 @@ def _prompt_user(prompt: str, choices: Optional[List[str]], question_type: str) 
     return input("Answer: ").strip()
 
 
-def _prompt_choice(prompt: str, choices: List[str]) -> str:
+def _prompt_choice(prompt: str, choices: list[str]) -> str:
     """Display a numbered menu and return the chosen text value."""
     print(f"\n{prompt}\n")
     for i, option in enumerate(choices, 1):

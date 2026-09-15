@@ -10,8 +10,8 @@ import json
 import os
 import shlex
 
-from chatybot.commands.registry import command, CommandResult
 from chatybot.commands.context import CommandContext
+from chatybot.commands.registry import CommandResult, command
 from chatybot.commands.replay import _preview as _replay_preview
 
 
@@ -524,8 +524,8 @@ async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandRes
             sub_arg = parts[2].strip().lower()
 
         if sub_arg in ("edit_live", "live_edit"):
-            import tempfile
             import subprocess
+            import tempfile
 
             context = app.tool_context or app.generate_tool_context()
             current_instr = app.live_agentic_instructions or app.agentic_instructions or app.default_agentic_instructions
@@ -1121,7 +1121,7 @@ def _render_tool_replay_at(snapshot, system_prompt):
     print("=" * 78)
     print(f"Tool: {snapshot.tool or '-'}  |  Status: {snapshot.status or '-'}  "
           f"|  Duration: {snapshot.duration_ms:.0f}ms" if snapshot.step else
-          f"Tool: -  |  Status: -  |  Duration: -")
+          "Tool: -  |  Status: -  |  Duration: -")
     print(f"Messages: {snapshot.message_count}  |  Uncut tokens: {snapshot.total_tokens}  "
           f"|  Truncated tokens: {snapshot.truncated_tokens}")
     print(f"Evicted indices: {snapshot.evicted_indices if snapshot.evicted_indices else 'none'}")
