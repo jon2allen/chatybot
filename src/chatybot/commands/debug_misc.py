@@ -209,13 +209,7 @@ async def cmd_logging(ctx: CommandContext, parts: list, command: str) -> Command
         if sub_args and sub_args[0].lower() in off_aliases:
             app.logging_manager.hex_mode = False
             print("Logging hex mode disabled.")
-        elif sub_args and sub_args[0].lower() in on_aliases:
-            app.logging_manager.hex_mode = True
-            if not app.logging_manager.logging_active:
-                app.logging_manager.start_logging(hex_mode=True)
-            else:
-                print("Logging hex mode enabled.")
-        elif not sub_args:
+        elif sub_args and sub_args[0].lower() in on_aliases or not sub_args:
             app.logging_manager.hex_mode = True
             if not app.logging_manager.logging_active:
                 app.logging_manager.start_logging(hex_mode=True)
@@ -285,9 +279,7 @@ async def cmd_save(ctx: CommandContext, parts: list, command: str) -> CommandRes
 
         if save_all:
             history_entries = (
-                app.chat_history
-                if app.chat_history
-                else ([(getattr(app, "last_prompt", "User Prompt") or "User Prompt", last_completion_fallback)] if last_completion_fallback else [])
+                app.chat_history or ([(getattr(app, "last_prompt", "User Prompt") or "User Prompt", last_completion_fallback)] if last_completion_fallback else [])
             )
             with open(file_path, "w") as f:
                 for i, (prompt, response) in enumerate(history_entries, 1):
@@ -758,9 +750,7 @@ async def cmd_docs(ctx: CommandContext, parts: list, command: str) -> CommandRes
                 page_num = max(1, int(arg.split("=", 1)[1]))
             except ValueError:
                 page_num = 1
-        elif arg_lower.startswith("var="):
-            target_var = arg.split("=", 1)[1].strip().lstrip("$")
-        elif arg_lower.startswith("target="):
+        elif arg_lower.startswith("var=") or arg_lower.startswith("target="):
             target_var = arg.split("=", 1)[1].strip().lstrip("$")
         elif arg_lower.startswith("limit="):
             try:

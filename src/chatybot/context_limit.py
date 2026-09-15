@@ -213,7 +213,7 @@ class ContextLimiter:
         # truncate individual message content down to fit the available token budget
         while self.count_tokens_messages(anchors + evictable) > target_limit:
             # Find the largest message among evictable (or all anchors if evictable is empty)
-            candidate_list = evictable if evictable else anchors
+            candidate_list = evictable or anchors
             if not candidate_list:
                 break
 
@@ -246,7 +246,7 @@ class ContextLimiter:
 
         if did_truncate:
             trunc_notice = "[Note: Earlier messages were truncated to fit the context limit.]"
-            target_notice_list = evictable if evictable else anchors
+            target_notice_list = evictable or anchors
             if target_notice_list and isinstance(target_notice_list[0].get("content"), str):
                 if not target_notice_list[0]["content"].startswith(trunc_notice) and not target_notice_list[0]["content"].startswith("[Note:"):
                     target_notice_list[0] = dict(target_notice_list[0])
@@ -254,7 +254,7 @@ class ContextLimiter:
 
             # Ensure prepending the truncation notice did not push total tokens over target_limit
             while self.count_tokens_messages(anchors + evictable) > target_limit:
-                candidate_list = evictable if evictable else anchors
+                candidate_list = evictable or anchors
                 if not candidate_list:
                     break
 

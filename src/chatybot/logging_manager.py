@@ -146,9 +146,7 @@ class LoggingManager:
         out = []
         for ch in text:
             code = ord(ch)
-            if ch in ("\n", "\t"):
-                out.append(ch)
-            elif 32 <= code <= 126:
+            if ch in ("\n", "\t") or 32 <= code <= 126:
                 out.append(ch)
             elif code < 32 or (127 <= code <= 159):
                 out.append(f"[0x{code:02X}]")

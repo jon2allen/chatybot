@@ -102,7 +102,7 @@ def _render_summary(snapshots) -> None:
     print("  • Trunc Tok:  Token count after auto-truncation/eviction to fit limit")
     print("  • Evicted:    Number of older intermediate messages dropped from prompt")
     print("  • AnchorWarn: YES if system + initial user anchors exceed context limit")
-    print("")
+    print()
 
 
 def _render_at(snapshot, system_prompt: str) -> None:
@@ -111,7 +111,7 @@ def _render_at(snapshot, system_prompt: str) -> None:
     print("=" * 78)
     print(f"Messages: {snapshot.message_count}  |  Uncut tokens: {snapshot.total_tokens}  "
           f"|  Truncated tokens: {snapshot.truncated_tokens}")
-    print(f"Evicted indices: {snapshot.evicted_indices if snapshot.evicted_indices else 'none'}")
+    print(f"Evicted indices: {snapshot.evicted_indices or 'none'}")
     print(f"Anchor overflow: {'YES (anchors alone exceed limit)' if snapshot.anchors_alone_exceed_limit else 'no'}")
     print(f"Tool turn: {'yes' if snapshot.is_tool_turn else 'no'}  |  Model: {snapshot.model_alias or 'default'}")
     print(f"System prompt (approximate): {_preview(system_prompt, 70)}")
@@ -139,9 +139,7 @@ def _render_at(snapshot, system_prompt: str) -> None:
         tags = []
         if i in anchor_idxs:
             tags.append("ANCHOR")
-        if i in evicted_set:
-            tags.append("EVICTED")
-        elif (m.get("role"), m.get("content")) not in surviving_keys and snapshot.did_truncate:
+        if i in evicted_set or (m.get("role"), m.get("content")) not in surviving_keys and snapshot.did_truncate:
             tags.append("EVICTED")
         tag_str = f" [{', '.join(tags)}]" if tags else ""
         print(f"  [{i}] {role:<10} ({clen} chars){tag_str}")

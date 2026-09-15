@@ -91,8 +91,7 @@ class ConfigTUI:
         # Adjust selection if list shrank
         if self.selected_idx >= len(self.filtered_list):
             self.selected_idx = max(0, len(self.filtered_list) - 1)
-        if self.selected_idx < 0:
-            self.selected_idx = 0
+        self.selected_idx = max(self.selected_idx, 0)
 
     def set_status(self, msg: str, is_error: bool = False):
         self.status_message = msg
@@ -146,8 +145,7 @@ class ConfigTUI:
             elif ch == curses.KEY_UP or ch == ord('k'):
                 if self.selected_idx > 0:
                     self.selected_idx -= 1
-                    if self.selected_idx < self.scroll_offset:
-                        self.scroll_offset = self.selected_idx
+                    self.scroll_offset = min(self.scroll_offset, self.selected_idx)
             elif ch == curses.KEY_DOWN or ch == ord('j'):
                 if self.selected_idx < len(self.filtered_list) - 1:
                     self.selected_idx += 1
@@ -856,7 +854,7 @@ class ConfigTUI:
                     old_str = str(old_val) if old_val is not None else ""
                     if find_str in old_str:
                         new_str = old_str.replace(find_str, parsed_replace_val)
-                        new_val = new_str if new_str else None
+                        new_val = new_str or None
                         if old_val != new_val:
                             should_change = True
                 else:
@@ -1214,8 +1212,7 @@ class ConfigTUI:
                 else:
                     if sel > 0:
                         sel -= 1
-                        if sel < scroll:
-                            scroll = sel
+                        scroll = min(scroll, sel)
             elif ch in (curses.KEY_DOWN, ord('j')):
                 if not focus_buttons:
                     if sel < total_count - 1:
@@ -1324,8 +1321,7 @@ class ConfigTUI:
             if ch in (curses.KEY_UP, ord('k'), ord('K')):
                 if sel > 0:
                     sel -= 1
-                    if sel < scroll:
-                        scroll = sel
+                    scroll = min(scroll, sel)
             elif ch in (curses.KEY_DOWN, ord('j'), ord('J')):
                 if sel < len(env_data) - 1:
                     sel += 1
@@ -1401,8 +1397,7 @@ class ConfigTUI:
             if ch == curses.KEY_UP:
                 if sel > 0:
                     sel -= 1
-                    if sel < scroll:
-                        scroll = sel
+                    scroll = min(scroll, sel)
             elif ch == curses.KEY_DOWN:
                 if sel < len(v_names) - 1:
                     sel += 1

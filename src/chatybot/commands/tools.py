@@ -286,7 +286,7 @@ async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandRes
 
             if not has_mcp and app.mcp_manager and app.mcp_manager.cached_schemas and glob_pattern == "*":
                 print("  (No MCP tools active)")
-        print("")
+        print()
         return CommandResult.ok()
 
     elif subcmd in ("enable", "disable"):
@@ -1111,7 +1111,7 @@ def _render_tool_replay_summary(snapshots, turn_id):
     print("  • Trunc Tok:  Token count after auto-truncation/eviction to fit limit")
     print("  • Evicted:    Number of older intermediate messages dropped from prompt")
     print("  • AnchorWarn: YES if system + initial user anchors exceed context limit")
-    print("")
+    print()
 
 
 def _render_tool_replay_at(snapshot, system_prompt):
@@ -1124,7 +1124,7 @@ def _render_tool_replay_at(snapshot, system_prompt):
           "Tool: -  |  Status: -  |  Duration: -")
     print(f"Messages: {snapshot.message_count}  |  Uncut tokens: {snapshot.total_tokens}  "
           f"|  Truncated tokens: {snapshot.truncated_tokens}")
-    print(f"Evicted indices: {snapshot.evicted_indices if snapshot.evicted_indices else 'none'}")
+    print(f"Evicted indices: {snapshot.evicted_indices or 'none'}")
     print(f"Anchor overflow: {'YES (anchors alone exceed limit)' if snapshot.anchors_alone_exceed_limit else 'no'}")
     print(f"System prompt (approximate): {_replay_preview(system_prompt, 70)}")
     print("-" * 78)
@@ -1147,9 +1147,7 @@ def _render_tool_replay_at(snapshot, system_prompt):
         tags = []
         if i in anchor_idxs:
             tags.append("ANCHOR")
-        if i in evicted_set:
-            tags.append("EVICTED")
-        elif (m.get("role"), m.get("content")) not in surviving_keys and snapshot.did_truncate:
+        if i in evicted_set or (m.get("role"), m.get("content")) not in surviving_keys and snapshot.did_truncate:
             tags.append("EVICTED")
         tag_str = f" [{', '.join(tags)}]" if tags else ""
         print(f"  [{i}] {role:<10} ({clen} chars){tag_str}")

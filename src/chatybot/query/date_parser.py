@@ -90,7 +90,7 @@ def parse_datetime_expr(val: str, now: datetime | None = None) -> datetime | Non
     # Date string matching
     original_val = val.strip()
     # Try ISO formats - strip trailing 'Z' if present
-    iso_clean = original_val[:-1] if original_val.endswith("Z") else original_val
+    iso_clean = original_val.removesuffix("Z")
     iso_clean = iso_clean.rstrip()
     if "T" in iso_clean:
         try:

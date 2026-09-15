@@ -62,7 +62,7 @@ def main():
             except (EOFError, KeyboardInterrupt):
                 print("\nSetup cancelled.")
                 return
-            collected[var_name] = user_input if user_input else current_val
+            collected[var_name] = user_input or current_val
         else:
             print(f"○ {display_name} ({var_name}) [{status}]")
             print(f"  Key URL: {url}")

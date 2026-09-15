@@ -61,7 +61,7 @@ class CorpusManager:
             Optional[Dict]: The item data if found, None otherwise
         """
         result = self.items.get(doc_id=item_id)
-        return result if result else None
+        return result or None
 
     def get_items_by_type(self, item_type: str) -> list[dict]:
         """

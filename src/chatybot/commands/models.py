@@ -136,7 +136,7 @@ async def cmd_model(ctx: CommandContext, parts: list, command: str) -> CommandRe
         temp = model_config.get("temperature")
         if temp is not None:
             print(f"Temperature:     {temp}")
-        print("")
+        print()
         return CommandResult.ok()
 
     if len(parts) < 2:
@@ -376,7 +376,7 @@ async def cmd_context(ctx: CommandContext, parts: list, command: str) -> Command
         else:
             print(f"  Total Usage:        ~{tot_tokens:,} tokens ({tot.get('kb', 0.0):.2f} KB)")
             print("  Context Limit:      Disabled (no limit configured)")
-    print("")
+    print()
     return CommandResult.ok()
 
 registry.register("/ctx", cmd_context, help="Show context and token usage metrics, or set context limit", args="[<limit>|off|session|loop|buffers|all]", category="models")

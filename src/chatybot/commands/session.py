@@ -263,7 +263,7 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
             print(f"\nSession IDs:{filter_str}")
             for sid in session_ids:
                 print(f"  {sid}")
-            print("")
+            print()
         else:
             print(f"\nAvailable Sessions:{filter_str}")
             for idx, s in enumerate(parsed_sessions, 1):
@@ -275,7 +275,7 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
                     short_note = s["snote"][:60] + "..." if len(s["snote"]) > 60 else s["snote"]
                     print(f"     ├─ Notes: \"{short_note}\"")
                 print(f"     └─ Turns: {s['turns_cnt']} exchanges (Updated: {s['upd']})")
-            print("")
+            print()
         return CommandResult.ok()
 
 
@@ -832,7 +832,7 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
                 sz = sess_map.get(sid)
                 sz_str = f" | {_format_size_bytes(sz)}" if sz else ""
                 print(f"  {sid}{sz_str}")
-            print("")
+            print()
             return CommandResult.ok()
 
         print(f"\nQuery Results for {query_desc}{filter_str}: {response.total_matches} match(es)\n")
@@ -859,10 +859,10 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
             if full_mode:
                 for line in (match.full_text or match.snippet).splitlines():
                     print(f"     {line}")
-                print("")
+                print()
             else:
                 print(f"     \"{match.snippet}\"")
-        print("")
+        print()
         return CommandResult.ok()
 
     elif subcmd == "get":

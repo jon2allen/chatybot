@@ -16,7 +16,7 @@ class PatternMatcher:
             multi_endings (dict): Dict of words with optional endings (e.g., {"run": ["ning", "s"]})
         """
         self.words = set(words) if words else set()
-        self.multi_endings = multi_endings if multi_endings else {}
+        self.multi_endings = multi_endings or {}
         self.pattern = self._compile_pattern()
 
     def _compile_pattern(self):
