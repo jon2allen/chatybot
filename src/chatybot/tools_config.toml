@@ -365,3 +365,30 @@ optional = true
 type = "string"
 description = "Optional script variable name to save the answer into (answer is also always saved to ASK_RESULT)"
 optional = true
+
+[tools.db_search]
+enabled = false
+description = "Search a TinyDB database for items matching a query string. Searches name, content, and metadata fields (case-insensitive substring). Use '*' to list all items."
+module = "chatybot.tools.db_tools"
+function = "db_search"
+
+[tools.db_search.parameters.query]
+type = "string"
+description = "Search term, or '*' to list all items"
+optional = false
+
+[tools.db_search.parameters.db_name]
+type = "string"
+description = "Database name to search. If omitted, uses the currently active database."
+optional = true
+
+[tools.db_search.parameters.limit]
+type = "number"
+description = "Maximum number of results to return (default 20)"
+optional = true
+
+[tools.db_list]
+enabled = false
+description = "List all available TinyDB databases with entry counts and file sizes."
+module = "chatybot.tools.db_tools"
+function = "db_list"
