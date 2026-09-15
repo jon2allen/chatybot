@@ -10,3 +10,4 @@ chatybot.vmem.*.log
 .env
 *.env
 !.env.example
+code_analysis/report.json
