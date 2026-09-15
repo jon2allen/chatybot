@@ -635,6 +635,19 @@ The following tools are packaged by default and can be enabled/disabled dynamica
 | `grep_search` | Searches for exact pattern matches or regular expressions within files or directories. | `query` (required), `path` (optional), `pattern` (optional), `case_insensitive` (optional), `is_regex` (optional), `max_matches` (optional) |
 | `replace_file_content` | Replaces a specific block of text in a file with new content, with indentation diagnosis and optional line bounds. | `path` (required), `target` (required), `replacement` (required), `start_line` (optional), `end_line` (optional) |
 | `run_command` | Executes shell commands on the host machine using safe subprocess tokenization. | `command` (required) |
+| `calculate` | Safely evaluates a mathematical or natural language math expression using mathparse. Optionally saves the result into a script variable. | `expression` (required), `target_variable` (optional) |
+| `str_search` | Searches for a substring pattern in text with optional case-insensitive matching. Returns match count or positions. | `pattern` (required), `text` (required), `mode` (optional), `case_sensitive` (optional), `target_variable` (optional) |
+| `get_context_metrics` | Returns the current size of context in characters, KB, and estimated tokens for session history, agentic loop, or buffers. | `scope` (optional), `target_variable` (optional) |
+| `session_search` | Searches across active and saved session turns, notes, and scratchpads with boolean logic and date filtering. | `query` (required), `operator` (optional), `since` (optional), `until` (optional), `range` (optional), `include_scratch` (optional), `limit` (optional), `ids_only` (optional), `full` (optional), `target_variable` (optional) |
+| `session_get` | Extracts read-only prompt, response, thinking, or full exchange text from a past or active session without switching sessions. | `session_id` (required), `turn_id` (optional), `part` (optional), `target_variable` (optional) |
+| `ask_user` | Prompts the user interactively for input (choice, yesno, or text). | `prompt` (required), `choices` (optional), `question_type` (optional), `target_variable` (optional) |
+
+**Optional Tools** (disabled by default, enable with `/tool enable <name>`):
+
+| Tool Name | Description | Key Parameters |
+|-----------|-------------|----------------|
+| `db_search` | Searches a TinyDB database for items matching a query string across name, content, and metadata. Use `*` to list all. | `query` (required), `db_name` (optional), `limit` (optional) |
+| `db_list` | Lists all available TinyDB databases with entry counts and file sizes. | none |
 
 #### **Supported Tool Calling Formats**
 Chatybot's extraction engine automatically recognizes, parses, and normalizes all major LLM tool-calling output syntaxes without requiring provider-specific adapter layers:
