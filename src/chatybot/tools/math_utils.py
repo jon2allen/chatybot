@@ -6,7 +6,7 @@ or store it in a target script variable.
 
 import re
 from decimal import Decimal
-from typing import Any, Dict, Optional
+from typing import Any
 
 import mathparse.mathparse as mp
 

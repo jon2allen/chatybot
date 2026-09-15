@@ -6,7 +6,7 @@ for session history, agentic tool loop, prompt buffers, and total payload contex
 
 import json
 import math
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 
 def calculate_metrics(text: str) -> dict[str, Any]:

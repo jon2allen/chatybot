@@ -5,7 +5,6 @@ shared ``handle_replay_command`` helper used by both entry points.
 """
 
 import dataclasses
-from typing import List, Optional
 
 from chatybot.commands.context import CommandContext
 from chatybot.commands.registry import CommandResult, command

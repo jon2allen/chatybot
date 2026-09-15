@@ -14,7 +14,7 @@ try:
     import curses.textpad
 except ImportError:
     curses = None
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from .config_model import (
     MAX_MODEL_ALIAS_LEN,

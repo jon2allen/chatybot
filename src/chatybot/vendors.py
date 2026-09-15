@@ -2,7 +2,6 @@
 """Vendor preset definitions for the Config TUI and model creation."""
 
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass(frozen=True)

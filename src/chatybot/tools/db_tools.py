@@ -6,7 +6,7 @@ Enabled via /tool enable db_search, db_list or tools_config.toml.
 
 import json
 import os
-from typing import Any, Optional
+from typing import Any
 
 
 def db_search(

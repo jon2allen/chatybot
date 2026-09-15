@@ -16,7 +16,7 @@ try:
 except ImportError:
     curses = None
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from .profile_manager import PROFILE_PRESETS, ProfileManager
 from .profile_model import (

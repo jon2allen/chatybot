@@ -13,7 +13,6 @@ import json
 import os
 import shutil
 import sys
-from typing import Any, Dict, List, Optional, Tuple
 
 
 def find_legacy_sessions(sessions_dir: str) -> list[str]:

@@ -10,7 +10,7 @@ import json
 import re
 from collections import UserDict
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 
 class ScriptVars(UserDict):

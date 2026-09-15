@@ -11,7 +11,6 @@ import sys
 import threading
 import unicodedata
 from datetime import datetime
-from typing import Optional
 
 try:
     from pyio_intercept import StdoutIntercept

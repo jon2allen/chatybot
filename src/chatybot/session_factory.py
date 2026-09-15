@@ -2,7 +2,6 @@
 session_factory.py - Registry and factory for creating BaseSessionStore instances.
 """
 
-from typing import Dict, Optional, Type
 
 from .session_interface import BaseSessionStore
 from .session_store_jsonl import JsonlSessionStore

@@ -1,6 +1,5 @@
-import asyncio
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 from urllib.parse import urlparse
 
 import httpx

@@ -288,7 +288,7 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
 
         try:
             sdata, turns = store.load_session(target)
-        except Exception as e:
+        except Exception:
             print(f"Error: Session '{target}' not found.")
             return CommandResult.ok()
 

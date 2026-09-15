@@ -6,7 +6,7 @@ Defines the contract for all pluggable session store implementations.
 import threading
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 
 class BaseSessionStore(ABC):
