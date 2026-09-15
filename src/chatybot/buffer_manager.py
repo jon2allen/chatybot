@@ -556,10 +556,10 @@ class BufferManager:
             # B. Array subscript replacement (supports braced `${key[index]}` and `{key[index]}`)
             flags = re.IGNORECASE if key.upper() in self.script_vars.protected_vars or key.upper() in ('CHAT_HISTORY', 'LAST_RESPONSE') else 0
             sub_pat = rf"\$?\{{{re.escape(key)}\[(-?\d+)\]\}}"
-            def replace_sub(m):
+            def replace_sub(m, k=key):
                 idx = m.group(1)
                 try:
-                    return self.get_variable_value(f"{key}[{idx}]")
+                    return self.get_variable_value(f"{k}[{idx}]")
                 except Exception:
                     return m.group(0)
             text_prompt = re.sub(sub_pat, replace_sub, text_prompt, flags=flags)
@@ -570,8 +570,8 @@ class BufferManager:
 
             # D. Base variable replacement (braced: `${key}` / `{key}`)
             braced_pat = rf"\$?\{{{re.escape(key)}\}}"
-            def replace_base(m):
-                val = self.resolve_text_variable(key)
+            def replace_base(m, k=key):
+                val = self.resolve_text_variable(k)
                 return str(val) if val is not None else m.group(0)
             text_prompt = re.sub(braced_pat, replace_base, text_prompt, flags=flags)
 

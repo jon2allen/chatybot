@@ -4,6 +4,8 @@ from typing import Dict, Any, List, Optional
 from urllib.parse import urlparse
 import httpx
 
+logger = logging.getLogger(__name__)
+
 class MCPClientManager:
     def __init__(self, config_data: Dict[str, Any]):
         self.server_configs = config_data.get("mcp", {}).get("servers", {})

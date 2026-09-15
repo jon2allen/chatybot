@@ -1588,7 +1588,7 @@ class ChatybotApp:
                         temp_file.close()
                         try:
                             os.unlink(temp_file.name)
-                        except:
+                        except OSError:
                             pass
                         self.debug_payload_mode = False
 
@@ -3833,7 +3833,7 @@ class ChatybotApp:
             # Clean up temp file
             try:
                 os.unlink(tmp_path)
-            except:
+            except OSError:
                 pass
 
     def extract_tool_call(self, text: str) -> Optional[Dict[str, Any]]:

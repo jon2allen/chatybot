@@ -288,7 +288,7 @@ class ImageGenerator:
                             request_body["image_config"] = {"image_size": "2K"}
                         else:
                             request_body["image_config"] = {"image_size": "4K"}
-                    except:
+                    except (ValueError, TypeError):
                         # If parsing fails, skip for Google
                         pass
             else:
