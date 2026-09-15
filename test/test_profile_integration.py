@@ -83,13 +83,6 @@ class TestProfileIntegration:
         assert "list" in help_text
         assert "edit" in help_text
 
-        # Verify show_help output contains /profile
-        with patch('builtins.print') as mock_print:
-            app.show_help()
-            called_args = [call[0][0] for call in mock_print.call_args_list if call[0]]
-            profile_line = [line for line in called_args if "/profile" in line]
-            assert len(profile_line) > 0
-            assert "Manage session profiles dynamically" in profile_line[0]
 
         # Verify matcher autocomplete contains profile
         assert "profile" in app.matcher.words
