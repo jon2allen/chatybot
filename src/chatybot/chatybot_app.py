@@ -7,6 +7,7 @@ Orchestrates all components and provides the main interface
 import asyncio
 import os
 import sys
+
 try:
     if sys.platform == "win32":
         try:
@@ -17,28 +18,28 @@ try:
         import readline
 except ImportError:
     readline = None
-import time
-import re
-import shlex
-import random
-import json
-import copy
-import signal
-import shutil
-from datetime import datetime
-from pathlib import Path
-from typing import Dict, Any, List, Tuple, Optional, Callable, Union
-import logging
 import atexit
+import copy
 import ctypes
 import ctypes.util
+import json
+import logging
+import random
+import re
+import shlex
+import shutil
+import signal
 import struct
+import time
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+
 from .pattern import PatternMatcher
 
 
 class LoopBreak(Exception):
     """Raised to exit a foreach loop early via the 'break' keyword."""
-    pass
 
 
 try:
@@ -56,26 +57,26 @@ except ImportError:
         "Parsley is not installed. Please install it with 'pip install parsley'."
     )
 
-from .config_manager import ConfigManager
-from .logging_manager import LoggingManager
 from .buffer_manager import BufferManager
-from .image_generator import ImageGenerator
-from .image_manager import ImageManager
-from .extract_code import process_file
 from .chaty_help import get_help_system
 from .chatydb import (
-    set_db,
-    search_db,
+    SEARCHBUFFER,
     dblog,
+    dbprint,
+    list_dbs,
     load_var,
     save_var,
-    list_dbs,
-    dbprint,
-    SEARCHBUFFER,
+    search_db,
+    set_db,
 )
 from .commands import registry as _command_registry
-from .commands.registry import CommandResult, CommandAction
 from .commands.context import CommandContext
+from .commands.registry import CommandAction, CommandResult
+from .config_manager import ConfigManager
+from .extract_code import process_file
+from .image_generator import ImageGenerator
+from .image_manager import ImageManager
+from .logging_manager import LoggingManager
 
 # Global variables needed for database functionality
 app = None  # Global app instance for database functions to access
@@ -84,7 +85,7 @@ app = None  # Global app instance for database functions to access
 class ChatybotApp:
     """Main application class for Chatybot."""
 
-    def __init__(self, config_path: Optional[str] = None, lang: str = "en", no_tools: bool = False):
+    def __init__(self, config_path: str | None = None, lang: str = "en", no_tools: bool = False):
         """Initialize the Chatybot application."""
         self.no_tools: bool = no_tools
         # Initialize managers
@@ -115,9 +116,9 @@ class ChatybotApp:
         )
 
         # Procedure processing system
-        self.procedures: Dict[str, Dict[str, Any]] = {}
+        self.procedures: dict[str, dict[str, Any]] = {}
         self.proc_depth: int = 0
-        self.active_proc_stack: List[Dict[str, Any]] = []
+        self.active_proc_stack: list[dict[str, Any]] = []
         # Tracks active foreach loops so 'break' can detect use outside a loop
         # and defproc can warn when defined inside a loop body.
         self.foreach_active: int = 0
@@ -129,19 +130,19 @@ class ChatybotApp:
         self.image_size_manual = False
 
         # Chat state
-        self.chat_history: List[Tuple[str, str]] = []
-        self.last_prompt: Optional[str] = None
-        self.last_response: Optional[str] = None
-        self.input_history: List[str] = []
+        self.chat_history: list[tuple[str, str]] = []
+        self.last_prompt: str | None = None
+        self.last_response: str | None = None
+        self.input_history: list[str] = []
         self.input_history_index = -1
-        self.input_history_matches: List[str] = []
+        self.input_history_matches: list[str] = []
 
         # Flags and settings
         self.code_only_flag: bool = False
         self.streaming_enabled: bool = False
         self.note_mode: bool = False
         self.reasoning_mode: bool = True
-        self.reasoning_effort: Optional[str] = None
+        self.reasoning_effort: str | None = None
         self.show_thinking: bool = True
         # Reasoning token count from the most recent completion's usage, if the
         # provider exposes one (e.g. OpenAI completion_tokens_details.reasoning_tokens).
@@ -152,8 +153,8 @@ class ChatybotApp:
         self.should_exit: bool = False
         self.script_context: bool = False
         self.thoughtstyle: str = "none"
-        self.default_profile: Optional[str] = None
-        self._openai_clients: Dict[str, Any] = {}
+        self.default_profile: str | None = None
+        self._openai_clients: dict[str, Any] = {}
         
         # Context limit settings
         from .context_limit import ContextLimiter
@@ -181,9 +182,9 @@ class ChatybotApp:
         self.live_tool_context: str = ""
         self.tool_timeout: int = 30
         self.rate_limit_delay: float = 0.0
-        self._cached_rate_limit_delay: Optional[float] = None
+        self._cached_rate_limit_delay: float | None = None
         self.strip_thinking_from_filebanks: bool = True
-        self.tool_overrides: Dict[str, bool] = {}
+        self.tool_overrides: dict[str, bool] = {}
         self.default_agentic_instructions: str = (
             "IMPORTANT: You are executing in an autonomous, multi-turn tool-calling loop. "
             "Use tools ONLY when necessary to perform actions on the system or fetch external information. "
@@ -201,14 +202,14 @@ class ChatybotApp:
         self.session_strip_thinking: str = "separate" # "separate", "true", "false"
         self.session_storage_engine: str = "jsonl"    # "jsonl", "monolithic"
         self.session_store = None
-        self.active_session_id: Optional[str] = None
-        self.active_session_name: Optional[str] = None
-        self.session_model_alias: Optional[str] = None
-        self.session_turns: List[Dict[str, Any]] = []
-        self.session_activity: List[Dict[str, Any]] = []  # Chronological log of action verbs and prompts (reference only)
-        self.session_created_at: Optional[str] = None
-        self.session_first_prompt_slug: Optional[str] = None
-        self.session_notes: Optional[str] = None
+        self.active_session_id: str | None = None
+        self.active_session_name: str | None = None
+        self.session_model_alias: str | None = None
+        self.session_turns: list[dict[str, Any]] = []
+        self.session_activity: list[dict[str, Any]] = []  # Chronological log of action verbs and prompts (reference only)
+        self.session_created_at: str | None = None
+        self.session_first_prompt_slug: str | None = None
+        self.session_notes: str | None = None
         self.enable_chat_history: bool = True
 
         # Trace settings
@@ -223,30 +224,30 @@ class ChatybotApp:
         self.debug_payload_data: dict = {}
 
         # Virtual Memory Monitoring state
-        self.vmem_monitor_thread: Optional[object] = None
+        self.vmem_monitor_thread: object | None = None
         self.vmem_monitor_active: bool = False
-        self.vmem_log_file: Optional[str] = None
+        self.vmem_log_file: str | None = None
 
         # Seed configuration
-        self.seed_config: Optional[Union[int, str, Tuple[str, int, int]]] = None
+        self.seed_config: int | str | tuple[str, int, int] | None = None
 
         # Control-C handling state
         self.control_c_count: int = 0
         self.interrupt_requested: bool = False
 
         # Top-level parameters
-        self.temperature: Optional[float] = None
-        self.top_p: Optional[float] = None
-        self.top_k: Optional[int] = None
-        self.freq_penalty: Optional[float] = None
-        self.pres_penalty: Optional[float] = None
+        self.temperature: float | None = None
+        self.top_p: float | None = None
+        self.top_k: int | None = None
+        self.freq_penalty: float | None = None
+        self.pres_penalty: float | None = None
 
         # Semantic Reranking state
         self.rerank_documents_source = None
         self.latest_rerank_results = []
 
         # Macro processing state
-        self.macros: Dict[str, Dict[str, Any]] = {}
+        self.macros: dict[str, dict[str, Any]] = {}
         self._definition_grammar = None
         self._invocation_grammar = None
 
@@ -468,7 +469,6 @@ class ChatybotApp:
 
     def setup_macro_grammars(self):
         """No-op kept for backwards compatibility."""
-        pass
 
     def load_macros(self, macro_file: str = "macro.chatdsl") -> None:
         """Load macro definitions from file using Parsley."""
@@ -498,7 +498,7 @@ class ChatybotApp:
         except Exception as e:
             print(f"Error loading macros: {e}")
 
-    def list_macros(self, filter_term: Optional[str] = None) -> None:
+    def list_macros(self, filter_term: str | None = None) -> None:
         """List all loaded macros with parameter signatures and template previews."""
         if not self.macros:
             print("No macros loaded. Use '/reloadmacros' to load macro definitions.")
@@ -626,7 +626,7 @@ class ChatybotApp:
                 result = result.replace(f'${{{var_name}}}', var_value)
             return result
 
-    def parse_dsl_list(self, val_str: str) -> List[str]:
+    def parse_dsl_list(self, val_str: str) -> list[str]:
         """Splits a DSL list string by top-level commas, respecting quotes and braces/brackets."""
         val_str = val_str.strip()
         if "```" in val_str:
@@ -689,7 +689,7 @@ class ChatybotApp:
         elements.append("".join(current_element))
         return elements
 
-    def parse_array_value(self, val_str: str) -> List[str]:
+    def parse_array_value(self, val_str: str) -> list[str]:
         """
         Parses an array value string containing a DSL list, replacing placeholders
         within elements, and returns a list of resolved string elements.
@@ -795,11 +795,11 @@ class ChatybotApp:
         os.makedirs(path, exist_ok=True)
         return path
 
-    def _resolve_session_file(self, target: str) -> Optional[str]:
+    def _resolve_session_file(self, target: str) -> str | None:
         """Resolve a session identifier or custom name using session store."""
         return self._get_session_store().resolve_session(target)
 
-    def get_scratch_dir(self, create: bool = True) -> Optional[str]:
+    def get_scratch_dir(self, create: bool = True) -> str | None:
         """
         Get the current active scratchpad directory path.
         If an active session exists, returns ~/.local/share/chatybot/sessions/<session_id>/scratch/
@@ -839,7 +839,7 @@ class ChatybotApp:
             counter += 1
         return candidate
 
-    def _extract_thinking_tokens(self, response_text: str) -> Tuple[Optional[str], str]:
+    def _extract_thinking_tokens(self, response_text: str) -> tuple[str | None, str]:
         """Extract reasoning traces (<think>...</think>, <thought>...</thought>, <thinking>...</thinking>) from response text."""
         matches = re.findall(
             r"<(?:think|thought|thinking)>(.*?)</(?:think|thought|thinking)>",
@@ -903,7 +903,7 @@ class ChatybotApp:
         """Acquire an advisory lock file for the session. Returns True if acquired or already held."""
         return self._get_session_store().acquire_lock(session_id)
 
-    def _release_session_lock(self, session_id: Optional[str] = None) -> None:
+    def _release_session_lock(self, session_id: str | None = None) -> None:
         """Release the lock file for the given session (or the active session if None)."""
         sid = session_id or self.active_session_id
         if sid:
@@ -963,7 +963,7 @@ class ChatybotApp:
         except OSError as e:
             print(f"Warning: Could not save session to disk ({e}).")
 
-    def append_session_turn(self, prompt: str, response: str, agentic_loop_data: Optional[List[Dict[str, Any]]] = None, timing: Optional[Dict[str, Any]] = None):
+    def append_session_turn(self, prompt: str, response: str, agentic_loop_data: list[dict[str, Any]] | None = None, timing: dict[str, Any] | None = None):
         """Append a completed exchange turn to active session and save to disk."""
         if self.session_mode == "off":
             return
@@ -981,7 +981,7 @@ class ChatybotApp:
         
         thinking_text, clean_resp = self._extract_thinking_tokens(response)
         
-        turn_data: Dict[str, Any] = {
+        turn_data: dict[str, Any] = {
             "turn_id": len(self.session_turns) + 1,
             "model_alias": getattr(self.config_manager, "active_model_alias", None) or "default",
             "prompt": prompt,
@@ -1001,7 +1001,7 @@ class ChatybotApp:
             print(f"Warning: Could not write turn to disk session ({e}). Session continues in memory.")
         self.buffer_manager.set_script_var('SESSION_NAME', self.active_session_name or self.active_session_id, allow_protected=True)
 
-    def attach_agentic_loop_to_current_turn(self, agentic_trace: List[Dict[str, Any]], final_response: Optional[str] = None) -> None:
+    def attach_agentic_loop_to_current_turn(self, agentic_trace: list[dict[str, Any]], final_response: str | None = None) -> None:
         """Attach or update agentic loop execution trace and final response on the latest active session turn."""
         if self.session_mode == "off" or not self.session_turns:
             return
@@ -1066,7 +1066,7 @@ class ChatybotApp:
         except FileNotFoundError:
             pass
 
-    def input_history_completer(self, text: str, state: int) -> Optional[str]:
+    def input_history_completer(self, text: str, state: int) -> str | None:
         """
         Completer function for readline to navigate input history.
 
@@ -1090,7 +1090,7 @@ class ChatybotApp:
             return self.input_history_matches[self.input_history_index]
         return None
 
-    def search_input_history(self, search_term: str) -> List[str]:
+    def search_input_history(self, search_term: str) -> list[str]:
         """
         Search input history for commands containing the search term.
 
@@ -1111,7 +1111,7 @@ class ChatybotApp:
 
         return list(reversed(matches))  # Return in original order (oldest first)
 
-    async def handle_history_command(self, command: str) -> Optional[str]:
+    async def handle_history_command(self, command: str) -> str | None:
         """
         Handle the history search command (!).
 
@@ -1543,9 +1543,9 @@ class ChatybotApp:
                     print("Warning: /debug payload is not allowed in script context. Skipping.")
                     self.debug_payload_mode = False
                 else:
-                    import tempfile
                     import os
                     import subprocess
+                    import tempfile
 
                     self.debug_payload_data = kwargs.copy()
 
@@ -1581,7 +1581,7 @@ class ChatybotApp:
                         print(f"\nUsing modified payload from: {temp_file.name}")
 
                     except Exception as e:
-                        print(f"Error in debug payload mode: {str(e)}")
+                        print(f"Error in debug payload mode: {e!s}")
                         self.debug_payload_mode = False
                     finally:
                         # Clean up and reset debug mode
@@ -2143,11 +2143,11 @@ class ChatybotApp:
         except Exception as e:
             import traceback
             traceback.print_exc()
-            error_msg = f"Error during chat completion: {str(e)}"
+            error_msg = f"Error during chat completion: {e!s}"
             print(error_msg)
             if self.logging_manager.logging_active:
                 self.logging_manager.log_message(error_msg)
-            return f"Error: {str(e)}"
+            return f"Error: {e!s}"
         finally:
             # Ensure one-shot debug flags never leak past this completion,
             # even when the API call raises before the flags are consumed.
@@ -2165,7 +2165,15 @@ class ChatybotApp:
         Supports the same post-processing as ``chat_completion``: logging,
         chat history, session activity, and tool auto-launch.
         """
-        from .apple_fm_backend import check_available, create_session, respond, stream_response, build_tools, build_generation_options, build_sampling_mode
+        from .apple_fm_backend import (
+            build_generation_options,
+            build_sampling_mode,
+            build_tools,
+            check_available,
+            create_session,
+            respond,
+            stream_response,
+        )
 
         ready, reason = check_available()
         if not ready:
@@ -2388,17 +2396,17 @@ class ChatybotApp:
 
             return full_response
         except Exception as e:
-            error_msg = f"Error during Apple FM completion: {str(e)}"
+            error_msg = f"Error during Apple FM completion: {e!s}"
             print(error_msg)
             if self.logging_manager.logging_active:
                 self.logging_manager.log_message(error_msg)
-            return f"Error: {str(e)}"
+            return f"Error: {e!s}"
         finally:
             self.debug_response_mode = False
             self.debug_response_raw = False
 
     async def execute_script_command(
-        self, command: str, original_handler: Callable[[str], Union[bool, str]]
+        self, command: str, original_handler: Callable[[str], bool | str]
     ) -> bool:
         """
         Execute a command within a script context.
@@ -2926,7 +2934,7 @@ class ChatybotApp:
         self.procedures[proc_name] = {"params": params, "body": body_lines}
         print(f"Procedure '{proc_name}' defined with params: {params}")
 
-    def evaluate_foreach_iterable(self, expr_str: str) -> Tuple[Optional[Any], Optional[str]]:
+    def evaluate_foreach_iterable(self, expr_str: str) -> tuple[Any | None, str | None]:
         """
         Evaluates a foreach iterable target expression (variable name, range generator, or lines generator).
         Returns a tuple of (iterable_object_or_list, error_message).
@@ -3044,7 +3052,7 @@ class ChatybotApp:
         
         await self.execute_foreach_block(item_var, target_expr, buffer)
 
-    async def execute_foreach_block(self, item_var: str, target_expr: str, buffer: List[str]) -> None:
+    async def execute_foreach_block(self, item_var: str, target_expr: str, buffer: list[str]) -> None:
         """Executes a captured foreach loop block over an array variable or generator expression."""
         iterable, err = self.evaluate_foreach_iterable(target_expr)
         if iterable is None:
@@ -3073,7 +3081,7 @@ class ChatybotApp:
                     if item_var in self.buffer_manager.script_vars:
                         del self.buffer_manager.script_vars[item_var]
 
-    async def execute_command_list(self, commands_list: List[str]) -> None:
+    async def execute_command_list(self, commands_list: list[str]) -> None:
         """Execute a list of command lines with support for multiline blocks (foreach, defproc, multiline)."""
         old_script_context = self.script_context
         self.script_context = True
@@ -3160,7 +3168,7 @@ class ChatybotApp:
                 # 4. Check for defproc start
                 if lstripped_cmd.startswith("defproc ") or stripped_cmd == "defproc":
                     if self.foreach_active > 0:
-                        print(f"Warning: defproc defined inside a foreach loop body; it will be re-evaluated on every iteration.")
+                        print("Warning: defproc defined inside a foreach loop body; it will be re-evaluated on every iteration.")
                     m = re.match(r"defproc\s+([a-zA-Z_]\w*)(?:\(([^)]*)\))?", lstripped_cmd)
                     if m:
                         cur_proc_name = m.group(1)
@@ -3381,13 +3389,13 @@ class ChatybotApp:
             await self.execute_command_list(commands_list)
             print("Script execution finished")
         except Exception as e:
-            print(f"Error executing script: {str(e)}")
+            print(f"Error executing script: {e!s}")
         finally:
             self.script_context = False
 
     # =========== RUN COMMAND METHODS ===========
 
-    def check_dangerous(self, command: str) -> Optional[str]:
+    def check_dangerous(self, command: str) -> str | None:
         """
         Check command for dangerous patterns.
         
@@ -3440,7 +3448,7 @@ class ChatybotApp:
         
         return None
 
-    def execute_shell_command(self, command: str, timeout: Optional[int] = None) -> None:
+    def execute_shell_command(self, command: str, timeout: int | None = None) -> None:
         """
         Execute a shell command and store output in RUN_COMPLETION and LAST_COMPLETION.
         
@@ -3451,8 +3459,8 @@ class ChatybotApp:
             command: The shell command to execute
             timeout: Optional timeout in seconds (defaults to self.run_timeout)
         """
-        import subprocess
         import shlex
+        import subprocess
         
         if timeout is None:
             timeout = self.run_timeout
@@ -3555,7 +3563,7 @@ class ChatybotApp:
     def _format_capability_error(self, tool_name: str, raw_error: str) -> str:
         """Format permanent capability error with explicit LLM guidance."""
         guidance = (
-            f"[PERMANENT CAPABILITY ERROR]: Feature not supported by client environment. "
+            "[PERMANENT CAPABILITY ERROR]: Feature not supported by client environment. "
             "DO NOT retry this tool. Select an alternative tool or complete response directly."
         )
         if raw_error:
@@ -3574,10 +3582,10 @@ class ChatybotApp:
         Returns:
             JSON result from dispatcher or MCP server as string
         """
+        import json
+        import os
         import subprocess
         import tempfile
-        import os
-        import json
         
         # Use LAST_COMPLETION if no invocation_json provided
         if invocation_json is None:
@@ -3681,7 +3689,7 @@ class ChatybotApp:
                     print(err_msg)
                     return err_msg
                 try:
-                    from .tools.context_query import session_search, session_get
+                    from .tools.context_query import session_get, session_search
                     args = tool_call.get("arguments", {}) or {}
                     if tool_name == "session_search":
                         res = session_search(app=self, **args)
@@ -3794,7 +3802,7 @@ class ChatybotApp:
                 print(f"Tool dispatch failed: {result.stderr}")
                 return f"Error: Tool execution failed with exit code {result.returncode}: {result.stderr or result.stdout or 'Unknown error'}"
             else:
-                print(f"Tool dispatched successfully")
+                print("Tool dispatched successfully")
                 if tool_call and tool_call.get('tool') == 'change_dir':
                     path = tool_call.get('arguments', {}).get('path')
                     if path:
@@ -3828,7 +3836,7 @@ class ChatybotApp:
             self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
             self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', str(e))
             self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '-1')
-            return f"Error: Tool dispatch failed: {str(e)}"
+            return f"Error: Tool dispatch failed: {e!s}"
         finally:
             # Clean up temp file
             try:
@@ -3836,7 +3844,7 @@ class ChatybotApp:
             except OSError:
                 pass
 
-    def extract_tool_call(self, text: str) -> Optional[Dict[str, Any]]:
+    def extract_tool_call(self, text: str) -> dict[str, Any] | None:
         """
         Extract a tool call JSON block from conversational text.
         Returns a dictionary if a valid tool call is found, and None otherwise.
@@ -3867,7 +3875,7 @@ class ChatybotApp:
             names.update(self.tool_overrides.keys())
         return names
 
-    def extract_tool_calls(self, text: str) -> List[Dict[str, Any]]:
+    def extract_tool_calls(self, text: str) -> list[dict[str, Any]]:
         """
         Extract all tool call JSON blocks from conversational text.
         Supports standard JSON blocks, Gemma 4 native tool call syntax (<|tool_call>call:tool_name{...}<tool_call|>),
@@ -4083,7 +4091,7 @@ class ChatybotApp:
                 return [sanitize_json_types(item) for item in obj]
             return obj
 
-        def parse_json_or_dict(s: str) -> Optional[Dict[str, Any]]:
+        def parse_json_or_dict(s: str) -> dict[str, Any] | None:
             try:
                 cleaned = clean_json_string(s)
                 data = json.loads(cleaned)
@@ -4118,7 +4126,7 @@ class ChatybotApp:
 
             return None
 
-        def normalize_tool_call(data: Any) -> Optional[Dict[str, Any]]:
+        def normalize_tool_call(data: Any) -> dict[str, Any] | None:
             if isinstance(data, dict):
                 data = sanitize_json_types(data)
                 if "tool" in data:
@@ -4184,7 +4192,7 @@ class ChatybotApp:
                 return val_str[1:-1]
             return val_str
 
-        def extract_xml_tool_calls(s: str) -> List[Dict[str, Any]]:
+        def extract_xml_tool_calls(s: str) -> list[dict[str, Any]]:
             xml_calls = []
 
             # 1. Container tags with child elements: <tool_use> or <tool_call> with <tool_name> / <name>
@@ -4372,7 +4380,7 @@ class ChatybotApp:
                     xml_calls.append(call_obj)
             return xml_calls
 
-        def extract_kv_tool_calls(s: str) -> List[Dict[str, Any]]:
+        def extract_kv_tool_calls(s: str) -> list[dict[str, Any]]:
             calls = []
             blocks = []
             fence_pattern = re.compile(
@@ -4428,7 +4436,7 @@ class ChatybotApp:
                         calls.append(call_obj)
             return calls
 
-        def extract_kimi_tool_calls(s: str) -> List[Dict[str, Any]]:
+        def extract_kimi_tool_calls(s: str) -> list[dict[str, Any]]:
             """
             Extract tool calls formatted using Moonshot / Kimi K2 native special tokens:
             <|tool_calls_section_begin|><|tool_call_begin|>functions.tool_name:id<|tool_call_argument_begin|>{...}<|tool_call_end|><|tool_calls_section_end|>
@@ -4483,7 +4491,7 @@ class ChatybotApp:
                     calls.append(call_obj)
             return calls
 
-        def extract_dsml_tool_calls(s: str) -> List[Dict[str, Any]]:
+        def extract_dsml_tool_calls(s: str) -> list[dict[str, Any]]:
             """
             Extract tool calls formatted using DeepSeek Markup Language (DSML):
             <｜｜DSML｜｜ calls>
@@ -4823,7 +4831,7 @@ class ChatybotApp:
                     # dispatch_tool writes result to TOOL_DISPATCH_RESULT and returns the stdout string
                     result_str = await self.dispatch_tool(safe_json_dumps(tc, ensure_ascii=False))
                 except Exception as e:
-                    result_str = safe_json_dumps({"status": "error", "message": f"Dispatch execution error: {str(e)}"}, ensure_ascii=False)
+                    result_str = safe_json_dumps({"status": "error", "message": f"Dispatch execution error: {e!s}"}, ensure_ascii=False)
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', result_str)
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
                 _tool_duration_ms = round((time.perf_counter() - _tool_t0) * 1000, 1)
@@ -5251,7 +5259,7 @@ class ChatybotApp:
         self.tool_context = context
         return context
 
-    def _adapt_command_result(self, result: CommandResult) -> Union[bool, str]:
+    def _adapt_command_result(self, result: CommandResult) -> bool | str:
         """Translate a typed CommandResult back to the legacy Union[bool, str]
         contract used by handle_escape_command callers.
 
@@ -5270,7 +5278,7 @@ class ChatybotApp:
             exit(0)
         return True
 
-    async def handle_escape_command(self, command: str) -> Union[bool, str]:
+    async def handle_escape_command(self, command: str) -> bool | str:
         """
         Handle escape commands.
 
@@ -5416,12 +5424,12 @@ class ChatybotApp:
             print(f"Virtual memory monitoring is already active. Logging to '{self.vmem_log_file}'.")
             return
 
-        import threading
-        import time
-        import os
-        import sys
         import ctypes
         import ctypes.util
+        import os
+        import sys
+        import threading
+        import time
         from datetime import datetime
 
         self.vmem_monitor_active = True
@@ -5542,9 +5550,9 @@ class ChatybotApp:
 
         import sys
         if sys.platform == "darwin":
-            import os
             import ctypes
             import ctypes.util
+            import os
             import struct
             try:
                 libproc = ctypes.CDLL(ctypes.util.find_library("libproc") or "libproc.dylib")
@@ -5728,7 +5736,7 @@ class ChatybotApp:
             except Exception as e:
                 if isinstance(e, StopIteration):
                     raise
-                print(f"Error: {str(e)}")
+                print(f"Error: {e!s}")
 
     async def shutdown(self) -> None:
         """Gracefully close all background resources, MCP servers, and HTTP client sessions."""
@@ -5765,8 +5773,8 @@ class ChatybotApp:
 def run():
     """Entry point for the application."""
     import argparse
-    import sys
     import asyncio
+    import sys
 
     parser = argparse.ArgumentParser(description="Chatybot CLI")
     parser.add_argument(

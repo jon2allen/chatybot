@@ -2,20 +2,21 @@
 session_factory.py - Registry and factory for creating BaseSessionStore instances.
 """
 
-from typing import Dict, Type, Optional
+from typing import Dict, Optional, Type
+
 from .session_interface import BaseSessionStore
 from .session_store_jsonl import JsonlSessionStore
 from .session_store_monolithic import MonolithicJsonSessionStore
 
 # Registry of supported storage engines
-_SESSION_ENGINES: Dict[str, Type[BaseSessionStore]] = {
+_SESSION_ENGINES: dict[str, type[BaseSessionStore]] = {
     "jsonl": JsonlSessionStore,
     "monolithic": MonolithicJsonSessionStore,
     "json": MonolithicJsonSessionStore,
 }
 
 
-def register_session_engine(name: str, engine_cls: Type[BaseSessionStore]) -> None:
+def register_session_engine(name: str, engine_cls: type[BaseSessionStore]) -> None:
     """Register a custom session storage provider."""
     _SESSION_ENGINES[name.lower()] = engine_cls
 

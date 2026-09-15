@@ -5,13 +5,13 @@ Scans active and persisted session turns, metadata, and scratchpad areas.
 
 import os
 from datetime import datetime
-from typing import List, Dict, Any, Tuple, Optional
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
 from chatybot.query.base import (
     BaseQueryEngine,
-    QueryRequest,
     QueryMatch,
+    QueryRequest,
     QueryResponse,
     register_query_engine,
 )
@@ -30,9 +30,9 @@ class GrepQueryEngine(BaseQueryEngine):
     def search(self, app: Any, request: QueryRequest) -> QueryResponse:
         terms = [t.lower() for t in request.terms if t.strip()]
         op = request.operator.upper() if request.operator else "AND"
-        matches: List[QueryMatch] = []
+        matches: list[QueryMatch] = []
 
-        def check_text_match(text: str) -> Tuple[bool, List[str]]:
+        def check_text_match(text: str) -> tuple[bool, list[str]]:
             if not terms:
                 return True, []
             text_lower = text.lower()
@@ -42,7 +42,7 @@ class GrepQueryEngine(BaseQueryEngine):
             else:  # OR
                 return len(matched) > 0, matched
 
-        def make_snippet(text: str, matched_terms: List[str], max_len: int = 120) -> str:
+        def make_snippet(text: str, matched_terms: list[str], max_len: int = 120) -> str:
             clean_text = " ".join(text.split())
             if not matched_terms or not clean_text:
                 return clean_text[:max_len] + ("..." if len(clean_text) > max_len else "")
@@ -64,7 +64,7 @@ class GrepQueryEngine(BaseQueryEngine):
             suffix = "..." if end < len(clean_text) else ""
             return f"{prefix}{clean_text[start:end]}{suffix}"
 
-        def is_within_date(dt_val: Optional[datetime]) -> bool:
+        def is_within_date(dt_val: datetime | None) -> bool:
             # If a date filter is active, items lacking a timestamp cannot satisfy it
             if dt_val is None:
                 return not (request.since_dt or request.until_dt)
@@ -95,14 +95,14 @@ class GrepQueryEngine(BaseQueryEngine):
             except Exception:
                 store = None
 
-        session_size_cache: Dict[str, int] = {}
-        scratch_size_cache: Dict[str, int] = {}
+        session_size_cache: dict[str, int] = {}
+        scratch_size_cache: dict[str, int] = {}
 
         def get_session_size_bytes(
             sid_or_target: str,
-            turns_fallback: Optional[List[Dict[str, Any]]] = None,
-            notes_fallback: Optional[str] = None,
-            cached_summary: Optional[Dict[str, Any]] = None,
+            turns_fallback: list[dict[str, Any]] | None = None,
+            notes_fallback: str | None = None,
+            cached_summary: dict[str, Any] | None = None,
         ) -> int:
             if sid_or_target in session_size_cache:
                 return session_size_cache[sid_or_target]
@@ -134,7 +134,7 @@ class GrepQueryEngine(BaseQueryEngine):
             # Check session turns in memory
             turns = getattr(app, "session_turns", []) or []
             active_notes = getattr(app, "session_notes", None)
-            active_session_size: Optional[int] = None
+            active_session_size: int | None = None
             active_session_has_match = False
             for idx, turn in enumerate(turns, 1):
                 # Timestamp check
@@ -150,7 +150,7 @@ class GrepQueryEngine(BaseQueryEngine):
                 if turn.get("response"):
                     content_parts.append(f"assistant: {turn['response']}")
                 if turn.get("tool_calls"):
-                    content_parts.append(f"tool_calls: {str(turn['tool_calls'])}")
+                    content_parts.append(f"tool_calls: {turn['tool_calls']!s}")
 
                 full_content = "\n".join(content_parts)
                 matched_ok, hit_terms = check_text_match(full_content)
@@ -233,7 +233,7 @@ class GrepQueryEngine(BaseQueryEngine):
 
                     # Search session notes if present in meta
                     s_notes = meta.get("notes") or meta.get("session_notes")
-                    persisted_session_size: Optional[int] = None
+                    persisted_session_size: int | None = None
 
                     if s_notes:
                         matched_ok, hit_terms = check_text_match(str(s_notes))
@@ -277,7 +277,7 @@ class GrepQueryEngine(BaseQueryEngine):
                         if turn.get("text"):
                             content_parts.append(str(turn['text']))
                         if turn.get("tool_calls"):
-                            content_parts.append(f"tool_calls: {str(turn['tool_calls'])}")
+                            content_parts.append(f"tool_calls: {turn['tool_calls']!s}")
 
                         full_content = "\n".join(content_parts)
                         matched_ok, hit_terms = check_text_match(full_content)

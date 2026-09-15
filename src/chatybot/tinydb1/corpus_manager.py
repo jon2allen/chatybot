@@ -1,6 +1,8 @@
-from tinydb import TinyDB, Query
 #from tinydb.table import Document
-from typing import List, Dict, Optional, Union, Any
+from typing import Any, Dict, List, Optional, Union
+
+from tinydb import Query, TinyDB
+
 
 class CorpusManager:
     """
@@ -23,7 +25,7 @@ class CorpusManager:
         self.db.close()
 
     def add_item(self, item_type: str, name: str, content: str,
-                metadata: Dict[str, Any] = None) -> int:
+                metadata: dict[str, Any] = None) -> int:
         """
         Add a new item to the corpus.
 
@@ -48,7 +50,7 @@ class CorpusManager:
 
         return self.items.insert(item_data)
 
-    def get_item(self, item_id: int) -> Optional[Dict]:
+    def get_item(self, item_id: int) -> dict | None:
         """
         Retrieve an item by its ID.
 
@@ -61,7 +63,7 @@ class CorpusManager:
         result = self.items.get(doc_id=item_id)
         return result if result else None
 
-    def get_items_by_type(self, item_type: str) -> List[Dict]:
+    def get_items_by_type(self, item_type: str) -> list[dict]:
         """
         Retrieve all items of a specific type.
 
@@ -73,7 +75,7 @@ class CorpusManager:
         """
         return self.items.search(self.Item.type == item_type)
 
-    def get_items_by_metadata(self, key: str, value: Any) -> List[Dict]:
+    def get_items_by_metadata(self, key: str, value: Any) -> list[dict]:
         """
         Retrieve all items that have specific metadata.
 
@@ -87,7 +89,7 @@ class CorpusManager:
         return self.items.search(self.Item.metadata[key] == value)
 
     def update_item(self, item_id: int, name: str = None, content: str = None,
-                   metadata: Dict[str, Any] = None) -> bool:
+                   metadata: dict[str, Any] = None) -> bool:
         """
         Update an existing item.
 
@@ -125,7 +127,7 @@ class CorpusManager:
         """
         return self.items.remove(doc_ids=[item_id]) == [item_id]
 
-    def search_items(self, query: str, fields: List[str] = None) -> List[Dict]:
+    def search_items(self, query: str, fields: list[str] = None) -> list[dict]:
         """
         Search for items by content in specified fields.
 
@@ -151,7 +153,7 @@ class CorpusManager:
 
         return self.items.search(search_query) if search_query else []
 
-    def get_all_items(self) -> List[Dict]:
+    def get_all_items(self) -> list[dict]:
         """
         Retrieve all items from the corpus.
 

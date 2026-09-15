@@ -3,28 +3,28 @@ Context query tools for LLM tool calling in Chatybot.
 Provides session_search to search session turns, conversation history, notes, and scratchpad.
 """
 
-from typing import Dict, Any, Optional, List
 import shlex
+from typing import Any, Dict, List, Optional
 
 from chatybot.query.base import QueryRequest, get_query_engine
-from chatybot.query.date_parser import parse_datetime_expr, parse_date_range
+from chatybot.query.date_parser import parse_date_range, parse_datetime_expr
 
 
 def session_search(
     query: str = "",
     operator: str = "AND",
-    since: Optional[str] = None,
-    until: Optional[str] = None,
-    range: Optional[str] = None,
+    since: str | None = None,
+    until: str | None = None,
+    range: str | None = None,
     include_scratch: bool = True,
     limit: int = 15,
-    session_id: Optional[str] = None,
-    engine: Optional[str] = None,
+    session_id: str | None = None,
+    engine: str | None = None,
     ids_only: bool = False,
     full: bool = False,
-    target_variable: Optional[str] = None,
+    target_variable: str | None = None,
     app: Any = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Search past session turns, conversation history, notes, and scratchpad.
 
@@ -129,11 +129,11 @@ def session_search(
 
 def session_get(
     session_id: str,
-    turn_id: Optional[int] = None,
+    turn_id: int | None = None,
     part: str = "both",
-    target_variable: Optional[str] = None,
+    target_variable: str | None = None,
     app: Any = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Read-only text extraction from a session without altering active session state.
 
@@ -155,10 +155,10 @@ def session_get(
     if part_norm not in ("both", "prompt", "response", "thinking"):
         part_norm = "both"
 
-    meta: Dict[str, Any] = {}
-    turns: List[Dict[str, Any]] = []
+    meta: dict[str, Any] = {}
+    turns: list[dict[str, Any]] = []
     store = None
-    resolved_sid: Optional[str] = None
+    resolved_sid: str | None = None
 
     # 1. Resolve from Active Session
     active_sid = getattr(app, "active_session_id", None)
@@ -198,7 +198,7 @@ def session_get(
     extracted_text = ""
     extracted_turns = []
 
-    def format_turn(t: Dict[str, Any], idx: int) -> str:
+    def format_turn(t: dict[str, Any], idx: int) -> str:
         prompt_txt = str(t.get("prompt", "") or "")
         resp_txt = str(t.get("response", "") or "")
         think_txt = str(t.get("thinking", "") or "")

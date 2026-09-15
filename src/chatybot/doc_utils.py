@@ -43,7 +43,7 @@ def get_doc_dir() -> Path:
     return Path(__file__).resolve().parent / "doc"
 
 
-def get_readme_content() -> Optional[str]:
+def get_readme_content() -> str | None:
     """
     Retrieve the canonical README.md content.
     Checks:
@@ -109,7 +109,7 @@ def get_doc_path(rel_path: str = "") -> Path:
     return target
 
 
-def list_docs(subpath: str = "") -> List[str]:
+def list_docs(subpath: str = "") -> list[str]:
     """
     List relative paths of all documents available in the doc directory or a subpath.
     """
@@ -210,7 +210,7 @@ def display_doc(
         print(highlighted)
 
 
-def check_text_match(text: str, terms: List[str], op: str = "AND") -> Tuple[bool, List[str]]:
+def check_text_match(text: str, terms: list[str], op: str = "AND") -> tuple[bool, list[str]]:
     """
     Check if text matches terms using AND/OR logic.
     Reuses the exact matching logic from GrepQueryEngine.
@@ -225,7 +225,7 @@ def check_text_match(text: str, terms: List[str], op: str = "AND") -> Tuple[bool
         return len(matched) > 0, matched
 
 
-def make_snippet(text: str, matched_terms: List[str], max_len: int = 120) -> str:
+def make_snippet(text: str, matched_terms: list[str], max_len: int = 120) -> str:
     """
     Create a contextual snippet around matched terms.
     Reuses the exact snippet generator from GrepQueryEngine.
@@ -254,7 +254,7 @@ def make_snippet(text: str, matched_terms: List[str], max_len: int = 120) -> str
 class DocSearchMatch:
     """Represents a matched documentation line/entry."""
 
-    def __init__(self, filename: str, line_number: int, line_text: str, matched_terms: List[str], snippet: str):
+    def __init__(self, filename: str, line_number: int, line_text: str, matched_terms: list[str], snippet: str):
         self.filename = filename
         self.line_number = line_number
         self.line_text = line_text
@@ -272,11 +272,11 @@ class DocSearchMatch:
 
 
 def search_docs(
-    terms: List[str],
+    terms: list[str],
     op: str = "AND",
     limit: int = 20,
     subpath: str = "",
-) -> List[DocSearchMatch]:
+) -> list[DocSearchMatch]:
     """
     Search across bundled documentation files for terms matching AND/OR boolean logic.
     Reuses GrepQueryEngine matching and snippet semantics.
@@ -286,7 +286,7 @@ def search_docs(
         return []
 
     doc_files = list_docs(subpath)
-    matches: List[DocSearchMatch] = []
+    matches: list[DocSearchMatch] = []
 
     for rel_path in doc_files:
         full_path = get_doc_path(rel_path)

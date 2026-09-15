@@ -4,9 +4,17 @@ Migrated from chatybot_app.handle_escape_command elif chain:
   /setdb, /dblist, /searchdb, /dblog, /dbprint, /loadvar, /savevar
 """
 
-from chatybot.commands.registry import command, CommandResult
+from chatybot.chatydb import (
+    dblog,
+    dbprint,
+    list_dbs,
+    load_var,
+    save_var,
+    search_db,
+    set_db,
+)
 from chatybot.commands.context import CommandContext
-from chatybot.chatydb import set_db, search_db, dblog, load_var, save_var, list_dbs, dbprint
+from chatybot.commands.registry import CommandResult, command
 
 
 @command("/setdb", help="Set the active database", args="<dbname>", category="db")

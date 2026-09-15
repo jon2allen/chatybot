@@ -5,12 +5,12 @@ Manages file buffers, file banks, script variables, and image banks
 """
 
 import base64
-import re
-import json
 import contextlib
-from pathlib import Path
+import json
+import re
 from collections import UserDict
-from typing import Dict, List, Tuple, Any, Optional
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
 
 class ScriptVars(UserDict):
@@ -20,7 +20,7 @@ class ScriptVars(UserDict):
     """
     def __init__(self, manager, *args, **kwargs):
         self.manager = manager
-        self.types: Dict[str, str] = {}
+        self.types: dict[str, str] = {}
         self._is_user_write: bool = False
         self.protected_vars = {
             'AGENTIC_LOOP',
@@ -153,8 +153,8 @@ class BufferManager:
         self.app = app
         self.file_buffer: str = ""
         self.prompt_buffer: str = ""
-        self.file_banks: Dict[str, str] = {f"filebank{i}": "" for i in range(1, 6)}
-        self.image_banks: Dict[str, str] = {f"imagebank{i}": "" for i in range(1, 6)}
+        self.file_banks: dict[str, str] = {f"filebank{i}": "" for i in range(1, 6)}
+        self.image_banks: dict[str, str] = {f"imagebank{i}": "" for i in range(1, 6)}
         self.script_vars = ScriptVars(self)
     
     def is_base64_payload(self, val: str) -> bool:
@@ -197,7 +197,7 @@ class BufferManager:
                 self.file_buffer = f.read()
             print(f"File '{file_path}' loaded into buffer.")
         except Exception as e:
-            print(f"Error reading file: {str(e)}")
+            print(f"Error reading file: {e!s}")
             raise
     
     def clear_file_buffer(self) -> None:
@@ -226,7 +226,7 @@ class BufferManager:
                 self.file_banks[bank_name] = f.read()
             print(f"File '{file_path}' loaded into {bank_name}.")
         except Exception as e:
-            print(f"Error reading file: {str(e)}")
+            print(f"Error reading file: {e!s}")
             raise
     
     def clear_file_bank(self, bank_num: int) -> None:
@@ -285,7 +285,7 @@ class BufferManager:
             if allow_protected and hasattr(self.script_vars, '_is_user_write'):
                 self.script_vars._is_user_write = old_user_write
 
-    def get_script_var(self, var_name: str) -> Optional[str]:
+    def get_script_var(self, var_name: str) -> str | None:
         """
         Get a script variable value.
         
@@ -327,7 +327,7 @@ class BufferManager:
             self.image_banks[bank_name] = data_url
             print(f"Image '{file_path}' loaded into {bank_name}.")
         except Exception as e:
-            print(f"Error reading image file: {str(e)}")
+            print(f"Error reading image file: {e!s}")
             raise
 
     def clear_image_bank(self, bank_num: int) -> None:
@@ -426,7 +426,7 @@ class BufferManager:
                 return "\n".join(map(str, parsed))
             return str(var_value)
 
-    def resolve_text_variable(self, var_name: str) -> Optional[str]:
+    def resolve_text_variable(self, var_name: str) -> str | None:
         """Resolves text-safe variables only (blocks base64/multimodal data)."""
         # Special variables
         if var_name.upper() == 'LAST_RESPONSE':
@@ -483,7 +483,7 @@ class BufferManager:
             
         return None
 
-    def replace_placeholders(self, prompt: str, include_images: bool = True, clear_unresolved: bool = False) -> Tuple[str, List[Dict]]:
+    def replace_placeholders(self, prompt: str, include_images: bool = True, clear_unresolved: bool = False) -> tuple[str, list[dict]]:
         """
         Replace filebank, script variable, and imagebank placeholders in the prompt.
         Supports both ${VAR} and {VAR} syntaxes.
@@ -625,7 +625,7 @@ class BufferManager:
             print("--- END DEBUG METADATA ---\n")
             return
 
-        print(f"\nSource                Size (KB)")
+        print("\nSource                Size (KB)")
         print("-" * 32)
         
         # File Buffer
@@ -800,4 +800,4 @@ class BufferManager:
             except KeyError:
                 print(f"Error: Variable '{clean_name}' not found.")
             except (IndexError, ValueError) as e:
-                print(f"Error: {str(e)}.")
+                print(f"Error: {e!s}.")

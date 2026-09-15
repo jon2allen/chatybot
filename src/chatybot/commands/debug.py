@@ -7,8 +7,8 @@ registry lookup -> handler -> return-contract adaptation) while being
 self-contained.
 """
 
-from chatybot.commands.registry import command, CommandResult
 from chatybot.commands.context import CommandContext
+from chatybot.commands.registry import CommandResult, command
 
 
 @command("/echo", help="Print text with variable substitution", args="<text>", category="debug")

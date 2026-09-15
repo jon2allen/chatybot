@@ -5,7 +5,8 @@ except ImportError:
 import os
 import re
 import sys
-from typing import Optional, List, Dict, Any
+from typing import Any, Dict, List, Optional
+
 
 class ProfileEditor:
     def __init__(self, name: str, pm: Any, config_manager: Any):
@@ -587,5 +588,5 @@ def run_profile_editor(name: str, pm: Any, config_manager: Any) -> int:
     except KeyboardInterrupt:
         return 1
     except Exception as e:
-        print(f"\nFatal error in Profile Editor: {str(e)}", file=sys.stderr)
+        print(f"\nFatal error in Profile Editor: {e!s}", file=sys.stderr)
         return 1

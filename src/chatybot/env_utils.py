@@ -24,7 +24,7 @@ KNOWN_KEY_PREFIXES = (
 )
 
 
-def parse_env_line(line: str) -> Optional[Tuple[str, str]]:
+def parse_env_line(line: str) -> tuple[str, str] | None:
     """
     Parse a single line from an env file.
     
@@ -54,7 +54,7 @@ def parse_env_line(line: str) -> Optional[Tuple[str, str]]:
     return k, v
 
 
-def load_env_file(filepath: Union[str, Path], override: bool = True) -> Dict[str, str]:
+def load_env_file(filepath: str | Path, override: bool = True) -> dict[str, str]:
     """
     Read key-value pairs from an env file into os.environ.
     
@@ -70,7 +70,7 @@ def load_env_file(filepath: Union[str, Path], override: bool = True) -> Dict[str
     if not path.is_file():
         return {}
 
-    parsed: Dict[str, str] = {}
+    parsed: dict[str, str] = {}
     try:
         with open(path, "r", encoding="utf-8") as f:
             for line in f:
@@ -89,9 +89,9 @@ def load_env_file(filepath: Union[str, Path], override: bool = True) -> Dict[str
 
 
 def load_project_env_files(
-    cwd: Optional[Union[str, Path]] = None,
-    config_home: Optional[Union[str, Path]] = None,
-) -> List[str]:
+    cwd: str | Path | None = None,
+    config_home: str | Path | None = None,
+) -> list[str]:
     """
     Load environment variables respecting project boundaries and global fallbacks:
     
@@ -105,7 +105,7 @@ def load_project_env_files(
     Returns:
         List of paths that were loaded.
     """
-    loaded: List[str] = []
+    loaded: list[str] = []
     base = Path(cwd) if cwd else Path.cwd()
 
     # 1. Search for closest project .env (stop at first match)
@@ -133,7 +133,7 @@ def load_project_env_files(
     return loaded
 
 
-def resolve_api_key(key_spec: Optional[str]) -> Optional[str]:
+def resolve_api_key(key_spec: str | None) -> str | None:
     """
     Resolve an API key spec to its secret string value.
     

@@ -6,10 +6,10 @@
 import argparse
 import dataclasses
 import enum
+import json
 import logging
 import sys
-import json
-from typing import List, Dict, Optional, Union, Any, Set
+from typing import Any, Dict, List, Optional, Set, Union
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
@@ -48,7 +48,7 @@ class Tokenizer:
         self.line = 1
         self.col = 1
 
-    def tokenize(self, text: str) -> List[Token]:
+    def tokenize(self, text: str) -> list[Token]:
         self.tokens = []
         self.pos = 0
         self.line = 1
@@ -164,7 +164,7 @@ class Tokenizer:
         return self.tokens
 
 class TParser:
-    VALID_ESCAPE_COMMANDS: Set[str] = {
+    VALID_ESCAPE_COMMANDS: set[str] = {
         "help", "prompt", "file", "showfile", "clearfile", "filebank",
         "model", "listmodels", "logging", "save", "codeonly", "codeoff",
         "system", "temp", "maxtokens", "top_p", "top_k", "freq_penalty",
@@ -194,7 +194,7 @@ class TParser:
         "env", "str_search", "debug", "config", "setup_keys", "migrate_sessions"
     }
 
-    def __init__(self, tokens: List[Token], verbose: bool = False):
+    def __init__(self, tokens: list[Token], verbose: bool = False):
         self.tokens = tokens
         self.idx = 0
         self.verbose = verbose
@@ -220,7 +220,7 @@ class TParser:
         self.advance()
         return tok
 
-    def parse(self) -> List[Dict[str, Any]]:
+    def parse(self) -> list[dict[str, Any]]:
         units = []
         while not self.match(TokenType.EOF):
             if self.match(TokenType.ESCAPE, "/multiline"):
@@ -231,7 +231,7 @@ class TParser:
                 units.append(self.parse_line())
         return units
 
-    def parse_multiline_block(self) -> Dict[str, Any]:
+    def parse_multiline_block(self) -> dict[str, Any]:
         start_tok = self.expect(TokenType.ESCAPE, "/multiline")
         self.expect(TokenType.NEWLINE)
         
@@ -252,7 +252,7 @@ class TParser:
         self.expect(TokenType.ESCAPE, "/multiline")
         return {"type": "multiline_block", "content": body}
 
-    def parse_line(self) -> Dict[str, Any]:
+    def parse_line(self) -> dict[str, Any]:
         if self.match(TokenType.COMMENT):
             tok = self.expect(TokenType.COMMENT)
             return {"type": "comment", "val": tok.raw}
@@ -274,7 +274,7 @@ class TParser:
             
         return self.parse_command_or_chat()
 
-    def parse_macro_def(self) -> Dict[str, Any]:
+    def parse_macro_def(self) -> dict[str, Any]:
         self.expect(TokenType.IDENTIFIER, "def")
         self.expect(TokenType.WHITESPACE)
         name = self.expect(TokenType.IDENTIFIER).raw
@@ -293,7 +293,7 @@ class TParser:
         template = self.expect(TokenType.STRING).value
         return {"type": "macro_definition", "name": name, "params": params, "template": template}
 
-    def parse_macro_call(self) -> Dict[str, Any]:
+    def parse_macro_call(self) -> dict[str, Any]:
         self.expect(TokenType.SYMBOL, "%")
         name = self.expect(TokenType.IDENTIFIER).raw
         self.expect(TokenType.SYMBOL, "(")
@@ -327,7 +327,7 @@ class TParser:
 
         raise ParseError(f"Unexpected token in macro argument: {self.current.type.value}", self.current.line, self.current.column)
 
-    def parse_set(self) -> Dict[str, Any]:
+    def parse_set(self) -> dict[str, Any]:
         self.expect(TokenType.IDENTIFIER, "set")
         self.expect(TokenType.WHITESPACE)
         var_name = self.expect(TokenType.IDENTIFIER).raw
@@ -391,13 +391,13 @@ class TParser:
             raise ParseError(f"Expected string, number, or identifier in array literal, got {self.current.type.value} '{self.current.raw}'", self.current.line, self.current.column)
 
 
-    def parse_wait(self) -> Dict[str, Any]:
+    def parse_wait(self) -> dict[str, Any]:
         self.expect(TokenType.IDENTIFIER, "wait")
         self.expect(TokenType.WHITESPACE)
         val = self.expect(TokenType.NUMBER).value
         return {"type": "wait_command", "seconds": val}
 
-    def parse_if(self) -> Dict[str, Any]:
+    def parse_if(self) -> dict[str, Any]:
         start_tok = self.expect(TokenType.IDENTIFIER, "if")
         self.expect(TokenType.WHITESPACE)
         condition_tokens = []
@@ -411,7 +411,7 @@ class TParser:
         then_command = self.parse_line()
         return {"type": "if_command", "condition": " ".join(condition_tokens).strip(), "then": then_command}
 
-    def parse_command_or_chat(self) -> Dict[str, Any]:
+    def parse_command_or_chat(self) -> dict[str, Any]:
         if self.match(TokenType.ESCAPE):
             tok = self.expect(TokenType.ESCAPE)
             cmd_name = tok.raw[1:].lower()
@@ -439,7 +439,7 @@ class TParser:
                 content.append(self.current.raw); self.advance()
         return {"type": "chat_input", "content": content}
 
-    def parse_var_ref(self) -> Dict[str, Any]:
+    def parse_var_ref(self) -> dict[str, Any]:
         self.expect(TokenType.SYMBOL, "${")
         name = self.expect(TokenType.IDENTIFIER).raw
         self.expect(TokenType.SYMBOL, "}")

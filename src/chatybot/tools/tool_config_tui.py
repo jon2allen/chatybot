@@ -6,12 +6,13 @@ Allows browsing, editing, cloning tools with a tool editor integration.
 
 import os
 import sys
+
 try:
     import curses
 except ImportError:
     curses = None
-from typing import Optional, List, Tuple, Dict, Any
 from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional, Tuple
 
 
 @dataclass
@@ -22,10 +23,10 @@ class ToolConfig:
     description: str = ""
     module: str = ""
     function: str = ""
-    parameters: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    parameters: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     @classmethod
-    def from_toml_section(cls, section: Dict[str, Any], param_sections: Optional[Dict[str, Dict[str, Any]]] = None):
+    def from_toml_section(cls, section: dict[str, Any], param_sections: dict[str, dict[str, Any]] | None = None):
         """Create ToolConfig from TOML section data."""
         params = {}
         if param_sections:
@@ -43,7 +44,7 @@ class ToolConfig:
             parameters=params
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for TOML serialization."""
         return {
             "enabled": self.enabled,
@@ -56,11 +57,11 @@ class ToolConfig:
 class ToolsConfig:
     """Manages the complete tools configuration."""
     
-    def __init__(self, config_path: Optional[str] = None):
+    def __init__(self, config_path: str | None = None):
         self.config_path = config_path or os.path.join(os.path.dirname(__file__), "tools_config.toml")
         self.resolved_path = os.path.expanduser(self.config_path)
-        self.tools: Dict[str, ToolConfig] = {}
-        self.global_config: Dict[str, Any] = {}
+        self.tools: dict[str, ToolConfig] = {}
+        self.global_config: dict[str, Any] = {}
         
     @classmethod
     def from_toml(cls, toml_path: str) -> "ToolsConfig":
@@ -110,7 +111,7 @@ class ToolsConfig:
         
         return config
     
-    def to_toml(self, path: Optional[str] = None) -> str:
+    def to_toml(self, path: str | None = None) -> str:
         """Serialize configuration to TOML string."""
         lines = []
         
@@ -165,7 +166,7 @@ class ToolsConfig:
         
         return "\n".join(lines)
     
-    def save(self, path: Optional[str] = None):
+    def save(self, path: str | None = None):
         """Save configuration to file."""
         save_path = path or self.resolved_path
         toml_str = self.to_toml()
@@ -190,7 +191,7 @@ class ToolsConfig:
             seen.add(tool_name)
         return True
     
-    def get_tools_list(self) -> List[Tuple[str, ToolConfig]]:
+    def get_tools_list(self) -> list[tuple[str, ToolConfig]]:
         """Get sorted list of tools."""
         return sorted(self.tools.items(), key=lambda x: x[0])
 
@@ -198,12 +199,12 @@ class ToolsConfig:
 class ToolConfigTUI:
     """TUI for managing ChatyBot tools."""
     
-    def __init__(self, config_path: Optional[str] = None, test_mode: bool = False):
+    def __init__(self, config_path: str | None = None, test_mode: bool = False):
         self.config_path = config_path
         self.test_mode = test_mode
-        self.config: Optional[ToolsConfig] = None
-        self.tools_list: List[Tuple[str, ToolConfig]] = []
-        self.filtered_list: List[Tuple[str, ToolConfig]] = []
+        self.config: ToolsConfig | None = None
+        self.tools_list: list[tuple[str, ToolConfig]] = []
+        self.filtered_list: list[tuple[str, ToolConfig]] = []
         
         # UI State
         self.selected_idx = 0
@@ -292,7 +293,7 @@ class ToolConfigTUI:
             self.set_status(f"Loaded config from '{actual_path}'")
             return True
         except Exception as e:
-            self.status_message = f"Error loading config: {str(e)}"
+            self.status_message = f"Error loading config: {e!s}"
             self.status_is_error = True
             return False
     
@@ -589,7 +590,7 @@ class ToolConfigTUI:
         """Launch tool_editor to edit the selected tool."""
         # Import and run tool_editor
         try:
-            from .tool_editor import ToolEditorTUI, ToolDefinition, ParamType
+            from .tool_editor import ParamType, ToolDefinition, ToolEditorTUI
             
             # Convert ToolConfig to ToolDefinition for the editor
             tool_def = ToolDefinition(
@@ -626,7 +627,7 @@ class ToolConfigTUI:
                 try:
                     self.save_config_to_file(stdscr)
                 except Exception as e:
-                    self.set_status(f"Warning: Could not save before editing: {str(e)}")
+                    self.set_status(f"Warning: Could not save before editing: {e!s}")
             
             # Set test mode paths
             editor.test_mode = self.test_mode
@@ -653,12 +654,12 @@ class ToolConfigTUI:
             self.set_status(f"Edited tool '{tool_name}'")
             
         except Exception as e:
-            self.set_status(f"Error editing tool: {str(e)}", is_error=True)
+            self.set_status(f"Error editing tool: {e!s}", is_error=True)
     
     def create_new_tool(self, stdscr):
         """Create a new tool using the tool editor."""
         try:
-            from .tool_editor import ToolEditorTUI, ToolDefinition
+            from .tool_editor import ToolDefinition, ToolEditorTUI
             
             # Create empty tool definition
             tool_def = ToolDefinition(
@@ -673,7 +674,7 @@ class ToolConfigTUI:
                 try:
                     self.save_config_to_file(stdscr)
                 except Exception as e:
-                    self.set_status(f"Warning: Could not save before creating: {str(e)}")
+                    self.set_status(f"Warning: Could not save before creating: {e!s}")
             
             # Create and run editor
             editor = ToolEditorTUI()
@@ -698,7 +699,7 @@ class ToolConfigTUI:
             self.set_status("Created new tool")
             
         except Exception as e:
-            self.set_status(f"Error creating tool: {str(e)}", is_error=True)
+            self.set_status(f"Error creating tool: {e!s}", is_error=True)
     
     def clone_tool_dialog(self, stdscr, source_name: str, source_tool: ToolConfig):
         """Show dialog to clone a tool."""
@@ -786,7 +787,7 @@ class ToolConfigTUI:
             self.set_status(f"Cloned '{source_name}' to '{new_name}'")
             return True
         except Exception as e:
-            self.set_status(f"Error cloning tool: {str(e)}", is_error=True)
+            self.set_status(f"Error cloning tool: {e!s}", is_error=True)
             return False
     
     def delete_tool_dialog(self, stdscr, tool_name: str, tool_config: ToolConfig):
@@ -925,7 +926,7 @@ class ToolConfigTUI:
                 self.set_status(f"Saved configuration to '{new_path}'")
                 return True
             except Exception as e:
-                self.set_status(f"Error saving config: {str(e)}", is_error=True)
+                self.set_status(f"Error saving config: {e!s}", is_error=True)
         return False
     
     def save_menu_dialog(self, stdscr):
@@ -995,7 +996,7 @@ class ToolConfigTUI:
             self.has_changes = False
             self.set_status(f"Saved configuration to '{self.get_actual_config_path()}'")
         except Exception as e:
-            self.set_status(f"Error saving config: {str(e)}", is_error=True)
+            self.set_status(f"Error saving config: {e!s}", is_error=True)
     
     def edit_text_input(self, parent_win, y, x, width, initial_value: str, label: str) -> str:
         """Edit text field inline/dialog securely."""

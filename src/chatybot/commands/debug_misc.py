@@ -11,8 +11,8 @@ import os
 import re
 import shlex
 
-from chatybot.commands.registry import command, CommandResult
 from chatybot.commands.context import CommandContext
+from chatybot.commands.registry import CommandResult, command
 from chatybot.extract_code import process_file
 
 
@@ -183,7 +183,7 @@ async def cmd_prompt(ctx: CommandContext, parts: list, command: str) -> CommandR
             return CommandResult.execute_prompt(content)
     except Exception as e:
         app.buffer_manager.prompt_buffer = ""
-        print(f"Error reading prompt file: {str(e)}")
+        print(f"Error reading prompt file: {e!s}")
     return CommandResult.ok()
 
 
@@ -308,7 +308,7 @@ async def cmd_save(ctx: CommandContext, parts: list, command: str) -> CommandRes
                 print(f"Note mode is ON. Processing file '{file_path}'...")
                 process_file(file_path)
     except Exception as e:
-        print(f"Error saving file: {str(e)}")
+        print(f"Error saving file: {e!s}")
     return CommandResult.ok()
 
 
@@ -502,7 +502,11 @@ async def cmd_calc(ctx: CommandContext, parts: list, command: str) -> CommandRes
     expr_str = app.buffer_manager.replace_placeholders_legacy(expr_str, clear_unresolved=False)
 
     try:
-        from chatybot.tools.math_utils import ensure_mathparse_patched, preprocess_multilingual_expression, normalize_result
+        from chatybot.tools.math_utils import (
+            ensure_mathparse_patched,
+            normalize_result,
+            preprocess_multilingual_expression,
+        )
         ensure_mathparse_patched()
         from mathparse import mathparse
         lang_code = {
@@ -723,7 +727,13 @@ async def cmd_listmacros(ctx: CommandContext, parts: list, command: str) -> Comm
 
 @command("/docs", help="List, view, or search bundled documentation and guides", args="[filename|search <terms...>|cookbook|path] [page=N] [var=<varname>]", category="debug", aliases=["/doc"])
 async def cmd_docs(ctx: CommandContext, parts: list, command: str) -> CommandResult:
-    from chatybot.doc_utils import get_doc_dir, get_doc_path, list_docs, display_doc, search_docs
+    from chatybot.doc_utils import (
+        display_doc,
+        get_doc_dir,
+        get_doc_path,
+        list_docs,
+        search_docs,
+    )
     
     app = ctx.app
     in_script = bool(getattr(app, "script_context", False))
@@ -791,7 +801,7 @@ async def cmd_docs(ctx: CommandContext, parts: list, command: str) -> CommandRes
             print(f"{header}\n{body}")
             formatted_lines.append(f"{header}\n{body}")
 
-        print(f"\nView full document with: /docs <filename> [page=N]\n")
+        print("\nView full document with: /docs <filename> [page=N]\n")
 
         if target_var:
             saved_data = [m.to_dict() for m in matches]

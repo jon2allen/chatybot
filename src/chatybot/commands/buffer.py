@@ -10,8 +10,8 @@ to handlers that close over the bank number. i18n aliases (e.g.
 canonical names are all the registry needs.
 """
 
-from chatybot.commands.registry import command, CommandResult, registry
 from chatybot.commands.context import CommandContext
+from chatybot.commands.registry import CommandResult, command, registry
 
 
 @command("/file", help="Load a text file into the buffer", args="<path>", category="buffer")
@@ -25,7 +25,7 @@ async def cmd_file(ctx: CommandContext, parts: list, command: str) -> CommandRes
     try:
         app.buffer_manager.load_file_to_buffer(file_path)
     except Exception as e:
-        print(f"Error reading file: {str(e)}")
+        print(f"Error reading file: {e!s}")
     return CommandResult.ok()
 
 
@@ -65,7 +65,7 @@ def _make_filebank_handler(bank_num: int):
             try:
                 app.buffer_manager.load_file_to_bank(bank_num, file_path)
             except Exception as e:
-                print(f"Error reading file: {str(e)}")
+                print(f"Error reading file: {e!s}")
             return CommandResult.ok()
     return handler
 
@@ -92,7 +92,7 @@ def _make_imagebank_handler(bank_num: int):
             try:
                 app.buffer_manager.load_image_to_bank(bank_num, file_path)
             except Exception as e:
-                print(f"Error reading image file: {str(e)}")
+                print(f"Error reading image file: {e!s}")
             return CommandResult.ok()
     return handler
 

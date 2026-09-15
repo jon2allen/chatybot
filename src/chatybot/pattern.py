@@ -1,5 +1,6 @@
 import re
 
+
 class PatternMatcher:
     def __init__(self, words=None, multi_endings=None):
         """

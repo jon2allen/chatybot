@@ -39,7 +39,6 @@ from typing import Any, Dict, List, Optional, Union
 
 from pydantic import BaseModel, Field, field_validator
 
-
 # ============================================================================
 # PROFILE VERSION
 # ============================================================================
@@ -58,10 +57,10 @@ class ToolSettings(BaseModel):
     mode: str = "off"
     """Tool mode: 'off', 'auto', or 'on'."""
 
-    disabled_tools: List[str] = Field(default_factory=list)
+    disabled_tools: list[str] = Field(default_factory=list)
     """List of disabled tool names."""
 
-    max_turns: Optional[int] = None
+    max_turns: int | None = None
     """Maximum number of tool turns. None means unlimited."""
 
     auto_execute: bool = True
@@ -145,16 +144,16 @@ class ProfileConfig(BaseModel):
     model_alias: str
     """The model alias to use (e.g., 'mistral_1', 'gemini_flash')."""
 
-    temperature: Optional[float] = None
+    temperature: float | None = None
     """Sampling temperature. None means use model default."""
 
-    top_p: Optional[float] = None
+    top_p: float | None = None
     """Top-p sampling. None means use model default."""
 
-    top_k: Optional[int] = None
+    top_k: int | None = None
     """Top-k sampling. None means use model default."""
 
-    max_tokens: Optional[int] = None
+    max_tokens: int | None = None
     """Maximum tokens. None means use model default."""
 
     # Tool settings
@@ -174,12 +173,12 @@ class ProfileConfig(BaseModel):
     """Target percentage of context limit to truncate down to (10.0 to 100.0)."""
 
     # Additional settings
-    system_message: Optional[str] = None
+    system_message: str | None = None
     """Custom system message. None means use global default."""
 
     @field_validator("temperature")
     @classmethod
-    def validate_temperature(cls, v: Optional[float]) -> Optional[float]:
+    def validate_temperature(cls, v: float | None) -> float | None:
         if v is not None and not (0.0 <= v <= 2.0):
             raise ValueError(f"temperature must be between 0.0 and 2.0, got {v}")
         return v
@@ -206,16 +205,16 @@ class ProfileMeta(BaseModel):
     version: str = PROFILE_VERSION
     """Profile format version."""
 
-    created_at: Optional[datetime] = None
+    created_at: datetime | None = None
     """When the profile was created."""
 
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
     """When the profile was last updated."""
 
-    author: Optional[str] = None
+    author: str | None = None
     """Author of the profile."""
 
-    source_path: Optional[str] = None
+    source_path: str | None = None
     """Source file path if loaded from disk."""
 
 
@@ -247,7 +246,7 @@ class Profile(BaseModel):
     # ------------------------------------------------------------------
 
     @classmethod
-    def from_file(cls, path: str | Path) -> "Profile":
+    def from_file(cls, path: str | Path) -> Profile:
         """
         Load a profile from a .chatdsl file.
 
@@ -286,7 +285,7 @@ class Profile(BaseModel):
         return cls(meta=meta, config=config, unmanaged_content=unmanaged_part)
 
     @classmethod
-    def from_chatdsl_string(cls, chatdsl_str: str) -> "Profile":
+    def from_chatdsl_string(cls, chatdsl_str: str) -> Profile:
         """
         Load a profile from a raw chatdsl string.
 
@@ -532,7 +531,7 @@ class Profile(BaseModel):
         Returns:
             The profile as a chatdsl-formatted string.
         """
-        lines: List[str] = []
+        lines: list[str] = []
 
         # Metadata annotations
         if self.meta.name:
@@ -627,7 +626,7 @@ class Profile(BaseModel):
 
         return "\n".join(lines) + "\n"
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert profile to a plain dictionary."""
         return {
             "meta": self.meta.model_dump(exclude_none=True),
@@ -635,7 +634,7 @@ class Profile(BaseModel):
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "Profile":
+    def from_dict(cls, data: dict[str, Any]) -> Profile:
         """Create a profile from a dictionary."""
         return cls(
             meta=ProfileMeta(**data.get("meta", {})),
@@ -656,7 +655,7 @@ class Profile(BaseModel):
         """Check if profile is using the current version."""
         return self.version == PROFILE_VERSION
 
-    def upgrade(self) -> "Profile":
+    def upgrade(self) -> Profile:
         """
         Upgrade profile to current version.
 
@@ -677,7 +676,7 @@ class Profile(BaseModel):
 
         return self.model_copy(update={"meta": new_meta})
 
-    def with_updates(self, **kwargs) -> "Profile":
+    def with_updates(self, **kwargs) -> Profile:
         """
         Create a new profile with updated metadata.
 

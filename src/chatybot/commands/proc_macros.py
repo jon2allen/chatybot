@@ -7,8 +7,8 @@ Migrated from chatybot_app.handle_escape_command elif chain:
 import os
 import re
 
-from chatybot.commands.registry import command, CommandResult
 from chatybot.commands.context import CommandContext
+from chatybot.commands.registry import CommandResult, command
 
 
 @command("/proc", help="Execute a procedure", args='<name> [key="value"]...', category="proc_macros")

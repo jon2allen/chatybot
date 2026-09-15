@@ -27,11 +27,11 @@ def clean_thinking_tokens(text: str) -> str:
 
 
 def reconstruct_messages_from_turns(
-    turns: List[Dict[str, Any]],
+    turns: list[dict[str, Any]],
     system_prompt: str,
-    up_to_turn_id: Optional[int] = None,
+    up_to_turn_id: int | None = None,
     include_current: bool = True,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Reconstruct the message list for LLM context at a specific turn.
 
     Args:
@@ -44,7 +44,7 @@ def reconstruct_messages_from_turns(
             before it produced its answer). When True (default), the final
             turn stops at the user prompt — the context the model saw.
     """
-    messages: List[Dict[str, Any]] = []
+    messages: list[dict[str, Any]] = []
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
 
@@ -83,12 +83,12 @@ class TurnSnapshot:
     total_tokens: int           # before truncation
     truncated_tokens: int       # after truncation (if applied)
     did_truncate: bool
-    evicted_indices: List[int]  # original 0-based indices removed by truncation
+    evicted_indices: list[int]  # original 0-based indices removed by truncation
     anchors_alone_exceed_limit: bool
-    messages: List[Dict[str, Any]]        # full reconstructed message list
-    truncated_messages: List[Dict[str, Any]]  # after truncation
+    messages: list[dict[str, Any]]        # full reconstructed message list
+    truncated_messages: list[dict[str, Any]]  # after truncation
     is_tool_turn: bool
-    model_alias: Optional[str]
+    model_alias: str | None
 
 
 @dataclass
@@ -96,8 +96,8 @@ class TurnDiff:
     """Comparison between two turns."""
     turn_a: int
     turn_b: int
-    added_messages: List[Dict[str, Any]]          # present at turn_b but not turn_a
-    newly_evicted: List[Dict[str, Any]]           # survived at turn_a but evicted by turn_b
+    added_messages: list[dict[str, Any]]          # present at turn_b but not turn_a
+    newly_evicted: list[dict[str, Any]]           # survived at turn_a but evicted by turn_b
     token_delta: int                              # total_tokens_b - total_tokens_a (pre-truncation)
     truncation_evicted_delta: int                 # evicted_count_b - evicted_count_a
     anchor_overflow_changed: bool                 # True if overflow state differs between turns
@@ -119,7 +119,7 @@ class SessionReplayer:
 
     # -- session loading -------------------------------------------------
 
-    def load(self, target: str) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
+    def load(self, target: str) -> tuple[dict[str, Any], list[dict[str, Any]]]:
         """Load session meta + turns via the app's session store."""
         store = self.app._get_session_store()
         return store.load_session(target)
@@ -142,7 +142,7 @@ class SessionReplayer:
         if self.config_manager is not None:
             base = getattr(self.config_manager, "system_message", "") or ""
 
-        parts: List[str] = [base]
+        parts: list[str] = [base]
         has_tool_turns = any(t.get("agentic_loop") for t in turns)
         if has_tool_turns:
             tool_ctx = self._get_tool_context()
@@ -203,11 +203,11 @@ class SessionReplayer:
 
     def snapshot_at_turn(
         self,
-        turns: List[Dict[str, Any]],
+        turns: list[dict[str, Any]],
         system_prompt: str,
-        turn_id: Optional[int] = None,
-        limit: Optional[int] = None,
-    ) -> Optional[TurnSnapshot]:
+        turn_id: int | None = None,
+        limit: int | None = None,
+    ) -> TurnSnapshot | None:
         """Build a TurnSnapshot for the turn matching ``turn_id`` (or the last)."""
         llm_turns = [t for t in turns if t.get("type") != "command" and "prompt" in t]
         if not llm_turns:
@@ -247,10 +247,10 @@ class SessionReplayer:
     def replay_all(
         self,
         target: str,
-        limit: Optional[int] = None,
-        turns: Optional[List[Dict[str, Any]]] = None,
-        system_prompt: Optional[str] = None,
-    ) -> List[TurnSnapshot]:
+        limit: int | None = None,
+        turns: list[dict[str, Any]] | None = None,
+        system_prompt: str | None = None,
+    ) -> list[TurnSnapshot]:
         """Produce a snapshot for every LLM turn in the session."""
         if turns is None:
             meta, turns = self.load(target)
@@ -259,7 +259,7 @@ class SessionReplayer:
         elif system_prompt is None:
             system_prompt = self.reconstruct_system_prompt({}, turns)
         llm_turns = [t for t in turns if t.get("type") != "command" and "prompt" in t]
-        snapshots: List[TurnSnapshot] = []
+        snapshots: list[TurnSnapshot] = []
         for t in llm_turns:
             snap = self.snapshot_at_turn(turns, system_prompt, turn_id=t.get("turn_id"), limit=limit)
             if snap is not None:
@@ -271,10 +271,10 @@ class SessionReplayer:
         target: str,
         turn_a: int,
         turn_b: int,
-        limit: Optional[int] = None,
-        turns: Optional[List[Dict[str, Any]]] = None,
-        system_prompt: Optional[str] = None,
-    ) -> Optional[TurnDiff]:
+        limit: int | None = None,
+        turns: list[dict[str, Any]] | None = None,
+        system_prompt: str | None = None,
+    ) -> TurnDiff | None:
         """Compare the reconstructed context at turn_a vs turn_b."""
         if turns is None:
             meta, turns = self.load(target)

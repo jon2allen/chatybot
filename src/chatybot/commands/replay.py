@@ -7,28 +7,28 @@ shared ``handle_replay_command`` helper used by both entry points.
 import dataclasses
 from typing import List, Optional
 
-from chatybot.commands.registry import command, CommandResult
 from chatybot.commands.context import CommandContext
+from chatybot.commands.registry import CommandResult, command
 from chatybot.session_replayer import SessionReplayer
 
 _KEYWORDS = {"at", "diff", "step"}
 
 
-def _parse_replay_tokens(tokens: List[str], ctx: CommandContext):
+def _parse_replay_tokens(tokens: list[str], ctx: CommandContext):
     """Parse raw replay tokens into (target, mode, mode_args, limit, target_var).
 
     Returns (target, mode, mode_args, limit, target_var) where mode is one of
     "summary", "at", "diff", "step".
     """
     app = ctx.app
-    limit: Optional[int] = None
-    target: Optional[str] = None
+    limit: int | None = None
+    target: str | None = None
     mode = "summary"
-    mode_args: List[str] = []
-    target_var: Optional[str] = None
+    mode_args: list[str] = []
+    target_var: str | None = None
 
     # Strip and collect limit= overrides and var=/target= anywhere in the token stream
-    filtered: List[str] = []
+    filtered: list[str] = []
     for tok in tokens:
         if tok.lower().startswith("limit="):
             try:
@@ -175,7 +175,7 @@ def _render_diff(diff) -> None:
     print("=" * 78 + "\n")
 
 
-async def handle_replay_command(ctx: CommandContext, raw_tokens: List[str]) -> CommandResult:
+async def handle_replay_command(ctx: CommandContext, raw_tokens: list[str]) -> CommandResult:
     """Shared replay handler invoked by /session replay and /replay."""
     app = ctx.app
     target, mode, mode_args, limit, target_var = _parse_replay_tokens(raw_tokens, ctx)
@@ -288,7 +288,7 @@ async def handle_replay_command(ctx: CommandContext, raw_tokens: List[str]) -> C
     category="session",
 )
 async def cmd_replay(ctx: CommandContext, parts: list, command: str) -> CommandResult:
-    raw_tokens: List[str] = []
+    raw_tokens: list[str] = []
     for p in parts[1:]:
         raw_tokens.extend(p.strip().split())
     return await handle_replay_command(ctx, raw_tokens)

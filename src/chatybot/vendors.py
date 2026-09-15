@@ -4,11 +4,12 @@
 from dataclasses import dataclass
 from typing import Optional
 
+
 @dataclass(frozen=True)
 class VendorPreset:
     name: str
     base_url: str
-    api_key_env: Optional[str] = None
+    api_key_env: str | None = None
     image_support: bool = False
     default_type: str = "chat"       # "chat" or "reranker"
 
@@ -41,7 +42,7 @@ def vendor_names() -> list[str]:
     return list(VENDOR_PRESETS.keys())
 
 
-def get_env_status(config_models: Optional[dict] = None) -> list[dict]:
+def get_env_status(config_models: dict | None = None) -> list[dict]:
     """
     Collect all template API keys, config model API keys, and any defined environment
     variables matching API / KEY / TOKEN / SECRET patterns (like `set | grep -i api`).

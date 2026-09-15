@@ -23,7 +23,7 @@ existing behavior exactly):
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Awaitable, Callable, Dict, List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, Dict, List, Optional
 
 if TYPE_CHECKING:
     from chatybot.commands.context import CommandContext
@@ -41,11 +41,11 @@ class CommandAction(Enum):
 class CommandResult:
     """Strongly-typed return value replacing the ``Union[bool, str]`` contract."""
     action: CommandAction
-    message: Optional[str] = None
-    prompt_to_execute: Optional[str] = None
+    message: str | None = None
+    prompt_to_execute: str | None = None
 
     @classmethod
-    def ok(cls, msg: Optional[str] = None) -> "CommandResult":
+    def ok(cls, msg: str | None = None) -> "CommandResult":
         return cls(action=CommandAction.HANDLED, message=msg)
 
     @classmethod
@@ -53,7 +53,7 @@ class CommandResult:
         return cls(action=CommandAction.EXECUTE_PROMPT, prompt_to_execute=prompt)
 
     @classmethod
-    def error(cls, msg: Optional[str] = None) -> "CommandResult":
+    def error(cls, msg: str | None = None) -> "CommandResult":
         return cls(action=CommandAction.ERROR, message=msg)
 
     @classmethod
@@ -63,7 +63,7 @@ class CommandResult:
 
 # A handler takes (context, parts, raw_command) where parts is
 # command.split(maxsplit=2). It returns a CommandResult.
-HandlerFn = Callable[["CommandContext", List[str], str], Awaitable[CommandResult]]
+HandlerFn = Callable[["CommandContext", list[str], str], Awaitable[CommandResult]]
 
 
 @dataclass
@@ -73,15 +73,15 @@ class CommandSpec:
     help: str = ""
     args: str = ""
     category: str = "general"
-    aliases: List[str] = field(default_factory=list)
+    aliases: list[str] = field(default_factory=list)
 
 
 class CommandRegistry:
     """Maps canonical command names (and non-i18n aliases) to handlers."""
 
     def __init__(self):
-        self._commands: Dict[str, CommandSpec] = {}
-        self._aliases: Dict[str, str] = {}
+        self._commands: dict[str, CommandSpec] = {}
+        self._aliases: dict[str, str] = {}
 
     def register(
         self,
@@ -90,7 +90,7 @@ class CommandRegistry:
         help: str = "",
         args: str = "",
         category: str = "general",
-        aliases: Optional[List[str]] = None,
+        aliases: list[str] | None = None,
     ) -> None:
         aliases = aliases or []
         spec = CommandSpec(
@@ -105,7 +105,7 @@ class CommandRegistry:
         for alias in aliases:
             self._aliases[alias] = name
 
-    def get(self, name: str) -> Optional[CommandSpec]:
+    def get(self, name: str) -> CommandSpec | None:
         """Look up a spec by canonical name or non-i18n alias.
 
         Returns None when no handler is registered, so the caller can fall
@@ -117,10 +117,10 @@ class CommandRegistry:
     def has(self, name: str) -> bool:
         return self.get(name) is not None
 
-    def get_all_specs(self) -> List[CommandSpec]:
+    def get_all_specs(self) -> list[CommandSpec]:
         return list(self._commands.values())
 
-    def names(self) -> List[str]:
+    def names(self) -> list[str]:
         return list(self._commands.keys())
 
 
@@ -135,7 +135,7 @@ def command(
     help: str = "",
     args: str = "",
     category: str = "general",
-    aliases: Optional[List[str]] = None,
+    aliases: list[str] | None = None,
 ):
     """Decorator registering an async handler under ``name``.
 
