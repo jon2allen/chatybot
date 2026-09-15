@@ -39,21 +39,24 @@ class PatternMatcher:
         ##########################################
         return re.compile(pattern_str, re.IGNORECASE)
 
-    def add_word(self, word):
-        """Add a single word and recompile the pattern."""
-        self.words.add(word)
-        self.pattern = self._compile_pattern()
-
-    def add_words(self, words):
-        """Add multiple words and recompile the pattern."""
-        self.words.update(words)
-        self.pattern = self._compile_pattern()
-
-    def add_multi_ending_word(self, word, endings):
-        """Add a word with optional endings and recompile the pattern."""
-        self.multi_endings[word] = endings
-        self.pattern = self._compile_pattern()
-
-    def matches(self, input_string):
-        """Check if the input string matches any pattern."""
-        return bool(self.pattern.search(input_string))
+    # Dynamic mutation and matches() API — designed but never used in
+    # production. PatternMatcher is built once at construction and only
+    # .pattern is accessed. Commented out 2026-09-15.
+    # def add_word(self, word):
+    #     """Add a single word and recompile the pattern."""
+    #     self.words.add(word)
+    #     self.pattern = self._compile_pattern()
+    #
+    # def add_words(self, words):
+    #     """Add multiple words and recompile the pattern."""
+    #     self.words.update(words)
+    #     self.pattern = self._compile_pattern()
+    #
+    # def add_multi_ending_word(self, word, endings):
+    #     """Add a word with optional endings and recompile the pattern."""
+    #     self.multi_endings[word] = endings
+    #     self.pattern = self._compile_pattern()
+    #
+    # def matches(self, input_string):
+    #     """Check if the input string matches any pattern."""
+    #     return bool(self.pattern.search(input_string))
