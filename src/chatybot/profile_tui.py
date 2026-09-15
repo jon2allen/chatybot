@@ -305,8 +305,7 @@ class ProfileTUI:
         # Adjust selection if list shrank
         if self.selected_idx >= len(self.filtered_list):
             self.selected_idx = max(0, len(self.filtered_list) - 1)
-        if self.selected_idx < 0:
-            self.selected_idx = 0
+        self.selected_idx = max(self.selected_idx, 0)
 
     def set_status(self, msg: str, is_error: bool = False):
         self.status_message = msg
@@ -363,8 +362,7 @@ class ProfileTUI:
             elif ch == curses.KEY_UP or ch == ord('k'):
                 if self.selected_idx > 0:
                     self.selected_idx -= 1
-                    if self.selected_idx < self.scroll_offset:
-                        self.scroll_offset = self.selected_idx
+                    self.scroll_offset = min(self.scroll_offset, self.selected_idx)
             elif ch == curses.KEY_DOWN or ch == ord('j'):
                 if self.selected_idx < len(self.filtered_list) - 1:
                     self.selected_idx += 1
@@ -685,8 +683,7 @@ class ProfileTUI:
             if ch == curses.KEY_UP:
                 if sel > 0:
                     sel -= 1
-                    if sel < scroll:
-                        scroll = sel
+                    scroll = min(scroll, sel)
             elif ch == curses.KEY_DOWN:
                 if sel < len(preset_names) - 1:
                     sel += 1

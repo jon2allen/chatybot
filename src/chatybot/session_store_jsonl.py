@@ -50,7 +50,7 @@ class JsonlSessionStore(BaseSessionStore):
         clean = re.sub(r"[^\w\s-]", "", text.strip())
         words = clean.split()[:max_words]
         slug = "_".join(words).lower()
-        return slug if slug else "untitled_session"
+        return slug or "untitled_session"
 
     def _invalidate_cache(self) -> None:
         self._cache_dir_mtime = -1.0
@@ -104,7 +104,7 @@ class JsonlSessionStore(BaseSessionStore):
                     return False
                 elif is_stale:
                     print(f"Notice: Cleared stale lock file for session '{session_id}' (PID {pid}).")
-            except (ValueError, IOError):
+            except (OSError, ValueError):
                 pass
 
         try:
@@ -112,7 +112,7 @@ class JsonlSessionStore(BaseSessionStore):
             with open(lock_path, "w") as f:
                 f.write(f"{os.getpid()}\n{now_iso}\n")
             return True
-        except IOError:
+        except OSError:
             return False
 
     def release_lock(self, session_id: str | None = None) -> None:
@@ -126,7 +126,7 @@ class JsonlSessionStore(BaseSessionStore):
                 pid = int(content.splitlines()[0]) if content else 0
                 if pid == os.getpid():
                     os.remove(lock_path)
-        except (ValueError, IOError, OSError):
+        except (ValueError, OSError):
             pass
 
     def create_session(
@@ -672,8 +672,7 @@ class JsonlSessionStore(BaseSessionStore):
                                 sz = os.path.getsize(fp)
                                 mt = os.path.getmtime(fp)
                                 total_sz += sz
-                                if mt > max_mtime:
-                                    max_mtime = mt
+                                max_mtime = max(max_mtime, mt)
                             except OSError:
                                 pass
                     session_ts = self._get_session_timestamp(d, fallback_mtime=max_mtime)
@@ -742,8 +741,7 @@ class JsonlSessionStore(BaseSessionStore):
                             sz = os.path.getsize(fp)
                             mt = os.path.getmtime(fp)
                             dir_sz += sz
-                            if mt > max_mt:
-                                max_mt = mt
+                            max_mt = max(max_mt, mt)
                         except OSError:
                             pass
 

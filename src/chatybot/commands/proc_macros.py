@@ -354,7 +354,7 @@ async def cmd_chatdsl(ctx: CommandContext, parts: list, command: str) -> Command
         try:
             default_name = "session_workflow.chatdsl"
             user_fname = input(f"Output script filename [{default_name}]: ").strip()
-            target_file = user_fname if user_fname else default_name
+            target_file = user_fname or default_name
         except (EOFError, KeyboardInterrupt):
             print("\nOperation cancelled.")
             return CommandResult.ok()

@@ -55,7 +55,7 @@ class ImageGenerator:
                     counter = data.get("counter", 0)
                     if counter > 0:
                         self.counters[date_dir.name] = counter
-                except (json.JSONDecodeError, IOError):
+                except (OSError, json.JSONDecodeError):
                     # If index.json is corrupted, skip it
                     pass
     
@@ -129,15 +129,7 @@ class ImageGenerator:
             return await self._generate_ollama(
                 prompt, model_name, size, quality, endpoint, api_key, base_url
             )
-        elif "nvidia" in vendor_lower:
-            return await self._generate_openai(
-                prompt, model_name, size, quality, endpoint, api_key, base_url
-            )
-        elif "publicai" in vendor_lower:
-            return await self._generate_openai(
-                prompt, model_name, size, quality, endpoint, api_key, base_url
-            )
-        elif "bytez" in vendor_lower:
+        elif "nvidia" in vendor_lower or "publicai" in vendor_lower or "bytez" in vendor_lower:
             return await self._generate_openai(
                 prompt, model_name, size, quality, endpoint, api_key, base_url
             )

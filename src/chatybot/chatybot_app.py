@@ -807,7 +807,7 @@ class ChatybotApp:
         clean = re.sub(r"[^\w\s-]", "", text.strip())
         words = clean.split()[:max_words]
         slug = "_".join(words).lower()
-        return slug if slug else "untitled_session"
+        return slug or "untitled_session"
 
     def _generate_session_id(self, model_alias: str) -> str:
         """Generate a unique session ID, appending a counter if the timestamp collides."""
@@ -1038,7 +1038,7 @@ class ChatybotApp:
         try:
             with open(self.get_history_path(), "r") as f:
                 self.input_history = [
-                    line.strip() for line in f.readlines() if line.strip()
+                    line.strip() for line in f if line.strip()
                 ]
             # Set up readline history
             if readline:
@@ -1188,7 +1188,7 @@ class ChatybotApp:
         if client_key in self._openai_clients:
             return self._openai_clients[client_key]
 
-        client = AsyncOpenAI(api_key=api_key, base_url=base_url if base_url else None)
+        client = AsyncOpenAI(api_key=api_key, base_url=base_url or None)
         self._openai_clients[client_key] = client
         return client
 
@@ -2428,7 +2428,7 @@ class ChatybotApp:
                 try:
                     set_stripped = self.buffer_manager.replace_placeholders_legacy(command.lstrip())
                     # Use regex to parse "set var = value" supporting multiline (. matches anything with re.S)
-                    match = re.match(r"set\s+([a-zA-Z_]\w*(?:\[\])?)\s*=\s*(.*)", set_stripped, re.S)
+                    match = re.match(r"set\s+([a-zA-Z_]\w*(?:\[\])?)\s*=\s*(.*)", set_stripped, re.DOTALL)
                     if match:
                         var_name = match.group(1)
                         var_value = match.group(2).strip()
@@ -2492,7 +2492,7 @@ class ChatybotApp:
             with self.buffer_manager.script_vars.user_write():
                 try:
                     local_stripped = command.lstrip()
-                    match = re.match(r"local\s+([a-zA-Z_]\w*)\s*(?:=\s*(.*))?", local_stripped, re.S)
+                    match = re.match(r"local\s+([a-zA-Z_]\w*)\s*(?:=\s*(.*))?", local_stripped, re.DOTALL)
                     if match:
                         var_name = match.group(1)
                         raw_val = match.group(2)
@@ -2584,9 +2584,7 @@ class ChatybotApp:
                     then_command = parts[1].strip()
                     
                     # Strip optional outer quotes from condition
-                    if condition_str.startswith('"') and condition_str.endswith('"'):
-                        condition_str = condition_str[1:-1].strip()
-                    elif condition_str.startswith("'") and condition_str.endswith("'"):
+                    if condition_str.startswith('"') and condition_str.endswith('"') or condition_str.startswith("'") and condition_str.endswith("'"):
                         condition_str = condition_str[1:-1].strip()
                     
                     # Handle "not" prefix
@@ -3765,7 +3763,7 @@ class ChatybotApp:
                 env["CHATYBOT_SESSION_DIR"] = str(self.session_dir)
             env["CHATYBOT_ENABLE_CHAT_HISTORY"] = "1" if getattr(self, "enable_chat_history", True) else "0"
             env["CHATYBOT_BACKUP_ON_WRITE"] = "1" if getattr(self, "backup_file_on_write", True) else "0"
-            python_cmd = sys.executable if sys.executable else (
+            python_cmd = sys.executable or (
                 'python' if sys.platform == 'win32' else ('python3' if shutil.which('python3') else 'python')
             )
             cmd = [python_cmd, dispatcher_path, tmp_path, '--config', config_path]
@@ -5846,7 +5844,7 @@ def run():
         sys.exit(run_profile_tui(
             profile_dir=getattr(tmp, 'profile_dir', '~/.config/chatybot/profiles'),
             config_manager=tmp.config_manager,
-            initial_profile=args.profile_edit if args.profile_edit else None
+            initial_profile=args.profile_edit or None
         ))
 
     global app

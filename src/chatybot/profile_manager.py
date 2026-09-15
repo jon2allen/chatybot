@@ -382,7 +382,7 @@ class ProfileManager:
         profile = Profile.from_file(src)
 
         # Update metadata for the clone
-        clone_name = dst_name if dst_name else f"{profile.meta.name}_clone"
+        clone_name = dst_name or f"{profile.meta.name}_clone"
         profile = profile.with_updates(
             name=clone_name,
             description=f"Cloned from {profile.meta.name}",

@@ -43,15 +43,9 @@ def ensure_mathparse_patched():
         postfix = []
         opstack = []
         for token in tokens:
-            if mp.is_int(token):
+            if mp.is_int(token) or mp.is_float(token) or token in mp.mathwords.CONSTANTS:
                 postfix.append(token)
-            elif mp.is_float(token):
-                postfix.append(token)
-            elif token in mp.mathwords.CONSTANTS:
-                postfix.append(token)
-            elif mp.is_unary(token):
-                opstack.append(token)
-            elif token == '(':
+            elif mp.is_unary(token) or token == '(':
                 opstack.append(token)
             elif token == ')':
                 top_token = opstack.pop()
@@ -73,7 +67,7 @@ def ensure_mathparse_patched():
                 opstack.append(token)
             else:
                 raise mp.PostfixTokenEvaluationException(
-                    'Unsupported mathematical term: "{}"'.format(token)
+                    f'Unsupported mathematical term: "{token}"'
                 )
         while opstack != []:
             postfix.append(opstack.pop())

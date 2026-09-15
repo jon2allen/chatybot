@@ -319,8 +319,7 @@ class ToolConfigTUI:
         # Adjust selection if list shrank
         if self.selected_idx >= len(self.filtered_list):
             self.selected_idx = max(0, len(self.filtered_list) - 1)
-        if self.selected_idx < 0:
-            self.selected_idx = 0
+        self.selected_idx = max(self.selected_idx, 0)
     
     def set_status(self, msg: str, is_error: bool = False):
         self.status_message = msg
@@ -397,8 +396,7 @@ class ToolConfigTUI:
         elif ch == curses.KEY_UP or ch == ord('k'):
             if self.selected_idx > 0:
                 self.selected_idx -= 1
-                if self.selected_idx < self.scroll_offset:
-                    self.scroll_offset = self.selected_idx
+                self.scroll_offset = min(self.scroll_offset, self.selected_idx)
         elif ch == curses.KEY_DOWN or ch == ord('j'):
             if self.selected_idx < len(self.filtered_list) - 1:
                 self.selected_idx += 1

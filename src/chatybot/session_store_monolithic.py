@@ -41,7 +41,7 @@ class MonolithicJsonSessionStore(BaseSessionStore):
         clean = re.sub(r"[^\w\s-]", "", text.strip())
         words = clean.split()[:max_words]
         slug = "_".join(words).lower()
-        return slug if slug else "untitled_session"
+        return slug or "untitled_session"
 
     def _invalidate_cache(self) -> None:
         self._cache_dir_mtime = -1.0
@@ -93,7 +93,7 @@ class MonolithicJsonSessionStore(BaseSessionStore):
                     return False
                 elif is_stale:
                     print(f"Notice: Cleared stale lock file for session '{session_id}' (PID {pid}).")
-            except (ValueError, IOError):
+            except (OSError, ValueError):
                 pass
 
         try:
@@ -101,7 +101,7 @@ class MonolithicJsonSessionStore(BaseSessionStore):
             with open(lock_path, "w") as f:
                 f.write(f"{os.getpid()}\n{now_iso}\n")
             return True
-        except IOError:
+        except OSError:
             return False
 
     def release_lock(self, session_id: str | None = None) -> None:
@@ -115,7 +115,7 @@ class MonolithicJsonSessionStore(BaseSessionStore):
                 pid = int(content.splitlines()[0]) if content else 0
                 if pid == os.getpid():
                     os.remove(lock_path)
-        except (ValueError, IOError, OSError):
+        except (ValueError, OSError):
             pass
 
     def create_session(
