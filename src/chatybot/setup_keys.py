@@ -8,7 +8,6 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Dict, List, Tuple
 
 # Supported providers: (env_var_name, display_name, status, url)
 KEYS: list[tuple[str, str, str, str]] = [

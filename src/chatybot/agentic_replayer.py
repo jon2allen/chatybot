@@ -18,9 +18,9 @@ stored records, matching the format used in ``execute_tool_loop``.
 
 import json
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
-from chatybot.context_limit import ContextLimiter, TruncationDiagnostic
+from chatybot.context_limit import ContextLimiter
 from chatybot.session_replayer import SessionReplayer, clean_thinking_tokens
 
 

@@ -5,7 +5,7 @@ Returns match count or match positions, and optionally stores the result in a sc
 """
 
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 
 def str_search(

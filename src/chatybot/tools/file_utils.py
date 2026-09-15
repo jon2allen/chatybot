@@ -4,7 +4,7 @@ import json
 import math
 import os
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 
 def normalize_path(path: str) -> str:

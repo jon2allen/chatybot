@@ -5,7 +5,6 @@ Provides access to bundled package documentation and guides.
 
 import sys
 from pathlib import Path
-from typing import List, Optional, Tuple
 
 if sys.version_info >= (3, 11):
     from importlib.resources import files
@@ -132,7 +131,7 @@ def highlight_content(content: str, filename: str = "") -> str:
     try:
         import pygments
         from pygments.formatters import TerminalFormatter
-        from pygments.lexers import MarkdownLexer, PythonLexer, TextLexer
+        from pygments.lexers import MarkdownLexer, PythonLexer
 
         if filename.endswith((".chatdsl", ".dsl")):
             # ChatDSL looks like shell / python hybrid; PythonLexer or MarkdownLexer handles comments and commands cleanly

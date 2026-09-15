@@ -4,7 +4,7 @@ Provides session_search to search session turns, conversation history, notes, an
 """
 
 import shlex
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from chatybot.query.base import QueryRequest, get_query_engine
 from chatybot.query.date_parser import parse_date_range, parse_datetime_expr

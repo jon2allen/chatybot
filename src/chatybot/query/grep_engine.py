@@ -6,7 +6,7 @@ Scans active and persisted session turns, metadata, and scratchpad areas.
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from chatybot.query.base import (
     BaseQueryEngine,

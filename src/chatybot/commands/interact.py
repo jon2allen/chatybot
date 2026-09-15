@@ -16,7 +16,6 @@ The command is silently skipped (with a notice) when:
 
 import re
 import shlex
-from typing import List, Optional, Tuple
 
 from chatybot.commands.context import CommandContext
 from chatybot.commands.registry import CommandResult, command

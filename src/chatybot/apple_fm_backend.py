@@ -16,7 +16,7 @@ import json
 import logging
 import platform
 import sys
-from typing import Any, List, Optional, Tuple
+from typing import Any
 
 logger = logging.getLogger(__name__)
 

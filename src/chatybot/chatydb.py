@@ -2,7 +2,7 @@ import json
 import os
 import re
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 # Import the CorpusManager from the provided tinydb implementation
 from .tinydb1.corpus_manager import CorpusManager

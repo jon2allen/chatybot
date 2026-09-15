@@ -21,7 +21,7 @@ Supported question types
 
 import os
 import sys
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 # ---------------------------------------------------------------------------
 # Public API

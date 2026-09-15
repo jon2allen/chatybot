@@ -9,7 +9,7 @@ import importlib
 import json
 import os
 import sys
-from typing import Any, Dict, Tuple
+from typing import Any
 
 # Add the directory containing dispatcher.py to the path so that chatybot modules can be imported
 dispatcher_dir = os.path.dirname(os.path.abspath(__file__))

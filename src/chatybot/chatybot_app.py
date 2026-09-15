@@ -20,20 +20,15 @@ except ImportError:
     readline = None
 import atexit
 import copy
-import ctypes
-import ctypes.util
 import json
-import logging
 import random
 import re
-import shlex
 import shutil
 import signal
-import struct
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable
 
 from .pattern import PatternMatcher
 
@@ -59,21 +54,10 @@ except ImportError:
 
 from .buffer_manager import BufferManager
 from .chaty_help import get_help_system
-from .chatydb import (
-    SEARCHBUFFER,
-    dblog,
-    dbprint,
-    list_dbs,
-    load_var,
-    save_var,
-    search_db,
-    set_db,
-)
 from .commands import registry as _command_registry
 from .commands.context import CommandContext
 from .commands.registry import CommandAction, CommandResult
 from .config_manager import ConfigManager
-from .extract_code import process_file
 from .image_generator import ImageGenerator
 from .image_manager import ImageManager
 from .logging_manager import LoggingManager
@@ -3826,7 +3810,7 @@ class ChatybotApp:
                             target_var = tool_call.get("arguments", {}).get("target_variable")
                         if target_var and val is not None:
                             self.buffer_manager.set_script_var(str(target_var).strip(), val, allow_protected=True)
-                except Exception as e:
+                except Exception:
                     pass
 
                 return result.stdout
@@ -3888,7 +3872,7 @@ class ChatybotApp:
         """
         import json
         import re
-        from typing import Any, Dict, List, Optional
+        from typing import Any
 
         known_tools = self.get_known_tool_names()
 
@@ -5288,7 +5272,6 @@ class ChatybotApp:
         Returns:
             True if the command was handled, False otherwise, or "EXECUTE_PROMPT" for prompt execution
         """
-        import re
         parts = command.split(maxsplit=2)
         if self.logging_manager.logging_active:
             self.logging_manager.log_message(f"Escape command: {command}")

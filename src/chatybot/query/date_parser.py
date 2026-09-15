@@ -2,10 +2,8 @@
 Flexible date parser supporting relative offsets, human relative words, standard dates, and ranges.
 """
 
-import calendar
 import re
 from datetime import datetime, timedelta
-from typing import Optional, Tuple
 
 
 def parse_datetime_expr(val: str, now: datetime | None = None) -> datetime | None:
