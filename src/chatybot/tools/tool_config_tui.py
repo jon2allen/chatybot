@@ -335,7 +335,7 @@ class ToolConfigTUI:
             curses.init_pair(3, curses.COLOR_YELLOW, -1)   # Warning / Section header
             curses.init_pair(4, curses.COLOR_RED, -1)      # Error / Alert
             curses.init_pair(5, curses.COLOR_GREEN, -1)    # Success / OK
-        except:
+        except curses.error:
             pass
         
         self.colors = {
@@ -358,7 +358,7 @@ class ToolConfigTUI:
         
         try:
             curses.curs_set(0)
-        except:
+        except curses.error:
             pass
         
         # Try to load config
@@ -377,7 +377,7 @@ class ToolConfigTUI:
             self.draw_main_screen(stdscr)
             try:
                 ch = stdscr.getch()
-            except:
+            except curses.error:
                 break
             
             if self.handle_input(stdscr, ch) is False:
@@ -454,7 +454,7 @@ class ToolConfigTUI:
         stdscr.erase()
         try:
             h, w = stdscr.getmaxyx()
-        except:
+        except curses.error:
             return
         
         if h < 10 or w < 60:
@@ -542,7 +542,7 @@ class ToolConfigTUI:
         
         try:
             stdscr.refresh()
-        except:
+        except curses.error:
             pass
     
     def draw_too_small(self, stdscr, h, w):
@@ -550,7 +550,7 @@ class ToolConfigTUI:
         try:
             msg = "Terminal too small. Need at least 60x10."
             stdscr.addstr(h // 2, max(0, (w - len(msg)) // 2), msg)
-        except:
+        except curses.error:
             pass
     
     def handle_search(self, stdscr):
@@ -756,7 +756,7 @@ class ToolConfigTUI:
         try:
             win.clear()
             win.refresh()
-        except:
+        except curses.error:
             pass
     
     def execute_clone(self, stdscr, source_name: str, source_tool: ToolConfig, new_name: str) -> bool:
@@ -838,7 +838,7 @@ class ToolConfigTUI:
         try:
             win.clear()
             win.refresh()
-        except:
+        except curses.error:
             pass
     
     def draw_dialog_border(self, win, title: str):
@@ -897,7 +897,7 @@ class ToolConfigTUI:
             try:
                 win.clear()
                 win.refresh()
-            except:
+            except curses.error:
                 pass
     
     def save_config_as_dialog(self, stdscr) -> bool:
