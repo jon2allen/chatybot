@@ -1,0 +1,89 @@
+# ==============================================================================
+# ChatDSL Test Script: Tool Retry, Fix & Inject Matrix
+# ==============================================================================
+# Usage:
+#   chatybot --script test/test_tool_retry_fix.chatdsl
+#   or from REPL: /script test/test_tool_retry_fix.chatdsl
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. Configuration & Setup
+# ------------------------------------------------------------------------------
+set test_dir = "scratch/retry_test"
+set target_output = "scratch/retry_test/rescued_output.txt"
+set fixture_file = "scratch/retry_test/simulated_model_turn.xml"
+set test_timestamp = "2026-09-16"
+
+/echo "========================================================"
+/echo "🧪 STARTING TOOL RETRY, FIX & INJECT CHATDSL TEST"
+/echo "========================================================"
+
+# Enable tools and ensure clean test directory
+/tool on
+/tool enable write_file
+/tool enable read_file
+/tool enable list_files
+/tool enable run_command
+
+/run mkdir -p scratch/retry_test
+/run rm -f scratch/retry_test/*.txt scratch/retry_test/*.xml
+
+# ------------------------------------------------------------------------------
+# 2. Stage 1: Injecting Dynamic XML Tool Payload with Variables
+# ------------------------------------------------------------------------------
+set generated_secret = "CHATDSL_RETRY_VALIDATION_TOKEN_42"
+set file_content_var = "SUCCESS: This file was created via ChatDSL simulated tool injection at ${test_timestamp}.\nSecretToken: ${generated_secret}"
+
+/echo "\n[Stage 1] Constructing and injecting XML <dots_function_call> completion..."
+
+# Write dynamic failure fixture to file using /run or direct write
+/run printf '<dots_function_call>\n<invoke="write_file">\n">\n<parameter name="path">%s</parameter>\n<parameter name="content">\n%s\n</parameter>\n</invoke>\n</dots_function_call>\n' "scratch/retry_test/rescued_output.txt" "Validated Content: Rescued via ChatDSL injection" > scratch/retry_test/simulated_model_turn.xml
+
+# Inject the mock completion from the fixture file
+/tool inject file=scratch/retry_test/simulated_model_turn.xml
+
+/echo "Checking ${LAST_COMPLETION}..."
+/echo "${LAST_COMPLETION}"
+
+# ------------------------------------------------------------------------------
+# 3. Stage 2: Testing /tool retry run (Deterministic execution)
+# ------------------------------------------------------------------------------
+/echo "\n[Stage 2] Executing /tool retry run on injected completion..."
+/tool retry run
+
+# Verify file was written to disk
+/run test -f scratch/retry_test/rescued_output.txt && echo "FILE_EXISTS_OK" || echo "FILE_MISSING_FAIL"
+/echo "Disk validation result: ${RUN_COMPLETION}"
+
+# ------------------------------------------------------------------------------
+# 4. Stage 3: Reading back file content into Buffer and Inspecting
+# ------------------------------------------------------------------------------
+/echo "\n[Stage 3] Loading rescued file into context buffer using /file..."
+/file scratch/retry_test/rescued_output.txt
+/showfile
+
+# ------------------------------------------------------------------------------
+# 5. Stage 4: Testing Literal Text Injection of Bash Code Fence
+# ------------------------------------------------------------------------------
+/echo "\n[Stage 4] Injecting raw markdown bash code block completion..."
+/tool inject I will list the contents for you: ```bash\nls -la scratch/retry_test\n```
+
+/echo "Rescuing and executing tool call directly..."
+/tool retry run
+
+# ------------------------------------------------------------------------------
+# 6. Stage 5: Testing Typo Tool Name Injection for /tool retry fix/edit
+# ------------------------------------------------------------------------------
+/echo "\n[Stage 5] Injecting malformed tool name (create_file typo)..."
+/tool inject {"tool": "create_file", "arguments": {"path": "scratch/retry_test/typo_test.txt", "content": "Fixed content"}}
+
+/echo "Injected LAST_COMPLETION:"
+/echo "${LAST_COMPLETION}"
+/echo "Tip: Run '/tool retry fix' or '/tool retry edit' in REPL to test interactive schema repair."
+
+# ------------------------------------------------------------------------------
+# 7. Cleanup & Completion Summary
+# ------------------------------------------------------------------------------
+/echo "\n========================================================"
+/echo "✅ CHATDSL TOOL RETRY & INJECT TEST MATRIX FINISHED"
+/echo "========================================================"
