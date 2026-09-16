@@ -8,9 +8,11 @@ import json
 import os
 from typing import Any
 
+from .. import chatydb
+
 
 def db_search(
-    query: str,
+    query: str = "*",
     db_name: str | None = None,
     limit: int = 20,
     full_content: bool = False,
@@ -21,8 +23,8 @@ def db_search(
     Searches across name, content, and metadata fields (case-insensitive substring).
 
     Args:
-        query: Search term. Use '*' or empty string to list all items.
-        db_name: Database name to search. If None, uses the currently active database.
+        query: Search term. Use '*' or empty string to list all items (default '*').
+        db_name: Database name to search. If None, uses active database or CHATYBOT_ACTIVE_DB.
         limit: Maximum number of results to return (default 20).
         full_content: If True, return the complete untruncated content instead of a 500-character preview.
         app: ChatybotApp instance passed when called within application context.
@@ -30,10 +32,9 @@ def db_search(
     Returns:
         JSON string with matching items.
     """
-    from chatybot import chatydb
-
-    if db_name:
-        chatydb.set_db(db_name)
+    target_db = db_name or os.environ.get("CHATYBOT_ACTIVE_DB")
+    if target_db:
+        chatydb.set_db(target_db)
 
     if chatydb._manager is None:
         return json.dumps({
@@ -42,7 +43,8 @@ def db_search(
 
     all_items = chatydb._manager.get_all_items()
 
-    if not query.strip() or query.strip() in ("*", "all"):
+    effective_query = (query or "").strip()
+    if not effective_query or effective_query in ("*", "all"):
         results = list(all_items)
     else:
         q = query.lower()
@@ -114,10 +116,9 @@ def db_get(
     Returns:
         JSON string with the complete item details or an error message.
     """
-    from chatybot import chatydb
-
-    if db_name:
-        chatydb.set_db(db_name)
+    target_db = db_name or os.environ.get("CHATYBOT_ACTIVE_DB")
+    if target_db:
+        chatydb.set_db(target_db)
 
     if chatydb._manager is None:
         return json.dumps({

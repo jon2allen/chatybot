@@ -368,14 +368,14 @@ optional = true
 
 [tools.db_search]
 enabled = false
-description = "Search a TinyDB database for items matching a query string. Searches name, content, and metadata fields (case-insensitive substring). Use '*' to list all items."
+description = "Search a TinyDB database for items matching a query string across name, content, and metadata fields. If query is omitted or '*', lists all items. Tip: pass full_content=true to retrieve complete untruncated content in a single step without needing db_get."
 module = "chatybot.tools.db_tools"
 function = "db_search"
 
 [tools.db_search.parameters.query]
 type = "string"
-description = "Search term, or '*' to list all items"
-optional = false
+description = "Search term, or '*' / empty string to list all items (default '*')"
+optional = true
 
 [tools.db_search.parameters.db_name]
 type = "string"
@@ -394,7 +394,7 @@ optional = true
 
 [tools.db_get]
 enabled = false
-description = "Retrieve a single complete item from a TinyDB database by its integer ID."
+description = "Retrieve a single complete item from a TinyDB database by its integer ID. If db_name is omitted, uses the active database from the session or previous db_search."
 module = "chatybot.tools.db_tools"
 function = "db_get"
 

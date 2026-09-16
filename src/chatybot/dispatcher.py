@@ -117,24 +117,31 @@ def validate_and_route(invocation: dict[str, Any], config: dict[str, Any]) -> tu
 
     # Parameter Verification
     declared_params = tool_meta.get("parameters", {})
+    param_summary = ", ".join(
+        f"{p}: {rules.get('type', 'any')}{' (optional)' if rules.get('optional') else ' (required)'}"
+        for p, rules in declared_params.items()
+    )
     for param_name, param_rules in declared_params.items():
         is_optional = param_rules.get("optional", False)
         if param_name not in args:
             if not is_optional:
-                raise KeyError(f"Missing required argument: '{param_name}' for tool '{tool_name}'.")
+                raise KeyError(
+                    f"Missing required argument: '{param_name}' for tool '{tool_name}'. "
+                    f"Expected parameters: {{{param_summary}}}"
+                )
             continue
 
         # Simple type checking runtime enforcement
         expected_type = param_rules.get("type")
         val = args[param_name]
         if expected_type == "string" and not isinstance(val, str):
-            raise TypeError(f"Argument '{param_name}' must be a string.")
+            raise TypeError(f"Argument '{param_name}' must be a string (got {type(val).__name__}). Expected: {{{param_summary}}}")
         elif expected_type == "number" and not isinstance(val, (int, float)):
-            raise TypeError(f"Argument '{param_name}' must be a number.")
+            raise TypeError(f"Argument '{param_name}' must be a number (got {type(val).__name__}). Expected: {{{param_summary}}}")
         elif expected_type == "boolean" and not isinstance(val, bool):
-            raise TypeError(f"Argument '{param_name}' must be a boolean.")
+            raise TypeError(f"Argument '{param_name}' must be a boolean (got {type(val).__name__}). Expected: {{{param_summary}}}")
         elif expected_type == "array" and not isinstance(val, list):
-            raise TypeError(f"Argument '{param_name}' must be an array/list.")
+            raise TypeError(f"Argument '{param_name}' must be an array/list (got {type(val).__name__}). Expected: {{{param_summary}}}")
 
     # Dynamically resolve target module and function
     module_path = tool_meta.get("module")
