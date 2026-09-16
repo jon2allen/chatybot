@@ -56,6 +56,16 @@ find / -name "chatdsl_skill.md" 2>/dev/null
     assert candidate["is_valid"] is True
 
 
+def test_extract_retry_candidate_from_escaped_bash_fence():
+    app = ChatybotApp()
+    raw = r'I will list the contents for you: ```bash\nls -la scratch/retry_test\n```'
+    candidate = _extract_retry_candidate(raw, app)
+    assert candidate["tool"] == "run_command"
+    assert candidate["arguments"]["command"] == 'ls -la scratch/retry_test'
+    assert candidate["is_valid"] is True
+
+
+
 def test_extract_retry_candidate_unknown_tool():
     app = ChatybotApp()
     raw = """<action="custom_magic_tool">

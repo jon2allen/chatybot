@@ -1374,9 +1374,12 @@ def _extract_retry_candidate(raw_text: str, app) -> dict:
         v = pm.group(2).strip()
         args[k] = v
 
+    # Normalize literal \n escapes if present
+    normalized_text = raw_text.replace('\\n', '\n')
+
     # 3. Check for markdown code blocks (e.g. ```bash ... ``` or ```chatdsl ... ``` or ```python ... ```)
     if "content" not in args and "command" not in args:
-        code_fence = re.search(r'```(?:bash|sh|zsh)?\s*\n(.*?)\n```', raw_text, re.DOTALL | re.IGNORECASE)
+        code_fence = re.search(r'```(?:bash|sh|zsh)\b[\s:]*(.*?)```', normalized_text, re.DOTALL | re.IGNORECASE)
         if code_fence:
             cmd_body = code_fence.group(1).strip()
             if not detected_tool:
@@ -1384,24 +1387,24 @@ def _extract_retry_candidate(raw_text: str, app) -> dict:
             args["command"] = cmd_body
 
         if "content" not in args and "command" not in args:
-            script_fence = re.search(r'```(?:chatdsl|dsl|python|py|text|yaml|json)?\s*\n(.*?)\n```', raw_text, re.DOTALL | re.IGNORECASE)
+            script_fence = re.search(r'```(?:chatdsl|dsl|python|py|text|yaml|json|txt|md|markdown)?\b[\s:]*(.*?)```', normalized_text, re.DOTALL | re.IGNORECASE)
             if script_fence:
                 script_body = script_fence.group(1).strip()
                 if not detected_tool:
                     detected_tool = "write_file"
                 args["content"] = script_body
 
-    # 4. Check for standalone shell command syntax (e.g. `find / -name ...`)
+    # 4. Check for standalone shell command syntax (e.g. `find / -name ...` or `ls -la ...`)
     if not detected_tool and not args:
-        shell_match = re.search(r'^\s*(?:find|ls|grep|cat|mkdir|touch|cp|mv|git|python|pytest|sh|bash)\s+.*$', raw_text, re.MULTILINE)
+        shell_match = re.search(r'(?:^|\n)\s*((?:find|ls|grep|cat|mkdir|touch|cp|mv|git|python|pytest|sh|bash)\s+[^\n]+)', normalized_text, re.IGNORECASE)
         if shell_match:
             detected_tool = "run_command"
-            args["command"] = shell_match.group(0).strip()
+            args["command"] = shell_match.group(1).strip()
 
     # 5. Check if user prompt mentions target file or scratchpad to populate path
     if detected_tool in ("write_file", "replace_file_content") and "path" not in args:
         # Check if scratchpad path is in text
-        path_match = re.search(r'(/[\w\.\-/]+\.(?:chatdsl|dsl|py|sh|txt|json|md))', raw_text)
+        path_match = re.search(r'(/[\w\.\-/]+\.(?:chatdsl|dsl|py|sh|txt|json|md))', normalized_text)
         if path_match:
             args["path"] = path_match.group(1)
         elif hasattr(app, "get_scratch_dir"):
