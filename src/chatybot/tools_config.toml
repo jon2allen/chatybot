@@ -387,6 +387,27 @@ type = "number"
 description = "Maximum number of results to return (default 20)"
 optional = true
 
+[tools.db_search.parameters.full_content]
+type = "boolean"
+description = "If true, return the full untruncated content instead of a 500-character preview (default false)"
+optional = true
+
+[tools.db_get]
+enabled = false
+description = "Retrieve a single complete item from a TinyDB database by its integer ID."
+module = "chatybot.tools.db_tools"
+function = "db_get"
+
+[tools.db_get.parameters.item_id]
+type = "number"
+description = "The integer ID (doc_id) of the database item to retrieve"
+optional = false
+
+[tools.db_get.parameters.db_name]
+type = "string"
+description = "Database name to search. If omitted, uses the currently active database."
+optional = true
+
 [tools.db_list]
 enabled = false
 description = "List all available TinyDB databases with entry counts and file sizes."

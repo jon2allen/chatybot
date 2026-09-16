@@ -646,7 +646,8 @@ The following tools are packaged by default and can be enabled/disabled dynamica
 
 | Tool Name | Description | Key Parameters |
 |-----------|-------------|----------------|
-| `db_search` | Searches a TinyDB database for items matching a query string across name, content, and metadata. Use `*` to list all. | `query` (required), `db_name` (optional), `limit` (optional) |
+| `db_search` | Searches a TinyDB database for items matching a query string across name, content, and metadata. Use `*` to list all. | `query` (required), `db_name` (optional), `limit` (optional), `full_content` (optional) |
+| `db_get` | Retrieves a single complete item from a TinyDB database by its integer ID. | `item_id` (required), `db_name` (optional) |
 | `db_list` | Lists all available TinyDB databases with entry counts and file sizes. | none |
 
 #### **Supported Tool Calling Formats**

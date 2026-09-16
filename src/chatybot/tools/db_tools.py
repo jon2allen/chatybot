@@ -13,6 +13,7 @@ def db_search(
     query: str,
     db_name: str | None = None,
     limit: int = 20,
+    full_content: bool = False,
     app: Any = None,
 ) -> str:
     """
@@ -23,6 +24,7 @@ def db_search(
         query: Search term. Use '*' or empty string to list all items.
         db_name: Database name to search. If None, uses the currently active database.
         limit: Maximum number of results to return (default 20).
+        full_content: If True, return the complete untruncated content instead of a 500-character preview.
         app: ChatybotApp instance passed when called within application context.
 
     Returns:
@@ -74,14 +76,18 @@ def db_search(
     for item in results:
         doc_id = getattr(item, "doc_id", None)
         content = str(item.get("content") or "")
-        output.append({
+        record = {
             "id": doc_id,
             "type": item.get("type"),
             "name": item.get("name"),
-            "content_preview": content[:500],
             "content_length": len(content),
             "metadata": item.get("metadata", {}),
-        })
+        }
+        if full_content:
+            record["content"] = content
+        else:
+            record["content_preview"] = content[:500]
+        output.append(record)
 
     return json.dumps({
         "query": query,
@@ -90,6 +96,58 @@ def db_search(
         "returned": len(results),
         "results": output,
     }, ensure_ascii=False, indent=2)
+
+
+def db_get(
+    item_id: int,
+    db_name: str | None = None,
+    app: Any = None,
+) -> str:
+    """
+    Retrieve a single complete item from a TinyDB database by its integer ID.
+
+    Args:
+        item_id: The integer ID (doc_id) of the item to retrieve.
+        db_name: Database name to look in. If None, uses the currently active database.
+        app: ChatybotApp instance passed when called within application context.
+
+    Returns:
+        JSON string with the complete item details or an error message.
+    """
+    from chatybot import chatydb
+
+    if db_name:
+        chatydb.set_db(db_name)
+
+    if chatydb._manager is None:
+        return json.dumps({
+            "error": "No database selected. Use the db_name parameter or /setdb first."
+        }, ensure_ascii=False)
+
+    try:
+        doc_id = int(item_id)
+    except (ValueError, TypeError):
+        return json.dumps({
+            "error": f"Invalid item_id '{item_id}'. Must be an integer."
+        }, ensure_ascii=False)
+
+    item = chatydb._manager.get_item(doc_id)
+    if not item:
+        return json.dumps({
+            "error": f"Item with ID {doc_id} not found in database '{db_name or 'active'}'."
+        }, ensure_ascii=False)
+
+    content = str(item.get("content") or "")
+    output = {
+        "id": getattr(item, "doc_id", doc_id),
+        "type": item.get("type"),
+        "name": item.get("name"),
+        "content": content,
+        "content_length": len(content),
+        "metadata": item.get("metadata", {}),
+    }
+
+    return json.dumps(output, ensure_ascii=False, indent=2)
 
 
 def db_list(app: Any = None) -> str:

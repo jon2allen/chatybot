@@ -3,14 +3,16 @@
 Unit tests for TinyDB database tools (db_search, db_list).
 """
 
-import pytest
-import os
 import json
+import os
 import tempfile
 from unittest.mock import patch
-import src.chatybot.chatydb as chatydb
+
+import pytest
+
+from src.chatybot import chatydb
 from src.chatybot.tinydb1.corpus_manager import CorpusManager
-from src.chatybot.tools.db_tools import db_search, db_list
+from src.chatybot.tools.db_tools import db_get, db_list, db_search
 
 
 class TestDbSearch:
@@ -154,6 +156,97 @@ class TestDbSearch:
             assert result["total_matches"] == 1
         finally:
             os.unlink(tmp_path)
+
+    def test_search_full_content(self):
+        """full_content=True returns full content instead of preview"""
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
+            tmp_path = tmp.name
+        try:
+            manager = CorpusManager(tmp_path)
+            long_content = "B" * 1000
+            manager.add_item("doc", "Full Doc", long_content, {})
+            manager.close()
+            chatydb._manager = CorpusManager(tmp_path)
+
+            result = json.loads(db_search("Full", full_content=True))
+            assert "content" in result["results"][0]
+            assert "content_preview" not in result["results"][0]
+            assert result["results"][0]["content"] == long_content
+            assert result["results"][0]["content_length"] == 1000
+        finally:
+            os.unlink(tmp_path)
+
+
+class TestDbGet:
+    """Test suite for db_get tool"""
+
+    @pytest.fixture(autouse=True)
+    def setup_cleanup(self):
+        """Reset chatydb global state before and after tests"""
+        chatydb.SEARCHBUFFER.clear()
+        chatydb._manager = None
+        chatydb._db_path = None
+        yield
+        chatydb.SEARCHBUFFER.clear()
+        chatydb._manager = None
+        chatydb._db_path = None
+
+    def test_db_get_success(self):
+        """db_get successfully retrieves item by doc_id"""
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
+            tmp_path = tmp.name
+        try:
+            manager = CorpusManager(tmp_path)
+            doc_id = manager.add_item("doc", "Sample Item", "This is the full text.", {"author": "Alice"})
+            manager.close()
+            chatydb._manager = CorpusManager(tmp_path)
+
+            result = json.loads(db_get(doc_id))
+            assert result["id"] == doc_id
+            assert result["name"] == "Sample Item"
+            assert result["type"] == "doc"
+            assert result["content"] == "This is the full text."
+            assert result["content_length"] == len("This is the full text.")
+            assert result["metadata"]["author"] == "Alice"
+        finally:
+            os.unlink(tmp_path)
+
+    def test_db_get_not_found(self):
+        """db_get returns error when item_id doesn't exist"""
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
+            tmp_path = tmp.name
+        try:
+            manager = CorpusManager(tmp_path)
+            manager.add_item("doc", "Item 1", "Content 1", {})
+            manager.close()
+            chatydb._manager = CorpusManager(tmp_path)
+
+            result = json.loads(db_get(9999))
+            assert "error" in result
+            assert "9999 not found" in result["error"]
+        finally:
+            os.unlink(tmp_path)
+
+    def test_db_get_invalid_id(self):
+        """db_get returns error for non-integer id"""
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
+            tmp_path = tmp.name
+        try:
+            manager = CorpusManager(tmp_path)
+            manager.close()
+            chatydb._manager = CorpusManager(tmp_path)
+
+            result = json.loads(db_get("not_an_id"))
+            assert "error" in result
+            assert "Must be an integer" in result["error"]
+        finally:
+            os.unlink(tmp_path)
+
+    def test_db_get_no_database(self):
+        """db_get returns error when no database selected"""
+        result = json.loads(db_get(1))
+        assert "error" in result
+        assert "No database selected" in result["error"]
 
 
 class TestDbList:
