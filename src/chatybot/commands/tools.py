@@ -89,7 +89,7 @@ async def cmd_run_unsafe(ctx: CommandContext, parts: list, command: str) -> Comm
     return CommandResult.ok()
 
 
-@command("/tool", help="Manage tools and tool mode", args="[list|enable|disable|on|off|auto|scratch|loop|max_turns|rate_limit|prompt|history|replay|translate] ...", category="tools")
+@command("/tool", help="Manage tools and tool mode", args="[list|enable|disable|on|off|auto|scratch|loop|max_turns|rate_limit|prompt|history|replay|retry|inject|translate] ...", category="tools")
 async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandResult:
     app = ctx.app
     # Handle /tool subcommands: on, off, or dispatch
@@ -989,6 +989,9 @@ async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandRes
     elif subcmd == "retry":
         return await _handle_tool_retry(ctx, parts, command)
 
+    elif subcmd == "inject":
+        return await _handle_tool_inject(ctx, parts, command)
+
     elif subcmd in ("translate", "convert", "parse"):
         raw_text = command.split(maxsplit=2)[2].strip() if len(parts) > 2 else (app.buffer_manager.get_script_var('LAST_COMPLETION') or "")
         if not raw_text:
@@ -1615,4 +1618,61 @@ async def _handle_tool_retry(ctx: CommandContext, parts: list, command: str) -> 
             pass
 
     return CommandResult.ok()
+
+
+async def _handle_tool_inject(ctx: CommandContext, parts: list, command: str) -> CommandResult:
+    """Handle /tool inject [file=<path> | <payload>] command to seed LAST_COMPLETION."""
+    app = ctx.app
+    if len(parts) < 3 and not command.strip().startswith("/tool inject "):
+        print("Usage: /tool inject <payload text> | file=<filepath>")
+        return CommandResult.ok()
+
+    # Extract everything after '/tool inject'
+    raw_arg = command.split(maxsplit=2)[2].strip() if len(parts) > 2 else ""
+    if not raw_arg:
+        print("Usage: /tool inject <payload text> | file=<filepath>")
+        return CommandResult.ok()
+
+    payload = ""
+    source_desc = "literal text"
+
+    # Check for file=<path> argument
+    if raw_arg.lower().startswith("file="):
+        file_target = raw_arg[5:].strip().strip("\"'")
+        expanded = os.path.expanduser(file_target)
+        if not os.path.exists(expanded):
+            print(f"Error: Specified file not found: {file_target}")
+            return CommandResult.ok()
+        try:
+            with open(expanded, "r", encoding="utf-8", errors="replace") as f:
+                payload = f.read()
+            source_desc = f"file '{file_target}'"
+        except Exception as e:
+            print(f"Error reading file '{file_target}': {e}")
+            return CommandResult.ok()
+    else:
+        payload = raw_arg
+
+    if not payload:
+        print("Warning: Injected payload is empty.")
+
+    # Store into LAST_COMPLETION buffer variable
+    if hasattr(app, "buffer_manager") and app.buffer_manager:
+        app.buffer_manager.set_script_var('LAST_COMPLETION', payload, allow_protected=True)
+
+    # Synchronize chat_history
+    if hasattr(app, "chat_history"):
+        app.chat_history.append(("assistant", payload))
+
+    lines_cnt = len(payload.splitlines())
+    chars_cnt = len(payload)
+    preview = payload.strip().splitlines()[0][:60] if payload.strip() else "(empty)"
+    if len(preview) == 60:
+        preview += "..."
+
+    print(f"Successfully injected mock completion from {source_desc} ({chars_cnt} chars, {lines_cnt} lines).")
+    print(f"Preview: {preview}")
+    print("Tip: Run '/tool retry edit', '/tool retry fix', or '/tool retry run' to test rescue.")
+    return CommandResult.ok()
+
 

@@ -161,3 +161,77 @@ async def test_tool_retry_edit_mode_executes_on_editor_save():
     assert dispatched["tool"] == "write_file"
     assert dispatched["arguments"]["path"] == "/tmp/custom.txt"
     assert dispatched["arguments"]["content"] == "custom content"
+
+
+@pytest.mark.anyio
+async def test_tool_inject_literal_text():
+    app = ChatybotApp()
+    app.initialize()
+    ctx = CommandContext(
+        buffer_manager=app.buffer_manager,
+        config_manager=app.config_manager,
+        i18n=app.i18n,
+        session_store=app._get_session_store(),
+        app=app,
+    )
+
+    cmd = '/tool inject <invoke name="write_file"><parameter name="path">test.py</parameter></invoke>'
+    result = await cmd_tool(ctx, ["/tool", "inject", '<invoke name="write_file"><parameter name="path">test.py</parameter></invoke>'], cmd)
+    assert result is not None
+
+    last_comp = app.buffer_manager.get_script_var("LAST_COMPLETION")
+    assert '<invoke name="write_file">' in last_comp
+    assert '<parameter name="path">test.py</parameter>' in last_comp
+    assert app.chat_history[-1] == ("assistant", '<invoke name="write_file"><parameter name="path">test.py</parameter></invoke>')
+
+
+@pytest.mark.anyio
+async def test_tool_inject_file(tmp_path):
+    app = ChatybotApp()
+    app.initialize()
+    ctx = CommandContext(
+        buffer_manager=app.buffer_manager,
+        config_manager=app.config_manager,
+        i18n=app.i18n,
+        session_store=app._get_session_store(),
+        app=app,
+    )
+
+    test_file = tmp_path / "mock_turn.txt"
+    test_file.write_text('{"tool": "list_directory", "arguments": {"path": "/var/log"}}', encoding="utf-8")
+
+    cmd = f'/tool inject file={test_file}'
+    result = await cmd_tool(ctx, ["/tool", "inject", f"file={test_file}"], cmd)
+    assert result is not None
+
+    last_comp = app.buffer_manager.get_script_var("LAST_COMPLETION")
+    assert '"tool": "list_directory"' in last_comp
+    assert '"path": "/var/log"' in last_comp
+
+
+@pytest.mark.anyio
+async def test_tool_inject_and_retry_chain():
+    app = ChatybotApp()
+    app.initialize()
+    app.dispatch_tool = AsyncMock(return_value="Dispatched")
+    ctx = CommandContext(
+        buffer_manager=app.buffer_manager,
+        config_manager=app.config_manager,
+        i18n=app.i18n,
+        session_store=app._get_session_store(),
+        app=app,
+    )
+
+    # 1. Inject
+    inject_cmd = '/tool inject {"tool": "list_directory", "arguments": {"path": "/src"}}'
+    await cmd_tool(ctx, ["/tool", "inject", '{"tool": "list_directory", "arguments": {"path": "/src"}}'], inject_cmd)
+
+    # 2. Retry run
+    retry_cmd = '/tool retry run'
+    await cmd_tool(ctx, ["/tool", "retry", "run"], retry_cmd)
+
+    app.dispatch_tool.assert_called_once()
+    called_arg = json.loads(app.dispatch_tool.call_args[0][0])
+    assert called_arg["tool"] == "list_directory"
+    assert called_arg["arguments"] == {"path": "/src"}
+
