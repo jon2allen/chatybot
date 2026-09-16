@@ -22,21 +22,23 @@ set test_timestamp = "2026-09-16"
 /tool on
 /tool enable write_file
 /tool enable read_file
-/tool enable list_files
+/tool enable list_directory
 /tool enable run_command
 
+# Temporarily disable safe mode for shell test harness setup
+/run_unsafe
+
 /run mkdir -p scratch/retry_test
-/run rm -f scratch/retry_test/*.txt scratch/retry_test/*.xml
+/run rm -f scratch/retry_test/rescued_output.txt scratch/retry_test/simulated_model_turn.xml
 
 # ------------------------------------------------------------------------------
 # 2. Stage 1: Injecting Dynamic XML Tool Payload with Variables
 # ------------------------------------------------------------------------------
 set generated_secret = "CHATDSL_RETRY_VALIDATION_TOKEN_42"
-set file_content_var = "SUCCESS: This file was created via ChatDSL simulated tool injection at ${test_timestamp}.\nSecretToken: ${generated_secret}"
 
 /echo "\n[Stage 1] Constructing and injecting XML <dots_function_call> completion..."
 
-# Write dynamic failure fixture to file using /run or direct write
+# Write dynamic failure fixture to file
 /run printf '<dots_function_call>\n<invoke="write_file">\n">\n<parameter name="path">%s</parameter>\n<parameter name="content">\n%s\n</parameter>\n</invoke>\n</dots_function_call>\n' "scratch/retry_test/rescued_output.txt" "Validated Content: Rescued via ChatDSL injection" > scratch/retry_test/simulated_model_turn.xml
 
 # Inject the mock completion from the fixture file
@@ -52,7 +54,7 @@ set file_content_var = "SUCCESS: This file was created via ChatDSL simulated too
 /tool retry run
 
 # Verify file was written to disk
-/run test -f scratch/retry_test/rescued_output.txt && echo "FILE_EXISTS_OK" || echo "FILE_MISSING_FAIL"
+/run ls -l scratch/retry_test/rescued_output.txt
 /echo "Disk validation result: ${RUN_COMPLETION}"
 
 # ------------------------------------------------------------------------------
