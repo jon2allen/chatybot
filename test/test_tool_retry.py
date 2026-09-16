@@ -74,9 +74,12 @@ def test_build_tool_retry_buffer_valid_tool():
         "arguments": {"path": "/tmp/test.txt", "content": "Hello World"},
         "is_valid": True,
     }
-    buf = _build_tool_retry_buffer(candidate, app)
+    raw_completion = "Some explanation before call:\n<invoke=write_file>\n<parameter name=\"path\">/tmp/test.txt</parameter>\n</invoke>"
+    buf = _build_tool_retry_buffer(candidate, app, raw_text=raw_completion)
     assert "# Target Tool: write_file" in buf
     assert "# PARAMETER SCHEMA:" in buf
+    assert "# ORIGINAL COMPLETION / RAW TOOL CALL (LAST_COMPLETION):" in buf
+    assert "# <invoke=write_file>" in buf
     assert '"tool": "write_file"' in buf
     assert '"path": "/tmp/test.txt"' in buf
 

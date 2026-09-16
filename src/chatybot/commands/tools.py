@@ -1419,19 +1419,31 @@ def _extract_retry_candidate(raw_text: str, app) -> dict:
     }
 
 
-def _build_tool_retry_buffer(candidate: dict, app) -> str:
-    """Build the template file for $EDITOR with header comments, schema hints, and pre-filled JSON."""
-    tool_name = candidate.get("tool") or "CHANGE_ME"
-    is_valid = candidate.get("is_valid", False)
-    args = candidate.get("arguments") or {}
-
+def _build_tool_retry_buffer(candidate: dict, app, raw_text: str = "") -> str:
+    """Build the template file for $EDITOR with header comments, original raw completion, schema hints, and pre-filled JSON."""
     config = app._load_tools_config() if hasattr(app, "_load_tools_config") else {}
     tools_section = config.get("tools", {}) if config else {}
     known_tools = app.get_known_tool_names() if hasattr(app, "get_known_tool_names") else set()
 
+    tool_name = candidate.get("tool") or "CHANGE_ME"
+    is_valid = (candidate.get("is_valid", False) or (tool_name in known_tools or tool_name.startswith("mcp__"))) and tool_name != "CHANGE_ME"
+    args = candidate.get("arguments") or {}
+
     lines = []
     lines.append("# ==============================================================================")
     lines.append("# TOOL RETRY LIVE EDITOR")
+    lines.append("# ==============================================================================")
+
+    # 1. Include Original Raw Completion from LAST_COMPLETION in comments
+    if raw_text and raw_text.strip():
+        lines.append("# ORIGINAL COMPLETION / RAW TOOL CALL (LAST_COMPLETION):")
+        lines.append("# ------------------------------------------------------------------------------")
+        for r_line in raw_text.strip().splitlines():
+            lines.append(f"# {r_line}")
+        lines.append("# ------------------------------------------------------------------------------")
+        lines.append("#")
+
+    # 2. Schema or Warning
     if is_valid:
         lines.append(f"# Target Tool: {tool_name}")
         meta = tools_section.get(tool_name, {})
@@ -1466,7 +1478,7 @@ def _build_tool_retry_buffer(candidate: dict, app) -> str:
 
     lines.append("#")
     lines.append("# INSTRUCTIONS:")
-    lines.append("#   - Edit the JSON payload below.")
+    lines.append("#   - Edit the JSON payload below (copy/paste from the raw completion above).")
     lines.append("#   - Save and exit your editor to dispatch the tool call.")
     lines.append("#   - To cancel execution, delete the contents or leave an empty object {}.")
     lines.append("# ==============================================================================")
@@ -1555,7 +1567,7 @@ async def _handle_tool_retry(ctx: CommandContext, parts: list, command: str) -> 
     # -------------------------------------------------------------------------
     # Mode: 'edit' (Open scaffold in $EDITOR)
     # -------------------------------------------------------------------------
-    buffer_content = _build_tool_retry_buffer(candidate, app)
+    buffer_content = _build_tool_retry_buffer(candidate, app, raw_text=raw_text)
 
     with tempfile.NamedTemporaryFile(suffix=".json", delete=False, mode="w", encoding="utf-8") as tf:
         tf.write(buffer_content)
