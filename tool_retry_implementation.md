@@ -102,13 +102,42 @@ Since the raw completion is preserved as the turn's last completion:
 
 ---
 
-## 5. Summary of Files Modified & Added
+## 5. Live Mock Injector: `/tool inject`
+
+To facilitate local offline testing, edge-case debugging, and test automation without incurring LLM inference costs or tokens, the **`/tool inject`** command injects a synthetic or malformed completion directly into `${LAST_COMPLETION}` and `chat_history`.
+
+### Syntax
+
+```bash
+/tool inject <payload text>
+/tool inject file=<path_to_file>
+```
+
+### Examples
+
+```bash
+# Inject literal XML completion:
+/tool inject <invoke name="write_file"><parameter name="path">test.py</parameter><parameter name="content">print('hello')</parameter></invoke>
+
+# Inject from an existing crash or test fixture file:
+/tool inject file=crashes/malformed_turn.txt
+/tool inject file="test/fixtures/dots_broken_turn.txt"
+
+# Immediately test rescue in $EDITOR:
+/tool retry edit
+```
+
+---
+
+## 6. Summary of Files Modified & Added
 
 - **`src/chatybot/commands/tools.py`**:
   - `_extract_retry_candidate()`: Deterministic regex parser for tool call patterns (JSON, XML, markdown code blocks).
   - `_build_tool_retry_buffer()`: Generates editor buffer with schema documentation and invalid tool warnings.
   - `_handle_tool_retry()`: Controller for `edit`, `fix`, and `run` sub-actions.
+  - `_handle_tool_inject()`: Seeds mock assistant completion into `${LAST_COMPLETION}` and session history from text or `file=<path>`.
 - **`src/chatybot/chaty_help.py`**:
-  - Added documentation and examples for `/tool retry [edit|fix|run]`.
+  - Added documentation and examples for `/tool retry [edit|fix|run]` and `/tool inject [file=<path>|<payload>]`.
 - **`test/test_tool_retry.py`**:
-  - Test suite covering candidate extraction, buffer generation, warning headers, and editor/CLI execution flows.
+  - Test suite covering candidate extraction, buffer generation, warning headers, inject commands, and editor/CLI execution flows.
+
