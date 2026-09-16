@@ -986,6 +986,9 @@ async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandRes
     elif subcmd == "replay":
         return await _handle_tool_replay(ctx, parts)
 
+    elif subcmd == "retry":
+        return await _handle_tool_retry(ctx, parts, command)
+
     elif subcmd in ("translate", "convert", "parse"):
         raw_text = command.split(maxsplit=2)[2].strip() if len(parts) > 2 else (app.buffer_manager.get_script_var('LAST_COMPLETION') or "")
         if not raw_text:
@@ -1306,3 +1309,310 @@ async def _handle_tool_replay(ctx: CommandContext, parts: list) -> CommandResult
         return CommandResult.ok()
 
     return CommandResult.ok()
+
+
+# ---------------------------------------------------------------------------
+# /tool retry — live tool rescue and repair
+# ---------------------------------------------------------------------------
+
+def _extract_retry_candidate(raw_text: str, app) -> dict:
+    """Analyze raw completion text to extract or infer candidate tool calls and arguments.
+
+    Returns a dict with keys:
+      'tool': detected tool name (or None/candidate)
+      'arguments': dict of harvested arguments
+      'raw_match': raw matched text snippet
+      'is_valid': bool indicating if tool is in known enabled tools
+    """
+    import re
+
+    known_tools = app.get_known_tool_names() if hasattr(app, "get_known_tool_names") else set()
+
+    # 1. First, check if standard extract_tool_calls finds any valid call
+    calls = app.extract_tool_calls(raw_text) if hasattr(app, "extract_tool_calls") else []
+    if calls:
+        first = calls[0]
+        tool_name = first.get("tool", "")
+        return {
+            "tool": tool_name,
+            "arguments": first.get("arguments", {}),
+            "raw_match": json.dumps(first, indent=2),
+            "is_valid": tool_name in known_tools or tool_name.startswith("mcp__"),
+        }
+
+    detected_tool = None
+    args: dict = {}
+
+    # 2. Check for XML tag variants: <invoke="name">, <function=name>, <tool name="name">
+    tag_name_match = re.search(
+        r'<(?:invoke|function|tool|call|dots_function_call|action)(?:=|\s+name=)["\']?([a-zA-Z0-9_\-\.]+)["\']?',
+        raw_text,
+        re.IGNORECASE,
+    )
+    if tag_name_match:
+        cand_name = tag_name_match.group(1).strip()
+        if cand_name.lower() not in ("dots_function_call", "action", "tool_call"):
+            detected_tool = cand_name
+
+    # Check for parameter blocks: <parameter name="key">val</parameter> or <param=key>val</param>
+    param_matches = list(re.finditer(
+        r'<(?:parameter|param)\s+name=["\']([^"\']+)["\'][^>]*>(.*?)</(?:parameter|param)>',
+        raw_text,
+        re.IGNORECASE | re.DOTALL,
+    ))
+    if not param_matches:
+        param_matches = list(re.finditer(
+            r'<(?:parameter|param)=["\']?([a-zA-Z0-9_\-\.]+)["\']?[^>]*>(.*?)</(?:parameter|param)>',
+            raw_text,
+            re.IGNORECASE | re.DOTALL,
+        ))
+    for pm in param_matches:
+        k = pm.group(1).strip()
+        v = pm.group(2).strip()
+        args[k] = v
+
+    # 3. Check for markdown code blocks (e.g. ```bash ... ``` or ```chatdsl ... ``` or ```python ... ```)
+    if "content" not in args and "command" not in args:
+        code_fence = re.search(r'```(?:bash|sh|zsh)?\s*\n(.*?)\n```', raw_text, re.DOTALL | re.IGNORECASE)
+        if code_fence:
+            cmd_body = code_fence.group(1).strip()
+            if not detected_tool:
+                detected_tool = "run_command"
+            args["command"] = cmd_body
+
+        if "content" not in args and "command" not in args:
+            script_fence = re.search(r'```(?:chatdsl|dsl|python|py|text|yaml|json)?\s*\n(.*?)\n```', raw_text, re.DOTALL | re.IGNORECASE)
+            if script_fence:
+                script_body = script_fence.group(1).strip()
+                if not detected_tool:
+                    detected_tool = "write_file"
+                args["content"] = script_body
+
+    # 4. Check for standalone shell command syntax (e.g. `find / -name ...`)
+    if not detected_tool and not args:
+        shell_match = re.search(r'^\s*(?:find|ls|grep|cat|mkdir|touch|cp|mv|git|python|pytest|sh|bash)\s+.*$', raw_text, re.MULTILINE)
+        if shell_match:
+            detected_tool = "run_command"
+            args["command"] = shell_match.group(0).strip()
+
+    # 5. Check if user prompt mentions target file or scratchpad to populate path
+    if detected_tool in ("write_file", "replace_file_content") and "path" not in args:
+        # Check if scratchpad path is in text
+        path_match = re.search(r'(/[\w\.\-/]+\.(?:chatdsl|dsl|py|sh|txt|json|md))', raw_text)
+        if path_match:
+            args["path"] = path_match.group(1)
+        elif hasattr(app, "get_scratch_dir"):
+            scratch = app.get_scratch_dir(create=False)
+            if scratch:
+                args["path"] = os.path.join(scratch, "script.chatdsl")
+
+    # Final validity determination
+    is_valid = bool(detected_tool and (detected_tool in known_tools or detected_tool.startswith("mcp__")))
+    return {
+        "tool": detected_tool or "write_file",
+        "arguments": args,
+        "raw_match": raw_text[:500],
+        "is_valid": is_valid,
+    }
+
+
+def _build_tool_retry_buffer(candidate: dict, app) -> str:
+    """Build the template file for $EDITOR with header comments, schema hints, and pre-filled JSON."""
+    tool_name = candidate.get("tool") or "CHANGE_ME"
+    is_valid = candidate.get("is_valid", False)
+    args = candidate.get("arguments") or {}
+
+    config = app._load_tools_config() if hasattr(app, "_load_tools_config") else {}
+    tools_section = config.get("tools", {}) if config else {}
+    known_tools = app.get_known_tool_names() if hasattr(app, "get_known_tool_names") else set()
+
+    lines = []
+    lines.append("# ==============================================================================")
+    lines.append("# TOOL RETRY LIVE EDITOR")
+    if is_valid:
+        lines.append(f"# Target Tool: {tool_name}")
+        meta = tools_section.get(tool_name, {})
+        desc = meta.get("description", "No description available")
+        lines.append(f"# Description: {desc}")
+        lines.append("#")
+        params = meta.get("parameters", {})
+        if params:
+            lines.append("# PARAMETER SCHEMA:")
+            for p_name, p_rules in params.items():
+                p_type = p_rules.get("type", "string")
+                p_desc = p_rules.get("description", "")
+                p_opt = "optional" if p_rules.get("optional") else "required"
+                lines.append(f"#   - {p_name} ({p_type}, {p_opt}): {p_desc}")
+        else:
+            lines.append("# (No parameters declared)")
+    else:
+        lines.append(f"# ⚠️  WARNING: '{tool_name}' is NOT a recognized/enabled tool name!")
+        lines.append("# Please edit the \"tool\" property below to a valid tool name.")
+        lines.append("#")
+        lines.append("# AVAILABLE ENABLED TOOLS:")
+        enabled_count = 0
+        for t_name, t_meta in tools_section.items():
+            is_enabled = app.tool_overrides.get(t_name, t_meta.get("enabled", False)) if hasattr(app, "tool_overrides") else t_meta.get("enabled", False)
+            if is_enabled:
+                t_desc = t_meta.get("description", "")[:70]
+                lines.append(f"#   - {t_name:<22}: {t_desc}")
+                enabled_count += 1
+        if enabled_count == 0:
+            for t_name in sorted(known_tools):
+                lines.append(f"#   - {t_name}")
+
+    lines.append("#")
+    lines.append("# INSTRUCTIONS:")
+    lines.append("#   - Edit the JSON payload below.")
+    lines.append("#   - Save and exit your editor to dispatch the tool call.")
+    lines.append("#   - To cancel execution, delete the contents or leave an empty object {}.")
+    lines.append("# ==============================================================================")
+
+    payload = {
+        "tool": tool_name if is_valid else (tool_name or "CHANGE_ME"),
+        "arguments": args,
+    }
+    lines.append(json.dumps(payload, indent=2, ensure_ascii=False))
+    return "\n".join(lines)
+
+
+async def _handle_tool_retry(ctx: CommandContext, parts: list, command: str) -> CommandResult:
+    """Handle /tool retry [edit|fix|run] command."""
+    app = ctx.app
+    import subprocess
+    import tempfile
+
+    mode = "edit"
+    if len(parts) > 2:
+        mode = parts[2].strip().lower()
+
+    # Retrieve last completion text
+    raw_text = (app.buffer_manager.get_script_var('LAST_COMPLETION') or "") if hasattr(app, "buffer_manager") else ""
+    if not raw_text and hasattr(app, "chat_history") and app.chat_history:
+        raw_text = app.chat_history[-1][1] or ""
+
+    if not raw_text.strip():
+        print("Error: No completion available in LAST_COMPLETION or chat history to retry.")
+        return CommandResult.ok()
+
+    candidate = _extract_retry_candidate(raw_text, app)
+
+    # -------------------------------------------------------------------------
+    # Mode: 'run' (Dispatch directly without opening editor if already valid)
+    # -------------------------------------------------------------------------
+    if mode == "run":
+        if candidate.get("is_valid") and candidate.get("arguments"):
+            payload_str = json.dumps({"tool": candidate["tool"], "arguments": candidate["arguments"]})
+            print(f"Directly dispatching detected tool '{candidate['tool']}'...")
+            await app.dispatch_tool(payload_str)
+            return CommandResult.ok()
+        print(f"Tool candidate '{candidate.get('tool')}' requires inspection. Opening editor...")
+        mode = "edit"
+
+    # -------------------------------------------------------------------------
+    # Mode: 'fix' (Fast interactive CLI wizard in terminal)
+    # -------------------------------------------------------------------------
+    if mode == "fix":
+        tool_name = candidate.get("tool", "")
+        print("\n=== TOOL RETRY QUICK FIX WIZARD ===")
+        print(f"Detected Tool: {tool_name}{'' if candidate.get('is_valid') else ' [INVALID]'}")
+
+        if not candidate.get("is_valid"):
+            try:
+                new_name = input(f"Enter valid tool name (or [Enter] for '{tool_name}'): ").strip()
+                if new_name:
+                    tool_name = new_name
+            except (EOFError, KeyboardInterrupt):
+                print("\nAborted.")
+                return CommandResult.ok()
+
+        args = dict(candidate.get("arguments", {}))
+        config = app._load_tools_config() if hasattr(app, "_load_tools_config") else {}
+        meta = config.get("tools", {}).get(tool_name, {}) if config else {}
+        declared_params = meta.get("parameters", {})
+
+        # Prompt for parameters
+        for p_name, p_rules in declared_params.items():
+            curr_val = args.get(p_name)
+            p_opt = "(optional)" if p_rules.get("optional") else "(required)"
+            disp_curr = f" [current: {str(curr_val)[:40]}...]" if curr_val is not None else " [not set]"
+            try:
+                user_inp = input(f"Parameter '{p_name}' {p_opt}{disp_curr}: ").strip()
+                if user_inp:
+                    args[p_name] = user_inp
+            except (EOFError, KeyboardInterrupt):
+                print("\nAborted.")
+                return CommandResult.ok()
+
+        final_payload = {"tool": tool_name, "arguments": args}
+        print(f"\nDispatching tool: {tool_name}...")
+        await app.dispatch_tool(json.dumps(final_payload))
+        return CommandResult.ok()
+
+    # -------------------------------------------------------------------------
+    # Mode: 'edit' (Open scaffold in $EDITOR)
+    # -------------------------------------------------------------------------
+    buffer_content = _build_tool_retry_buffer(candidate, app)
+
+    with tempfile.NamedTemporaryFile(suffix=".json", delete=False, mode="w", encoding="utf-8") as tf:
+        tf.write(buffer_content)
+        temp_path = tf.name
+
+    try:
+        config = app._load_tools_config() if hasattr(app, "_load_tools_config") else {}
+        config_editor = config.get("config", {}).get("editor") if config else None
+        default_editor = "notepad.exe" if os.name == "nt" else "vi"
+        editor = config_editor or os.environ.get("VISUAL") or os.environ.get("EDITOR") or default_editor
+
+        print(f"Opening tool rescue editor using '{editor}'...")
+        if os.name == "nt":
+            cmd = shlex.split(editor, posix=False) + [temp_path]
+        else:
+            cmd = shlex.split(editor) + [temp_path]
+        subprocess.run(cmd)
+
+        with open(temp_path, "r", encoding="utf-8") as f:
+            saved_content = f.read()
+
+        # Parse JSON ignoring comment lines
+        non_comment_lines = [
+            line for line in saved_content.splitlines()
+            if not line.strip().startswith("#")
+        ]
+        cleaned_json_str = "\n".join(non_comment_lines).strip()
+
+        if not cleaned_json_str or cleaned_json_str == "{}":
+            print("Tool retry cancelled (empty buffer).")
+            return CommandResult.ok()
+
+        try:
+            parsed = json.loads(cleaned_json_str)
+        except json.JSONDecodeError as jde:
+            print(f"Error parsing edited tool JSON: {jde}")
+            print("Tip: Run '/tool retry edit' to reopen and correct the JSON syntax.")
+            return CommandResult.ok()
+
+        if not isinstance(parsed, dict) or "tool" not in parsed:
+            print("Error: JSON must be an object with at least a 'tool' property.")
+            return CommandResult.ok()
+
+        chosen_tool = parsed.get("tool", "")
+        known_tools = app.get_known_tool_names() if hasattr(app, "get_known_tool_names") else set()
+        if chosen_tool not in known_tools and not chosen_tool.startswith("mcp__"):
+            print(f"Error: '{chosen_tool}' is not a recognized enabled tool.")
+            print("Available tools: " + ", ".join(sorted(known_tools)))
+            print("Run '/tool retry edit' to select a valid tool name.")
+            return CommandResult.ok()
+
+        print(f"Dispatching rescued tool '{chosen_tool}'...")
+        await app.dispatch_tool(cleaned_json_str)
+    except Exception as exc:
+        print(f"Error in tool retry editor: {exc}")
+    finally:
+        try:
+            os.unlink(temp_path)
+        except Exception:
+            pass
+
+    return CommandResult.ok()
+
