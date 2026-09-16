@@ -8,8 +8,8 @@ test_v085_review_fixes.py - Regression tests for issues identified in v0.8.5 rev
 6. /save clean_thinking handling mismatched closing tags without truncating to end of string.
 """
 
-import os
 import pytest
+
 from chatybot.chatybot_app import ChatybotApp
 from chatybot.tools.file_utils import replace_file_content
 
@@ -116,3 +116,44 @@ async def test_save_mismatched_closing_tags_does_not_truncate(tmp_path):
         content = f.read()
 
     assert content == "Final answer is 100."
+
+
+def test_extract_tool_calls_dots_function_call():
+    app = ChatybotApp()
+    sample = """<dots_function_call>
+<invoke="find_files">
+">
+<parameter name="pattern">
+*chatdsl*
+</parameter>
+</invoke>
+</dots_function_call>
+<dots_function_call>
+<invoke="read_file">
+<parameter name="path">./src/chatybot/doc/chatdsl_skill.md</parameter>
+</invoke>
+</dots_function_call>"""
+    calls = app.extract_tool_calls(sample)
+    assert len(calls) == 2
+    assert calls[0] == {"tool": "find_files", "arguments": {"pattern": "*chatdsl*"}}
+    assert calls[1] == {"tool": "read_file", "arguments": {"path": "./src/chatybot/doc/chatdsl_skill.md"}}
+
+
+def test_extract_tool_calls_invoke_equal_multiline_content():
+    app = ChatybotApp()
+    sample = """<dots_function_call>
+<invoke="write_file">
+<parameter name="path">/home/user/scratch/test.chatdsl</parameter>
+<parameter name="content">
+# ChatDSL Script
+/setdb 3Kingdoms
+/dblog
+</parameter>
+</invoke>
+</dots_function_call>"""
+    calls = app.extract_tool_calls(sample)
+    assert len(calls) == 1
+    assert calls[0]["tool"] == "write_file"
+    assert calls[0]["arguments"]["path"] == "/home/user/scratch/test.chatdsl"
+    assert "/setdb 3Kingdoms" in calls[0]["arguments"]["content"]
+

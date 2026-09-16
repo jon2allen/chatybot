@@ -4332,19 +4332,19 @@ class ChatybotApp:
                 if call_obj not in xml_calls:
                     xml_calls.append(call_obj)
 
-            # 4. Standard XML function= style: <function=name>
+            # 4. Standard XML function= / invoke= style: <function=name> or <invoke=name> or <invoke="name">
             fn_pattern = re.compile(
-                r'<(?:function|tool|call)=([a-zA-Z0-9_\-\.]+)[^>]*>(.*?)</(?:function|tool|call)>',
+                r'<(?:function|tool|call|invoke)=["\']?([a-zA-Z0-9_\-\.]+)["\']?[^>]*>(.*?)</(?:function|tool|call|invoke)>',
                 re.IGNORECASE | re.DOTALL
             )
             for match in fn_pattern.finditer(s):
                 tool_name = match.group(1).strip()
                 if "." in tool_name:
                     tool_name = tool_name.split(".")[-1]
-                fn_body = match.group(2)
+                fn_body = re.sub(r'^\s*["\'>]+\s*', '', match.group(2))
                 args = {}
                 param_pattern = re.compile(
-                    r'<(?:parameter|param)=([a-zA-Z0-9_\-\.]+)[^>]*>(.*?)</(?:parameter|param)>',
+                    r'<(?:parameter|param)\s+name=["\']([^"\']+)["\'][^>]*>(.*?)</(?:parameter|param)>',
                     re.IGNORECASE | re.DOTALL
                 )
                 param_matches = list(param_pattern.finditer(fn_body))
@@ -4354,25 +4354,36 @@ class ChatybotApp:
                         raw_val = p_match.group(2)
                         args[p_name] = parse_xml_param_value(raw_val)
                 else:
-                    sc_pattern = re.compile(
-                        r'<(?:parameter|param)=([a-zA-Z0-9_\-\.]+)\s+value=["\']([^"\']*)["\'][^>]*/?>',
-                        re.IGNORECASE
+                    param_pattern_eq = re.compile(
+                        r'<(?:parameter|param)=["\']?([a-zA-Z0-9_\-\.]+)["\']?[^>]*>(.*?)</(?:parameter|param)>',
+                        re.IGNORECASE | re.DOTALL
                     )
-                    sc_matches = list(sc_pattern.finditer(fn_body))
-                    if sc_matches:
-                        for sc_match in sc_matches:
-                            p_name = sc_match.group(1).strip()
-                            raw_val = sc_match.group(2)
+                    param_matches_eq = list(param_pattern_eq.finditer(fn_body))
+                    if param_matches_eq:
+                        for p_match in param_matches_eq:
+                            p_name = p_match.group(1).strip()
+                            raw_val = p_match.group(2)
                             args[p_name] = parse_xml_param_value(raw_val)
-                    elif fn_body.strip():
-                        body_str = fn_body.strip()
-                        if (body_str.startswith("{") and body_str.endswith("}")):
-                            try:
-                                parsed = parse_json_or_dict(body_str)
-                                if isinstance(parsed, dict):
-                                    args = parsed
-                            except Exception:
-                                pass
+                    else:
+                        sc_pattern = re.compile(
+                            r'<(?:parameter|param)(?:\s+name=|=)["\']?([a-zA-Z0-9_\-\.]+)["\']?\s+value=["\']([^"\']*)["\'][^>]*/?>',
+                            re.IGNORECASE
+                        )
+                        sc_matches = list(sc_pattern.finditer(fn_body))
+                        if sc_matches:
+                            for sc_match in sc_matches:
+                                p_name = sc_match.group(1).strip()
+                                raw_val = sc_match.group(2)
+                                args[p_name] = parse_xml_param_value(raw_val)
+                        elif fn_body.strip():
+                            body_str = fn_body.strip()
+                            if (body_str.startswith("{") and body_str.endswith("}")):
+                                try:
+                                    parsed = parse_json_or_dict(body_str)
+                                    if isinstance(parsed, dict):
+                                        args = parsed
+                                except Exception:
+                                    pass
                 call_obj = {"tool": tool_name, "arguments": args}
                 if call_obj not in xml_calls:
                     xml_calls.append(call_obj)
@@ -4591,7 +4602,7 @@ class ChatybotApp:
         )
         # Remove extracted XML tool call blocks before JSON scanner loop to avoid duplicates
         text_for_json = re.sub(
-            r'<(?:tool_call|function_call|action|tool)>.*?</(?:tool_call|function_call|action|tool)>',
+            r'<(?:tool_call|function_call|action|tool|dots_function_call)>.*?</(?:tool_call|function_call|action|tool|dots_function_call)>',
             ' ',
             text_for_json,
             flags=re.IGNORECASE | re.DOTALL
@@ -4609,7 +4620,7 @@ class ChatybotApp:
             flags=re.IGNORECASE | re.DOTALL
         )
         text_for_json = re.sub(
-            r'<(?:function|tool|call)=[a-zA-Z0-9_\-\.]+[^>]*>.*?</(?:function|tool|call)>',
+            r'<(?:function|tool|call|invoke)=["\']?[a-zA-Z0-9_\-\.]+["\']?[^>]*>.*?</(?:function|tool|call|invoke)>',
             ' ',
             text_for_json,
             flags=re.IGNORECASE | re.DOTALL
