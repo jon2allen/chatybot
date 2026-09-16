@@ -1,0 +1,22 @@
+# Recipe 8.5 - Offline Tool Testing and Rescue (/tool inject & /tool retry)
+# Goal: Seed mock LLM completions with variables and verify post-turn tool recovery.
+# Run: /script doc/cookbook/08_5_tool_retry_and_inject.chatdsl
+
+/tool on
+/tool enable write_file
+/tool enable run_command
+
+# 1. Define target file path and variable content
+set output_path = "scratch/cookbook_retry_out.txt"
+set note = "Processed via ChatDSL variable substitution"
+
+# 2. Inject a simulated XML completion into ${LAST_COMPLETION}
+/tool inject <invoke="write_file"><parameter name="path">scratch/cookbook_retry_out.txt</parameter><parameter name="content">Data note: ${note}</parameter></invoke>
+
+# 3. Rescue and execute without LLM tokens
+/tool retry run
+
+# 4. Read back and verify output
+/file scratch/cookbook_retry_out.txt
+/showfile
+/clearfile
