@@ -93,6 +93,35 @@ class TestDbSearch:
         finally:
             os.unlink(tmp_path)
 
+    def test_search_default_omitted_query(self):
+        """Omitting query defaults to wildcard and returns all items"""
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
+            tmp_path = tmp.name
+        try:
+            self._create_test_db(tmp_path)
+            chatydb._manager = CorpusManager(tmp_path)
+
+            result = json.loads(db_search())
+            assert result["total_matches"] == 3
+        finally:
+            os.unlink(tmp_path)
+
+    def test_search_active_db_env_fallback(self):
+        """Active db resolves via CHATYBOT_ACTIVE_DB env var"""
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
+            tmp_path = tmp.name
+        try:
+            self._create_test_db(tmp_path)
+            db_name = os.path.splitext(os.path.basename(tmp_path))[0]
+            with (
+                patch.dict(os.environ, {"CHATYBOT_ACTIVE_DB": db_name}),
+                patch.object(chatydb, "_ensure_db_path", return_value=tmp_path),
+            ):
+                result = json.loads(db_search())
+                assert result["total_matches"] == 3
+        finally:
+            os.unlink(tmp_path)
+
     def test_search_no_matches(self):
         """Search with no matches returns empty results"""
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
@@ -208,6 +237,26 @@ class TestDbGet:
             assert result["content"] == "This is the full text."
             assert result["content_length"] == len("This is the full text.")
             assert result["metadata"]["author"] == "Alice"
+        finally:
+            os.unlink(tmp_path)
+
+    def test_db_get_active_db_env_fallback(self):
+        """db_get uses CHATYBOT_ACTIVE_DB env var when db_name is omitted"""
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
+            tmp_path = tmp.name
+        try:
+            manager = CorpusManager(tmp_path)
+            doc_id = manager.add_item("doc", "Item X", "Full content X", {})
+            manager.close()
+            db_name = os.path.splitext(os.path.basename(tmp_path))[0]
+
+            with (
+                patch.dict(os.environ, {"CHATYBOT_ACTIVE_DB": db_name}),
+                patch.object(chatydb, "_ensure_db_path", return_value=tmp_path),
+            ):
+                result = json.loads(db_get(doc_id))
+                assert result["id"] == doc_id
+                assert result["content"] == "Full content X"
         finally:
             os.unlink(tmp_path)
 

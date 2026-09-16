@@ -12,13 +12,20 @@ SEARCHBUFFER: list[dict[str, Any]] = []  # Holds the last search results
 
 # Internal reference to the active CorpusManager instance
 _manager: CorpusManager | None = None
-# Storage for the current database path
+# Storage for the current database path and name
 _db_path: str | None = None
+_active_db_name: str | None = None
 
 # A database name must be a single safe path component: no slashes, no "..",
 # no path separators, no empty/whitespace. This prevents path traversal and
 # weird filenames like "db/.json".
 _DB_NAME_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
+
+
+def get_active_db() -> str | None:
+    """Return the currently active database name, if any."""
+    global _active_db_name
+    return _active_db_name or os.environ.get("CHATYBOT_ACTIVE_DB")
 
 
 def _ensure_db_path(db_name: str) -> str:
@@ -36,7 +43,7 @@ def set_db(db_name: str) -> None:
     The database file is placed under the project's ``db`` directory.
     If db_name is 'Null' (case-insensitive), deactivate database support.
     """
-    global _manager, _db_path
+    global _manager, _db_path, _active_db_name
     if db_name.lower() == "null":
         # Close the previous manager before deactivating so its file handle
         # is released.
@@ -47,6 +54,8 @@ def set_db(db_name: str) -> None:
                 pass
         _manager = None
         _db_path = None
+        _active_db_name = None
+        os.environ.pop("CHATYBOT_ACTIVE_DB", None)
         print("Database support deactivated.")
         return
 
@@ -68,6 +77,8 @@ def set_db(db_name: str) -> None:
             pass
     _manager = CorpusManager(db_path)
     _db_path = db_path
+    _active_db_name = name
+    os.environ["CHATYBOT_ACTIVE_DB"] = name
     print(f"Database set to '{db_path}'.")
 
 

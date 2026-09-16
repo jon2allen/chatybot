@@ -3763,6 +3763,13 @@ class ChatybotApp:
                 env["CHATYBOT_SESSION_DIR"] = str(self.session_dir)
             env["CHATYBOT_ENABLE_CHAT_HISTORY"] = "1" if getattr(self, "enable_chat_history", True) else "0"
             env["CHATYBOT_BACKUP_ON_WRITE"] = "1" if getattr(self, "backup_file_on_write", True) else "0"
+            try:
+                from . import chatydb
+                active_db = chatydb.get_active_db()
+                if active_db:
+                    env["CHATYBOT_ACTIVE_DB"] = active_db
+            except Exception:
+                pass
             python_cmd = sys.executable or (
                 'python' if sys.platform == 'win32' else ('python3' if shutil.which('python3') else 'python')
             )
@@ -3793,6 +3800,15 @@ class ChatybotApp:
                             print(f"Main process updated CWD to: {os.getcwd()}")
                         except Exception as e:
                             print(f"Warning: Failed to update main process CWD to {path}: {e}")
+
+                if tool_call and tool_call.get('tool') in ('db_search', 'db_get'):
+                    call_db = tool_call.get('arguments', {}).get('db_name')
+                    if call_db:
+                        try:
+                            from . import chatydb
+                            chatydb.set_db(call_db)
+                        except Exception:
+                            pass
 
                 # Automatically populate script_vars if tool call requested target_variable and tool succeeded
                 try:
