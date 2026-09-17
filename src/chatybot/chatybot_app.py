@@ -4998,6 +4998,13 @@ class ChatybotApp:
         if self.trace_agentic_loop:
             self.show_agentic_loop_trace()
 
+    async def execute_tool_loop(self, max_turns: int = 25, initial_tool_results: str = None) -> None:
+        """
+        Executes the autonomous agentic tool loop (Option B - History Management).
+        Alias for run_tool_loop for backward compatibility and auto-loop dispatch.
+        """
+        await self.run_tool_loop(max_turns=max_turns, initial_tool_results=initial_tool_results)
+
     def show_agentic_loop_trace(self, verbose: bool = False) -> None:
         """
         Print a summary of the most recent agentic tool loop run.
