@@ -1353,6 +1353,21 @@ def _extract_retry_candidate(raw_text: str, app) -> dict:
 
     detected_tool = None
     args: dict = {}
+    normalized_text = raw_text.replace('\\n', '\n')
+
+    # Primary parameter lookup for single-argument shorthand
+    primary_params = {
+        "read_file": "path",
+        "list_directory": "path",
+        "change_dir": "path",
+        "delete_file": "path",
+        "find_files": "pattern",
+        "run_command": "command",
+        "grep_search": "query",
+        "calculate": "expression",
+        "read_url": "url",
+        "ask_user": "prompt",
+    }
 
     # 2. Check for XML tag variants: <invoke="name">, <invoke="=" name">, <function=name>, <tool name="name">
     tag_name_match = re.search(
@@ -1364,6 +1379,13 @@ def _extract_retry_candidate(raw_text: str, app) -> dict:
         cand_name = tag_name_match.group(1).strip()
         if cand_name.lower() not in ("dots_function_call", "action", "tool_call"):
             detected_tool = cand_name
+
+    # Check for direct tool XML tags: <read_file> ... </read_file>
+    if not detected_tool:
+        for t in known_tools:
+            if re.search(rf'<({re.escape(t)})\b[^>]*>', raw_text, re.IGNORECASE):
+                detected_tool = t
+                break
 
     # Check for parameter blocks: <parameter name="key">val</parameter> or <param=key>val</param>
     param_matches = list(re.finditer(
@@ -1382,48 +1404,118 @@ def _extract_retry_candidate(raw_text: str, app) -> dict:
         v = pm.group(2).strip()
         args[k] = v
 
-    # Normalize literal \n escapes if present
-    normalized_text = raw_text.replace('\\n', '\n')
+    # If direct tool XML tag matched (<read_file><path>...</path></read_file>), extract inner parameter tags
+    if detected_tool and not args:
+        inner_tag_match = re.search(rf'<({re.escape(detected_tool)})\b[^>]*>(.*?)</\1>', raw_text, re.IGNORECASE | re.DOTALL)
+        if inner_tag_match:
+            inner_body = inner_tag_match.group(2)
+            for m_inner in re.finditer(r'<([a-zA-Z0-9_]+)[^>]*>(.*?)</\1>', inner_body, re.DOTALL):
+                args[m_inner.group(1).strip()] = m_inner.group(2).strip()
 
-    # 3. Check for markdown code blocks (e.g. ```bash ... ``` or ```chatdsl ... ``` or ```python ... ```)
-    if "content" not in args and "command" not in args:
-        code_fence = re.search(r'```(?:bash|sh|zsh)\b[\s:]*(.*?)```', normalized_text, re.DOTALL | re.IGNORECASE)
-        if code_fence:
-            cmd_body = code_fence.group(1).strip()
+    # 3. Check for Python / functional invocation syntax: tool_name(arg="val", ...) or tool_name("val")
+    if not detected_tool:
+        fn_call_match = re.search(r'\b([a-zA-Z0-9_]+)\s*\(([^)]*)\)', normalized_text)
+        if fn_call_match and (fn_call_match.group(1) in known_tools or fn_call_match.group(1).startswith("mcp__")):
+            detected_tool = fn_call_match.group(1)
+            raw_args = fn_call_match.group(2).strip()
+            kv_pairs = re.findall(r'([a-zA-Z0-9_]+)\s*=\s*["\']([^"\']*)["\']', raw_args)
+            if kv_pairs:
+                for k, v in kv_pairs:
+                    args[k] = v
+            elif raw_args:
+                m_lit = re.match(r'^["\']([^"\']*)["\']$', raw_args)
+                arg_val = m_lit.group(1) if m_lit else raw_args
+                p_name = primary_params.get(detected_tool, "path")
+                args[p_name] = arg_val
+
+    # 4. Check for Action / Tool prefix lines or direct tool_name: argument
+    if not detected_tool:
+        action_match = re.search(r'^\s*(?:action|tool|tool_call)\s*:\s*["\']?([a-zA-Z0-9_\-\.]+)["\']?', normalized_text, re.IGNORECASE | re.MULTILINE)
+        if action_match and (action_match.group(1) in known_tools or action_match.group(1).startswith("mcp__")):
+            detected_tool = action_match.group(1)
+
+        action_input_match = re.search(r'^\s*(?:action input|tool input|input|args|arguments)\s*:\s*(.+)$', normalized_text, re.IGNORECASE | re.MULTILINE)
+        if action_input_match:
+            raw_inp = action_input_match.group(1).strip()
+            try:
+                parsed_inp = json.loads(raw_inp)
+                if isinstance(parsed_inp, dict):
+                    args.update(parsed_inp)
+            except Exception:
+                kv_pairs = re.findall(r'([a-zA-Z0-9_]+)\s*=\s*["\']([^"\']*)["\']', raw_inp)
+                for k, v in kv_pairs:
+                    args[k] = v
+
+    if not detected_tool:
+        # Check for tool_name: <argument> (e.g. read_file: 3kingdoms_culture.chatdsl)
+        for t in known_tools:
+            m_direct = re.search(rf'^\s*{re.escape(t)}\s*:\s*(.+)$', normalized_text, re.IGNORECASE | re.MULTILINE)
+            if m_direct:
+                detected_tool = t
+                val = m_direct.group(1).strip().strip('"\'`')
+                p_name = primary_params.get(t, "path")
+                args[p_name] = val
+                break
+
+    # 5. Check markdown code blocks
+    fence_matches = list(re.finditer(r'```([a-zA-Z0-9_\-\.]*)\b[\s:]*(.*?)```', normalized_text, re.DOTALL))
+    for fm in fence_matches:
+        f_lang = fm.group(1).strip().lower()
+        f_body = fm.group(2).strip()
+
+        if f_lang in known_tools and not detected_tool:
+            detected_tool = f_lang
+
+        if not detected_tool:
+            for t in known_tools:
+                m_inner = re.search(rf'^\s*{re.escape(t)}\s*:\s*(.+)$', f_body, re.IGNORECASE | re.MULTILINE)
+                if m_inner:
+                    detected_tool = t
+                    val = m_inner.group(1).strip().strip('"\'`')
+                    p_name = primary_params.get(t, "path")
+                    args[p_name] = val
+                    break
+
+        if f_lang in ("bash", "sh", "zsh"):
             if not detected_tool:
                 detected_tool = "run_command"
-            args["command"] = cmd_body
+            args["command"] = f_body
+        elif detected_tool == "write_file" or (not detected_tool and any(w in normalized_text.lower() for w in ("write to", "save to", "create file", "write this out"))):
+            if not detected_tool:
+                detected_tool = "write_file"
+            if "content" not in args:
+                args["content"] = f_body
 
-        if "content" not in args and "command" not in args:
-            script_fence = re.search(r'```(?:chatdsl|dsl|python|py|text|yaml|json|txt|md|markdown)?\b[\s:]*(.*?)```', normalized_text, re.DOTALL | re.IGNORECASE)
-            if script_fence:
-                script_body = script_fence.group(1).strip()
-                if not detected_tool:
-                    detected_tool = "write_file"
-                args["content"] = script_body
-
-    # 4. Check for standalone shell command syntax (e.g. `find / -name ...` or `ls -la ...`)
+    # 6. Check for standalone shell command syntax (e.g. `find / -name ...` or `ls -la ...`)
     if not detected_tool and not args:
         shell_match = re.search(r'(?:^|\n)\s*((?:find|ls|grep|cat|mkdir|touch|cp|mv|git|python|pytest|sh|bash)\s+[^\n]+)', normalized_text, re.IGNORECASE)
         if shell_match:
             detected_tool = "run_command"
             args["command"] = shell_match.group(1).strip()
 
-    # 5. Check if user prompt mentions target file or scratchpad to populate path
-    if detected_tool in ("write_file", "replace_file_content") and "path" not in args:
-        # Check if scratchpad path is in text
+    # 7. Check if user prompt mentions target file or scratchpad to populate path
+    if detected_tool in ("write_file", "replace_file_content", "read_file") and "path" not in args:
         path_match = re.search(r'(/[\w\.\-/]+\.(?:chatdsl|dsl|py|sh|txt|json|md))', normalized_text)
+        if not path_match:
+            path_match = re.search(r'\b([\w\-]+\.(?:chatdsl|dsl|py|sh|txt|json|md))\b', normalized_text)
         if path_match:
             args["path"] = path_match.group(1)
-        elif hasattr(app, "get_scratch_dir"):
+        elif detected_tool == "write_file" and hasattr(app, "get_scratch_dir"):
             scratch = app.get_scratch_dir(create=False)
             if scratch:
                 args["path"] = os.path.join(scratch, "script.chatdsl")
 
+    # 8. Check for any standalone mention of a known tool in text
+    if not detected_tool:
+        for t in known_tools:
+            if re.search(rf'\b{re.escape(t)}\b', normalized_text):
+                detected_tool = t
+                break
+
     # Final validity determination
     is_valid = bool(detected_tool and (detected_tool in known_tools or detected_tool.startswith("mcp__")))
     return {
-        "tool": detected_tool or "write_file",
+        "tool": detected_tool or "CHANGE_ME",
         "arguments": args,
         "raw_match": raw_text[:500],
         "is_valid": is_valid,
