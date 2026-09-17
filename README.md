@@ -338,7 +338,7 @@ chat --> Hello!           # Start chatting!
 | `/trace rerank <state>`| Enable/disable debugging output for the reranking processor | `/trace rerank on` |
 | `/imagebank{1-5} <file>` | Load image into bank for vision analysis | `/imagebank1 cat.jpg` |
 | `/imagebank{1-5} clear` | Clear an image bank | `/imagebank1 clear` |
-| `/session [subcommand]` | Manage multi-turn session persistence, note annotations, exports, merging, compression, and pruning | `/session start my_project` |
+| `/session [subcommand]` | Manage multi-turn session persistence, note annotations, exports, merging, compression, and pruning | `/session start my_project` (or `/session new`) |
 | `/session query [terms] [options]` | Search turns, notes, and scratchpads with boolean logic, date filters, and whole session byte sizes | `/session query "error" since=7d ids` |
 | `/session get <sid|active> [turn=N] [part]` | Extract turn prompts, responses, or thoughts read-only without switching sessions | `/session get sess_1 turn=1 both var=turn_data` |
 | `/listmacros [filter]` | List loaded macros with signatures, templates, and search filter | `/listmacros debug` |
@@ -735,7 +735,7 @@ A legacy single-file flat JSON store (`monolithic`) is also supported via `sessi
 
 #### **Session Commands**
 ```bash
-/session start project_alpha               # Start and persist new named session (sets ${SESSION_NAME})
+/session start project_alpha               # Start and persist new named session (alias: /session new; sets ${SESSION_NAME})
 /session list [limit=N] [range=A:B] [all]  # List sessions; always sets ${SESSION_LIST} (dicts) and ${SESSION_IDS} (sid strings)
 /session list ids                          # Compact sid-only output; ${SESSION_IDS} still set; var= gets sid list
 /session list model=test_model var=my_var  # Filter by model alias and save session objects to custom variable

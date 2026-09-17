@@ -616,3 +616,31 @@ def test_v084_session_ids_full_keywords():
     mgr_ar = LocalizationManager("ar")
     assert mgr_ar.get_reverse_aliases().get("معرفات") == "ids"
     assert mgr_ar.get_reverse_aliases().get("كامل") == "full"
+
+
+def test_v084_session_new_keywords():
+    """Verify new keyword across all locales for /session new alias."""
+    for loc in ["en", "es", "fr", "zh", "it", "ar"]:
+        mgr = LocalizationManager(loc)
+        rev = mgr.get_reverse_aliases()
+        assert rev.get("new") == "new", f"new keyword missing in {loc}"
+
+    # Localized variants
+    mgr_es = LocalizationManager("es")
+    assert mgr_es.get_reverse_aliases().get("nuevo") == "new"
+
+    mgr_fr = LocalizationManager("fr")
+    assert mgr_fr.get_reverse_aliases().get("nouveau") == "new"
+    assert mgr_fr.get_reverse_aliases().get("nouvelle") == "new"
+
+    mgr_zh = LocalizationManager("zh")
+    assert mgr_zh.get_reverse_aliases().get("新建") == "new"
+    assert mgr_zh.get_reverse_aliases().get("新") == "new"
+
+    mgr_it = LocalizationManager("it")
+    assert mgr_it.get_reverse_aliases().get("nuovo") == "new"
+    assert mgr_it.get_reverse_aliases().get("nuova") == "new"
+
+    mgr_ar = LocalizationManager("ar")
+    assert mgr_ar.get_reverse_aliases().get("جديد") == "new"
+

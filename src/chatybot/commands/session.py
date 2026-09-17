@@ -34,7 +34,7 @@ def _format_size_bytes(bytes_cnt: int) -> str:
         return f"{bytes_cnt / (1024 * 1024):.1f} MB"
 
 
-@command("/session", help="Manage sessions", args="<start|auto|stop|status|history|note|save|list|use|show|export|info|delete|merge|compress|prune|replay|query|get> ...", category="session")
+@command("/session", help="Manage sessions", args="<start|new|auto|stop|status|history|note|save|list|use|show|export|info|delete|merge|compress|prune|replay|query|get> ...", category="session")
 async def cmd_session(ctx: CommandContext, parts: list, command: str) -> CommandResult:
     app = ctx.app
     if len(parts) < 2:
@@ -48,9 +48,9 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
 
     subcmd = parts[1].lower()
 
-    if subcmd == "start":
+    if subcmd in ("start", "new"):
         if len(parts) < 3:
-            print("Usage: /session start <name>")
+            print("Usage: /session start|new <name>")
             return CommandResult.ok()
         session_name = _sanitize_session_name(" ".join(parts[2:]))
         app._release_session_lock()
@@ -929,6 +929,6 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
         return CommandResult.ok()
 
     else:
-        print(f"Unknown session subcommand: {subcmd}. Use start, auto, stop, status, save, list, use, show, export, info, delete, merge, compress, prune, replay, query, get.")
+        print(f"Unknown session subcommand: {subcmd}. Use start, new, auto, stop, status, save, list, use, show, export, info, delete, merge, compress, prune, replay, query, get.")
         return CommandResult.ok()
 
