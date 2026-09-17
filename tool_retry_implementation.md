@@ -129,15 +129,49 @@ To facilitate local offline testing, edge-case debugging, and test automation wi
 
 ---
 
-## 6. Summary of Files Modified & Added
+## 6. Rich Output Preview & Agentic Loop Continuation (`/tool continue`)
+
+When a tool is dispatched via `/tool retry`, Chatybot formats and prints an immediate output preview banner and provides seamless loop continuation without manual variable interpolation:
+
+### Rich Execution Banner
+```text
+================================================================================
+✔ TOOL RESCUE SUCCESS: read_file (211 chars, 12 lines, 0.2 KB)
+================================================================================
+# Preview of first 15 lines...
+================================================================================
+Tip: Run '/tool continue' (or '/continue') to hand this result to the model and resume the agentic loop.
+```
+
+### Resuming the Agentic Loop
+To hand the rescued tool results back to the LLM and resume autonomous multi-turn execution:
+```bash
+# Suffix --continue to retry command:
+/tool retry run --continue
+/tool retry edit --continue
+/tool retry fix --continue
+
+# Or review output first and then continue:
+/tool continue
+/continue
+```
+
+---
+
+## 7. Summary of Files Modified & Added
 
 - **`src/chatybot/commands/tools.py`**:
   - `_extract_retry_candidate()`: Deterministic regex parser for tool call patterns (JSON, XML, markdown code blocks).
-  - `_build_tool_retry_buffer()`: Generates editor buffer with schema documentation and invalid tool warnings.
-  - `_handle_tool_retry()`: Controller for `edit`, `fix`, and `run` sub-actions.
+  - `_build_tool_retry_buffer()`: Generates editor buffer with schema documentation, original completion comments, and invalid tool warnings.
+  - `_record_rescued_tool_execution()`: Prints rich output preview and records execution in `AGENTIC_LOOP` and session history.
+  - `_handle_tool_retry()`: Controller for `edit`, `fix`, and `run` sub-actions with `--continue` support.
+  - `_handle_tool_continue()`: Continues the agentic loop with rescued tool results.
   - `_handle_tool_inject()`: Seeds mock assistant completion into `${LAST_COMPLETION}` and session history from text or `file=<path>`.
+- **`src/chatybot/chatybot_app.py`**:
+  - `run_tool_loop()`: Extended with `initial_tool_results` support to resume loop directly from rescued output.
 - **`src/chatybot/chaty_help.py`**:
-  - Added documentation and examples for `/tool retry [edit|fix|run]` and `/tool inject [file=<path>|<payload>]`.
+  - Added documentation and examples for `/tool retry [edit|fix|run] [--continue]`, `/tool continue`, `/continue`, and `/tool inject`.
 - **`test/test_tool_retry.py`**:
-  - Test suite covering candidate extraction, buffer generation, warning headers, inject commands, and editor/CLI execution flows.
+  - Test suite covering candidate extraction, buffer generation, warning headers, inject commands, rich output preview, session history recording, and `/tool continue` execution flows.
+
 

@@ -4730,25 +4730,27 @@ class ChatybotApp:
 
         return tool_calls
 
-    async def execute_tool_loop(self, max_turns: int) -> None:
+    async def run_tool_loop(self, max_turns: int = 25, initial_tool_results: str = None):
         """
-        Executes the autonomous agentic tool loop (Option B - History Management).
+        Execute an autonomous multi-turn tool calling loop with the LLM.
         """
-        import json
-        
-        def safe_json_dumps(obj: Any, **kwargs) -> str:
-            """Safely serialize an object to JSON, converting set/frozenset to list and fallback types to str."""
-            def _default(o):
-                if isinstance(o, (set, frozenset)):
-                    return list(o)
-                return str(o)
+        import time
+        from datetime import datetime
+
+        def _default(o):
+            if hasattr(o, '__dict__'):
+                return o.__dict__
+            return str(o)
+
+        def safe_json_dumps(obj, **kwargs):
             try:
                 return json.dumps(obj, default=_default, **kwargs)
             except Exception:
                 return str(obj)
 
-        # Initialize or reset the AGENTIC_LOOP script variable
-        self.buffer_manager.set_script_var('AGENTIC_LOOP', [], allow_protected=True)
+        # Initialize or reset the AGENTIC_LOOP script variable if not continuing
+        if not initial_tool_results:
+            self.buffer_manager.set_script_var('AGENTIC_LOOP', [], allow_protected=True)
 
         if not self.enable_chat_history:
             print("Error: Agentic tool loops are disabled when chat history collection is turned off.")
@@ -4789,8 +4791,13 @@ class ChatybotApp:
         final_natural_language_response = ""
         previous_loop_size = 0
 
-        # If the last completion was natural language (not a tool call), request an initial tool call from the LLM
-        if not self.extract_tool_call(current_response):
+        if initial_tool_results:
+            print(f"Continuing agentic tool loop with tool results (max turns: {max_turns})...")
+            temp_history.append({"role": "assistant", "content": current_response})
+            temp_history.append({"role": "user", "content": f"Tool execution results:\n{initial_tool_results}"})
+            await self._apply_rate_limit_delay()
+            current_response = await self.chat_completion(temp_history, stream=self.streaming_enabled)
+        elif not self.extract_tool_call(current_response):
             print("Last completion was not a tool call. Requesting initial tool call from LLM...")
             await self._apply_rate_limit_delay()
             current_response = await self.chat_completion(temp_history, stream=self.streaming_enabled)
