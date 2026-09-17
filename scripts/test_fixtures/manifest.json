@@ -1,0 +1,47 @@
+[
+  {
+    "file": "truncated.json",
+    "description": "Truncated JSON (cut mid-file)",
+    "expected_exit": 1
+  },
+  {
+    "file": "no_table.json",
+    "description": "Missing 'items' table",
+    "expected_exit": 1
+  },
+  {
+    "file": "missing_field.json",
+    "description": "Record missing required field 'content'",
+    "expected_exit": 1
+  },
+  {
+    "file": "wrong_type.json",
+    "description": "metadata is str instead of dict",
+    "expected_exit": 1
+  },
+  {
+    "file": "gap.json",
+    "description": "Gap in doc_id sequence (id 20 deleted)",
+    "expected_exit": 1
+  },
+  {
+    "file": "bad_meta_type.json",
+    "description": "thinking_tokens is str instead of int",
+    "expected_exit": 1
+  },
+  {
+    "file": "duplicate_id.json",
+    "description": "Duplicate doc_id (key '01' shadows '1')",
+    "expected_exit": 1
+  },
+  {
+    "file": "non_dict_record.json",
+    "description": "Record 15 is a string not a dict",
+    "expected_exit": 1
+  },
+  {
+    "file": "missing_metadata.json",
+    "description": "Record 7 missing 'metadata' field",
+    "expected_exit": 1
+  }
+]
