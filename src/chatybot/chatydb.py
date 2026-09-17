@@ -200,8 +200,8 @@ def dblog(include_thinking: bool = False) -> None:
 
     - type: "chat"
     - name: "last_chat"
-    - content: The AI response text (with thinking tags intact, matching what
-      is stored in chat_history)
+    - content: The AI response text (clean final answer with thinking tags stripped,
+      or with thinking tags intact when include_thinking=True)
       - metadata: A dictionary containing:
        - timestamp: When the chat occurred
        - model_alias: The short alias used (e.g., "mistral_1")
@@ -275,12 +275,15 @@ def dblog(include_thinking: bool = False) -> None:
 
     metadata["prompt"] = last_prompt
 
-    # Thinking/reasoning awareness. The thinking text is already embedded in
+    # Thinking/reasoning awareness. The thinking text is embedded in
     # the stored response as <think>...</think> tags (standardized at
-    # completion time). When the user requests it, re-extract it via the app's
-    # existing extractor rather than storing it separately in chat_history.
-    # Token counts and reasoning_effort come from the app instance, which
-    # captures them at completion time.
+    # completion time).
+    # When include_thinking=True:
+    #   - Keep thinking tags intact in item content.
+    #   - Extract and populate metadata["thinking_content"] and token counts.
+    # When include_thinking=False (default):
+    #   - Strip <think>...</think> tags from item content so only the final answer is logged.
+    #   - Set metadata thinking fields to None / 0.
     if include_thinking:
         thinking_content = None
         if app_instance is not None:
@@ -290,12 +293,31 @@ def dblog(include_thinking: bool = False) -> None:
         metadata["thinking_content"] = thinking_content
         metadata["thinking_tokens"] = getattr(app_instance, "last_reasoning_tokens", 0) if app_instance else 0
         metadata["reasoning_effort"] = getattr(app_instance, "reasoning_effort", None) if app_instance else None
+        logged_content = last_response
     else:
+        # Strip thinking tags from content for clean answer logging
+        if app_instance is not None:
+            extractor = getattr(app_instance, "_extract_thinking_tokens", None)
+            if callable(extractor):
+                _, clean_text = extractor(last_response)
+                logged_content = clean_text
+            else:
+                logged_content = last_response
+        else:
+            # Fallback regex strip if app_instance is unavailable
+            import re
+            logged_content = re.sub(
+                r"<(?:think|thought|thinking)>.*?</(?:think|thought|thinking)>\s*",
+                "",
+                last_response,
+                flags=re.DOTALL | re.IGNORECASE,
+            ).strip()
+
         metadata["thinking_content"] = None
         metadata["thinking_tokens"] = 0
         metadata["reasoning_effort"] = getattr(app_instance, "reasoning_effort", None) if app_instance else None
 
-    _manager.add_item("chat", "last_chat", last_response, metadata)
+    _manager.add_item("chat", "last_chat", logged_content, metadata)
 
     if include_thinking and metadata["thinking_content"]:
         print("Last chat completion logged to the database (with thinking).")
