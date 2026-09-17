@@ -157,3 +157,22 @@ def test_extract_tool_calls_invoke_equal_multiline_content():
     assert calls[0]["arguments"]["path"] == "/home/user/scratch/test.chatdsl"
     assert "/setdb 3Kingdoms" in calls[0]["arguments"]["content"]
 
+
+def test_extract_tool_calls_dots_invoke_loose_equals_syntax():
+    """Verify loose invoke syntax like <invoke="=" read_file"> from dots_free is recognized."""
+    app = ChatybotApp()
+    sample = """<think>Let me read the file to understand its structure.
+</think>
+
+<dots_function_call>
+<invoke="=" read_file">
+<parameter name="path">3kingdoms_culture.chatdsl
+</parameter>
+</invoke>
+</dots_function_call>"""
+    calls = app.extract_tool_calls(sample)
+    assert len(calls) == 1
+    assert calls[0]["tool"] == "read_file"
+    assert calls[0]["arguments"]["path"] == "3kingdoms_culture.chatdsl"
+
+

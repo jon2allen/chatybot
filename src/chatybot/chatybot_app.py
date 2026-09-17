@@ -4298,16 +4298,16 @@ class ChatybotApp:
                 if call_obj not in xml_calls:
                     xml_calls.append(call_obj)
 
-            # 3. Anthropic invoke style: <invoke name="...">
+            # 3. Anthropic invoke style: <invoke name="..."> or <invoke="=" tool_name"> or <invoke="tool_name">
             invoke_pattern = re.compile(
-                r'<invoke\s+name=["\']([^"\']+)["\'][^>]*>(.*?)</invoke>',
+                r'<invoke(?:\s+name=|=|\s*=|\s+)["\'=\s]*([a-zA-Z0-9_\-\.]+)["\'\s]*[^>]*>(.*?)</invoke>',
                 re.IGNORECASE | re.DOTALL
             )
             for inv_match in invoke_pattern.finditer(s):
                 tool_name = inv_match.group(1).strip()
                 if "." in tool_name:
                     tool_name = tool_name.split(".")[-1]
-                inv_body = inv_match.group(2)
+                inv_body = re.sub(r'^\s*["\'>]+\s*', '', inv_match.group(2))
                 args = {}
                 param_pattern = re.compile(
                     r'<(?:parameter|param)\s+name=["\']([^"\']+)["\'][^>]*>(.*?)</(?:parameter|param)>',
@@ -4334,7 +4334,7 @@ class ChatybotApp:
 
             # 4. Standard XML function= / invoke= style: <function=name> or <invoke=name> or <invoke="name">
             fn_pattern = re.compile(
-                r'<(?:function|tool|call|invoke)=["\']?([a-zA-Z0-9_\-\.]+)["\']?[^>]*>(.*?)</(?:function|tool|call|invoke)>',
+                r'<(?:function|tool|call|invoke)(?:=|\s+name=|\s*=|\s+)["\'=\s]*([a-zA-Z0-9_\-\.]+)["\'\s]*[^>]*>(.*?)</(?:function|tool|call|invoke)>',
                 re.IGNORECASE | re.DOTALL
             )
             for match in fn_pattern.finditer(s):
