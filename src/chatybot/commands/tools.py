@@ -1354,9 +1354,9 @@ def _extract_retry_candidate(raw_text: str, app) -> dict:
     detected_tool = None
     args: dict = {}
 
-    # 2. Check for XML tag variants: <invoke="name">, <function=name>, <tool name="name">
+    # 2. Check for XML tag variants: <invoke="name">, <invoke="=" name">, <function=name>, <tool name="name">
     tag_name_match = re.search(
-        r'<(?:invoke|function|tool|call|dots_function_call|action)(?:=|\s+name=)["\']?([a-zA-Z0-9_\-\.]+)["\']?',
+        r'<(?:invoke|function|tool|call|dots_function_call|action)(?:=|\s+name=|\s*=|\s+)["\'=\s]*([a-zA-Z0-9_\-\.]+)["\'\s]*',
         raw_text,
         re.IGNORECASE,
     )

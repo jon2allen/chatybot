@@ -65,6 +65,21 @@ def test_extract_retry_candidate_from_escaped_bash_fence():
     assert candidate["is_valid"] is True
 
 
+def test_extract_retry_candidate_from_dots_loose_invoke():
+    app = ChatybotApp()
+    raw = """<dots_function_call>
+<invoke="=" read_file">
+<parameter name="path">3kingdoms_culture.chatdsl
+</parameter>
+</invoke>
+</dots_function_call>"""
+    candidate = _extract_retry_candidate(raw, app)
+    assert candidate["tool"] == "read_file"
+    assert candidate["arguments"]["path"] == "3kingdoms_culture.chatdsl"
+    assert candidate["is_valid"] is True
+
+
+
 
 def test_extract_retry_candidate_unknown_tool():
     app = ChatybotApp()
