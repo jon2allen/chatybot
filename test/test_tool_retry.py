@@ -325,3 +325,15 @@ async def test_tool_continue_resumes_loop():
     assert app.run_tool_loop.call_args[1]["max_turns"] == 15
 
 
+@pytest.mark.anyio
+async def test_execute_tool_loop_alias():
+    """Verify execute_tool_loop delegates to run_tool_loop with expected arguments."""
+    app = ChatybotApp()
+    app.initialize()
+    app.run_tool_loop = AsyncMock()
+
+    await app.execute_tool_loop(max_turns=12, initial_tool_results="Sample results")
+    app.run_tool_loop.assert_called_once_with(max_turns=12, initial_tool_results="Sample results")
+
+
+
