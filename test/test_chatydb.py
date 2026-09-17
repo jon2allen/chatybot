@@ -239,4 +239,62 @@ class TestChatyDB:
         backups = list(backup_dir.glob("repeated.*.bak.json"))
         assert len(backups) == 1
 
+    def test_dbprint_table_mode_and_range_filtering(self, tmp_path, capsys):
+        """Test dbprint with table_mode=True and item_range filtering."""
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
+            tmp_path_file = tmp.name
+
+        try:
+            manager = CorpusManager(tmp_path_file)
+            chatydb._manager = manager
+            chatydb._db_path = tmp_path_file
+            chatydb._active_db_name = "test_table"
+
+            # Add 3 items with distinct metadata
+            manager.add_item("chat", "chat1", "<think>reasoning</think>Answer 1", {"prompt": "What is A?", "model_alias": "m1"})
+            manager.add_item("chat", "chat2", "Answer 2", {"prompt": "What is B?", "model_alias": "m2", "thinking_content": "meta reason", "thinking_tokens": 500})
+            manager.add_item("chat", "chat3", "Answer 3", {"prompt": "What is C?", "model_alias": "m3"})
+
+            # 1. Print all items in table mode
+            chatydb.dbprint(table_mode=True)
+            out_all = capsys.readouterr().out
+            assert "DATABASE SUMMARY TABLE: test_table (3 items" in out_all
+            assert "ID" in out_all and "Timestamp" in out_all and "Thinking" in out_all
+            assert "in content" in out_all
+            assert "metadata" in out_all
+            assert "stripped" in out_all
+            assert "500" in out_all
+
+            # 2. Filter range 1-2
+            chatydb.dbprint(table_mode=True, item_range="1-2")
+            out_range = capsys.readouterr().out
+            assert "(2 items, range: 1-2)" in out_range
+            assert "What is A?" in out_range
+            assert "What is B?" in out_range
+            assert "What is C?" not in out_range
+
+            # 3. Filter single ID 3
+            chatydb.dbprint(table_mode=False, item_range=3)
+            out_single = capsys.readouterr().out
+            assert "Items displayed: 1 (filter: ID 3)" in out_single
+            assert "Answer 3" in out_single
+            assert "Answer 1" not in out_single
+
+            # 4. Export to file
+            export_file = tmp_path / "export_table.txt"
+            chatydb.dbprint(target_file=str(export_file), table_mode=True, item_range="2-3")
+            out_export = capsys.readouterr().out
+            assert f"Database report saved to '{export_file}'." in out_export
+            assert export_file.exists()
+            content = export_file.read_text()
+            assert "DATABASE SUMMARY TABLE: test_table (2 items, range: 2-3)" in content
+            assert "What is B?" in content
+            assert "What is C?" in content
+            assert "What is A?" not in content
+
+        finally:
+            if os.path.exists(tmp_path_file):
+                os.unlink(tmp_path_file)
+
+
 

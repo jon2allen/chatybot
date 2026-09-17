@@ -525,49 +525,126 @@ def save_var(var_name: str, filename: str) -> None:
         print(f"Error saving variable to file: {e}")
 
 
-def dbprint(target_file: str = None) -> None:
-    """Print the entire database contents in a formatted report.
+def dbprint(
+    target_file: str = None,
+    table_mode: bool = False,
+    item_range: str | int = None,
+) -> None:
+    """Print database contents in full detail or as a concise summary table.
 
     Args:
         target_file: Optional filename to save the report to. If None, prints to screen.
+        table_mode: If True, renders a compact table with ID, timestamp, model,
+                    prompt snippet, thinking status, and token counts.
+        item_range: Optional single ID (e.g. 5 or '5') or range (e.g. '1-10', '21-31').
     """
     if _manager is None:
         print("No database selected. Use /setdb <dbname> first.")
         return
 
-    # Helper function to duplicate line feeds (add extra blank lines)
-    def duplicate_linefeeds(text):
-        if not text:
-            return ""
-        # Replace each newline with two newlines to create extra spacing
-        return text.replace("\n", "\n\n")
+    all_items = _manager.get_all_items()
+    if not all_items:
+        print("No items in database.")
+        return
 
-    # Generate the report content
+    # Filter items by ID or range if requested
+    items = all_items
+    range_label = "ALL"
+    if item_range is not None:
+        raw_range = str(item_range).strip()
+        if "-" in raw_range:
+            try:
+                s_str, e_str = raw_range.split("-", 1)
+                s_id = int(s_str.strip())
+                e_id = int(e_str.strip())
+                items = [it for it in all_items if s_id <= getattr(it, "doc_id", 0) <= e_id]
+                range_label = f"{s_id}-{e_id}"
+            except ValueError:
+                print(f"Invalid range format '{item_range}'. Use e.g. 1-10 or 21-31.")
+                return
+        else:
+            try:
+                target_id = int(raw_range)
+                items = [it for it in all_items if getattr(it, "doc_id", 0) == target_id]
+                range_label = f"ID {target_id}"
+            except ValueError:
+                print(f"Invalid item filter '{item_range}'. Use an ID (5) or range (1-10).")
+                return
+
+    if not items:
+        print(f"No items found matching range '{item_range}'.")
+        return
+
     report_lines = []
-    report_lines.append("=" * 80)
-    report_lines.append("DATABASE REPORT")
-    report_lines.append("=" * 80)
-    if _db_path:
-        report_lines.append(f"Database path: {_db_path}")
-    report_lines.append("")
 
-    # Print items
-    items = _manager.get_all_items()
-    report_lines.append(f"ITEMS ({len(items)} total):")
-    report_lines.append("-" * 80)
-    if items:
+    if table_mode:
+        # Compact summary table view
+        db_name = _active_db_name or "database"
+        hdr_title = f"DATABASE SUMMARY TABLE: {db_name} ({len(items)} items, range: {range_label})"
+        line_width = 110
+        report_lines.append("=" * line_width)
+        report_lines.append(hdr_title)
+        report_lines.append("=" * line_width)
+        report_lines.append(
+            f" {'ID':<4} {'Timestamp':<19} {'Model':<14} {'Prompt':<42} {'Thinking':<12} {'Tokens':>8}"
+        )
+        report_lines.append("-" * line_width)
+
+        for it in items:
+            doc_id = getattr(it, "doc_id", "N/A")
+            meta = it.get("metadata") or {}
+            raw_ts = meta.get("timestamp") or ""
+            # Format timestamp nicely (YYYY-MM-DD HH:MM:SS) if isoformat
+            ts_str = raw_ts[:19].replace("T", " ") if len(raw_ts) >= 19 else raw_ts
+
+            model_alias = str(meta.get("model_alias") or "unknown")[:14]
+            prompt = str(meta.get("prompt") or "")
+            clean_prompt = " ".join(prompt.split())
+            if len(clean_prompt) > 40:
+                clean_prompt = clean_prompt[:37] + "..."
+
+            # Determine thinking status
+            content_str = str(it.get("content") or "")
+            has_think_tag = any(tag in content_str for tag in ("<think>", "<thought>", "<thinking>"))
+            if meta.get("thinking_content"):
+                think_status = "metadata"
+            elif has_think_tag:
+                think_status = "in content"
+            else:
+                think_status = "stripped"
+
+            tokens = meta.get("thinking_tokens", 0) or 0
+            tok_str = f"{tokens:,}" if isinstance(tokens, int) and tokens > 0 else "0"
+
+            report_lines.append(
+                f" {doc_id:<4} {ts_str:<19} {model_alias:<14} {clean_prompt:<42} {think_status:<12} {tok_str:>8}"
+            )
+        report_lines.append("=" * line_width)
+
+    else:
+        # Detailed report view
+        def duplicate_linefeeds(text):
+            if not text:
+                return ""
+            return text.replace("\n", "\n\n")
+
+        report_lines.append("=" * 80)
+        report_lines.append("DATABASE REPORT")
+        report_lines.append("=" * 80)
+        if _db_path:
+            report_lines.append(f"Database path: {_db_path}")
+        report_lines.append(f"Items displayed: {len(items)} (filter: {range_label})")
+        report_lines.append("")
+        report_lines.append("-" * 80)
+
         for i, item in enumerate(items, 1):
-            # Get doc_id safely
             doc_id = getattr(item, "doc_id", "N/A")
             report_lines.append(f"[{i}] ID: {doc_id}")
 
-            # Move metadata to top
             metadata = item.get("metadata", {})
             if metadata:
                 report_lines.append("    Metadata:")
                 for key, value in metadata.items():
-                    # Skip the verbose thinking_content here; it gets its own
-                    # styled section below when present.
                     if key == "thinking_content":
                         continue
                     report_lines.append(f"      {key}: {value}")
@@ -577,7 +654,6 @@ def dbprint(target_file: str = None) -> None:
             report_lines.append(f"    Type: {item.get('type', 'N/A')}")
             report_lines.append(f"    Name: {item.get('name', 'N/A')}")
 
-            # Styled thinking section (only when thinking was logged)
             thinking = metadata.get("thinking_content") if metadata else None
             if thinking:
                 report_lines.append("    -- Thinking --")
@@ -592,36 +668,30 @@ def dbprint(target_file: str = None) -> None:
 
             content = item.get("content", "")
             if content:
-                # Duplicate line feeds in content for better readability
                 formatted_content = duplicate_linefeeds(content)
-                # Split by double newlines and indent each part
-                content_parts = formatted_content.split("\n\n")
-                for part in content_parts:
-                    if part.strip():  # Only add non-empty parts
+                for part in formatted_content.split("\n\n"):
+                    if part.strip():
                         report_lines.append(f"    {part}")
             else:
                 report_lines.append("    Content: [Empty]")
             report_lines.append("")
-    else:
-        report_lines.append("No items found.")
 
-    report_lines.append("=" * 80)
-    report_lines.append("END OF REPORT")
-    report_lines.append("=" * 80)
+        report_lines.append("=" * 80)
+        report_lines.append("END OF REPORT")
+        report_lines.append("=" * 80)
 
-    # Output the report
+    # Output to target_file or stdout
     report_content = "\n".join(report_lines)
     if target_file:
         try:
-            import os
-
-            os.makedirs(os.path.dirname(target_file) or ".", exist_ok=True)
+            target_dir = os.path.dirname(target_file)
+            if target_dir:
+                os.makedirs(target_dir, exist_ok=True)
             with open(target_file, "w", encoding="utf-8") as f:
                 f.write(report_content)
+                f.write("\n")
             print(f"Database report saved to '{target_file}'.")
         except Exception as e:
             print(f"Error saving database report to file: {e}")
     else:
         print(report_content)
-    print("END OF REPORT")
-    print("=" * 80)

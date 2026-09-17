@@ -571,7 +571,7 @@ class HelpSystem:
             ("dblist", "List all TinyDB databases", "/dblist", "", []),
             ("searchdb", "Search all docs in current database", "/searchdb <query>", "", ["/searchdb python"]),
             ("dblog", "Log last completion to database", "/dblog [thinking]", "Add 'thinking' to also persist extracted reasoning text and token count", ["/dblog", "/dblog thinking"]),
-            ("dbprint", "Print entire database contents", "/dbprint", "", []),
+            ("dbprint", "Print database report or summary table", "/dbprint [table|summ] [id|range] [export <filename>]", "Display full detailed report or compact summary table, with optional ID/range filtering and file export", ["/dbprint", "/dbprint table", "/dbprint 1-10", "/dbprint table 1-10 export summary.txt"]),
         ]
         
         for cmd, desc, usage, long_desc, examples in db_commands:

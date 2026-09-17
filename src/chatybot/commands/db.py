@@ -61,13 +61,48 @@ async def cmd_dblog(ctx: CommandContext, parts: list, command: str) -> CommandRe
     return CommandResult.ok()
 
 
-@command("/dbprint", help="Print a database entry", args="[id]", category="db")
+@command(
+    "/dbprint",
+    help="Print database report or summary table",
+    args="[table|summ] [id|range] [export <filename>]",
+    category="db",
+)
 async def cmd_dbprint(ctx: CommandContext, parts: list, command: str) -> CommandResult:
-    if len(parts) > 1:
-        filename = parts[1].strip('"')
-        dbprint(filename)
-    else:
-        dbprint()
+    # Syntax:
+    # /dbprint
+    # /dbprint table (or summ)
+    # /dbprint 1-10
+    # /dbprint table 1-10
+    # /dbprint [table] [1-10] export <filename>
+    tokens = command.split()[1:]  # strip leading /dbprint
+    target_file = None
+    table_mode = False
+    item_range = None
+
+    # Check for "export <filename>"
+    i = 0
+    remaining_tokens = []
+    while i < len(tokens):
+        tok = tokens[i]
+        if tok.lower() == "export" and i + 1 < len(tokens):
+            target_file = tokens[i + 1].strip('"\'')
+            i += 2
+        else:
+            remaining_tokens.append(tok)
+            i += 1
+
+    for tok in remaining_tokens:
+        tok_clean = tok.strip('"\'')
+        tok_lower = tok_clean.lower()
+        if tok_lower in ("table", "summ", "summary", "tabla", "tableau", "tabelle", "tabella"):
+            table_mode = True
+        elif "-" in tok_clean or tok_clean.isdigit():
+            item_range = tok_clean
+        elif not target_file and ("." in tok_clean or "/" in tok_clean or "\\" in tok_clean):
+            # Backward compatibility: bare filename passed without export keyword
+            target_file = tok_clean
+
+    dbprint(target_file=target_file, table_mode=table_mode, item_range=item_range)
     return CommandResult.ok()
 
 
