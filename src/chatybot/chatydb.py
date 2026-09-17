@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import shutil
 from datetime import datetime
 from typing import Any
 
@@ -9,6 +10,12 @@ from .tinydb1.corpus_manager import CorpusManager
 
 # Global variables
 SEARCHBUFFER: list[dict[str, Any]] = []  # Holds the last search results
+
+# Maximum number of rolling snapshot backups to retain per database
+MAX_DB_BACKUPS = 5
+
+# Track databases that have already been backed up during this process/session
+_session_backed_up_dbs: set[str] = set()
 
 # Internal reference to the active CorpusManager instance
 _manager: CorpusManager | None = None
@@ -37,13 +44,70 @@ def _ensure_db_path(db_name: str) -> str:
     return os.path.join(db_dir, f"{db_name}.json")
 
 
+def _backup_db(db_path: str, db_name: str, max_backups: int = MAX_DB_BACKUPS) -> tuple[str, int, int] | None:
+    """Create a rolling snapshot of an existing non-empty database file.
+
+    Saves backups into a hidden subdirectory:
+        <db_dir>/.backups/<db_name>/<db_name>.<timestamp>.bak.json
+
+    Maintains up to `max_backups` recent snapshots, pruning the oldest ones.
+
+    Returns:
+        tuple (backup_path, remaining_count, max_backups) on success, or None if skipped/failed.
+    """
+    if not os.path.exists(db_path) or os.path.getsize(db_path) == 0:
+        return None
+
+    try:
+        db_dir = os.path.dirname(db_path)
+        backup_dir = os.path.join(db_dir, ".backups", db_name)
+        os.makedirs(backup_dir, exist_ok=True)
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_filename = f"{db_name}.{timestamp}.bak.json"
+        backup_path = os.path.join(backup_dir, backup_filename)
+
+        # If a backup with the exact same timestamp already exists, append counter
+        counter = 1
+        while os.path.exists(backup_path):
+            backup_filename = f"{db_name}.{timestamp}_{counter}.bak.json"
+            backup_path = os.path.join(backup_dir, backup_filename)
+            counter += 1
+
+        shutil.copy2(db_path, backup_path)
+
+        # Rotate: keep at most max_backups files, deleting oldest by mtime
+        existing_backups = [
+            os.path.join(backup_dir, f)
+            for f in os.listdir(backup_dir)
+            if f.startswith(f"{db_name}.") and f.endswith(".bak.json")
+        ]
+        # Sort backups: sort primarily by ctime (creation/change time) and filename
+        # Note: shutil.copy2 preserves source mtime, so sorting by mtime can cause all
+        # copies from the same source file to share the exact same timestamp.
+        existing_backups.sort(key=lambda p: (os.path.getctime(p), os.path.basename(p)))
+
+        while len(existing_backups) > max_backups:
+            oldest = existing_backups.pop(0)
+            try:
+                os.unlink(oldest)
+            except OSError:
+                pass
+
+        return backup_path, len(existing_backups), max_backups
+    except Exception as e:
+        # Non-fatal: backup failure should warn but never prevent opening the DB
+        print(f"[backup warning] Failed to create snapshot for '{db_name}': {e}")
+        return None
+
+
 def set_db(db_name: str) -> None:
     """Create (if needed) and activate a TinyDB database with the given name.
 
     The database file is placed under the project's ``db`` directory.
     If db_name is 'Null' (case-insensitive), deactivate database support.
     """
-    global _manager, _db_path, _active_db_name
+    global _manager, _db_path, _active_db_name, _session_backed_up_dbs
     if db_name.lower() == "null":
         # Close the previous manager before deactivating so its file handle
         # is released.
@@ -67,7 +131,19 @@ def set_db(db_name: str) -> None:
         )
         return
 
+    # If this database is already open and active in the current process, reuse it
+    # without re-running backups or reloading the manager.
+    if _active_db_name == name and _manager is not None:
+        return
+
     db_path = _ensure_db_path(name)
+
+    # Automatic snapshot backup on initial open in this session
+    backup_info = None
+    if name not in _session_backed_up_dbs:
+        backup_info = _backup_db(db_path, name)
+        _session_backed_up_dbs.add(name)
+
     # Close the previous manager before opening a new one so its file handle
     # is released rather than leaked across repeated /setdb calls.
     if _manager is not None:
@@ -80,6 +156,10 @@ def set_db(db_name: str) -> None:
     _active_db_name = name
     os.environ["CHATYBOT_ACTIVE_DB"] = name
     print(f"Database set to '{db_path}'.")
+    if backup_info:
+        backup_path, count, max_count = backup_info
+        rel_backup = os.path.relpath(backup_path, os.path.dirname(db_path))
+        print(f"[backup] Snapshot saved: {rel_backup} ({count}/{max_count})")
 
 
 def list_dbs() -> None:

@@ -20,10 +20,14 @@ class TestChatyDB:
         chatydb.SEARCHBUFFER.clear()
         chatydb._manager = None
         chatydb._db_path = None
+        chatydb._active_db_name = None
+        chatydb._session_backed_up_dbs.clear()
         yield
         chatydb.SEARCHBUFFER.clear()
         chatydb._manager = None
         chatydb._db_path = None
+        chatydb._active_db_name = None
+        chatydb._session_backed_up_dbs.clear()
 
     def test_search_db_name_content_and_metadata(self):
         """Test that search_db matches query in name, content, and metadata fields"""
@@ -155,4 +159,84 @@ class TestChatyDB:
         finally:
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
+
+    def test_backup_db_creation_and_rotation(self, tmp_path):
+        """Test that _backup_db creates snapshots and prunes older ones when exceeding max_backups."""
+        db_file = tmp_path / "testdb.json"
+        db_file.write_text('{"items": {"1": {"content": "hello"}}}')
+
+        # Run 7 backups with max_backups=3
+        backups_created = []
+        for i in range(7):
+            res = chatydb._backup_db(str(db_file), "testdb", max_backups=3)
+            assert res is not None
+            backup_path, count, max_count = res
+            assert count <= 3
+            assert max_count == 3
+            assert os.path.exists(backup_path)
+
+        backup_dir = tmp_path / ".backups" / "testdb"
+        assert backup_dir.exists()
+        retained = list(backup_dir.glob("testdb.*.bak.json"))
+        assert len(retained) == 3
+
+    def test_backup_db_skips_empty_or_nonexistent(self, tmp_path):
+        """Test that _backup_db returns None for nonexistent or empty files."""
+        # Nonexistent
+        res = chatydb._backup_db(str(tmp_path / "nonexistent.json"), "nonexistent")
+        assert res is None
+
+        # Empty file (0 bytes)
+        empty_file = tmp_path / "empty.json"
+        empty_file.touch()
+        res = chatydb._backup_db(str(empty_file), "empty")
+        assert res is None
+
+    def test_set_db_triggers_backup_on_existing(self, tmp_path, monkeypatch, capsys):
+        """Test that set_db automatically backs up an existing DB file."""
+        # Point _ensure_db_path to our temp directory
+        def mock_ensure_db_path(name):
+            return str(tmp_path / f"{name}.json")
+
+        monkeypatch.setattr(chatydb, "_ensure_db_path", mock_ensure_db_path)
+
+        db_file = tmp_path / "mycorpus.json"
+        db_file.write_text('{"items": {"1": {"name": "Doc1", "type": "doc", "content": "text", "metadata": {}}}}')
+
+        chatydb.set_db("mycorpus")
+
+        out = capsys.readouterr().out
+        assert "[backup] Snapshot saved:" in out
+        assert ".backups/mycorpus/mycorpus." in out
+
+        backup_dir = tmp_path / ".backups" / "mycorpus"
+        assert backup_dir.exists()
+        backups = list(backup_dir.glob("mycorpus.*.bak.json"))
+        assert len(backups) == 1
+
+    def test_set_db_skips_backup_if_already_active_or_backed_up(self, tmp_path, monkeypatch, capsys):
+        """Test that repeated set_db calls (e.g. from db_search / db_get) do not create multiple backups."""
+        def mock_ensure_db_path(name):
+            return str(tmp_path / f"{name}.json")
+
+        monkeypatch.setattr(chatydb, "_ensure_db_path", mock_ensure_db_path)
+
+        db_file = tmp_path / "repeated.json"
+        db_file.write_text('{"items": {"1": {"name": "Doc1", "type": "doc", "content": "text", "metadata": {}}}}')
+
+        # First call: opens DB and creates snapshot
+        chatydb.set_db("repeated")
+        out1 = capsys.readouterr().out
+        assert "[backup] Snapshot saved:" in out1
+
+        # Second call: same DB name while already active -> early exit, no second backup
+        chatydb.set_db("repeated")
+        out2 = capsys.readouterr().out
+        assert "[backup] Snapshot saved:" not in out2
+
+        # Verify only 1 backup file exists
+        backup_dir = tmp_path / ".backups" / "repeated"
+        backups = list(backup_dir.glob("repeated.*.bak.json"))
+        assert len(backups) == 1
+
 
