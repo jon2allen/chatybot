@@ -94,7 +94,7 @@ async def cmd_continue(ctx: CommandContext, parts: list, command: str) -> Comman
     return await _handle_tool_continue(ctx, parts, command)
 
 
-@command("/tool", help="Manage tools and tool mode", args="[list|enable|disable|on|off|auto|scratch|loop|max_turns|rate_limit|prompt|history|replay|retry|continue|inject|translate] ...", category="tools")
+@command("/tool", help="Manage tools and tool mode", args="[list|enable|disable|on|off|auto|scratch|loop|append_mode|max_turns|rate_limit|prompt|history|replay|retry|continue|inject|translate] ...", category="tools")
 async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandResult:
     app = ctx.app
     # Handle /tool subcommands: on, off, or dispatch
@@ -491,6 +491,20 @@ async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandRes
                 except ValueError:
                     pass
         await app.execute_tool_loop(max_turns)
+        return CommandResult.ok()
+
+    elif subcmd in ("append_mode", "appendmode"):
+        if len(parts) > 2:
+            mode = parts[2].strip().lower()
+            if mode in ("off", "full", "summary"):
+                app.tool_append_mode = mode
+                app._tool_append_mode_user_set = True
+                print(f"Tool append mode set to: {mode}")
+            else:
+                print(f"Invalid append mode: '{mode}'. Usage: /tool append_mode <off|full|summary>")
+        else:
+            cur_mode = getattr(app, "tool_append_mode", "summary")
+            print(f"Current tool append mode: {cur_mode} (options: off | full | summary)")
         return CommandResult.ok()
 
     elif subcmd == "max_turns":
@@ -1369,9 +1383,9 @@ def _extract_retry_candidate(raw_text: str, app) -> dict:
         "ask_user": "prompt",
     }
 
-    # 2. Check for XML tag variants: <invoke="name">, <invoke="=" name">, <function=name>, <tool name="name">
+    # 2. Check for XML tag variants: <invoke="name">, <invoke="=" name">, <function=name>, <tool name="name">, <invokename="name">
     tag_name_match = re.search(
-        r'<(?:invoke|function|tool|call|dots_function_call|action)(?:=|\s+name=|\s*=|\s+)["\'=\s]*([a-zA-Z0-9_\-\.]+)["\'\s]*',
+        r'<(?:invoke|function|tool|call|dots_function_call|action)(?:=|\s*name=|\s*=|\s+)["\'=\s]*([a-zA-Z0-9_\-\.]+)["\'\s]*',
         raw_text,
         re.IGNORECASE,
     )

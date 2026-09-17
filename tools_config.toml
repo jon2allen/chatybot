@@ -3,6 +3,7 @@ tool_timeout = 60
 rate_limit_delay = 2.0
 max_turns = 25
 max_tool_calls_per_turn = 10
+tool_append_mode = "summary"
 strip_thinking_from_filebanks = true
 agentic_instructions = """
 IMPORTANT: You are executing in an autonomous, multi-turn tool-calling loop.

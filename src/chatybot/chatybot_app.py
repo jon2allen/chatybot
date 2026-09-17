@@ -159,6 +159,8 @@ class ChatybotApp:
         self.tool_scratch: bool = False
         self._tool_scratch_user_set: bool = False
         self.backup_file_on_write: bool = True
+        self._tool_append_mode: str = "summary"  # "off", "full", "summary"
+        self._tool_append_mode_user_set: bool = False
         self.max_turns: int = 25
         self.max_tool_calls_per_turn: int = 10
         self.agentic_instructions: str = ""
@@ -234,6 +236,19 @@ class ChatybotApp:
         self.macros: dict[str, dict[str, Any]] = {}
         self._definition_grammar = None
         self._invocation_grammar = None
+
+    @property
+    def tool_append_mode(self) -> str:
+        return self._tool_append_mode
+
+    @tool_append_mode.setter
+    def tool_append_mode(self, value: str) -> None:
+        val = str(value).lower()
+        if val in ("off", "full", "summary"):
+            self._tool_append_mode = val
+            self._tool_append_mode_user_set = True
+        else:
+            self._tool_append_mode = "summary"
 
     def initialize(self) -> None:
         """Initialize the application by loading configuration and setting up history."""
@@ -4263,6 +4278,13 @@ class ChatybotApp:
                     call_obj = {"tool": t_name, "arguments": args}
                     if call_obj not in xml_calls:
                         xml_calls.append(call_obj)
+                else:
+                    # Fallback: container tag may enclose a JSON object directly (e.g. <tool_use>{"name": "write_file", ...}</tool_use>)
+                    parsed_inner = parse_json_or_dict(c_body.strip())
+                    if isinstance(parsed_inner, dict):
+                        norm_call = normalize_tool_call(parsed_inner)
+                        if norm_call and norm_call not in xml_calls:
+                            xml_calls.append(norm_call)
 
             # 2. Tag attribute syntax: <tool name="..." ...> or <tool_call name="..."> or <call name="...">
             tag_pattern = re.compile(
@@ -4298,9 +4320,9 @@ class ChatybotApp:
                 if call_obj not in xml_calls:
                     xml_calls.append(call_obj)
 
-            # 3. Anthropic invoke style: <invoke name="..."> or <invoke="=" tool_name"> or <invoke="tool_name">
+            # 3. Anthropic invoke style: <invoke name="..."> or <invoke="=" tool_name"> or <invoke="tool_name"> or <invokename="tool_name">
             invoke_pattern = re.compile(
-                r'<invoke(?:\s+name=|=|\s*=|\s+)["\'=\s]*([a-zA-Z0-9_\-\.]+)["\'\s]*[^>]*>(.*?)</invoke>',
+                r'<invoke(?:\s*name=|=|\s*=|\s+)["\'=\s]*([a-zA-Z0-9_\-\.]+)["\'\s]*[^>]*>(.*?)</invoke>',
                 re.IGNORECASE | re.DOTALL
             )
             for inv_match in invoke_pattern.finditer(s):
@@ -4332,9 +4354,9 @@ class ChatybotApp:
                 if call_obj not in xml_calls:
                     xml_calls.append(call_obj)
 
-            # 4. Standard XML function= / invoke= style: <function=name> or <invoke=name> or <invoke="name">
+            # 4. Standard XML function= / invoke= style: <function=name> or <invoke=name> or <invoke="name"> or <invokename="name">
             fn_pattern = re.compile(
-                r'<(?:function|tool|call|invoke)(?:=|\s+name=|\s*=|\s+)["\'=\s]*([a-zA-Z0-9_\-\.]+)["\'\s]*[^>]*>(.*?)</(?:function|tool|call|invoke)>',
+                r'<(?:function|tool|call|invoke)(?:=|\s*name=|\s*=|\s+)["\'=\s]*([a-zA-Z0-9_\-\.]+)["\'\s]*[^>]*>(.*?)</(?:function|tool|call|invoke)>',
                 re.IGNORECASE | re.DOTALL
             )
             for match in fn_pattern.finditer(s):
@@ -4602,7 +4624,7 @@ class ChatybotApp:
         )
         # Remove extracted XML tool call blocks before JSON scanner loop to avoid duplicates
         text_for_json = re.sub(
-            r'<(?:tool_call|function_call|action|tool|dots_function_call)>.*?</(?:tool_call|function_call|action|tool|dots_function_call)>',
+            r'<(?:tool_call|tool_use|function_call|action|tool|dots_function_call)>.*?</(?:tool_call|tool_use|function_call|action|tool|dots_function_call)>',
             ' ',
             text_for_json,
             flags=re.IGNORECASE | re.DOTALL
@@ -4614,13 +4636,13 @@ class ChatybotApp:
             flags=re.IGNORECASE | re.DOTALL
         )
         text_for_json = re.sub(
-            r'<invoke\s+name=["\'][^"\']+["\'][^>]*>.*?</invoke>',
+            r'<invoke(?:\s*name=|=|\s*=|\s+)["\'][^"\']+["\'][^>]*>.*?</invoke>',
             ' ',
             text_for_json,
             flags=re.IGNORECASE | re.DOTALL
         )
         text_for_json = re.sub(
-            r'<(?:function|tool|call|invoke)=["\']?[a-zA-Z0-9_\-\.]+["\']?[^>]*>.*?</(?:function|tool|call|invoke)>',
+            r'<(?:function|tool|call|invoke)(?:=|\s*name=|\s*=|\s+)["\']?[a-zA-Z0-9_\-\.]+["\']?[^>]*>.*?</(?:function|tool|call|invoke)>',
             ' ',
             text_for_json,
             flags=re.IGNORECASE | re.DOTALL
@@ -4729,6 +4751,53 @@ class ChatybotApp:
             i += 1
 
         return tool_calls
+
+    def format_tool_loop_summary(self, agentic_loop: list[dict[str, Any]]) -> str:
+        """
+        Format a compact, redacted execution summary of tool calls and statuses
+        to inform subsequent conversation turns without high token overhead.
+        """
+        if not agentic_loop:
+            return ""
+
+        summary_lines = ["[Tool Executions]:"]
+        for rec in agentic_loop:
+            if not isinstance(rec, dict):
+                continue
+            tool_name = rec.get("tool", "unknown")
+            args = rec.get("arguments", {})
+            status = rec.get("status", "success")
+
+            # Redact/truncate arguments for compact display
+            compact_args_list = []
+            if isinstance(args, dict):
+                for k, v in args.items():
+                    if isinstance(v, str):
+                        if len(v) > 60:
+                            v_clean = f"<{len(v)} chars>"
+                        else:
+                            v_clean = repr(v)
+                    elif isinstance(v, (dict, list)):
+                        v_str = json.dumps(v)
+                        if len(v_str) > 60:
+                            v_clean = f"<{len(v_str)} bytes {type(v).__name__}>"
+                        else:
+                            v_clean = v_str
+                    else:
+                        v_clean = repr(v)
+                    compact_args_list.append(f"{k}={v_clean}")
+            arg_str = ", ".join(compact_args_list)
+
+            # Compact outcome
+            if status == "success":
+                outcome = "Success"
+            else:
+                exit_code = rec.get("exit_code", 1)
+                outcome = f"Error (code {exit_code})"
+
+            summary_lines.append(f"- {tool_name}({arg_str}) -> {outcome}")
+
+        return "\n".join(summary_lines)
 
     async def run_tool_loop(self, max_turns: int = 25, initial_tool_results: str = None):
         """
@@ -4979,8 +5048,49 @@ class ChatybotApp:
         # Update LAST_COMPLETION to the final output
         self.buffer_manager.set_script_var('LAST_COMPLETION', final_natural_language_response)
         
-        # Commit ONLY the final, natural-language outcome to the main chat_history (Option B)
-        self.chat_history[-1] = (initial_prompt, final_natural_language_response)
+        # Commit tool loop results to chat_history according to tool_append_mode
+        mode = getattr(self, "tool_append_mode", "summary").lower()
+        if mode == "full":
+            # Append all intermediate tool interactions from temp_history into main chat_history.
+            # Prior turns in temp_history occupy 2 * (len(self.chat_history) - 1) items.
+            # The current loop begins with {"role": "user", "content": initial_prompt}.
+            prefix_len = 2 * max(0, len(self.chat_history) - 1)
+            loop_messages = list(temp_history[prefix_len:])
+            
+            # Ensure the final terminal assistant response is captured
+            if not loop_messages or loop_messages[-1].get("role") != "assistant":
+                loop_messages.append({"role": "assistant", "content": final_natural_language_response})
+            elif loop_messages[-1].get("content") != final_natural_language_response:
+                loop_messages.append({"role": "assistant", "content": final_natural_language_response})
+
+            new_turns = []
+            curr_user = initial_prompt
+            for m in loop_messages:
+                r = m.get("role")
+                c = m.get("content", "")
+                if r == "user":
+                    curr_user = c
+                elif r == "assistant":
+                    new_turns.append((curr_user, c))
+                    curr_user = "[Next Tool Step]"
+
+            if new_turns:
+                self.chat_history.pop()
+                self.chat_history.extend(new_turns)
+            else:
+                self.chat_history[-1] = (initial_prompt, final_natural_language_response)
+        elif mode == "summary":
+            # Default: prepend a concise, redacted tool execution summary to the final response
+            agentic_trace = self.buffer_manager.script_vars.get('AGENTIC_LOOP', [])
+            summary_header = self.format_tool_loop_summary(agentic_trace)
+            if summary_header:
+                combined_response = f"{summary_header}\n\n{final_natural_language_response}"
+            else:
+                combined_response = final_natural_language_response
+            self.chat_history[-1] = (initial_prompt, combined_response)
+        else:
+            # "off": Option B - only the final natural language outcome
+            self.chat_history[-1] = (initial_prompt, final_natural_language_response)
         
         # Update active session turn record with agentic loop outcome
         if self.session_mode != "off" and self.session_turns:
@@ -5185,6 +5295,14 @@ class ChatybotApp:
                 self.backup_file_on_write = True
             elif str(val).lower() in ('false', '0', 'no', 'off'):
                 self.backup_file_on_write = False
+
+        if 'tool_append_mode' in config_section and not getattr(self, '_tool_append_mode_user_set', False):
+            val = str(config_section.get('tool_append_mode')).lower()
+            if val in ("off", "full", "summary"):
+                self.tool_append_mode = val
+            else:
+                print(f"Warning: Invalid tool_append_mode '{val}'. Using default 'summary'.")
+                self.tool_append_mode = "summary"
 
         tools = config.get('tools', {})
         
