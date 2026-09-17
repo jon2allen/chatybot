@@ -89,7 +89,12 @@ async def cmd_run_unsafe(ctx: CommandContext, parts: list, command: str) -> Comm
     return CommandResult.ok()
 
 
-@command("/tool", help="Manage tools and tool mode", args="[list|enable|disable|on|off|auto|scratch|loop|max_turns|rate_limit|prompt|history|replay|retry|inject|translate] ...", category="tools")
+@command("/continue", help="Continue agentic loop with last rescued tool result", args="[max_turns]", category="tools")
+async def cmd_continue(ctx: CommandContext, parts: list, command: str) -> CommandResult:
+    return await _handle_tool_continue(ctx, parts, command)
+
+
+@command("/tool", help="Manage tools and tool mode", args="[list|enable|disable|on|off|auto|scratch|loop|max_turns|rate_limit|prompt|history|replay|retry|continue|inject|translate] ...", category="tools")
 async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandResult:
     app = ctx.app
     # Handle /tool subcommands: on, off, or dispatch
@@ -989,6 +994,9 @@ async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandRes
     elif subcmd == "retry":
         return await _handle_tool_retry(ctx, parts, command)
 
+    elif subcmd == "continue":
+        return await _handle_tool_continue(ctx, parts, command)
+
     elif subcmd == "inject":
         return await _handle_tool_inject(ctx, parts, command)
 
@@ -1494,15 +1502,76 @@ def _build_tool_retry_buffer(candidate: dict, app, raw_text: str = "") -> str:
     return "\n".join(lines)
 
 
+def _record_rescued_tool_execution(app, tool_name: str, args: dict, result_str: str) -> None:
+    """Format and display tool output banner and record rescued tool execution in session history."""
+    from datetime import datetime
+
+    chars_cnt = len(result_str or "")
+    lines_cnt = len((result_str or "").splitlines())
+    kb_size = chars_cnt / 1024.0
+
+    preview_lines = (result_str or "").strip().splitlines()
+    preview_snippet = "\n".join(preview_lines[:15])
+    if len(preview_lines) > 15:
+        preview_snippet += f"\n... ({len(preview_lines) - 15} more lines) ..."
+
+    exit_code_str = (app.buffer_manager.get_script_var('TOOL_DISPATCH_EXIT_CODE') or "0") if hasattr(app, "buffer_manager") else "0"
+    is_success = str(exit_code_str) == "0" and not (result_str or "").startswith("Error:")
+
+    status_icon = "✔" if is_success else "✖"
+    status_label = "SUCCESS" if is_success else "FAILED / ERROR"
+
+    print("\n" + "=" * 80)
+    print(f"{status_icon} TOOL RESCUE {status_label}: {tool_name} ({chars_cnt} chars, {lines_cnt} lines, {kb_size:.1f} KB)")
+    print("=" * 80)
+    if preview_snippet:
+        print(preview_snippet)
+    else:
+        print("(No output returned)")
+    print("=" * 80)
+    print("Tip: Run '/tool continue' (or '/continue') to hand this result to the model and resume the agentic loop.\n")
+
+    tool_rec = {
+        "turn": 1,
+        "tool": tool_name,
+        "arguments": args,
+        "result": result_str,
+        "exit_code": 0 if is_success else 1,
+        "status": "success" if is_success else "error",
+        "timestamp": datetime.now().isoformat(),
+        "duration_ms": 0.0,
+    }
+
+    if hasattr(app, "buffer_manager") and app.buffer_manager:
+        app.buffer_manager.set_script_var('LAST_TOOL_RESCUED', tool_rec, allow_protected=True)
+        current_loop = app.buffer_manager.get_script_var('AGENTIC_LOOP') or []
+        if not isinstance(current_loop, list):
+            current_loop = []
+        current_loop.append(tool_rec)
+        app.buffer_manager.set_script_var('AGENTIC_LOOP', current_loop, allow_protected=True)
+
+    if hasattr(app, "session_turns") and app.session_turns and getattr(app, "session_mode", "") != "off":
+        last_turn = app.session_turns[-1]
+        turn_loop = last_turn.get("agentic_loop") or []
+        if not isinstance(turn_loop, list):
+            turn_loop = []
+        tool_rec["turn"] = len(turn_loop) + 1
+        turn_loop.append(tool_rec)
+        last_turn["agentic_loop"] = turn_loop
+
+
 async def _handle_tool_retry(ctx: CommandContext, parts: list, command: str) -> CommandResult:
-    """Handle /tool retry [edit|fix|run] command."""
+    """Handle /tool retry [edit|fix|run] [--continue] command."""
     app = ctx.app
     import subprocess
     import tempfile
 
+    should_continue = any(p.lower() in ("--continue", "-c", "continue") for p in parts[2:])
+    clean_parts = [p for p in parts[2:] if p.lower() not in ("--continue", "-c", "continue")]
+
     mode = "edit"
-    if len(parts) > 2:
-        mode = parts[2].strip().lower()
+    if clean_parts:
+        mode = clean_parts[0].strip().lower()
 
     # Retrieve last completion text
     raw_text = (app.buffer_manager.get_script_var('LAST_COMPLETION') or "") if hasattr(app, "buffer_manager") else ""
@@ -1522,7 +1591,10 @@ async def _handle_tool_retry(ctx: CommandContext, parts: list, command: str) -> 
         if candidate.get("is_valid") and candidate.get("arguments"):
             payload_str = json.dumps({"tool": candidate["tool"], "arguments": candidate["arguments"]})
             print(f"Directly dispatching detected tool '{candidate['tool']}'...")
-            await app.dispatch_tool(payload_str)
+            res = await app.dispatch_tool(payload_str)
+            _record_rescued_tool_execution(app, candidate["tool"], candidate["arguments"], res)
+            if should_continue:
+                await _handle_tool_continue(ctx, ["/tool", "continue"], "/tool continue")
             return CommandResult.ok()
         print(f"Tool candidate '{candidate.get('tool')}' requires inspection. Opening editor...")
         mode = "edit"
@@ -1564,7 +1636,10 @@ async def _handle_tool_retry(ctx: CommandContext, parts: list, command: str) -> 
 
         final_payload = {"tool": tool_name, "arguments": args}
         print(f"\nDispatching tool: {tool_name}...")
-        await app.dispatch_tool(json.dumps(final_payload))
+        res = await app.dispatch_tool(json.dumps(final_payload))
+        _record_rescued_tool_execution(app, tool_name, args, res)
+        if should_continue:
+            await _handle_tool_continue(ctx, ["/tool", "continue"], "/tool continue")
         return CommandResult.ok()
 
     # -------------------------------------------------------------------------
@@ -1623,7 +1698,10 @@ async def _handle_tool_retry(ctx: CommandContext, parts: list, command: str) -> 
             return CommandResult.ok()
 
         print(f"Dispatching rescued tool '{chosen_tool}'...")
-        await app.dispatch_tool(cleaned_json_str)
+        res = await app.dispatch_tool(cleaned_json_str)
+        _record_rescued_tool_execution(app, chosen_tool, parsed.get("arguments", {}), res)
+        if should_continue:
+            await _handle_tool_continue(ctx, ["/tool", "continue"], "/tool continue")
     except Exception as exc:
         print(f"Error in tool retry editor: {exc}")
     finally:
@@ -1632,6 +1710,42 @@ async def _handle_tool_retry(ctx: CommandContext, parts: list, command: str) -> 
         except Exception:
             pass
 
+    return CommandResult.ok()
+
+
+async def _handle_tool_continue(ctx: CommandContext, parts: list, command: str) -> CommandResult:
+    """Handle /tool continue [max_turns] or /continue to hand rescued tool results back to LLM."""
+    app = ctx.app
+
+    max_turns = getattr(app, "max_turns", 25)
+    for p in parts[1:]:
+        if p.isdigit():
+            try:
+                max_turns = int(p)
+                break
+            except ValueError:
+                pass
+
+    # Retrieve last rescued tool record or TOOL_DISPATCH_RESULT
+    rescued_rec = app.buffer_manager.get_script_var('LAST_TOOL_RESCUED') if hasattr(app, "buffer_manager") else None
+    result_str = (app.buffer_manager.get_script_var('TOOL_DISPATCH_RESULT') or "") if hasattr(app, "buffer_manager") else ""
+
+    if not rescued_rec and not result_str:
+        print("No pending rescued tool execution found. Run '/tool retry' first, or execute a new prompt.")
+        return CommandResult.ok()
+
+    tool_name = rescued_rec.get("tool", "unknown") if isinstance(rescued_rec, dict) else "rescued_tool"
+    tool_args = rescued_rec.get("arguments", {}) if isinstance(rescued_rec, dict) else {}
+    if isinstance(rescued_rec, dict) and "result" in rescued_rec:
+        result_str = rescued_rec["result"]
+
+    formatted_result = f"Tool: {tool_name}\nArguments: {json.dumps(tool_args, ensure_ascii=False)}\nResult: {result_str}"
+
+    print(f"Continuing agentic loop with result from '{tool_name}'...")
+    if hasattr(app, "run_tool_loop"):
+        await app.run_tool_loop(max_turns=max_turns, initial_tool_results=formatted_result)
+    else:
+        print("Agentic loop runner not available.")
     return CommandResult.ok()
 
 
