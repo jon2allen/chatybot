@@ -12,6 +12,7 @@ session_dir = "~/.local/share/chatybot/sessions"
 session_strip_thinking = "separate"
 tool_scratch = false
 backup_file_on_write = true
+tool_append_mode = "summary"
 # editor = "nano"
 agentic_instructions = """
 IMPORTANT: You are executing in an autonomous, multi-turn tool-calling loop.

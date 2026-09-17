@@ -872,6 +872,12 @@ Scripts that require multi-turn feedback and state accumulation:
    ;;
    ```
 
+   **Tool History Append Mode (`/tool append_mode <summary|full|off>`)**:
+   Controls how multi-turn tool loops are recorded into conversational history:
+   - `summary` (default): Appends a compact, redacted execution summary of tool calls and statuses (e.g. `write_file(path="out.dsl", content="<1347 chars>") -> Success`). Keeps tokens low while reinforcing successful tool syntax for subsequent turns.
+   - `full`: Appends every intermediate step and tool output from the loop into chat history for models requiring explicit step-by-step context.
+   - `off`: Preserves only the final natural-language response.
+
 2. **Iterative Conversational Refinement (Single Model)**:
    Multi-step conversational flows where a single model builds upon its previous reasoning:
    ```chatdsl
