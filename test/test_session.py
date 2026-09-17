@@ -45,6 +45,31 @@ async def test_session_start_and_append(app):
         assert turns[0]["prompt"] == "What is Python?"
 
 @pytest.mark.anyio
+async def test_session_new_alias_and_append(app):
+    """Test /session new works as an exact alias for /session start."""
+    await app.handle_escape_command("/session new new_alias_session")
+    assert app.active_session_name == "new_alias_session"
+    assert app.active_session_id is not None
+    assert app.buffer_manager.script_vars.get("SESSION_NAME") == "new_alias_session"
+
+    app.append_session_turn("What is ChatDSL?", "ChatDSL is an automation domain-specific language.")
+    assert len(app.session_turns) == 1
+    assert app.session_turns[0]["prompt"] == "What is ChatDSL?"
+    assert app.session_turns[0]["response"] == "ChatDSL is an automation domain-specific language."
+
+    # Verify JSONL session storage written to disk
+    session_dir = os.path.join(app.get_sessions_dir(), app.active_session_id)
+    meta_file = os.path.join(session_dir, "meta.json")
+    turns_file = os.path.join(session_dir, "turns.jsonl")
+    assert os.path.exists(meta_file)
+    assert os.path.exists(turns_file)
+
+    with open(meta_file, "r", encoding="utf-8") as f:
+        data = json.load(f)
+        assert data["custom_name"] == "new_alias_session"
+        assert data["turn_count"] == 1
+
+@pytest.mark.anyio
 async def test_session_use_and_load(app):
     await app.handle_escape_command("/session start load_test")
     app.append_session_turn("First prompt", "First response")
