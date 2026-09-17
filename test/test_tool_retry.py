@@ -79,6 +79,39 @@ def test_extract_retry_candidate_from_dots_loose_invoke():
     assert candidate["is_valid"] is True
 
 
+def test_extract_retry_candidate_fence_with_tool_label():
+    """Verify tool calls formatted as markdown fences with tool: arg (e.g. read_file: path) are extracted."""
+    app = ChatybotApp()
+    raw = """I will start by reading the file to see its current contents:
+```
+read_file: 3kingdoms_culture.chatdsl
+```"""
+    candidate = _extract_retry_candidate(raw, app)
+    assert candidate["tool"] == "read_file"
+    assert candidate["arguments"]["path"] == "3kingdoms_culture.chatdsl"
+    assert candidate["is_valid"] is True
+
+
+def test_extract_retry_candidate_functional_syntax():
+    """Verify functional call syntax tool(arg=val) is extracted."""
+    app = ChatybotApp()
+    raw = 'read_file(path="3kingdoms_culture.chatdsl")'
+    candidate = _extract_retry_candidate(raw, app)
+    assert candidate["tool"] == "read_file"
+    assert candidate["arguments"]["path"] == "3kingdoms_culture.chatdsl"
+    assert candidate["is_valid"] is True
+
+
+def test_extract_retry_candidate_no_tool_falls_back_to_change_me():
+    """Verify prose without any tool calls falls back to CHANGE_ME rather than falsely claiming write_file."""
+    app = ChatybotApp()
+    raw = "Here is a natural language explanation of the culture of Three Kingdoms without any tool call."
+    candidate = _extract_retry_candidate(raw, app)
+    assert candidate["tool"] == "CHANGE_ME"
+    assert candidate["is_valid"] is False
+
+
+
 
 
 def test_extract_retry_candidate_unknown_tool():
