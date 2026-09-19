@@ -7,6 +7,7 @@ Model hierarchy:
     BaseModelConfig
     ├── ChatModelConfig    (type = "chat")    — standard LLM chat + optional image generation
     ├── RerankerModelConfig (type = "reranker") — re-ranking API endpoints
+    ├── DecisionModelConfig (type = "decision") — TypeSafe Jev / OpenRouter decisions
     └── AppleFMModelConfig  (type = "apple_fm") — Apple on-device Foundation Model
 
 Top-level container: ChatConfig
@@ -174,6 +175,27 @@ class RerankerModelConfig(BaseModelConfig):
 
 
 # ============================================================================
+# DECISION MODEL CONFIG
+# ============================================================================
+
+class DecisionModelConfig(BaseModelConfig):
+    """
+    Configuration for a TypeSafe Jev / OpenRouter decisions endpoint.
+
+    Decision models make fast, structured decisions (choice, score, noul)
+    rather than generating text. They use a custom endpoint path that differs
+    from chat completions.
+    """
+
+    type: Literal["decision"] = "decision"
+    """Discriminator field — always 'decision' for this class."""
+
+    endpoint_path: str = "/v1/systemone"
+    """Path appended to base_url for the decisions API.
+    Native TypeSafe: '/v1/systemone'. OpenRouter: '/api/alpha/decisions'."""
+
+
+# ============================================================================
 # APPLE FOUNDATION MODEL CONFIG
 # ============================================================================
 
@@ -202,7 +224,7 @@ class AppleFMModelConfig(BaseModelConfig):
 # ============================================================================
 
 ModelConfig = Annotated[
-    ChatModelConfig | RerankerModelConfig | AppleFMModelConfig,
+    ChatModelConfig | RerankerModelConfig | DecisionModelConfig | AppleFMModelConfig,
     Field(discriminator="type"),
 ]
 """Union of all supported model config types, discriminated on the ``type`` field."""
@@ -389,6 +411,10 @@ class ChatConfig(BaseModel):
         """Return all models of type 'reranker'."""
         return [m for m in self.models.values() if isinstance(m, RerankerModelConfig)]
 
+    def decision_models(self) -> list[DecisionModelConfig]:
+        """Return all models of type 'decision'."""
+        return [m for m in self.models.values() if isinstance(m, DecisionModelConfig)]
+
     def apple_fm_models(self) -> list[AppleFMModelConfig]:
         """Return all models of type 'apple_fm'."""
         return [m for m in self.models.values() if isinstance(m, AppleFMModelConfig)]
@@ -519,6 +545,7 @@ class ChatConfig(BaseModel):
             "OLLAMA MODELS": [],
             "APPLE FM MODELS": [],
             "JINA RERANKER MODELS": [],
+            "DECISION MODELS": [],
         }
 
         for alias, model in self.models.items():
@@ -528,6 +555,8 @@ class ChatConfig(BaseModel):
                 categories["OPENROUTER MODELS"].append((alias, model))
             elif "jina" in base_url or model.type == "reranker":
                 categories["JINA RERANKER MODELS"].append((alias, model))
+            elif model.type == "decision":
+                categories["DECISION MODELS"].append((alias, model))
             elif "openrouter.ai" in base_url:
                 categories["OPENROUTER MODELS"].append((alias, model))
             elif "nvidia" in base_url or "integrate.api.nvidia" in base_url:

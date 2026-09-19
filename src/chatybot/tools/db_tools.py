@@ -200,3 +200,130 @@ def db_list(app: Any = None) -> str:
     return json.dumps({
         "databases": databases
     }, ensure_ascii=False, indent=2)
+
+
+def db_summary(
+    db_name: str | None = None,
+    item_range: str | None = None,
+    limit: int = 50,
+    format: str = "table",
+    app: Any = None,
+) -> str:
+    """
+    Get a concise summary table or JSON list of items in a TinyDB database.
+    Provides ID, timestamp, model, prompt snippet, thinking status, and token counts
+    without returning heavy content payloads.
+
+    Args:
+        db_name: Database name to summarize. If None, uses active database or CHATYBOT_ACTIVE_DB.
+        item_range: Optional item ID (e.g. '5') or start-end range (e.g. '1-10', '21-31').
+        limit: Maximum number of items to return (default 50).
+        format: Output format: 'table' for a compact ASCII table, or 'json' for structured JSON array.
+        app: ChatybotApp instance passed when called within application context.
+
+    Returns:
+        Formatted ASCII summary table or JSON string.
+    """
+    target_db = db_name or os.environ.get("CHATYBOT_ACTIVE_DB")
+    if target_db:
+        chatydb.set_db(target_db)
+
+    if chatydb._manager is None:
+        return json.dumps({
+            "error": "No database selected. Use the db_name parameter or /setdb first."
+        }, ensure_ascii=False)
+
+    all_items = chatydb._manager.get_all_items()
+    if not all_items:
+        return json.dumps({
+            "database": target_db or "active",
+            "items": [],
+            "message": "Database is empty."
+        }, ensure_ascii=False)
+
+    # Apply range / ID filtering
+    items = all_items
+    range_label = "ALL"
+    if item_range:
+        raw_range = str(item_range).strip()
+        if "-" in raw_range:
+            try:
+                s_str, e_str = raw_range.split("-", 1)
+                s_id = int(s_str.strip())
+                e_id = int(e_str.strip())
+                items = [it for it in all_items if s_id <= getattr(it, "doc_id", 0) <= e_id]
+                range_label = f"{s_id}-{e_id}"
+            except ValueError:
+                return json.dumps({"error": f"Invalid range '{item_range}'. Use e.g. '1-10'."})
+        else:
+            try:
+                t_id = int(raw_range)
+                items = [it for it in all_items if getattr(it, "doc_id", 0) == t_id]
+                range_label = f"ID {t_id}"
+            except ValueError:
+                return json.dumps({"error": f"Invalid item filter '{item_range}'. Use e.g. '5' or '1-10'."})
+
+    total_matched = len(items)
+    items = items[:limit]
+
+    records = []
+    for it in items:
+        doc_id = getattr(it, "doc_id", "N/A")
+        meta = it.get("metadata") or {}
+        raw_ts = meta.get("timestamp") or ""
+        ts_str = raw_ts[:19].replace("T", " ") if len(raw_ts) >= 19 else raw_ts
+
+        model_alias = str(meta.get("model_alias") or "unknown")
+        prompt = str(meta.get("prompt") or "")
+        clean_prompt = " ".join(prompt.split())
+        prompt_snippet = clean_prompt[:40] + ("..." if len(clean_prompt) > 40 else "")
+
+        content_str = str(it.get("content") or "")
+        has_think_tag = any(tag in content_str for tag in ("<think>", "<thought>", "<thinking>"))
+        if meta.get("thinking_content"):
+            think_status = "metadata"
+        elif has_think_tag:
+            think_status = "in content"
+        else:
+            think_status = "stripped"
+
+        tokens = meta.get("thinking_tokens", 0) or 0
+
+        records.append({
+            "id": doc_id,
+            "timestamp": ts_str,
+            "model": model_alias,
+            "prompt": prompt_snippet,
+            "thinking": think_status,
+            "thinking_tokens": tokens,
+            "type": it.get("type", "chat"),
+            "name": it.get("name", "last_chat"),
+        })
+
+    if format.lower() == "json":
+        return json.dumps({
+            "database": target_db or "active",
+            "range": range_label,
+            "total_matched": total_matched,
+            "returned": len(records),
+            "items": records,
+        }, ensure_ascii=False, indent=2)
+
+    # Table format
+    db_label = target_db or "active"
+    hdr_title = f"DATABASE SUMMARY TABLE: {db_label} ({total_matched} items, range: {range_label})"
+    line_width = 110
+    lines = [
+        "=" * line_width,
+        hdr_title,
+        "=" * line_width,
+        f" {'ID':<4} {'Timestamp':<19} {'Model':<14} {'Prompt':<42} {'Thinking':<12} {'Tokens':>8}",
+        "-" * line_width,
+    ]
+    for r in records:
+        t_str = f"{r['thinking_tokens']:,}" if r['thinking_tokens'] > 0 else "0"
+        lines.append(
+            f" {r['id']:<4} {r['timestamp']:<19} {r['model'][:14]:<14} {r['prompt']:<42} {r['thinking']:<12} {t_str:>8}"
+        )
+    lines.append("=" * line_width)
+    return "\n".join(lines)

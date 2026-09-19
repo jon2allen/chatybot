@@ -414,3 +414,29 @@ enabled = false
 description = "List all available TinyDB databases with entry counts and file sizes."
 module = "chatybot.tools.db_tools"
 function = "db_list"
+
+[tools.db_summary]
+enabled = false
+description = "Get a concise summary table or JSON manifest of items in a TinyDB database, including ID, timestamp, model, prompt snippet, thinking status, and reasoning token counts, without returning heavy content text."
+module = "chatybot.tools.db_tools"
+function = "db_summary"
+
+[tools.db_summary.parameters.db_name]
+type = "string"
+description = "Database name to summarize. If omitted, uses the currently active database."
+optional = true
+
+[tools.db_summary.parameters.item_range]
+type = "string"
+description = "Optional single ID (e.g. '5') or start-end range (e.g. '1-10', '21-31') to filter items"
+optional = true
+
+[tools.db_summary.parameters.limit]
+type = "number"
+description = "Maximum number of items to return (default 50)"
+optional = true
+
+[tools.db_summary.parameters.format]
+type = "string"
+description = "Output format: 'table' for compact ASCII table (default), or 'json' for structured JSON array"
+optional = true

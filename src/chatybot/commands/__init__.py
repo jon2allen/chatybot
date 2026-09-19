@@ -8,6 +8,7 @@ from chatybot.commands import (
     buffer,  # noqa: F401  (registers /file, /filebank1-5, /imagebank1-5, etc.)
     db,  # noqa: F401  (registers /setdb, /dblist, /searchdb, etc.)
     debug,  # noqa: F401  (registers /echo)
+    decide,  # noqa: F401  (registers /decide)
     debug_misc,  # noqa: F401  (registers /trace, /debug, /prompt, /logging, etc.)
     image,  # noqa: F401  (registers /imagine, /saveimage, etc.)
     interact,  # noqa: F401  (registers /ask)

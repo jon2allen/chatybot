@@ -21,6 +21,7 @@ from .config_model import (
     AppleFMModelConfig,
     ChatConfig,
     ChatModelConfig,
+    DecisionModelConfig,
     RerankerModelConfig,
 )
 from .vendors import VENDOR_PRESETS, get_env_status, vendor_names
@@ -1491,7 +1492,7 @@ class ConfigTUI:
         fields = [
             ("alias",            "Alias:",           2,  16, 34, "text", None),
             ("name",             "Model Name:",      3,  16, 42, "text", None),
-            ("type",             "Type:",            4,  16, 16, "cycle", ["chat", "reranker", "apple_fm"]),
+            ("type",             "Type:",            4,  16, 16, "cycle", ["chat", "reranker", "decision", "apple_fm"]),
             
             # Endpoint section
             ("section_ep",       "── Endpoint ────────────────────────", 6, 4, 0, "header", None),
@@ -1640,7 +1641,7 @@ class ConfigTUI:
             if key in ("base_url", "api_key", "image_generation", "image_endpoint", "image_modalities"):
                 return True
             return False
-        if key in ("image_generation", "image_endpoint", "image_modalities") and form_data["type"] == "reranker":
+        if key in ("image_generation", "image_endpoint", "image_modalities") and form_data["type"] in ("reranker", "decision"):
             return True
         if key in ("image_endpoint", "image_modalities") and form_data["image_generation"] == "false":
             return True
@@ -1680,6 +1681,14 @@ class ConfigTUI:
                 if form_data["vendor"] == "":
                     form_data["vendor"] = "jina"
                     p = VENDOR_PRESETS["jina"]
+                    form_data["base_url"] = p.base_url
+                    form_data["api_key"] = p.api_key_env
+            elif form_data["type"] == "decision":
+                form_data["image_generation"] = "false"
+                # If switching to decision, typesafe is a good default preset
+                if form_data["vendor"] == "":
+                    form_data["vendor"] = "typesafe"
+                    p = VENDOR_PRESETS["typesafe"]
                     form_data["base_url"] = p.base_url
                     form_data["api_key"] = p.api_key_env
 
@@ -1758,6 +1767,13 @@ class ConfigTUI:
                     if isinstance(existing, ChatModelConfig):
                         update["context_limit"] = existing.context_limit
                     updated_model = RerankerModelConfig(**update)
+            elif m_type == "decision":
+                if isinstance(existing, DecisionModelConfig):
+                    updated_model = existing.model_copy(update=update)
+                else:
+                    if hasattr(existing, "context_limit"):
+                        update["context_limit"] = existing.context_limit
+                    updated_model = DecisionModelConfig(**update)
             else:
                 img_gen = form_data["image_generation"] == "true"
                 img_end = form_data["image_endpoint"].strip() or None

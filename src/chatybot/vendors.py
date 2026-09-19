@@ -34,6 +34,8 @@ VENDOR_PRESETS: dict[str, VendorPreset] = {
     "apple_fm":   VendorPreset("apple_fm",   "on-device", None, image_support=False),
     "jina":       VendorPreset("jina",       "https://api.jina.ai/v1/rerank",
                                "JINA_API_KEY", default_type="reranker"),
+    "typesafe":   VendorPreset("typesafe",   "https://api.typesafe.ai",
+                               "TYPESAFE_API_KEY", default_type="decision"),
 }
 
 def vendor_names() -> list[str]:
