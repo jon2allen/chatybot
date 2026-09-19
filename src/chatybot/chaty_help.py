@@ -856,21 +856,28 @@ class HelpSystem:
             name="/decide",
             category="decision",
             short_desc="Evaluate content with a structured decision model (TypeSafe Jev)",
-            usage='/decide "<state>" <choice|score|noul> "<instructions>" [, options="key:desc,..."] [, levels="lvl0,lvl1,..."] [, var=<name>] [, model=<alias>]',
+            usage='/decide "<state>" <choice|score|noul> "<instructions>" [, options="key:desc,..."] [, levels="lvl0,lvl1,..."] [, scale="min:max"] [, threshold=<float>] [, var=<name>] [, model=<alias>]',
             long_desc=(
                 "Evaluates content against a typed question using a TypeSafe Jev or OpenRouter "
                 "decisions model. Three question types are supported:\n"
                 "  choice — picks one option from a set (returns the selected option)\n"
                 "  score  — rates content on a spectrum (returns a numeric score)\n"
-                "  noul   — yes/no question (returns a probability 0-1)\n\n"
-                "The scalar answer is stored in the DECIDE protected variable (and an optional "
-                "user-named var via var=). The full structured response with probabilities and "
-                "confidence is stored in DECIDE_FULL. Variable substitution applies to the state "
-                "argument, so $VAR and ${VAR} are resolved before evaluation."
+                "  noul   — yes/no question (returns true/false)\n\n"
+                "Calibration unpacking: confidence and per-option probabilities are flattened "
+                "into dedicated script variables so ChatDSL scripts can gate actions on "
+                "uncertainty without JSON traversal.\n\n"
+                "Global registers: DECIDE (result or FALLBACK), DECIDE_CONF (confidence), "
+                "DECIDE_PROB (winning probability), DECIDE_FULL (raw API payload).\n\n"
+                "Per-var registers (when var=<name>): <name>, <name>_choice, <name>_conf, "
+                "<name>_confidence, <name>_prob, <name>_prob_<option>.\n\n"
+                "If threshold is set and confidence falls below it, the primary variable "
+                "resolves to \"FALLBACK\" for deterministic error-handling. Variable "
+                "substitution applies to the state argument, so $VAR and ${VAR} are resolved "
+                "before evaluation."
             ),
             examples=[
-                '/decide "$ticket" choice "Which team?" options="billing:Payments,technical:Bugs,sales:Pricing" var=team',
-                '/decide "$bug_report" score "How severe?" levels="Cosmetic,Broken w/ workaround,Blocking" var=severity',
+                '/decide "$ticket" choice "Which team?" options="billing:Payments,technical:Bugs,sales:Pricing" threshold=0.70 var=team',
+                '/decide "$bug_report" score "How severe?" scale="1:5" var=severity',
                 '/decide "$message" noul "Is this urgent?" var=urgency',
             ],
             parameters={
@@ -879,7 +886,9 @@ class HelpSystem:
                 "instructions": "The question to evaluate (quoted string)",
                 'options=': 'For choice: comma-separated key:description pairs, e.g. options="billing:Payments,technical:Bugs"',
                 'levels=': 'For score: comma-separated ordered level descriptions, e.g. levels="Low,Medium,High"',
-                'var=': "Optional variable name to store the scalar answer",
+                'scale=': 'For score: integer range as "min:max", e.g. scale="1:5" (alternative to levels=)',
+                'threshold=': 'Minimum confidence floor (0.0-1.0); if confidence < threshold, result becomes "FALLBACK"',
+                'var=': "Optional variable name to store the scalar answer and flattened metrics",
                 'model=': "Optional model alias to use (defaults to first type=decision model in config)",
             },
             see_also=["/model", "/setvar", "/rerank"]
