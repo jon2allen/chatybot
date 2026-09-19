@@ -24,10 +24,14 @@ class TestDbSearch:
         chatydb.SEARCHBUFFER.clear()
         chatydb._manager = None
         chatydb._db_path = None
+        chatydb._active_db_name = None
+        os.environ.pop("CHATYBOT_ACTIVE_DB", None)
         yield
         chatydb.SEARCHBUFFER.clear()
         chatydb._manager = None
         chatydb._db_path = None
+        chatydb._active_db_name = None
+        os.environ.pop("CHATYBOT_ACTIVE_DB", None)
 
     def _create_test_db(self, tmp_path):
         """Create a test database with known items"""
@@ -215,10 +219,14 @@ class TestDbGet:
         chatydb.SEARCHBUFFER.clear()
         chatydb._manager = None
         chatydb._db_path = None
+        chatydb._active_db_name = None
+        os.environ.pop("CHATYBOT_ACTIVE_DB", None)
         yield
         chatydb.SEARCHBUFFER.clear()
         chatydb._manager = None
         chatydb._db_path = None
+        chatydb._active_db_name = None
+        os.environ.pop("CHATYBOT_ACTIVE_DB", None)
 
     def test_db_get_success(self):
         """db_get successfully retrieves item by doc_id"""

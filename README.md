@@ -604,6 +604,10 @@ You can enable native-like tool usage for LLMs, allowing them to autonomously se
     *   `off`: Disables scratchpad mode and removes scratchpad instructions from the system prompt.
     *   `clean`: Purges all temporary scripts, outputs, and subdirectories from the active scratchpad folder.
     *   `status` (or `show`/`info`): Displays current scratchpad state, directory path, and lists all files currently in the scratchpad.
+*   **`/tool append_mode [off|full|summary]`**: Configure how autonomous tool loop execution results are recorded into conversation history:
+    *   `summary` (default): Appends a compact, redacted execution summary of tool calls and statuses (e.g. `write_file(path="out.dsl", content="<1347 chars>") -> Success`) to the final response. Keeps token overhead minimal while reinforcing successful tool signatures and outcomes for future turns.
+    *   `full`: Appends every intermediate turn and tool result from the loop into chat history for models requiring explicit step-by-step history.
+    *   `off`: Preserves only the final natural-language response.
 *   **`/tool loop [turns|max|max=val] [force]`**: Starts the autonomous execution loop. Chatybot will feed the model's requests to local tools, execute them, and feed results back to the model until:
     *   The model returns a conversational natural-language answer (terminal state).
     *   The maximum number of turns is reached (default 25; configurable via `max_turns` in `tools_config.toml`; use `max` or `max=100` to increase). Loop counts greater than 100 require the `force` flag.
@@ -1119,6 +1123,25 @@ chat --> Create a blog post outline about ${topic}
 ```
 
 ### Change log
+
+September 18th, 2026 (v0.8.6)
+----------------------------
+- **Tool History Append Mode (`/tool append_mode [summary|full|off]`)**:
+  - Added configurable history commit modes for autonomous tool loops (`summary` [default], `full`, and `off`).
+  - `summary` appends a compact, redacted execution summary of tool calls and exit statuses to the final response, keeping token overhead minimal while reinforcing correct tool invocation signatures for future turns.
+  - `full` records every intermediate step and tool output for models requiring explicit step-by-step reasoning context.
+  - `off` preserves only the final natural-language response.
+- **Autonomous Tool Loop Resilience & Rescue (`/tool retry`, `/tool continue`, `/tool inject`)**:
+  - Enhanced tool call extraction to recognize loose invoke syntax, XML tags (`<invoke="=" read_file">`), and functional formats without vendor adapters.
+  - Added intelligent fallback in `/tool retry` to prevent false default assignments when parsing natural language completions.
+  - Added `/tool continue` command to resume the agentic loop immediately after interactive tool rescues.
+- **Database Management & Integrity Utilities (`/setdb`, `/dbprint`)**:
+  - Added automatic rolling snapshot backups on session open when connecting to TinyDB databases.
+  - Added summary tables, range filtering, and CSV/JSON export capabilities to `/dbprint`.
+  - Added `db_mgmt_util` integrity checker with test harnesses and fixtures.
+- **Session Alias & Localization Enhancements**:
+  - Added `/session new` alias for `/session start`.
+  - Expanded multilingual keyword mapping (`append_mode`, `summary`, `retry`, `continue`, `inject`, `off`) across all 6 supported locales (EN, ES, FR, ZH, IT, AR).
 
 September 13th, 2026 (v0.8.5)
 ----------------------------

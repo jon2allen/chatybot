@@ -26,7 +26,8 @@ class TestVmemMonitoring:
     @pytest.mark.anyio
     async def test_vmem_start_stop_status(self, app, tmp_path):
         # Change working dir in test to tmp_path to write log file there
-        with patch('os.path.join', side_effect=lambda *args: os.path.join(tmp_path, args[-1]) if any("chatybot.vmem" in arg for arg in args) else os.path.join(*args)):
+        real_join = os.path.join
+        with patch('os.path.join', side_effect=lambda *args: real_join(str(tmp_path), args[-1]) if any("chatybot.vmem" in str(arg) for arg in args) else real_join(*args)):
             with patch('builtins.print') as mock_print:
                 # 1. Check status when OFF
                 await app.handle_escape_command("/debug vmem status")
