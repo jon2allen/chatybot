@@ -267,7 +267,8 @@ class TestRunCommandBehavior:
             assert len(app.chat_history) == 1
             # Final output must be committed to history
             assert app.chat_history[-1][0] == "Find files"
-            assert app.chat_history[-1][1] == "Here is the content: some final response text"
+            assert "Here is the content: some final response text" in app.chat_history[-1][1]
+            assert "[Tool Executions]:" in app.chat_history[-1][1]
             
             # chat_completion should have been called once with temp history
             app.chat_completion.assert_called_once()
@@ -386,7 +387,8 @@ class TestRunCommandBehavior:
             # The tool loop should have successfully fetched the tool call first, run it,
             # and then finished on the second turn.
             assert app.chat_completion.call_count == 2
-            assert app.chat_history[-1][1] == "Here is the final response."
+            assert "Here is the final response." in app.chat_history[-1][1]
+            assert "[Tool Executions]:" in app.chat_history[-1][1]
 
     def test_extract_tool_call_normalization(self, app):
         """Verifies that extract_tool_call normalizes fully qualified function paths to short tool names"""

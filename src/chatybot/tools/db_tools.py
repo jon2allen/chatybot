@@ -32,9 +32,10 @@ def db_search(
     Returns:
         JSON string with matching items.
     """
-    target_db = db_name or os.environ.get("CHATYBOT_ACTIVE_DB")
-    if target_db:
-        chatydb.set_db(target_db)
+    if db_name:
+        chatydb.set_db(db_name)
+    elif chatydb._manager is None and os.environ.get("CHATYBOT_ACTIVE_DB"):
+        chatydb.set_db(os.environ["CHATYBOT_ACTIVE_DB"])
 
     if chatydb._manager is None:
         return json.dumps({
@@ -116,9 +117,10 @@ def db_get(
     Returns:
         JSON string with the complete item details or an error message.
     """
-    target_db = db_name or os.environ.get("CHATYBOT_ACTIVE_DB")
-    if target_db:
-        chatydb.set_db(target_db)
+    if db_name:
+        chatydb.set_db(db_name)
+    elif chatydb._manager is None and os.environ.get("CHATYBOT_ACTIVE_DB"):
+        chatydb.set_db(os.environ["CHATYBOT_ACTIVE_DB"])
 
     if chatydb._manager is None:
         return json.dumps({
