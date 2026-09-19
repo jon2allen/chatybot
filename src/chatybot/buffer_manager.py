@@ -49,6 +49,8 @@ class ScriptVars(UserDict):
             'ASK_RESULT',
             'DECIDE',
             'DECIDE_FULL',
+            'DECIDE_CONF',
+            'DECIDE_PROB',
         }
         super().__init__(*args, **kwargs)
 

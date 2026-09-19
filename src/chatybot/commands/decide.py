@@ -4,6 +4,24 @@ Evaluates content against a typed question (choice, score, or noul) using
 a TypeSafe Jev / OpenRouter decisions model. Stores the scalar answer in
 the DECIDE protected variable (and an optional user-named var), and the
 full structured response in DECIDE_FULL.
+
+Calibration unpacking: confidence and per-option probabilities are flattened
+into dedicated script variables so ChatDSL scripts can gate actions on
+uncertainty without JSON traversal.
+
+Global registers:
+  DECIDE       — latest choice/answer/score (or "FALLBACK" if below threshold)
+  DECIDE_CONF  — calibrated confidence (0.00–1.00)
+  DECIDE_PROB  — winning option probability
+  DECIDE_FULL  — unmodified API payload
+
+Per-var registers (when var=<name> is given):
+  <name>              — decision result (or "FALLBACK")
+  <name>_choice       — raw winning choice/boolean/score
+  <name>_conf         — calibrated confidence
+  <name>_confidence   — verbose alias for _conf
+  <name>_prob         — probability of the selected option
+  <name>_prob_<opt>   — probability per candidate option
 """
 
 import os
@@ -17,7 +35,7 @@ from chatybot.commands.registry import CommandResult, command
 @command(
     "/decide",
     help="Evaluate content with a structured decision model (TypeSafe Jev)",
-    args='"<state>" <choice|score|noul> "<instructions>" [, options="key:desc,..."] [, levels="lvl0,lvl1,..."] [, var=<name>] [, model=<alias>]',
+    args='"<state>" <choice|score|noul> "<instructions>" [, options="key:desc,..."] [, levels="lvl0,lvl1,..."] [, scale="min:max"] [, threshold=<float>] [, var=<name>] [, model=<alias>]',
     category="decision",
 )
 async def cmd_decide(ctx: CommandContext, parts: list, command: str) -> CommandResult:
@@ -25,48 +43,46 @@ async def cmd_decide(ctx: CommandContext, parts: list, command: str) -> CommandR
     from ..env_utils import load_project_env_files
     load_project_env_files()
 
-    # ── Parse: state (first quoted string) ──────────────────────────
-    state_match = re.search(r'^/decide\s+["\']([^"\']+)["\']', command, re.IGNORECASE)
-    if not state_match:
+    # ── Parse: state, question type, and instructions ─────────────
+    # Combined regex so quotes inside the state content don't end the
+    # state match prematurely.  The state's closing quote is anchored to
+    # the question-type keyword (choice|score|noul) that follows it, so
+    # inner quotes followed by other words (e.g. echo "...") are skipped.
+    combined_match = re.match(
+        r'^/decide\s+["\'](.+?)["\']\s+(choice|score|noul)\s+["\']([^"\']+)["\']',
+        command, re.IGNORECASE | re.DOTALL,
+    )
+    if not combined_match:
         print(
             'Usage: /decide "<state>" <choice|score|noul> "<instructions>" '
-            '[, options="key:desc,..."] [, levels="lvl0,lvl1,..."] [, var=<name>] [, model=<alias>]'
+            '[, options="key:desc,..."] [, levels="lvl0,lvl1,..."] '
+            '[, scale="min:max"] [, threshold=<float>] [, var=<name>] [, model=<alias>]'
         )
         return CommandResult.ok()
 
-    state = state_match.group(1)
-    remainder = command[state_match.end():].strip()
+    state = combined_match.group(1)
+    question_type = combined_match.group(2).lower()
+    instructions = combined_match.group(3)
+    remainder = command[combined_match.end():].strip()
 
-    # ── Parse: question type (bare word) ─────────────────────────────
-    type_match = re.match(r'(\w+)', remainder)
-    if not type_match:
-        print("Error: specify question type: choice, score, or noul")
-        return CommandResult.ok()
-
-    question_type = type_match.group(1).lower()
     if question_type not in ("choice", "score", "noul"):
         print(f"Error: unknown question type '{question_type}'. Use: choice, score, or noul")
         return CommandResult.ok()
 
-    remainder = remainder[type_match.end():].strip()
-
-    # ── Parse: instructions (second quoted string) ──────────────────
-    instr_match = re.match(r'["\']([^"\']+)["\']', remainder)
-    if not instr_match:
-        print("Error: provide instructions as a quoted string after the question type")
-        return CommandResult.ok()
-
-    instructions = instr_match.group(1)
-    remainder = remainder[instr_match.end():].strip()
-
     # ── Parse: key=value options ────────────────────────────────────
     options_match = re.search(r'\boptions\s*=\s*["\']([^"\']+)["\']', remainder, re.IGNORECASE)
     levels_match = re.search(r'\blevels\s*=\s*["\']([^"\']+)["\']', remainder, re.IGNORECASE)
+    scale_match = re.search(r'\bscale\s*=\s*["\']?(\d+)\s*:\s*(\d+)["\']?', remainder, re.IGNORECASE)
     var_match = re.search(r'\bvar\s*=\s*(\S+)', remainder, re.IGNORECASE)
     model_match = re.search(r'\bmodel\s*=\s*(\S+)', remainder, re.IGNORECASE)
+    threshold_match = re.search(r'\bthreshold\s*=\s*([0-9]*\.?[0-9]+)', remainder, re.IGNORECASE)
 
     target_var = var_match.group(1).strip().lstrip("$") if var_match else None
     model_alias = model_match.group(1).strip() if model_match else None
+    threshold = float(threshold_match.group(1)) if threshold_match else 0.0
+    if threshold > 0.0 and not (0.0 <= threshold <= 1.0):
+        print(f"Error: threshold must be between 0.0 and 1.0, got {threshold}")
+        return CommandResult.ok()
 
     # ── Build the question body ────────────────────────────────────
     question_key = "q"
@@ -92,10 +108,18 @@ async def cmd_decide(ctx: CommandContext, parts: list, command: str) -> CommandR
         question_body["criteria"] = criteria
 
     elif question_type == "score":
-        if not levels_match:
-            print('Error: score questions require levels="lvl0,lvl1,lvl2,..."')
+        if scale_match and not levels_match:
+            # scale="min:max" — generate integer levels automatically
+            lo, hi = int(scale_match.group(1)), int(scale_match.group(2))
+            if lo >= hi:
+                print(f"Error: scale min ({lo}) must be less than max ({hi})")
+                return CommandResult.ok()
+            levels = [str(n) for n in range(lo, hi + 1)]
+        elif levels_match:
+            levels = [lvl.strip() for lvl in levels_match.group(1).split(",") if lvl.strip()]
+        else:
+            print('Error: score questions require levels="lvl0,lvl1,..." or scale="min:max"')
             return CommandResult.ok()
-        levels = [lvl.strip() for lvl in levels_match.group(1).split(",") if lvl.strip()]
         if len(levels) < 2:
             print("Error: score questions need at least 2 levels")
             return CommandResult.ok()
@@ -173,45 +197,95 @@ async def cmd_decide(ctx: CommandContext, parts: list, command: str) -> CommandR
         traceback.print_exc()
         return CommandResult.ok()
 
-    # ── Extract scalar answer ──────────────────────────────────────
+    # ── Extract scalar answer and calibration metrics ─────────────
     answers = response.get("answers", {})
     answer = answers.get(question_key, {})
+    if not answer and answers:
+        answer = next(iter(answers.values()))
     ans_type = answer.get("type", question_type)
 
     if ans_type == "choice":
-        scalar = answer.get("choice", "")
+        raw_result = str(answer.get("choice", ""))
     elif ans_type == "score":
-        scalar = str(answer.get("score", 0.0))
+        raw_result = str(answer.get("score", ""))
     elif ans_type == "noul":
-        scalar = str(answer.get("noul", 0.0))
+        # API may return "answer" (bool/str) or "noul" (float probability).
+        # The noul probability serves as both the answer and the confidence
+        # when no separate "confidence" field is present.
+        noul_val = answer.get("answer", answer.get("noul", 0.0))
+        if isinstance(noul_val, bool):
+            raw_result = "true" if noul_val else "false"
+        elif isinstance(noul_val, (int, float)):
+            raw_result = "true" if float(noul_val) >= 0.5 else "false"
+        else:
+            raw_result = str(noul_val).lower()
     else:
-        scalar = str(answer)
+        raw_result = str(answer.get("choice") or answer.get("answer") or answer)
 
-    # ── Store variables ─────────────────────────────────────────────
-    app.buffer_manager.set_script_var("DECIDE", scalar, allow_protected=True)
+    # Confidence: use explicit "confidence" field if present, otherwise
+    # fall back to the noul probability for noul-type questions.
+    confidence = answer.get("confidence")
+    if confidence is None:
+        if ans_type == "noul":
+            confidence = float(answer.get("noul", answer.get("answer", 0.0)) or 0.0)
+        else:
+            confidence = 0.0
+    confidence = float(confidence)
+    probabilities = answer.get("probabilities", {})
+    if not isinstance(probabilities, dict):
+        probabilities = {}
+    top_prob = float(probabilities.get(raw_result, confidence)) if probabilities else confidence
+
+    # Evaluate optional fallback threshold.
+    # Noul always returns true/false — the user can gate on _conf in
+    # their script.  Threshold gating applies to choice and score only.
+    is_fallback = threshold > 0.0 and confidence < threshold and ans_type != "noul"
+    final_output = "FALLBACK" if is_fallback else raw_result
+
+    # ── Store global registers ─────────────────────────────────────
+    app.buffer_manager.set_script_var("DECIDE", final_output, allow_protected=True)
+    app.buffer_manager.set_script_var("DECIDE_CONF", f"{confidence:.2f}", allow_protected=True)
+    app.buffer_manager.set_script_var("DECIDE_PROB", f"{top_prob:.2f}", allow_protected=True)
     app.buffer_manager.set_script_var("DECIDE_FULL", response, allow_protected=True)
+
+    # ── Store per-var flattened registers ──────────────────────────
     if target_var:
-        app.buffer_manager.set_script_var(target_var, scalar, allow_protected=True)
+        app.buffer_manager.set_script_var(target_var, final_output, allow_protected=True)
+        app.buffer_manager.set_script_var(f"{target_var}_choice", raw_result)
+        app.buffer_manager.set_script_var(f"{target_var}_conf", f"{confidence:.2f}")
+        app.buffer_manager.set_script_var(f"{target_var}_confidence", f"{confidence:.2f}")
+        app.buffer_manager.set_script_var(f"{target_var}_prob", f"{top_prob:.2f}")
+
+        # Flatten individual option probabilities
+        for opt_name, opt_val in probabilities.items():
+            clean_opt = str(opt_name).replace(" ", "_").replace("-", "_").lower()
+            try:
+                numeric_val = float(opt_val)
+                app.buffer_manager.set_script_var(f"{target_var}_prob_{clean_opt}", f"{numeric_val:.2f}")
+            except (ValueError, TypeError):
+                continue
 
     # ── Display ────────────────────────────────────────────────────
-    confidence = answer.get("confidence")
     print()
     print(f"  Question:  {instructions}")
     if ans_type == "choice":
-        print(f"  Answer:     {scalar}", end="")
-        if confidence is not None:
+        print(f"  Answer:     {final_output}", end="")
+        if is_fallback:
+            print(f"  [FALLBACK — confidence {confidence:.2f} < threshold {threshold:.2f}]")
+        elif confidence is not None:
             print(f"  (confidence: {confidence:.2f})")
         else:
             print()
-        probs = answer.get("probabilities", {})
-        if probs:
+        if probabilities:
             print()
             print("  Probabilities:")
-            for opt, prob in sorted(probs.items(), key=lambda x: x[1], reverse=True):
+            for opt, prob in sorted(probabilities.items(), key=lambda x: x[1], reverse=True):
                 print(f"    {opt:<20} {prob:.2f}")
     elif ans_type == "score":
-        print(f"  Score:      {scalar}", end="")
-        if confidence is not None:
+        print(f"  Score:      {final_output}", end="")
+        if is_fallback:
+            print(f"  [FALLBACK — confidence {confidence:.2f} < threshold {threshold:.2f}]")
+        elif confidence is not None:
             print(f"  (confidence: {confidence:.2f})")
         else:
             print()
@@ -220,11 +294,11 @@ async def cmd_decide(ctx: CommandContext, parts: list, command: str) -> CommandR
         if probs:
             print()
             print("  Probabilities:")
-            for lvl, prob in sorted(probs.items(), key=lambda x: int(x[0])):
+            for lvl, prob in sorted(probs.items(), key=lambda x: int(x[0]) if str(x[0]).isdigit() else 0):
                 label = legend.get(lvl, lvl)
                 print(f"    {label:<30} {prob:.2f}")
     elif ans_type == "noul":
-        print(f"  Probability: {scalar}", end="")
+        print(f"  Answer:     {final_output}", end="")
         if confidence is not None:
             print(f"  (confidence: {confidence:.2f})")
         else:
@@ -235,9 +309,9 @@ async def cmd_decide(ctx: CommandContext, parts: list, command: str) -> CommandR
         print()
         print(f"  Tokens: {usage.get('input_tokens', 0)} in / {usage.get('output_tokens', 0)} out")
 
-    saved_to = "DECIDE"
+    saved_to = "DECIDE, DECIDE_CONF, DECIDE_PROB, DECIDE_FULL"
     if target_var:
-        saved_to += f", ${target_var}"
+        saved_to += f", ${target_var}, ${target_var}_choice, ${target_var}_conf, ${target_var}_prob"
     print(f"  Saved to {saved_to}")
     print()
 
