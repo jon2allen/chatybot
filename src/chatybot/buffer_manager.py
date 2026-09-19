@@ -47,6 +47,8 @@ class ScriptVars(UserDict):
             'TOOL_REPLAY',
             'REPLAY',
             'ASK_RESULT',
+            'DECIDE',
+            'DECIDE_FULL',
         }
         super().__init__(*args, **kwargs)
 

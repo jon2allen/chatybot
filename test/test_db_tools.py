@@ -12,7 +12,7 @@ import pytest
 
 from src.chatybot import chatydb
 from src.chatybot.tinydb1.corpus_manager import CorpusManager
-from src.chatybot.tools.db_tools import db_get, db_list, db_search
+from src.chatybot.tools.db_tools import db_get, db_list, db_search, db_summary
 
 
 class TestDbSearch:
@@ -355,3 +355,87 @@ class TestDbList:
             recipes = [d for d in result["databases"] if d["name"] == "recipes"][0]
             assert recipes["entries"] == 2
             assert recipes["size_kb"] > 0
+
+
+class TestDbSummary:
+    """Test suite for db_summary tool"""
+
+    @pytest.fixture(autouse=True)
+    def setup_cleanup(self):
+        """Reset chatydb global state before and after tests"""
+        chatydb.SEARCHBUFFER.clear()
+        chatydb._manager = None
+        chatydb._db_path = None
+        chatydb._active_db_name = None
+        yield
+        chatydb.SEARCHBUFFER.clear()
+        chatydb._manager = None
+        chatydb._db_path = None
+        chatydb._active_db_name = None
+
+    def _create_test_db(self, tmp_path):
+        """Create a test database with known items and thinking metadata"""
+        manager = CorpusManager(tmp_path)
+        manager.add_item("chat", "chat1", "<think>scratch</think>Answer 1", {"prompt": "Prompt 1", "model_alias": "m1"})
+        manager.add_item("chat", "chat2", "Answer 2", {"prompt": "Prompt 2", "model_alias": "m2", "thinking_content": "reason", "thinking_tokens": 120})
+        manager.add_item("chat", "chat3", "Answer 3", {"prompt": "Prompt 3", "model_alias": "m3"})
+        manager.close()
+        return tmp_path
+
+    def test_db_summary_table_format(self):
+        """db_summary returns formatted ASCII table by default"""
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
+            tmp_path = tmp.name
+        try:
+            self._create_test_db(tmp_path)
+            chatydb._manager = CorpusManager(tmp_path)
+
+            output = db_summary()
+            assert "DATABASE SUMMARY TABLE:" in output
+            assert "Prompt 1" in output
+            assert "Prompt 2" in output
+            assert "Prompt 3" in output
+            assert "in content" in output
+            assert "metadata" in output
+            assert "stripped" in output
+            assert "120" in output
+        finally:
+            os.unlink(tmp_path)
+
+    def test_db_summary_json_format(self):
+        """db_summary returns structured JSON when format='json'"""
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
+            tmp_path = tmp.name
+        try:
+            self._create_test_db(tmp_path)
+            chatydb._manager = CorpusManager(tmp_path)
+
+            res = json.loads(db_summary(format="json"))
+            assert res["total_matched"] == 3
+            assert len(res["items"]) == 3
+            assert res["items"][0]["prompt"].startswith("Prompt 1")
+            assert res["items"][0]["thinking"] == "in content"
+            assert res["items"][1]["thinking"] == "metadata"
+            assert res["items"][1]["thinking_tokens"] == 120
+            assert res["items"][2]["thinking"] == "stripped"
+        finally:
+            os.unlink(tmp_path)
+
+    def test_db_summary_range_filtering(self):
+        """db_summary filters items by start-end range"""
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
+            tmp_path = tmp.name
+        try:
+            self._create_test_db(tmp_path)
+            chatydb._manager = CorpusManager(tmp_path)
+
+            res = json.loads(db_summary(item_range="1-2", format="json"))
+            assert res["total_matched"] == 2
+            assert [it["id"] for it in res["items"]] == [1, 2]
+
+            res_single = json.loads(db_summary(item_range="3", format="json"))
+            assert res_single["total_matched"] == 1
+            assert res_single["items"][0]["id"] == 3
+        finally:
+            os.unlink(tmp_path)
+

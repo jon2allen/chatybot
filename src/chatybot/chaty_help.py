@@ -851,6 +851,39 @@ class HelpSystem:
             ],
             see_also=["endfor", "set"]
         ))
+
+        self.register_command(CommandHelp(
+            name="/decide",
+            category="decision",
+            short_desc="Evaluate content with a structured decision model (TypeSafe Jev)",
+            usage='/decide "<state>" <choice|score|noul> "<instructions>" [, options="key:desc,..."] [, levels="lvl0,lvl1,..."] [, var=<name>] [, model=<alias>]',
+            long_desc=(
+                "Evaluates content against a typed question using a TypeSafe Jev or OpenRouter "
+                "decisions model. Three question types are supported:\n"
+                "  choice — picks one option from a set (returns the selected option)\n"
+                "  score  — rates content on a spectrum (returns a numeric score)\n"
+                "  noul   — yes/no question (returns a probability 0-1)\n\n"
+                "The scalar answer is stored in the DECIDE protected variable (and an optional "
+                "user-named var via var=). The full structured response with probabilities and "
+                "confidence is stored in DECIDE_FULL. Variable substitution applies to the state "
+                "argument, so $VAR and ${VAR} are resolved before evaluation."
+            ),
+            examples=[
+                '/decide "$ticket" choice "Which team?" options="billing:Payments,technical:Bugs,sales:Pricing" var=team',
+                '/decide "$bug_report" score "How severe?" levels="Cosmetic,Broken w/ workaround,Blocking" var=severity',
+                '/decide "$message" noul "Is this urgent?" var=urgency',
+            ],
+            parameters={
+                "state": 'Content to evaluate (quoted string, supports $VAR substitution)',
+                "choice|score|noul": "Question type",
+                "instructions": "The question to evaluate (quoted string)",
+                'options=': 'For choice: comma-separated key:description pairs, e.g. options="billing:Payments,technical:Bugs"',
+                'levels=': 'For score: comma-separated ordered level descriptions, e.g. levels="Low,Medium,High"',
+                'var=': "Optional variable name to store the scalar answer",
+                'model=': "Optional model alias to use (defaults to first type=decision model in config)",
+            },
+            see_also=["/model", "/setvar", "/rerank"]
+        ))
     
     def register_command(self, cmd_help: CommandHelp) -> None:
         """Register a command with the help system."""

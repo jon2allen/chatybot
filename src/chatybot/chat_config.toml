@@ -171,6 +171,17 @@ base_url = "https://openrouter.ai/api/v1/rerank"
 api_key = "OPENROUTER_API_KEY"
 
 # ============================================================================
+# DECISION MODELS (TypeSafe Jev / OpenRouter)
+# ============================================================================
+
+[models.openrouter_jev]
+name = "typesafe/jev-1.13"
+type = "decision"
+base_url = "https://openrouter.ai"
+endpoint_path = "/api/alpha/decisions"
+api_key = "OPENROUTER_API_KEY"
+
+# ============================================================================
 # NVIDIA NIM MODELS
 # ============================================================================
 
