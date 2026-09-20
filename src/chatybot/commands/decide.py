@@ -146,7 +146,7 @@ async def cmd_decide(ctx: CommandContext, parts: list, command: str) -> CommandR
         else:
             option_pairs = raw_options.split(",")
 
-        criteria: dict[str, str | None] = {}
+        criteria: dict[str, str] = {}
         for pair in option_pairs:
             pair = pair.strip()
             if not pair:
@@ -155,7 +155,8 @@ async def cmd_decide(ctx: CommandContext, parts: list, command: str) -> CommandR
                 k, v = pair.split(":", 1)
                 criteria[k.strip()] = v.strip()
             else:
-                criteria[pair] = None
+                # Use option key itself as description so JSON schema receives non-null string
+                criteria[pair] = pair
         if not criteria:
             print("Error: no valid options parsed from options= parameter")
             return CommandResult.ok()
