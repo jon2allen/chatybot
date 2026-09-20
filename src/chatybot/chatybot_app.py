@@ -1027,6 +1027,51 @@ class ChatybotApp:
             self.session_turns[-1]["agentic_loop"] = agentic_trace
         self.save_active_session()
 
+    def append_session_decision(
+        self,
+        command: str,
+        state: str,
+        question_type: str,
+        instructions: str,
+        result: str,
+        confidence: float,
+        model_alias: str,
+        target_var: str | None = None,
+        probabilities: dict[str, float] | None = None,
+        usage: dict[str, Any] | None = None,
+    ) -> None:
+        """Append a structured decision evaluation turn to active session and save to disk."""
+        if self.session_mode == "off":
+            return
+
+        self._ensure_active_session(f"/decide {instructions}")
+
+        decision_turn: dict[str, Any] = {
+            "turn_id": len(self.session_turns) + 1,
+            "type": "decision",
+            "model_alias": model_alias,
+            "command": command,
+            "state": state,
+            "question_type": question_type,
+            "instructions": instructions,
+            "prompt": f"[{question_type.upper()}] {instructions}\nState: {state}",
+            "response": result,
+            "confidence": confidence,
+            "timestamp": datetime.now().isoformat(),
+        }
+        if target_var:
+            decision_turn["target_var"] = target_var
+        if probabilities:
+            decision_turn["probabilities"] = probabilities
+        if usage:
+            decision_turn["usage"] = usage
+
+        self.session_turns.append(decision_turn)
+        try:
+            self._get_session_store().append_turn(self.active_session_id, decision_turn)
+        except OSError as e:
+            print(f"Warning: Could not write decision turn to disk session ({e}). Session continues in memory.")
+
     def append_session_command(self, command: str, verb: str):
         """Append a lightweight command action verb entry to active session and save to disk if active."""
         if self.session_mode == "off" or not self.active_session_id:

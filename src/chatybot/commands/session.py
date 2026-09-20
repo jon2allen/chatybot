@@ -354,16 +354,31 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
             t_id = turn.get("turn_id", 1)
             t_model = turn.get("model_alias")
             model_str = f" ({t_model})" if t_model else ""
-            print(f"[Turn {t_id}]{model_str}")
-            print(f"User: {turn.get('prompt')}")
-            if show_thinking and "thinking" in turn:
-                print("Thinking:")
-                for t_line in turn["thinking"].splitlines():
-                    print(f"  {t_line}")
-            print(f"Assistant: {turn.get('response')}")
-            if "agentic_loop" in turn:
-                t_count = len(turn["agentic_loop"])
-                print(f"(Tools executed: {t_count})")
+            t_type = turn.get("type")
+
+            if t_type == "decision":
+                q_type = turn.get("question_type", "choice").upper()
+                print(f"[Turn {t_id}] [DECISION:{q_type}]{model_str}")
+                print(f"Question: {turn.get('instructions')}")
+                print(f"State: {turn.get('state')}")
+                conf = turn.get("confidence")
+                conf_str = f" (confidence: {conf:.2f})" if isinstance(conf, (int, float)) else ""
+                print(f"Decision: {turn.get('response')}{conf_str}")
+                probs = turn.get("probabilities")
+                if probs and isinstance(probs, dict):
+                    prob_summary = ", ".join(f"{k}: {float(v):.2f}" for k, v in probs.items())
+                    print(f"Probabilities: {prob_summary}")
+            else:
+                print(f"[Turn {t_id}]{model_str}")
+                print(f"User: {turn.get('prompt')}")
+                if show_thinking and "thinking" in turn:
+                    print("Thinking:")
+                    for t_line in turn["thinking"].splitlines():
+                        print(f"  {t_line}")
+                print(f"Assistant: {turn.get('response')}")
+                if "agentic_loop" in turn:
+                    t_count = len(turn["agentic_loop"])
+                    print(f"(Tools executed: {t_count})")
             print("\n" + "-" * 80 + "\n")
         print("=" * 80 + "\n")
         return CommandResult.ok()
@@ -452,29 +467,47 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
         for turn in app.session_turns:
             t_id = turn.get("turn_id", 1)
             t_model = turn.get("model_alias")
-            header = f"## Turn {t_id}"
-            if t_model:
-                header += f" ({t_model})"
-            md_lines.append(f"{header}\n")
-            md_lines.append("### User")
-            md_lines.append(f"{turn.get('prompt')}\n")
-            if show_thinking and "thinking" in turn:
-                md_lines.append("### Reasoning Trace")
-                for t_line in turn["thinking"].splitlines():
-                    md_lines.append(f"> {t_line}")
-                md_lines.append("")
-            md_lines.append("### Assistant")
-            md_lines.append(f"{turn.get('response')}\n")
-            if "agentic_loop" in turn:
-                md_lines.append("#### Tools Executed")
-                for step in turn["agentic_loop"]:
-                    if isinstance(step, dict):
-                        tname = step.get("tool", "unknown_tool")
-                        md_lines.append(f"- `{tname}`")
-                    else:
-                        md_lines.append(f"- `{step}`")
-                md_lines.append("")
-            md_lines.append("---\n")
+            t_type = turn.get("type")
+            if t_type == "decision":
+                q_type = turn.get("question_type", "choice").upper()
+                header = f"## Turn {t_id} [Decision: {q_type}]"
+                if t_model:
+                    header += f" ({t_model})"
+                md_lines.append(f"{header}\n")
+                md_lines.append(f"- **Question**: {turn.get('instructions')}")
+                md_lines.append(f"- **State**: {turn.get('state')}")
+                conf = turn.get("confidence")
+                conf_str = f" (confidence: {conf:.2f})" if isinstance(conf, (int, float)) else ""
+                md_lines.append(f"- **Decision**: `{turn.get('response')}`{conf_str}")
+                probs = turn.get("probabilities")
+                if probs and isinstance(probs, dict):
+                    prob_summary = ", ".join(f"`{k}`: {float(v):.2f}" for k, v in probs.items())
+                    md_lines.append(f"- **Probabilities**: {prob_summary}")
+                md_lines.append("\n---\n")
+            else:
+                header = f"## Turn {t_id}"
+                if t_model:
+                    header += f" ({t_model})"
+                md_lines.append(f"{header}\n")
+                md_lines.append("### User")
+                md_lines.append(f"{turn.get('prompt')}\n")
+                if show_thinking and "thinking" in turn:
+                    md_lines.append("### Reasoning Trace")
+                    for t_line in turn["thinking"].splitlines():
+                        md_lines.append(f"> {t_line}")
+                    md_lines.append("")
+                md_lines.append("### Assistant")
+                md_lines.append(f"{turn.get('response')}\n")
+                if "agentic_loop" in turn:
+                    md_lines.append("#### Tools Executed")
+                    for step in turn["agentic_loop"]:
+                        if isinstance(step, dict):
+                            tname = step.get("tool", "unknown_tool")
+                            md_lines.append(f"- `{tname}`")
+                        else:
+                            md_lines.append(f"- `{step}`")
+                    md_lines.append("")
+                md_lines.append("---\n")
 
         try:
             with open(export_path, "w", encoding="utf-8") as f:

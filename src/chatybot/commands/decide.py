@@ -392,4 +392,22 @@ async def cmd_decide(ctx: CommandContext, parts: list, command: str) -> CommandR
     print(f"  Saved to {saved_to}")
     print()
 
+    # ── Record in session if active ─────────────────────────────────
+    if hasattr(app, "append_session_decision"):
+        try:
+            app.append_session_decision(
+                command=command,
+                state=state,
+                question_type=question_type,
+                instructions=instructions,
+                result=final_output,
+                confidence=confidence,
+                model_alias=model_alias or model_name,
+                target_var=target_var,
+                probabilities=probabilities,
+                usage=usage,
+            )
+        except Exception as e:
+            print(f"Warning: Could not save decision to session: {e}")
+
     return CommandResult.ok()
