@@ -191,6 +191,9 @@ async def cmd_decide(ctx: CommandContext, parts: list, command: str) -> CommandR
         if len(levels) < 2:
             print("Error: score questions need at least 2 levels")
             return CommandResult.ok()
+        if len(levels) > 10:
+            print(f"Error: score questions support at most 10 levels, got {len(levels)}")
+            return CommandResult.ok()
         question_body["criteria"] = levels
 
     # noul needs no criteria

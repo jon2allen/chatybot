@@ -486,3 +486,19 @@ async def test_score_negative_scale_param(capsys):
         "2": next(i for i, l in enumerate(lines) if l.startswith("2")),
     }
     assert prob_indices["-2"] < prob_indices["-1"] < prob_indices["0"] < prob_indices["1"] < prob_indices["2"]
+
+
+@pytest.mark.anyio
+async def test_score_level_limit_exceeded(capsys):
+    """Score questions with more than 10 levels should fail with an error."""
+    app = _make_app(capsys)
+
+    with patch("chatybot.decision_client.evaluate", new_callable=AsyncMock) as mock_eval:
+        await app.handle_escape_command(
+            '/decide "test text" score "Rate 1 to 20" scale="1:20"'
+        )
+        # Should not call evaluate
+        mock_eval.assert_not_called()
+
+    out = capsys.readouterr().out
+    assert "Error: score questions support at most 10 levels, got 20" in out
