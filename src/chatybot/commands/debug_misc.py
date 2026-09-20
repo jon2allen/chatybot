@@ -702,6 +702,15 @@ async def cmd_setvar(ctx: CommandContext, parts: list, command: str) -> CommandR
                 print(f"Error: Invalid array format for '{var_name}': {e}")
                 return CommandResult.ok()
 
+            # Strip thinking tags from array items, matching scalar path behavior
+            if strip_thinking:
+                extractor = getattr(app, "_extract_thinking_tokens", None)
+                if callable(extractor):
+                    string_list = [
+                        extractor(item)[1] if isinstance(item, str) else item
+                        for item in string_list
+                    ]
+
             success = app.buffer_manager.set_script_var(var_name, string_list)
             if not success:
                 return CommandResult.ok()

@@ -190,6 +190,42 @@ async def test_setvar_preserves_value_without_thinking_tags():
 
 
 @pytest.mark.anyio
+async def test_setvar_array_strips_thinking_tags_from_items():
+    """Issue 4: array variables should strip thinking tags from items by default."""
+    app = ChatybotApp()
+    app.initialize()
+    think_open = chr(60) + "think" + chr(62)
+    think_close = chr(60) + "/think" + chr(62)
+    raw = think_open + "reasoning" + think_close + "\nanswer"
+    app.last_response = raw
+    app.buffer_manager.set_script_var('LAST_COMPLETION', raw, allow_protected=True)
+
+    result = await app.handle_escape_command('/setvar arr1[] ["item1", "{LAST_COMPLETION}"]')
+    assert result is True
+
+    stored = app.buffer_manager.script_vars.get("arr1")
+    assert stored == ["item1", "answer"]
+
+
+@pytest.mark.anyio
+async def test_setvar_array_withthink_preserves_thinking_tags():
+    """Issue 4: array variables with withthink flag should preserve thinking tags."""
+    app = ChatybotApp()
+    app.initialize()
+    think_open = chr(60) + "think" + chr(62)
+    think_close = chr(60) + "/think" + chr(62)
+    raw = think_open + "reasoning" + think_close + "\nanswer"
+    app.last_response = raw
+    app.buffer_manager.set_script_var('LAST_COMPLETION', raw, allow_protected=True)
+
+    result = await app.handle_escape_command('/setvar arr2[] ["item1", "{LAST_COMPLETION}"] withthink')
+    assert result is True
+
+    stored = app.buffer_manager.script_vars.get("arr2")
+    assert stored == ["item1", raw]
+
+
+@pytest.mark.anyio
 async def test_setvar_withthink_flag_preserves_thinking_tags():
     """Verify /setvar withthink flag keeps thinking tags in the stored value."""
     app = ChatybotApp()
