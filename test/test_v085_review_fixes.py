@@ -100,6 +100,30 @@ def test_extract_thinking_tokens_supports_thinking_tags():
     assert clean == "The final answer is 42."
 
 
+def test_extract_thinking_tokens_handles_unclosed_tags():
+    """Issue 3: unclosed thinking blocks (e.g. interrupted streams) should be stripped."""
+    app = ChatybotApp()
+    think_open = chr(60) + "think" + chr(62)
+    unclosed = think_open + "partial reasoning with no close\nanswer text"
+    thinking, clean = app._extract_thinking_tokens(unclosed)
+    assert thinking is not None
+    assert "partial reasoning" in thinking
+    assert clean == ""
+
+
+def test_extract_thinking_tokens_handles_mixed_closed_and_unclosed():
+    """Issue 3: mixed closed and unclosed thinking blocks."""
+    app = ChatybotApp()
+    think_open = chr(60) + "think" + chr(62)
+    think_close = chr(60) + "/think" + chr(62)
+    mixed = think_open + "first" + think_close + "\n" + think_open + "second unclosed"
+    thinking, clean = app._extract_thinking_tokens(mixed)
+    assert thinking is not None
+    assert "first" in thinking
+    assert "second unclosed" in thinking
+    assert clean == ""
+
+
 @pytest.mark.anyio
 async def test_save_mismatched_closing_tags_does_not_truncate(tmp_path):
     app = ChatybotApp()
