@@ -839,17 +839,33 @@ class ChatybotApp:
         return candidate
 
     def _extract_thinking_tokens(self, response_text: str) -> tuple[str | None, str]:
-        """Extract reasoning traces (<think>...</think>, <thought>...</thought>, <thinking>...</thinking>) from response text."""
-        matches = re.findall(
+        """Extract reasoning traces from response text. Handles closed and unclosed thinking blocks."""
+        # Match closed thinking blocks for content extraction
+        closed_matches = re.findall(
             r"<(?:think|thought|thinking)>(.*?)</(?:think|thought|thinking)>",
             response_text,
             flags=re.DOTALL | re.IGNORECASE,
         )
-        if matches:
-            thinking_parts = [m.strip() for m in matches if m.strip()]
+        # Match unclosed thinking blocks (opening tag with no closing tag, e.g. interrupted streams)
+        after_closed = re.sub(
+            r"<(?:think|thought|thinking)>.*?</(?:think|thought|thinking)>\s*",
+            "",
+            response_text,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+        unclosed_matches = re.findall(
+            r"<(?:think|thought|thinking)>(.*)$",
+            after_closed,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+
+        all_matches = closed_matches + unclosed_matches
+        if all_matches:
+            thinking_parts = [m.strip() for m in all_matches if m.strip()]
             thinking_content = "\n\n".join(thinking_parts)
+            # Strip both closed and unclosed thinking blocks from clean text
             clean_text = re.sub(
-                r"<(?:think|thought|thinking)>.*?</(?:think|thought|thinking)>\s*",
+                r"<(?:think|thought|thinking)>.*?(?:</(?:think|thought|thinking)>|$)\s*",
                 "",
                 response_text,
                 flags=re.DOTALL | re.IGNORECASE,
