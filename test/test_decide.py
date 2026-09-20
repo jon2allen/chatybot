@@ -373,3 +373,24 @@ async def test_decide_variable_placeholder_substitution(capsys, q_type, mock_fn)
     assert "${subject}" not in call_kwargs["questions"]["q"]["instructions"]
 
 
+@pytest.mark.anyio
+async def test_decide_instructions_with_nested_quotes(capsys):
+    """Instructions with inner quotes ('Welcome' or 'Hello') should parse cleanly."""
+    app = _make_app(capsys)
+
+    mock_resp = _mock_choice_response(choice="welcome", confidence=0.88)
+    with patch("chatybot.decision_client.evaluate", new_callable=AsyncMock, return_value=mock_resp) as mock_eval:
+        cmd = '/decide "User arrived" choice "Should we say \'Welcome\' or \'Hello\' to user?" options="welcome:Greet,ignore:Skip" var=greet_ans'
+        res = await app.handle_escape_command(cmd)
+        assert res is True
+
+    call_kwargs = mock_eval.call_args.kwargs
+    assert call_kwargs["state"] == "User arrived"
+    assert call_kwargs["questions"]["q"]["instructions"] == "Should we say 'Welcome' or 'Hello' to user?"
+    assert call_kwargs["questions"]["q"]["type"] == "choice"
+
+    sv = app.buffer_manager.script_vars
+    assert sv["greet_ans"] == "welcome"
+
+
+
