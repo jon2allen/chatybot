@@ -44,14 +44,30 @@ async def cmd_decide(ctx: CommandContext, parts: list, command: str) -> CommandR
     load_project_env_files()
 
     # ── Parse: state, question type, and instructions ─────────────
-    # Combined regex so quotes inside the state content don't end the
-    # state match prematurely.  The state's closing quote is anchored to
-    # the question-type keyword (choice|score|noul) that follows it, so
-    # inner quotes followed by other words (e.g. echo "...") are skipped.
+    # Split the command into positional arguments (state, type, instructions)
+    # and optional key=value remainder. This allows instructions to contain
+    # nested quotes without breaking regex capture.
+    kw_match = re.search(r'\s+(?:options|levels|scale|var|model|threshold)\s*=', command, re.IGNORECASE)
+    if kw_match:
+        head = command[:kw_match.start()].strip()
+        remainder = command[kw_match.start():].strip()
+    else:
+        head = command.strip()
+        remainder = ""
+
     combined_match = re.match(
-        r'^/\S+\s+["\'](.+?)["\']\s+(choice|score|noul)\s+["\']([^"\']+)["\']',
-        command, re.IGNORECASE | re.DOTALL,
+        r'^/\S+\s+["\'](.+?)["\']\s+(choice|score|noul)\s+["\'](.+?)["\']\s*$',
+        head, re.IGNORECASE | re.DOTALL,
     )
+    if not combined_match:
+        # Fallback to direct prefix match for backwards compatibility
+        combined_match = re.match(
+            r'^/\S+\s+["\'](.+?)["\']\s+(choice|score|noul)\s+["\'](.+?)["\']',
+            command, re.IGNORECASE | re.DOTALL,
+        )
+        if combined_match:
+            remainder = command[combined_match.end():].strip()
+
     if not combined_match:
         print(
             'Usage: /decide "<state>" <choice|score|noul> "<instructions>" '
@@ -63,7 +79,6 @@ async def cmd_decide(ctx: CommandContext, parts: list, command: str) -> CommandR
     state = combined_match.group(1)
     question_type = combined_match.group(2).lower()
     instructions = combined_match.group(3)
-    remainder = command[combined_match.end():].strip()
 
     # Resolve variables and placeholders in state and instructions
     if hasattr(app, "buffer_manager") and app.buffer_manager:
