@@ -55,30 +55,43 @@ async def cmd_decide(ctx: CommandContext, parts: list, command: str) -> CommandR
         head = command.strip()
         remainder = ""
 
-    combined_match = re.match(
-        r'^/\S+\s+["\'](.+?)["\']\s+(choice|score|noul)\s+["\'](.+?)["\']\s*$',
-        head, re.IGNORECASE | re.DOTALL,
-    )
-    if not combined_match:
-        # Fallback to direct prefix match for backwards compatibility
-        combined_match = re.match(
+    state = None
+    question_type = None
+    instructions = None
+
+    # Search from right to left for the (choice|score|noul) separator.
+    # This prevents premature splitting when state content itself contains
+    # internal quotes followed by decision keywords (e.g. "User chose 'choice'").
+    for match in reversed(list(re.finditer(r'\s+(choice|score|noul)\s+', head, re.IGNORECASE))):
+        prefix = head[:match.start()].strip()
+        suffix = head[match.end():].strip()
+        m_state = re.match(r'^/\S+\s+["\'](.*)["\']\s*$', prefix, re.DOTALL)
+        m_instr = re.match(r'^["\'](.*)["\']\s*$', suffix, re.DOTALL)
+        if m_state and m_instr:
+            state = m_state.group(1)
+            question_type = match.group(1).lower()
+            instructions = m_instr.group(1)
+            break
+
+    if state is None or question_type is None or instructions is None:
+        # Fallback to direct regex match for backwards compatibility
+        fallback_match = re.match(
             r'^/\S+\s+["\'](.+?)["\']\s+(choice|score|noul)\s+["\'](.+?)["\']',
             command, re.IGNORECASE | re.DOTALL,
         )
-        if combined_match:
-            remainder = command[combined_match.end():].strip()
+        if fallback_match:
+            state = fallback_match.group(1)
+            question_type = fallback_match.group(2).lower()
+            instructions = fallback_match.group(3)
+            remainder = command[fallback_match.end():].strip()
 
-    if not combined_match:
+    if state is None or question_type is None or instructions is None:
         print(
             'Usage: /decide "<state>" <choice|score|noul> "<instructions>" '
             '[, options="key:desc,..."] [, levels="lvl0,lvl1,..."] '
             '[, scale="min:max"] [, threshold=<float>] [, var=<name>] [, model=<alias>]'
         )
         return CommandResult.ok()
-
-    state = combined_match.group(1)
-    question_type = combined_match.group(2).lower()
-    instructions = combined_match.group(3)
 
     # Resolve variables and placeholders in state and instructions
     if hasattr(app, "buffer_manager") and app.buffer_manager:
@@ -115,7 +128,7 @@ async def cmd_decide(ctx: CommandContext, parts: list, command: str) -> CommandR
     # ── Parse: key=value options ────────────────────────────────────
     options_match = re.search(r'\boptions\s*=\s*["\']([^"\']+)["\']', remainder, re.IGNORECASE)
     levels_match = re.search(r'\blevels\s*=\s*["\']([^"\']+)["\']', remainder, re.IGNORECASE)
-    scale_match = re.search(r'\bscale\s*=\s*["\']?(\d+)\s*:\s*(\d+)["\']?', remainder, re.IGNORECASE)
+    scale_match = re.search(r'\bscale\s*=\s*["\']?(-?\d+)\s*:\s*(-?\d+)["\']?', remainder, re.IGNORECASE)
     var_match = re.search(r'\bvar\s*=\s*(\S+)', remainder, re.IGNORECASE)
     model_match = re.search(r'\bmodel\s*=\s*(\S+)', remainder, re.IGNORECASE)
     threshold_match = re.search(r'\bthreshold\s*=\s*([0-9]*\.?[0-9]+)', remainder, re.IGNORECASE)
@@ -349,7 +362,13 @@ async def cmd_decide(ctx: CommandContext, parts: list, command: str) -> CommandR
         if probs:
             print()
             print("  Probabilities:")
-            for lvl, prob in sorted(probs.items(), key=lambda x: int(x[0]) if str(x[0]).isdigit() else 0):
+            def _score_key(item):
+                k = item[0]
+                try:
+                    return (0, int(k))
+                except (ValueError, TypeError):
+                    return (1, str(k))
+            for lvl, prob in sorted(probs.items(), key=_score_key):
                 label = legend.get(lvl, lvl)
                 print(f"    {label:<30} {prob:.2f}")
     elif ans_type == "noul":

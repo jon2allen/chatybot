@@ -436,6 +436,53 @@ async def test_decide_bare_options_criteria_non_null(capsys):
     assert app.buffer_manager.script_vars["status"] == "yes"
 
 
+@pytest.mark.anyio
+async def test_decide_state_containing_internal_decision_keywords(capsys):
+    """State containing quotes followed by decision keywords ('choice', etc.) should not split prematurely."""
+    app = _make_app(capsys)
+
+    mock_resp = _mock_choice_response(choice="positive", confidence=0.91)
+    with patch("chatybot.decision_client.evaluate", new_callable=AsyncMock, return_value=mock_resp) as mock_eval:
+        cmd = '/decide \'He said "test" choice "again"\' choice "Was the sentiment positive?" options="positive:Yes,negative:No" var=sentiment'
+        res = await app.handle_escape_command(cmd)
+        assert res is True
+
+    call_kwargs = mock_eval.call_args.kwargs
+    assert call_kwargs["state"] == 'He said "test" choice "again"'
+    assert call_kwargs["questions"]["q"]["type"] == "choice"
+    assert call_kwargs["questions"]["q"]["instructions"] == "Was the sentiment positive?"
+    assert app.buffer_manager.script_vars["sentiment"] == "positive"
 
 
+@pytest.mark.anyio
+async def test_score_negative_scale_param(capsys):
+    """Score: scale='-2:2' generates levels ['-2','-1','0','1','2'] and sorts probabilities correctly."""
+    app = _make_app(capsys)
 
+    mock_resp = _mock_score_response(
+        score=0,
+        confidence=0.85,
+        probabilities={"-2": 0.05, "2": 0.10, "-1": 0.15, "0": 0.50, "1": 0.20},
+    )
+    with patch("chatybot.decision_client.evaluate", new_callable=AsyncMock, return_value=mock_resp) as mock_eval:
+        await app.handle_escape_command(
+            '/decide "overall trend" score "Rate momentum" scale="-2:2" var=momentum'
+        )
+
+    call_kwargs = mock_eval.call_args.kwargs
+    assert call_kwargs["questions"]["q"]["criteria"] == ["-2", "-1", "0", "1", "2"]
+
+    sv = app.buffer_manager.script_vars
+    assert sv["momentum"] == "0"
+    assert sv["momentum_conf"] == "0.85"
+
+    out = capsys.readouterr().out
+    lines = [line.strip() for line in out.splitlines() if line.strip()]
+    prob_indices = {
+        "-2": next(i for i, l in enumerate(lines) if l.startswith("-2")),
+        "-1": next(i for i, l in enumerate(lines) if l.startswith("-1")),
+        "0": next(i for i, l in enumerate(lines) if l.startswith("0")),
+        "1": next(i for i, l in enumerate(lines) if l.startswith("1")),
+        "2": next(i for i, l in enumerate(lines) if l.startswith("2")),
+    }
+    assert prob_indices["-2"] < prob_indices["-1"] < prob_indices["0"] < prob_indices["1"] < prob_indices["2"]
