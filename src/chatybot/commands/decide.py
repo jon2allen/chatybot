@@ -49,7 +49,7 @@ async def cmd_decide(ctx: CommandContext, parts: list, command: str) -> CommandR
     # the question-type keyword (choice|score|noul) that follows it, so
     # inner quotes followed by other words (e.g. echo "...") are skipped.
     combined_match = re.match(
-        r'^/decide\s+["\'](.+?)["\']\s+(choice|score|noul)\s+["\']([^"\']+)["\']',
+        r'^/\S+\s+["\'](.+?)["\']\s+(choice|score|noul)\s+["\']([^"\']+)["\']',
         command, re.IGNORECASE | re.DOTALL,
     )
     if not combined_match:
