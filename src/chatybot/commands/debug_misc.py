@@ -626,21 +626,40 @@ async def cmd_setvar(ctx: CommandContext, parts: list, command: str) -> CommandR
             print(f"Error: Escape character '\\' is not allowed in setvar command for '{var_name}'.")
             return CommandResult.ok()
 
+        # Parse trailing withthink/raw flag before quote-stripping so quoted
+        # values are protected from flag collision (e.g. "The material is raw")
+        # and internal whitespace is preserved via rsplit.
+        strip_thinking = True
+        _WITHTHINK_FLAGS = ("withthink", "with-think", "withthinking", "with-thinking", "raw", "conpensar", "avecpenser", "含思考", "conpensare", "مع_تفكير", "crudo", "brut", "原始内容", "grezzo", "خام")
+        _NOTHINK_FLAGS = ("nothink", "no-think", "nothinking", "no-thinking", "clean", "sinpensar", "sanspenser", "无思考", "senzapensare", "بدون_تفكير")
+
+        if raw_value and raw_value[0] in "\"'":
+            # Quoted value: check for flag after the closing quote
+            quote_char = raw_value[0]
+            close_idx = raw_value.find(quote_char, 1)
+            if close_idx != -1 and close_idx < len(raw_value) - 1:
+                trailing = raw_value[close_idx + 1:].strip().strip("\"'").lower()
+                if trailing in _WITHTHINK_FLAGS:
+                    strip_thinking = False
+                    raw_value = raw_value[:close_idx + 1]
+                elif trailing in _NOTHINK_FLAGS:
+                    strip_thinking = True
+                    raw_value = raw_value[:close_idx + 1]
+        else:
+            # Unquoted value: check last word via rsplit to preserve whitespace
+            rsplit_parts = raw_value.rsplit(None, 1)
+            if len(rsplit_parts) == 2:
+                last_word = rsplit_parts[1].lower().strip("\"'")
+                if last_word in _WITHTHINK_FLAGS:
+                    strip_thinking = False
+                    raw_value = rsplit_parts[0]
+                elif last_word in _NOTHINK_FLAGS:
+                    strip_thinking = True
+                    raw_value = rsplit_parts[0]
+
         if (raw_value.startswith('"') and raw_value.endswith('"')) or (raw_value.startswith("'") and raw_value.endswith("'")):
             if len(raw_value) >= 2:
                 raw_value = raw_value[1:-1].strip()
-
-        # Parse trailing withthink/raw flag to preserve thinking tags, matching /save
-        strip_thinking = True
-        value_words = raw_value.split()
-        if len(value_words) >= 2:
-            last_word = value_words[-1].lower().strip("\"'")
-            if last_word in ("withthink", "with-think", "withthinking", "with-thinking", "raw", "conpensar", "avecpenser", "含思考", "conpensare", "مع_تفكير", "crudo", "brut", "原始内容", "grezzo", "خام"):
-                strip_thinking = False
-                raw_value = " ".join(value_words[:-1])
-            elif last_word in ("nothink", "no-think", "nothinking", "no-thinking", "clean", "sinpensar", "sanspenser", "无思考", "senzapensare", "بدون_تفكير"):
-                strip_thinking = True
-                raw_value = " ".join(value_words[:-1])
 
         if var_name in app.buffer_manager.script_vars:
             existing_type = app.buffer_manager.script_vars.get_type(var_name)
