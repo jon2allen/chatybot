@@ -135,8 +135,19 @@ async def cmd_decide(ctx: CommandContext, parts: list, command: str) -> CommandR
         if not options_match:
             print('Error: choice questions require options="key:desc,key:desc,..."')
             return CommandResult.ok()
+        raw_options = options_match.group(1).strip()
+        if ";" in raw_options:
+            option_pairs = raw_options.split(";")
+        elif "|" in raw_options:
+            option_pairs = raw_options.split("|")
+        elif ":" in raw_options:
+            # Split on commas that are followed by the next option key and colon
+            option_pairs = re.split(r',\s*(?=[a-zA-Z0-9_\-]+\s*:)', raw_options)
+        else:
+            option_pairs = raw_options.split(",")
+
         criteria: dict[str, str | None] = {}
-        for pair in options_match.group(1).split(","):
+        for pair in option_pairs:
             pair = pair.strip()
             if not pair:
                 continue

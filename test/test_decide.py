@@ -393,4 +393,29 @@ async def test_decide_instructions_with_nested_quotes(capsys):
     assert sv["greet_ans"] == "welcome"
 
 
+@pytest.mark.anyio
+@pytest.mark.parametrize("options_str", [
+    'refund:Customer wants a refund, store credit, or return, support:General questions, inquiries, help',
+    'refund:Customer wants a refund, store credit, or return; support:General questions, inquiries, help',
+])
+async def test_decide_options_with_commas_in_descriptions(capsys, options_str):
+    """Option descriptions containing commas parse correctly via comma lookahead or semicolon."""
+    app = _make_app(capsys)
+
+    mock_resp = _mock_choice_response(choice="refund", confidence=0.93)
+    with patch("chatybot.decision_client.evaluate", new_callable=AsyncMock, return_value=mock_resp) as mock_eval:
+        cmd = f'/decide "Need money back" choice "What is the intent?" options="{options_str}" var=intent'
+        res = await app.handle_escape_command(cmd)
+        assert res is True
+
+    call_kwargs = mock_eval.call_args.kwargs
+    criteria = call_kwargs["questions"]["q"]["criteria"]
+    assert criteria == {
+        "refund": "Customer wants a refund, store credit, or return",
+        "support": "General questions, inquiries, help",
+    }
+    assert app.buffer_manager.script_vars["intent"] == "refund"
+
+
+
 
