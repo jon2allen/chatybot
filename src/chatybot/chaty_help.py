@@ -607,12 +607,13 @@ class HelpSystem:
             name="/setvar",
             category="variable",
             short_desc="Set a script variable",
-            usage="/setvar <varname> <value>",
-            long_desc="Set a script variable to a string value. Surrounding quotes and leading '=' are automatically stripped. To have quotes inside quotes, alternate single and double quotes instead of escaping with '\\' (which is forbidden to prevent script parsing errors). This is for text only, not image data.",
+            usage="/setvar <varname> <value> [withthink|raw|nothink]",
+            long_desc="Set a script variable to a string value. Surrounding quotes and leading '=' are automatically stripped. To have quotes inside quotes, alternate single and double quotes instead of escaping with '\\' (which is forbidden to prevent script parsing errors). This is for text only, not image data. Thinking tags (think, thought, thinking) are automatically stripped from the stored value by default, matching /dblog and /save. Append 'withthink' (or 'raw') to preserve thinking tags, or 'nothink' (or 'clean') to explicitly strip them.",
             examples=[
                 "/setvar name John",
                 "/setvar count = 42",
-                "/setvar quote_var 'This is an \"inner\" quote'"
+                "/setvar quote_var 'This is an \"inner\" quote'",
+                "/setvar raw_resp {LAST_COMPLETION} withthink"
             ]
         ))
 
