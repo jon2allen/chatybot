@@ -342,3 +342,34 @@ async def test_decide_localized_aliases(capsys, alias):
     assert sv["res"] == "true"
     assert sv["DECIDE"] == "true"
 
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("q_type,mock_fn", [
+    ("choice", lambda: _mock_choice_response(choice="billing", confidence=0.85)),
+    ("score", lambda: _mock_score_response(score=5, confidence=0.90)),
+    ("noul", lambda: _mock_noul_response(answer=True, confidence=0.95)),
+])
+async def test_decide_variable_placeholder_substitution(capsys, q_type, mock_fn):
+    """Placeholders ($var, ${var}) in state and instructions are resolved across choice, score, and noul."""
+    app = _make_app(capsys)
+    app.buffer_manager.set_script_var("ticket_text", "Customer wants invoice refund for charge #402")
+    app.buffer_manager.set_script_var("subject", "invoice refund")
+
+    mock_resp = mock_fn()
+    with patch("chatybot.decision_client.evaluate", new_callable=AsyncMock, return_value=mock_resp) as mock_eval:
+        if q_type == "choice":
+            cmd = '/decide "$ticket_text" choice "Which category for ${subject}?" options="billing:Invoicing,tech:Support" var=ans'
+        elif q_type == "score":
+            cmd = '/decide "$ticket_text" score "Severity of ${subject}?" scale="1:5" var=ans'
+        else:
+            cmd = '/decide "$ticket_text" noul "Is ${subject} urgent?" var=ans'
+
+        res = await app.handle_escape_command(cmd)
+        assert res is True
+
+    call_kwargs = mock_eval.call_args.kwargs
+    assert call_kwargs["state"] == "Customer wants invoice refund for charge #402"
+    assert "invoice refund" in call_kwargs["questions"]["q"]["instructions"]
+    assert "${subject}" not in call_kwargs["questions"]["q"]["instructions"]
+
+

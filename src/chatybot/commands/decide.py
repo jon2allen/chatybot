@@ -65,6 +65,34 @@ async def cmd_decide(ctx: CommandContext, parts: list, command: str) -> CommandR
     instructions = combined_match.group(3)
     remainder = command[combined_match.end():].strip()
 
+    # Resolve variables and placeholders in state and instructions
+    if hasattr(app, "buffer_manager") and app.buffer_manager:
+        bm = app.buffer_manager
+        state_var = state.strip()
+        if (state_var.startswith("${") and state_var.endswith("}")) or (state_var.startswith("$") and re.match(r'^\$[a-zA-Z_]\w*$', state_var)):
+            clean_var = state_var[2:-1] if state_var.startswith("${") else state_var[1:]
+            if clean_var in bm.script_vars:
+                raw_val = bm.script_vars[clean_var]
+                if isinstance(raw_val, str):
+                    state = raw_val
+                elif raw_val is not None:
+                    state = str(raw_val)
+            else:
+                state, _ = bm.replace_placeholders(state, include_images=False, clear_unresolved=False)
+        elif "$" in state or "{" in state:
+            # Replace defined variables and placeholders while preserving exact whitespace
+            keys_to_resolve = list(bm.script_vars.keys()) + ["LAST_RESPONSE", "CHAT_HISTORY"] + list(bm.file_banks.keys())
+            sorted_keys = sorted(list(set(keys_to_resolve)), key=len, reverse=True)
+            for k in sorted_keys:
+                val = bm.resolve_text_variable(k)
+                if val is not None:
+                    flags = re.IGNORECASE if k.upper() in bm.script_vars.protected_vars or k.upper() in ("CHAT_HISTORY", "LAST_RESPONSE") else 0
+                    state = re.sub(rf"\$?\{{{re.escape(k)}\}}", str(val), state, flags=flags)
+                    state = re.sub(rf"\${re.escape(k)}\b", str(val), state, flags=flags)
+
+        if "$" in instructions or "{" in instructions:
+            instructions, _ = bm.replace_placeholders(instructions, include_images=False, clear_unresolved=False)
+
     if question_type not in ("choice", "score", "noul"):
         print(f"Error: unknown question type '{question_type}'. Use: choice, score, or noul")
         return CommandResult.ok()
