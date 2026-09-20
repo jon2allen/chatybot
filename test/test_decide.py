@@ -417,5 +417,25 @@ async def test_decide_options_with_commas_in_descriptions(capsys, options_str):
     assert app.buffer_manager.script_vars["intent"] == "refund"
 
 
+@pytest.mark.anyio
+async def test_decide_bare_options_criteria_non_null(capsys):
+    """Bare options (e.g. 'yes, no') should map to string descriptions, avoiding null in API criteria."""
+    app = _make_app(capsys)
+
+    mock_resp = _mock_choice_response(choice="yes", confidence=0.99)
+    with patch("chatybot.decision_client.evaluate", new_callable=AsyncMock, return_value=mock_resp) as mock_eval:
+        cmd = '/decide "Is battery charged?" choice "Select state" options="yes, no, maybe" var=status'
+        res = await app.handle_escape_command(cmd)
+        assert res is True
+
+    call_kwargs = mock_eval.call_args.kwargs
+    criteria = call_kwargs["questions"]["q"]["criteria"]
+    assert criteria == {"yes": "yes", "no": "no", "maybe": "maybe"}
+    # Ensure no values are None (which would serialize as null in JSON)
+    assert all(isinstance(v, str) and v for v in criteria.values())
+    assert app.buffer_manager.script_vars["status"] == "yes"
+
+
+
 
 
