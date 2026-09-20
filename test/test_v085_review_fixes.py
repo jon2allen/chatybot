@@ -118,6 +118,107 @@ async def test_save_mismatched_closing_tags_does_not_truncate(tmp_path):
     assert content == "Final answer is 100."
 
 
+@pytest.mark.anyio
+async def test_setvar_strips_thinking_tags_from_last_completion():
+    """Verify /setvar strips thinking tags from {LAST_COMPLETION}, matching /dblog default behavior."""
+    app = ChatybotApp()
+    app.initialize()
+    think_open = chr(60) + "think" + chr(62)
+    think_close = chr(60) + "/think" + chr(62)
+    app.last_response = think_open + "Let me compute." + think_close + "\nThe answer is 42."
+    app.buffer_manager.set_script_var('LAST_COMPLETION', app.last_response, allow_protected=True)
+
+    result = await app.handle_escape_command("/setvar myvar {LAST_COMPLETION}")
+    assert result is True
+
+    stored = app.buffer_manager.script_vars.get("myvar")
+    assert stored == "The answer is 42."
+
+
+@pytest.mark.anyio
+async def test_setvar_strips_thinking_tags_from_last_response_placeholder():
+    """Verify /setvar strips thinking tags from {LAST_RESPONSE} placeholder too."""
+    app = ChatybotApp()
+    app.initialize()
+    think_open = chr(60) + "think" + chr(62)
+    think_close = chr(60) + "/think" + chr(62)
+    app.last_response = think_open + "Reasoning here." + think_close + "\nFinal output."
+    app.buffer_manager.set_script_var('LAST_RESPONSE', app.last_response, allow_protected=True)
+
+    result = await app.handle_escape_command("/setvar cleanvar {LAST_RESPONSE}")
+    assert result is True
+
+    stored = app.buffer_manager.script_vars.get("cleanvar")
+    assert stored == "Final output."
+
+
+@pytest.mark.anyio
+async def test_setvar_preserves_value_without_thinking_tags():
+    """Verify /setvar does not alter values that contain no thinking tags."""
+    app = ChatybotApp()
+    app.initialize()
+
+    result = await app.handle_escape_command("/setvar plainvar hello world")
+    assert result is True
+
+    stored = app.buffer_manager.script_vars.get("plainvar")
+    assert stored == "hello world"
+
+
+@pytest.mark.anyio
+async def test_setvar_withthink_flag_preserves_thinking_tags():
+    """Verify /setvar withthink flag keeps thinking tags in the stored value."""
+    app = ChatybotApp()
+    app.initialize()
+    think_open = chr(60) + "think" + chr(62)
+    think_close = chr(60) + "/think" + chr(62)
+    raw = think_open + "Let me compute." + think_close + "\nThe answer is 42."
+    app.last_response = raw
+    app.buffer_manager.set_script_var('LAST_COMPLETION', raw, allow_protected=True)
+
+    result = await app.handle_escape_command("/setvar rawvar {LAST_COMPLETION} withthink")
+    assert result is True
+
+    stored = app.buffer_manager.script_vars.get("rawvar")
+    assert stored == raw
+
+
+@pytest.mark.anyio
+async def test_setvar_raw_flag_preserves_thinking_tags():
+    """Verify /setvar raw alias also keeps thinking tags."""
+    app = ChatybotApp()
+    app.initialize()
+    think_open = chr(60) + "think" + chr(62)
+    think_close = chr(60) + "/think" + chr(62)
+    raw = think_open + "Reasoning." + think_close + "\nOutput."
+    app.last_response = raw
+    app.buffer_manager.set_script_var('LAST_COMPLETION', raw, allow_protected=True)
+
+    result = await app.handle_escape_command("/setvar rawvar2 {LAST_COMPLETION} raw")
+    assert result is True
+
+    stored = app.buffer_manager.script_vars.get("rawvar2")
+    assert stored == raw
+
+
+@pytest.mark.anyio
+async def test_setvar_nothink_flag_strips_thinking_tags():
+    """Verify /setvar nothink flag explicitly strips thinking tags (same as default)."""
+    app = ChatybotApp()
+    app.initialize()
+    think_open = chr(60) + "think" + chr(62)
+    think_close = chr(60) + "/think" + chr(62)
+    raw = think_open + "Let me compute." + think_close + "\nThe answer is 42."
+    app.last_response = raw
+    app.buffer_manager.set_script_var('LAST_COMPLETION', raw, allow_protected=True)
+
+    result = await app.handle_escape_command("/setvar cleanvar2 {LAST_COMPLETION} nothink")
+    assert result is True
+
+    stored = app.buffer_manager.script_vars.get("cleanvar2")
+    assert stored == "The answer is 42."
+
+
 def test_extract_tool_calls_dots_function_call():
     app = ChatybotApp()
     sample = """<dots_function_call>

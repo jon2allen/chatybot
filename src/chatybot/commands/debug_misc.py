@@ -630,6 +630,18 @@ async def cmd_setvar(ctx: CommandContext, parts: list, command: str) -> CommandR
             if len(raw_value) >= 2:
                 raw_value = raw_value[1:-1].strip()
 
+        # Parse trailing withthink/raw flag to preserve thinking tags, matching /save
+        strip_thinking = True
+        value_words = raw_value.split()
+        if len(value_words) >= 2:
+            last_word = value_words[-1].lower().strip("\"'")
+            if last_word in ("withthink", "with-think", "withthinking", "with-thinking", "raw", "conpensar", "avecpenser", "含思考", "conpensare", "مع_تفكير", "crudo", "brut", "原始内容", "grezzo", "خام"):
+                strip_thinking = False
+                raw_value = " ".join(value_words[:-1])
+            elif last_word in ("nothink", "no-think", "nothinking", "no-thinking", "clean", "sinpensar", "sanspenser", "无思考", "senzapensare", "بدون_تفكير"):
+                strip_thinking = True
+                raw_value = " ".join(value_words[:-1])
+
         if var_name in app.buffer_manager.script_vars:
             existing_type = app.buffer_manager.script_vars.get_type(var_name)
             if existing_type in ("image", "json", "audio"):
@@ -686,6 +698,12 @@ async def cmd_setvar(ctx: CommandContext, parts: list, command: str) -> CommandR
                     raw_value = raw_value.replace(f"${{{bank_name}}}", image_data)
 
         var_value, _ = app.buffer_manager.replace_placeholders(raw_value, include_images=False, clear_unresolved=False)
+
+        # Strip thinking tags, matching /dblog and /save default behavior
+        if strip_thinking:
+            extractor = getattr(app, "_extract_thinking_tokens", None)
+            if callable(extractor) and isinstance(var_value, str):
+                _, var_value = extractor(var_value)
 
         success = app.buffer_manager.set_script_var(var_name, var_value)
         if not success:
