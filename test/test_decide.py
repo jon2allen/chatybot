@@ -325,3 +325,20 @@ async def test_state_with_echo_quote_pattern(capsys):
     sv = app.buffer_manager.script_vars
     assert sv["bash_decision"] == "true"
     assert sv["bash_decision_conf"] == "0.95"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("alias", ["/decidir", "/decider", "/决策", "/decidi", "/قرار"])
+async def test_decide_localized_aliases(capsys, alias):
+    """Localized aliases for /decide (es, fr, zh, it, ar) dispatch and parse correctly."""
+    app = _make_app(capsys)
+
+    mock_resp = _mock_noul_response(answer=True, confidence=0.91)
+    with patch("chatybot.decision_client.evaluate", new_callable=AsyncMock, return_value=mock_resp):
+        res = await app.handle_escape_command(f'{alias} "sample state" noul "Is it valid?" var=res')
+        assert res is True
+
+    sv = app.buffer_manager.script_vars
+    assert sv["res"] == "true"
+    assert sv["DECIDE"] == "true"
+
