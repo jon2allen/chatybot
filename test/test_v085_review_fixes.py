@@ -219,6 +219,62 @@ async def test_setvar_nothink_flag_strips_thinking_tags():
     assert stored == "The answer is 42."
 
 
+@pytest.mark.anyio
+async def test_setvar_quoted_value_with_trailing_flag_strips_quotes():
+    """Issue 1a: /setvar var "{LAST_COMPLETION}" withthink should strip quotes and apply flag."""
+    app = ChatybotApp()
+    app.initialize()
+    app.last_response = "hello world"
+    app.buffer_manager.set_script_var('LAST_COMPLETION', "hello world", allow_protected=True)
+
+    result = await app.handle_escape_command('/setvar q1 "{LAST_COMPLETION}" withthink')
+    assert result is True
+
+    stored = app.buffer_manager.script_vars.get("q1")
+    assert stored == "hello world"
+
+
+@pytest.mark.anyio
+async def test_setvar_quoted_literal_flag_not_consumed():
+    """Issue 1b/2b: flag word inside quotes is part of the literal, not a flag."""
+    app = ChatybotApp()
+    app.initialize()
+
+    result = await app.handle_escape_command('/setvar q2 "some text withthink"')
+    assert result is True
+
+    stored = app.buffer_manager.script_vars.get("q2")
+    assert stored == "some text withthink"
+
+
+@pytest.mark.anyio
+async def test_setvar_quoted_value_ending_in_common_word_preserved():
+    """Issue 2b: quoted value ending in 'raw' should not be truncated."""
+    app = ChatybotApp()
+    app.initialize()
+
+    result = await app.handle_escape_command('/setvar q3 "The material is raw"')
+    assert result is True
+
+    stored = app.buffer_manager.script_vars.get("q3")
+    assert stored == "The material is raw"
+
+
+@pytest.mark.anyio
+async def test_setvar_flag_preserves_internal_whitespace():
+    """Issue 5: withthink flag should not collapse internal whitespace."""
+    app = ChatybotApp()
+    app.initialize()
+    app.last_response = "line1\n\nline2"
+    app.buffer_manager.set_script_var('LAST_COMPLETION', "line1\n\nline2", allow_protected=True)
+
+    result = await app.handle_escape_command('/setvar q4 "{LAST_COMPLETION}" withthink')
+    assert result is True
+
+    stored = app.buffer_manager.script_vars.get("q4")
+    assert stored == "line1\n\nline2"
+
+
 def test_extract_tool_calls_dots_function_call():
     app = ChatybotApp()
     sample = """<dots_function_call>
