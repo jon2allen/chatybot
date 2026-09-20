@@ -335,7 +335,6 @@ chat --> Hello!           # Start chatting!
 | `/setvar <v> <val>`| Set a string variable (supports `{CHAT_HISTORY}` JSON export) | `/setvar var1 {CHAT_HISTORY}` |
 | `/documents <src>=<id>`| Set the active rerank source: `db=<name>`, `var=<name>` (or `CHAT_HISTORY`/`file`), `filebank=<1-5>`, or `dir="<path>"` | `/documents dir="test/conrad_test"` |
 | `/rerank "<query>"` | Semantically rerank source sentences/chunks with optional parameters | `/rerank "sea voyage" top_n=3 split=paragraph` |
-| `/decide "<state>" <type> "<instructions>"` | Evaluate content with a structured decision model (TypeSafe Jev): `choice`, `score`, or `noul` | `/decide "$ticket" choice "Which team?" options="billing:Payments,technical:Bugs" var=team` |
 | `/trace rerank <state>`| Enable/disable debugging output for the reranking processor | `/trace rerank on` |
 | `/imagebank{1-5} <file>` | Load image into bank for vision analysis | `/imagebank1 cat.jpg` |
 | `/imagebank{1-5} clear` | Clear an image bank | `/imagebank1 clear` |
