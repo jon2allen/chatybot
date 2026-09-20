@@ -502,3 +502,42 @@ async def test_score_level_limit_exceeded(capsys):
 
     out = capsys.readouterr().out
     assert "Error: score questions support at most 10 levels, got 20" in out
+
+
+@pytest.mark.anyio
+async def test_decide_saved_to_session_turn(capsys):
+    """When a session is active, /decide records prompt and structured result in session turns."""
+    app = _make_app(capsys)
+    app.session_mode = "on"
+    app.active_session_id = "test_decide_session_001"
+
+    mock_resp = _mock_choice_response(
+        choice="billing",
+        confidence=0.94,
+        probabilities={"billing": 0.94, "tech": 0.06},
+    )
+    with patch("chatybot.decision_client.evaluate", new_callable=AsyncMock, return_value=mock_resp):
+        cmd = '/decide "invoice inquiry" choice "Which department?" options="billing:Billing,tech:Technical" var=dept'
+        res = await app.handle_escape_command(cmd)
+        assert res is True
+
+    # Assert turn was appended to session_turns
+    assert len(app.session_turns) == 1
+    turn = app.session_turns[0]
+    assert turn["type"] == "decision"
+    assert turn["question_type"] == "choice"
+    assert turn["instructions"] == "Which department?"
+    assert turn["state"] == "invoice inquiry"
+    assert turn["response"] == "billing"
+    assert turn["confidence"] == 0.94
+    assert turn["probabilities"] == {"billing": 0.94, "tech": 0.06}
+    assert turn["target_var"] == "dept"
+
+    # Test /session show formats the decision turn properly
+    await app.handle_escape_command("/session show")
+    out = capsys.readouterr().out
+    assert "[Turn 1] [DECISION:CHOICE]" in out
+    assert "Question: Which department?" in out
+    assert "State: invoice inquiry" in out
+    assert "Decision: billing (confidence: 0.94)" in out
+
