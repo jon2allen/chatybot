@@ -313,6 +313,13 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
                     "verb": item.get("verb", ""),
                     "timestamp": item.get("timestamp")
                 })
+            elif item.get("type") == "decision":
+                app.session_activity.append({
+                    "type": "decision",
+                    "text": item.get("prompt", ""),
+                    "model": item.get("model_alias", app.session_model_alias or "default"),
+                    "timestamp": item.get("timestamp")
+                })
             elif "prompt" in item:
                 app.session_activity.append({
                     "type": "prompt",

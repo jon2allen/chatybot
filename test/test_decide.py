@@ -541,3 +541,13 @@ async def test_decide_saved_to_session_turn(capsys):
     assert "State: invoice inquiry" in out
     assert "Decision: billing (confidence: 0.94)" in out
 
+    # Verify decision turn is not lost when save_active_session() is called
+    assert any(act.get("type") == "decision" for act in app.session_activity)
+    app.save_active_session()
+    _, loaded_turns = app._get_session_store().load_session(app.active_session_id)
+    decision_turns_on_disk = [t for t in loaded_turns if t.get("type") == "decision"]
+    assert len(decision_turns_on_disk) == 1
+    assert decision_turns_on_disk[0]["response"] == "billing"
+    assert decision_turns_on_disk[0]["instructions"] == "Which department?"
+
+

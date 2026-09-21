@@ -972,6 +972,16 @@ class ChatybotApp:
                                 "response": "",
                                 "model_alias": act.get("model", model_alias)
                             })
+                    elif act.get("type") == "decision":
+                        p_text = act.get("text")
+                        if p_text in turn_map:
+                            combined_items.append(turn_map[p_text])
+                        else:
+                            # Fallback to matching any unattached decision turn
+                            for t in self.session_turns:
+                                if t.get("type") == "decision" and t not in combined_items:
+                                    combined_items.append(t)
+                                    break
                 store.replace_turns(self.active_session_id, combined_items)
             else:
                 store.replace_turns(self.active_session_id, self.session_turns)
@@ -1066,11 +1076,20 @@ class ChatybotApp:
         if usage:
             decision_turn["usage"] = usage
 
+        prompt = f"[{question_type.upper()}] {instructions}\nState: {state}"
+        self.session_activity.append({
+            "type": "decision",
+            "text": prompt,
+            "model": model_alias,
+            "timestamp": datetime.now().isoformat()
+        })
+
         self.session_turns.append(decision_turn)
         try:
             self._get_session_store().append_turn(self.active_session_id, decision_turn)
         except OSError as e:
             print(f"Warning: Could not write decision turn to disk session ({e}). Session continues in memory.")
+        self.buffer_manager.set_script_var('SESSION_NAME', self.active_session_name or self.active_session_id, allow_protected=True)
 
     def append_session_command(self, command: str, verb: str):
         """Append a lightweight command action verb entry to active session and save to disk if active."""
