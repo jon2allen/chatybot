@@ -551,3 +551,20 @@ async def test_decide_saved_to_session_turn(capsys):
     assert decision_turns_on_disk[0]["instructions"] == "Which department?"
 
 
+@pytest.mark.anyio
+async def test_decide_keywords_inside_state_and_instructions(capsys):
+    """Keywords like var=, scale=, or options= inside state or instructions must not trigger premature splitting."""
+    app = _make_app(capsys)
+
+    mock_resp = _mock_choice_response(choice="config", confidence=0.88)
+    with patch("chatybot.decision_client.evaluate", new_callable=AsyncMock, return_value=mock_resp) as mock_eval:
+        cmd = '/decide "The system with var=5 and scale=1:5 is failing" choice "Why did var=5 fail?" options="bug:Bug,config:Config" var=cause'
+        res = await app.handle_escape_command(cmd)
+        assert res is True
+
+    call_kwargs = mock_eval.call_args.kwargs
+    assert call_kwargs["state"] == "The system with var=5 and scale=1:5 is failing"
+    assert call_kwargs["questions"]["q"]["type"] == "choice"
+    assert call_kwargs["questions"]["q"]["instructions"] == "Why did var=5 fail?"
+    assert call_kwargs["questions"]["q"]["criteria"] == {"bug": "Bug", "config": "Config"}
+    assert app.buffer_manager.script_vars["cause"] == "config"
