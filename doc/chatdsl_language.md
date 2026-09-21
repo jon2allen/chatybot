@@ -150,6 +150,7 @@ ChatDSL currently supports the following languages:
 | `/dbprint` | `/imprimir_db` | `/imprimer_bd` | `/打印数据库` | `/stampa_db` | Dump vector storage content |
 | `/documents` | `/documentos` | `/documents` | `/文档源` | `/documenti` | Set source (db, var, filebank, dir) |
 | `/rerank` | `/reordenar` | `/reclasser` | `/重排` | `/riordina` | Execute Jina RAG rerank query on source |
+| `/decide` | `/decidir` | `/decider` | `/决策` | `/decidi` | Evaluate content with a structured decision model |
 | `/calc` | `/calcular` | `/calculer` | `/计算` | `/calcola` | Evaluate math expression using mathparse |
 | `/str_search` | `/buscar_cadena` / `/buscar_texto` | `/recherche_texte` / `/chercher_texte` | `/查找文本` / `/搜索字符串` | `/cerca_testo` / `/cerca_str` | Substring search pattern in script variables |
 

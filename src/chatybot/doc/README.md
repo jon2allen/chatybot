@@ -332,7 +332,8 @@ chat --> Hello!           # Start chatting!
 | `/dbprint [file]` | Print formatted DB report | `/dbprint report.txt` |
 | `/loadvar <v> [p]` | Store search, ALL, ID, or range in variable | `/loadvar results 1-5` |
 | `/savevar <v> <f>`| Save variable to file | `/savevar results log.txt` |
-| `/setvar <v> <val>`| Set a string variable (supports `{CHAT_HISTORY}` JSON export) | `/setvar var1 {CHAT_HISTORY}` |
+| `/setvar <v> <val> [flags]`| Set a string variable (strips thinking tags by default; `withthink` preserves) | `/setvar var1 ${LAST_COMPLETION} withthink` |
+| `/decide "<st>" <type> "<ins>"`| Evaluate content with TypeSafe Jev structured decision models (`choice`, `score`, `noul`) | `/decide "$text" choice "Classify" options="A:First,B:Second" var=cat` |
 | `/documents <src>=<id>`| Set the active rerank source: `db=<name>`, `var=<name>` (or `CHAT_HISTORY`/`file`), `filebank=<1-5>`, or `dir="<path>"` | `/documents dir="test/conrad_test"` |
 | `/rerank "<query>"` | Semantically rerank source sentences/chunks with optional parameters | `/rerank "sea voyage" top_n=3 split=paragraph` |
 | `/trace rerank <state>`| Enable/disable debugging output for the reranking processor | `/trace rerank on` |
@@ -478,6 +479,46 @@ Variables can be set manually, via search results, or in scripts:
 /setvar username "Jon"
 chat --> Hello ${username}, show me ${search_results}
 ```
+
+#### **Reasoning & Thinking Tag Stripping in Variables**
+* **Default Behavior**: Setting variables via `/setvar <name> <value>` or array append `/setvar arr[] <value>` automatically strips reasoning tags (`<think>`, `<thought>`, and `<thinking>`), matching `/save` and `/dblog`.
+* **Explicit Flags**:
+  * `withthink` (or `raw`): Preserves thinking tags and reasoning blocks verbatim inside the stored variable.
+  * `nothink` (or `clean`): Explicitly strips reasoning tags.
+```bash
+# Clean content without thinking traces
+/setvar clean_ans ${LAST_COMPLETION}
+
+# Preserve thinking tags explicitly
+/setvar raw_ans ${LAST_COMPLETION} withthink
+```
+
+### **Structured Decisions (`/decide`) (New!)**
+Chatybot integrates with **TypeSafe Jev** and OpenRouter structured decision models (`type = "decision"` in `chat_config.toml`), allowing scripts to run deterministic evaluations, classifications, and calibrations without unpredictable free-form text formatting.
+
+#### **Question Types**
+1. **`choice`**: Selects a discrete option from candidate descriptions.
+   ```bash
+   /decide "$ticket" choice "Which team should handle this ticket?" options="billing:Invoicing,technical:Bugs,sales:Pricing" threshold=0.70 var=team
+   ```
+2. **`score`**: Evaluates content along an ordinal spectrum via `scale="min:max"` or custom `levels=`.
+   ```bash
+   /decide "$bug_report" score "How severe is this bug?" scale="1:5" var=severity
+   ```
+3. **`noul`**: Fast calibrated binary evaluation returning boolean `true`/`false`.
+   ```bash
+   /decide "$message" noul "Is this customer query urgent?" var=is_urgent
+   ```
+
+#### **Calibration Unpacking & Confidence Gating**
+* **`threshold=<float>`**: If calibrated confidence falls below the specified floor, the primary variable resolves to `"FALLBACK"`, enabling safe, deterministic error-handling in ChatDSL scripts (`if "${team}" == "FALLBACK" then ...`).
+* **Registers**:
+  * `${DECIDE}`: Decision result (or `"FALLBACK"`).
+  * `${DECIDE_CONF}`: Calibrated confidence score ($0.00 - 1.00$).
+  * `${DECIDE_PROB}`: Winning option probability.
+  * `${DECIDE_FULL}`: Complete raw API response payload.
+  * When `var=<name>` is used, also populates `<name>_choice`, `<name>_conf`, `<name>_prob`, and `<name>_prob_<option>`.
+* **Session Persistence**: Decision prompts, state inputs, confidence levels, and outputs are automatically recorded as structured turns in active sessions (`/session show`, `/session export`).
 
 #### **Special & Protected Variable Case Insensitivity**
 All predefined system and protected variables (such as `CHAT_HISTORY`, `LAST_RESPONSE`, `AGENTIC_LOOP`, `TOOL_CONTEXT`, and `LAST_COMPLETION`) are case-insensitive. They can be referenced, subscripted, or dumped using any case variation (e.g. `${chat_history[0]}` or `/dump agentic_loop`). Custom user-defined script variables remain case-sensitive.
@@ -653,6 +694,7 @@ The following tools are packaged by default and can be enabled/disabled dynamica
 | `db_search` | Searches a TinyDB database for items matching a query across name, content, and metadata (lists all if query omitted). Pass `full_content=true` to retrieve full texts in one step. | `query` (optional), `db_name` (optional), `limit` (optional), `full_content` (optional) |
 | `db_get` | Retrieves a single complete item from a TinyDB database by its integer ID. Uses active DB if `db_name` omitted. | `item_id` (required), `db_name` (optional) |
 | `db_list` | Lists all available TinyDB databases with entry counts and file sizes. | none |
+| `db_summary` | Concise summary table or JSON list of database items (ID, timestamp, prompt snippet, thinking tokens) without heavy content payloads. | `db_name` (optional), `item_range` (optional), `format` (optional), `limit` (optional) |
 
 #### **Supported Tool Calling Formats**
 Chatybot's extraction engine automatically recognizes, parses, and normalizes all major LLM tool-calling output syntaxes without requiring provider-specific adapter layers:
@@ -1124,8 +1166,27 @@ chat --> Create a blog post outline about ${topic}
 
 ### Change log
 
-September 18th, 2026 (v0.8.6)
+September 21st, 2026 (v0.8.7)
 ----------------------------
+- **Structured Decision Engine (`/decide`)**:
+  - Integrated TypeSafe Jev & OpenRouter decision model support with three question types: `choice`, `score`, and `noul` (boolean).
+  - Added calibrated confidence gating with `threshold=<float>`, falling back deterministically to `"FALLBACK"` when confidence falls below the floor.
+  - Implemented automatic calibration unpacking into protected registers (`${DECIDE}`, `${DECIDE_CONF}`, `${DECIDE_PROB}`, `${DECIDE_FULL}`) and custom variable registers (`<var>`, `<var>_choice`, `<var>_conf`, `<var>_prob`, `<var>_prob_<option>`).
+  - Added support for ordinal scales with `scale="min:max"` (including negative integer ranges) or `levels=`, with Jev 10-level validation.
+  - Full variable and placeholder resolution for `<state>` and `<instructions>` with backslash escape protection.
+  - Decision turns are fully persisted and serialized across sessions (`/session show`, `/session export`, `save_active_session`).
+  - Added multilingual alias dispatch (`/decidir`, `/decider`, `/决策`, `/decidi`, `/قرار`).
+- **Thinking Tag Normalization & `/setvar` Flags**:
+  - `/setvar` and array assignments (`/setvar var[]`) now automatically strip reasoning tags (`<think>`, `<thought>`, `<thinking>`) by default.
+  - Added `withthink` / `raw` and `nothink` / `clean` flags to `/setvar` to explicitly retain or strip thinking blocks.
+  - Improved robustness of unclosed or truncated thinking tag stripping during stream interruptions.
+- **Database Summary Tool (`db_summary`)**:
+  - Added `db_summary` agent tool to `tools_config.toml` for retrieving concise database manifests in compact table or JSON format with range filtering.
+- **Model Configuration & TUI**:
+  - Added `type = "decision"` model configuration support with TypeSafe vendor presets in `chat_config.toml` and interactive editing in `config_tui.py`.
+
+September 18th, 2026 (v0.8.6)
+ ----------------------------
 - **Tool History Append Mode (`/tool append_mode [summary|full|off]`)**:
   - Added configurable history commit modes for autonomous tool loops (`summary` [default], `full`, and `off`).
   - `summary` appends a compact, redacted execution summary of tool calls and exit statuses to the final response, keeping token overhead minimal while reinforcing correct tool invocation signatures for future turns.
