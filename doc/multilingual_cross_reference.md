@@ -127,6 +127,7 @@ This table lists all available slash commands in ChatyBot, providing localized c
 | `/dbprint` | `/imprimir_db` | `/imprimer_bd` | `/打印数据库` | `/stampa_db` | Dump vector storage content |
 | `/documents` | `/documentos` | `/documents` | `/文档源` | `/documenti` | Set source (db, var, filebank, dir) |
 | `/rerank` | `/reordenar` | `/reclasser` | `/重排` | `/riordina` | Execute Jina RAG rerank query on source |
+| `/decide` | `/decidir` | `/decider` | `/决策` | `/decidi` | Evaluate content with a structured decision model |
 
 ---
 
