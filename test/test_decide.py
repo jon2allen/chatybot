@@ -568,3 +568,24 @@ async def test_decide_keywords_inside_state_and_instructions(capsys):
     assert call_kwargs["questions"]["q"]["instructions"] == "Why did var=5 fail?"
     assert call_kwargs["questions"]["q"]["criteria"] == {"bug": "Bug", "config": "Config"}
     assert app.buffer_manager.script_vars["cause"] == "config"
+
+
+@pytest.mark.anyio
+async def test_decide_variable_with_raw_backslashes(capsys):
+    """Variables containing raw backslashes like \\u0020 or C:\\users must not cause bad escape errors."""
+    app = _make_app(capsys)
+
+    # Text containing \u (which crashes regex if parsed as escape sequence)
+    raw_diff = "Commit: 1234\nPath: \\user\\local\\bin\nUnicode: \\u003cbr\\u003e\nModified line."
+    app.buffer_manager.set_script_var("diff_content", raw_diff)
+
+    mock_resp = _mock_noul_response(answer=True, confidence=0.92)
+    with patch("chatybot.decision_client.evaluate", new_callable=AsyncMock, return_value=mock_resp) as mock_eval:
+        cmd = '/decide "Check this diff: ${diff_content}" noul "Does this modify paths?" var=has_paths'
+        res = await app.handle_escape_command(cmd)
+        assert res is True
+
+    call_kwargs = mock_eval.call_args.kwargs
+    assert raw_diff in call_kwargs["state"]
+    assert app.buffer_manager.script_vars["has_paths"] == "true"
+

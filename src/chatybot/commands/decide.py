@@ -134,8 +134,10 @@ async def cmd_decide(ctx: CommandContext, parts: list, command: str) -> CommandR
                 val = bm.resolve_text_variable(k)
                 if val is not None:
                     flags = re.IGNORECASE if k.upper() in bm.script_vars.protected_vars or k.upper() in ("CHAT_HISTORY", "LAST_RESPONSE") else 0
-                    state = re.sub(rf"\$?\{{{re.escape(k)}\}}", str(val), state, flags=flags)
-                    state = re.sub(rf"\${re.escape(k)}\b", str(val), state, flags=flags)
+                    val_str = str(val)
+                    repl = lambda _m, v=val_str: v
+                    state = re.sub(rf"\$?\{{{re.escape(k)}\}}", repl, state, flags=flags)
+                    state = re.sub(rf"\${re.escape(k)}\b", repl, state, flags=flags)
 
         if "$" in instructions or "{" in instructions:
             instructions, _ = bm.replace_placeholders(instructions, include_images=False, clear_unresolved=False)
