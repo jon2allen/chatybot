@@ -950,38 +950,54 @@ class ChatybotApp:
         try:
             store.save_meta(self.active_session_id, meta)
             if self.session_activity:
-                # Reconstruct turns list preserving command events and exchange turns
+                # Reconstruct turns list preserving command events, exchange turns, and decision turns
                 combined_items = []
-                turn_map = {t.get("prompt"): t for t in self.session_turns if "prompt" in t}
+                prompt_turns = [t for t in self.session_turns if t.get("type") not in ("decision", "command")]
+                decision_turns = [t for t in self.session_turns if t.get("type") == "decision"]
+                p_idx = 0
+                d_idx = 0
+
                 for act in self.session_activity:
-                    if act.get("type") == "command":
+                    act_type = act.get("type")
+                    if act_type == "command":
                         combined_items.append({
                             "type": "command",
                             "text": act.get("text"),
                             "verb": act.get("verb"),
                             "timestamp": act.get("timestamp")
                         })
-                    elif act.get("type") == "prompt":
-                        p_text = act.get("text")
-                        if p_text in turn_map:
-                            combined_items.append(turn_map[p_text])
+                    elif act_type == "prompt":
+                        if p_idx < len(prompt_turns):
+                            combined_items.append(prompt_turns[p_idx])
+                            p_idx += 1
                         else:
                             combined_items.append({
                                 "turn_id": len(combined_items) + 1,
-                                "prompt": p_text,
+                                "prompt": act.get("text", ""),
                                 "response": "",
                                 "model_alias": act.get("model", model_alias)
                             })
-                    elif act.get("type") == "decision":
-                        p_text = act.get("text")
-                        if p_text in turn_map:
-                            combined_items.append(turn_map[p_text])
+                    elif act_type == "decision":
+                        if d_idx < len(decision_turns):
+                            combined_items.append(decision_turns[d_idx])
+                            d_idx += 1
                         else:
-                            # Fallback to matching any unattached decision turn
-                            for t in self.session_turns:
-                                if t.get("type") == "decision" and t not in combined_items:
-                                    combined_items.append(t)
-                                    break
+                            combined_items.append({
+                                "turn_id": len(combined_items) + 1,
+                                "type": "decision",
+                                "prompt": act.get("text", ""),
+                                "response": "",
+                                "model_alias": act.get("model", model_alias)
+                            })
+
+                # Append any remaining turns not accounted for in session_activity
+                while p_idx < len(prompt_turns):
+                    combined_items.append(prompt_turns[p_idx])
+                    p_idx += 1
+                while d_idx < len(decision_turns):
+                    combined_items.append(decision_turns[d_idx])
+                    d_idx += 1
+
                 store.replace_turns(self.active_session_id, combined_items)
             else:
                 store.replace_turns(self.active_session_id, self.session_turns)

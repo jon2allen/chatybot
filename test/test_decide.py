@@ -589,3 +589,37 @@ async def test_decide_variable_with_raw_backslashes(capsys):
     assert raw_diff in call_kwargs["state"]
     assert app.buffer_manager.script_vars["has_paths"] == "true"
 
+
+@pytest.mark.anyio
+async def test_multiple_decision_turns_fifo_persistence(capsys):
+    """Multiple decision turns in a session must persist in exact FIFO order without collision."""
+    app = _make_app(capsys)
+    app.session_mode = "on"
+    app.active_session_id = "test_decide_multi_fifo_001"
+
+    resp1 = _mock_choice_response(choice="first_choice", confidence=0.90)
+    resp2 = _mock_choice_response(choice="second_choice", confidence=0.85)
+
+    with patch("chatybot.decision_client.evaluate", new_callable=AsyncMock, side_effect=[resp1, resp2]):
+        cmd1 = '/decide "state 1" choice "Same question" options="first_choice:A,second_choice:B" var=v1'
+        cmd2 = '/decide "state 2" choice "Same question" options="first_choice:A,second_choice:B" var=v2'
+        await app.handle_escape_command(cmd1)
+        await app.handle_escape_command(cmd2)
+
+    assert len(app.session_turns) == 2
+    assert app.session_turns[0]["response"] == "first_choice"
+    assert app.session_turns[1]["response"] == "second_choice"
+
+    # Trigger save_active_session
+    app.save_active_session()
+
+    # Load from disk and verify FIFO order is intact
+    _, loaded_turns = app._get_session_store().load_session(app.active_session_id)
+    decisions_on_disk = [t for t in loaded_turns if t.get("type") == "decision"]
+    assert len(decisions_on_disk) == 2
+    assert decisions_on_disk[0]["response"] == "first_choice"
+    assert decisions_on_disk[0]["state"] == "state 1"
+    assert decisions_on_disk[1]["response"] == "second_choice"
+    assert decisions_on_disk[1]["state"] == "state 2"
+
+
