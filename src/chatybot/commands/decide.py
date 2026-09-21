@@ -28,8 +28,18 @@ import os
 import re
 import traceback
 
+from typing import Any
+
 from chatybot.commands.context import CommandContext
 from chatybot.commands.registry import CommandResult, command
+
+
+def _score_key(item: tuple[Any, Any]) -> tuple[int, Any]:
+    k = item[0]
+    try:
+        return (0, int(k))
+    except (ValueError, TypeError):
+        return (1, str(k))
 
 
 @command(
@@ -47,30 +57,39 @@ async def cmd_decide(ctx: CommandContext, parts: list, command: str) -> CommandR
     # Split the command into positional arguments (state, type, instructions)
     # and optional key=value remainder. This allows instructions to contain
     # nested quotes without breaking regex capture.
-    kw_match = re.search(r'\s+(?:options|levels|scale|var|model|threshold)\s*=', command, re.IGNORECASE)
-    if kw_match:
-        head = command[:kw_match.start()].strip()
-        remainder = command[kw_match.start():].strip()
-    else:
-        head = command.strip()
-        remainder = ""
-
     state = None
     question_type = None
     instructions = None
+    remainder = ""
 
     # Search from right to left for the (choice|score|noul) separator.
     # This prevents premature splitting when state content itself contains
     # internal quotes followed by decision keywords (e.g. "User chose 'choice'").
-    for match in reversed(list(re.finditer(r'\s+(choice|score|noul)\s+', head, re.IGNORECASE))):
-        prefix = head[:match.start()].strip()
-        suffix = head[match.end():].strip()
+    # Also ensures keywords like var= or scale= inside state quotes do not trigger
+    # premature remainder splitting.
+    for match in reversed(list(re.finditer(r'\s+(choice|score|noul)\s+', command, re.IGNORECASE))):
+        prefix = command[:match.start()].strip()
+        after = command[match.end():].strip()
         m_state = re.match(r'^/\S+\s+["\'](.*)["\']\s*$', prefix, re.DOTALL)
-        m_instr = re.match(r'^["\'](.*)["\']\s*$', suffix, re.DOTALL)
-        if m_state and m_instr:
-            state = m_state.group(1)
-            question_type = match.group(1).lower()
-            instructions = m_instr.group(1)
+        if not m_state:
+            continue
+
+        qtype = match.group(1).lower()
+
+        # In `after`, identify keyword argument start positions outside the instructions string.
+        kw_indices = [m.start() for m in re.finditer(r'\s+(?:options|levels|scale|var|model|threshold)\s*=', after, re.IGNORECASE)]
+        candidate_splits = kw_indices + [len(after)]
+        for kw_idx in candidate_splits:
+            candidate_instr = after[:kw_idx].strip()
+            candidate_rem = after[kw_idx:].strip()
+            m_instr = re.match(r'^["\'](.*)["\']\s*$', candidate_instr, re.DOTALL)
+            if m_instr:
+                state = m_state.group(1)
+                question_type = qtype
+                instructions = m_instr.group(1)
+                remainder = candidate_rem
+                break
+        if state is not None:
             break
 
     if state is None or question_type is None or instructions is None:
@@ -365,12 +384,6 @@ async def cmd_decide(ctx: CommandContext, parts: list, command: str) -> CommandR
         if probs:
             print()
             print("  Probabilities:")
-            def _score_key(item):
-                k = item[0]
-                try:
-                    return (0, int(k))
-                except (ValueError, TypeError):
-                    return (1, str(k))
             for lvl, prob in sorted(probs.items(), key=_score_key):
                 label = legend.get(lvl, lvl)
                 print(f"    {label:<30} {prob:.2f}")
