@@ -440,3 +440,112 @@ optional = true
 type = "string"
 description = "Output format: 'table' for compact ASCII table (default), or 'json' for structured JSON array"
 optional = true
+
+[tools.decide_score]
+enabled = false
+description = "Evaluate content against a numeric scale (e.g. '1:10', '1:5') or ordered qualitative rubric levels using the default TypeSafe Jev decision model. Returns the winning score, calibrated confidence (0.00-1.00), top probability, and full probability distribution."
+module = "chatybot.tools.decide_tools"
+function = "decide_score"
+
+[tools.decide_score.parameters.state]
+type = "string"
+description = "Target content, answer, draft, code, or context to evaluate"
+optional = false
+
+[tools.decide_score.parameters.instructions]
+type = "string"
+description = "Scoring criteria, rubric prompt, or grading instruction"
+optional = false
+
+[tools.decide_score.parameters.scale]
+type = "string"
+description = "Integer scale formatted as 'min:max' (e.g. '1:10', '1:5', '-2:2'). Default is '1:10'."
+optional = true
+
+[tools.decide_score.parameters.levels]
+type = "any"
+description = "Optional list or comma-separated string of 2 to 10 qualitative levels (e.g. ['poor', 'fair', 'good', 'excellent']). If provided, scale is ignored."
+optional = true
+
+[tools.decide_score.parameters.threshold]
+type = "number"
+description = "Minimum confidence threshold (0.0 to 1.0). If confidence falls below threshold, result is 'FALLBACK'."
+optional = true
+
+[tools.decide_score.parameters.model]
+type = "string"
+description = "Optional model alias override for decision model"
+optional = true
+
+[tools.decide_score.parameters.target_variable]
+type = "string"
+description = "Optional script variable name to store the winning score"
+optional = true
+
+[tools.decide_choice]
+enabled = false
+description = "Select the best option from a discrete set of choices with calibrated confidence using the default TypeSafe Jev decision model."
+module = "chatybot.tools.decide_tools"
+function = "decide_choice"
+
+[tools.decide_choice.parameters.state]
+type = "string"
+description = "Target content, draft, context, or assertion to evaluate"
+optional = false
+
+[tools.decide_choice.parameters.instructions]
+type = "string"
+description = "Instructions explaining the decision criteria or question"
+optional = false
+
+[tools.decide_choice.parameters.options]
+type = "any"
+description = "Choices to evaluate. Can be a dict {'opt_a': 'desc_a', 'opt_b': 'desc_b'}, a list of strings, or 'key:desc,key:desc'."
+optional = false
+
+[tools.decide_choice.parameters.threshold]
+type = "number"
+description = "Minimum confidence threshold (0.0 to 1.0). If confidence falls below threshold, result is 'FALLBACK'."
+optional = true
+
+[tools.decide_choice.parameters.model]
+type = "string"
+description = "Optional model alias override for decision model"
+optional = true
+
+[tools.decide_choice.parameters.target_variable]
+type = "string"
+description = "Optional script variable name to store the winning choice"
+optional = true
+
+[tools.decide_noul]
+enabled = false
+description = "Evaluate a binary proposition or verification condition (true/false) with calibrated confidence and probability using the default TypeSafe Jev decision model."
+module = "chatybot.tools.decide_tools"
+function = "decide_noul"
+
+[tools.decide_noul.parameters.state]
+type = "string"
+description = "Target content, assertion, draft, or context to evaluate"
+optional = false
+
+[tools.decide_noul.parameters.instructions]
+type = "string"
+description = "The proposition, verification question, or binary condition to evaluate"
+optional = false
+
+[tools.decide_noul.parameters.threshold]
+type = "number"
+description = "Minimum confidence threshold (0.0 to 1.0). If confidence falls below threshold, result is 'FALLBACK'."
+optional = true
+
+[tools.decide_noul.parameters.model]
+type = "string"
+description = "Optional model alias override for decision model"
+optional = true
+
+[tools.decide_noul.parameters.target_variable]
+type = "string"
+description = "Optional script variable name to store the boolean answer"
+optional = true
+
