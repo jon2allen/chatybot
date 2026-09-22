@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
+import json
 import os
 import re
 from typing import Any
@@ -22,18 +23,27 @@ from typing import Any
 from ..decision_client import DecisionAPIError, evaluate
 from ..env_utils import load_project_env_files, resolve_api_key
 
+_THREAD_POOL: concurrent.futures.ThreadPoolExecutor | None = None
+
+
+def _get_thread_pool() -> concurrent.futures.ThreadPoolExecutor:
+    global _THREAD_POOL
+    if _THREAD_POOL is None:
+        _THREAD_POOL = concurrent.futures.ThreadPoolExecutor(max_workers=2, thread_name_prefix="decide_worker")
+    return _THREAD_POOL
+
 
 def _run_async(coro):
-    """Run an async coroutine synchronously, handling any existing event loops."""
+    """Run an async coroutine synchronously, handling any existing event loops safely."""
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
         loop = None
 
     if loop and loop.is_running():
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-            future = executor.submit(lambda: asyncio.run(coro))
-            return future.result()
+        executor = _get_thread_pool()
+        future = executor.submit(lambda: asyncio.run(coro))
+        return future.result()
     return asyncio.run(coro)
 
 
@@ -93,7 +103,7 @@ def _resolve_decision_config(model_alias: str | None = None, app: Any = None) ->
     return decision_model_config, api_key or ""
 
 
-def _execute_decision(
+async def async_execute_decision(
     question_type: str,
     state: str,
     instructions: str,
@@ -103,7 +113,23 @@ def _execute_decision(
     target_variable: str | None = None,
     app: Any = None,
 ) -> dict[str, Any]:
-    """Internal runner for structured decision evaluations."""
+    """Async internal runner for structured decision evaluations."""
+    try:
+        threshold_val = float(threshold or 0.0)
+    except (ValueError, TypeError):
+        return {
+            "status": "error",
+            "message": f"Invalid threshold '{threshold}'. Must be a float between 0.0 and 1.0.",
+            "result": None,
+        }
+
+    if threshold_val < 0.0 or threshold_val > 1.0:
+        return {
+            "status": "error",
+            "message": f"Error: threshold must be between 0.0 and 1.0, got {threshold}",
+            "result": None,
+        }
+
     model_cfg, api_key = _resolve_decision_config(model_alias=model_alias, app=app)
 
     if not api_key:
@@ -128,15 +154,13 @@ def _execute_decision(
     questions = {"q": q_body}
 
     try:
-        response = _run_async(
-            evaluate(
-                state=state,
-                questions=questions,
-                model_name=model_name,
-                base_url=base_url,
-                endpoint_path=endpoint_path,
-                api_key=api_key,
-            )
+        response = await evaluate(
+            state=state,
+            questions=questions,
+            model_name=model_name,
+            base_url=base_url,
+            endpoint_path=endpoint_path,
+            api_key=api_key,
         )
     except DecisionAPIError as e:
         return {
@@ -188,9 +212,24 @@ def _execute_decision(
     if not isinstance(probabilities, dict):
         probabilities = {}
 
-    top_prob = float(probabilities.get(raw_result, confidence)) if probabilities else confidence
+    top_prob = None
+    if probabilities:
+        if raw_result in probabilities:
+            top_prob = float(probabilities[raw_result])
+        elif raw_result.lower() in probabilities:
+            top_prob = float(probabilities[raw_result.lower()])
+        elif raw_result.capitalize() in probabilities:
+            top_prob = float(probabilities[raw_result.capitalize()])
+        elif raw_result.upper() in probabilities:
+            top_prob = float(probabilities[raw_result.upper()])
+        elif raw_result in ("true", "false"):
+            bool_key = raw_result == "true"
+            if bool_key in probabilities:
+                top_prob = float(probabilities[bool_key])
+    if top_prob is None:
+        top_prob = confidence
 
-    is_fallback = threshold > 0.0 and confidence < threshold and ans_type != "noul"
+    is_fallback = threshold_val > 0.0 and confidence < threshold_val and ans_type != "noul"
     final_output = "FALLBACK" if is_fallback else raw_result
 
     result_payload: dict[str, Any] = {
@@ -223,7 +262,32 @@ def _execute_decision(
     return result_payload
 
 
-def decide_score(
+def _execute_decision(
+    question_type: str,
+    state: str,
+    instructions: str,
+    criteria: Any = None,
+    threshold: float = 0.0,
+    model_alias: str | None = None,
+    target_variable: str | None = None,
+    app: Any = None,
+) -> dict[str, Any]:
+    """Sync wrapper around async_execute_decision."""
+    return _run_async(
+        async_execute_decision(
+            question_type=question_type,
+            state=state,
+            instructions=instructions,
+            criteria=criteria,
+            threshold=threshold,
+            model_alias=model_alias,
+            target_variable=target_variable,
+            app=app,
+        )
+    )
+
+
+async def async_decide_score(
     state: str,
     instructions: str,
     scale: str | None = "1:10",
@@ -233,28 +297,21 @@ def decide_score(
     target_variable: str | None = None,
     app: Any = None,
 ) -> dict[str, Any]:
-    """
-    Evaluate content against a numeric scale or ordered qualitative rubric levels
-    using the default TypeSafe Jev decision model.
-
-    Args:
-        state: Target content, answer, draft, or context to evaluate.
-        instructions: Scoring criteria or rubric prompt.
-        scale: Integer scale formatted as 'min:max' (e.g. '1:10', '1:5', '-2:2'). Default '1:10'.
-        levels: Optional list of 2-10 ordered qualitative levels (e.g. ['poor', 'fair', 'good', 'excellent']).
-                If levels are provided, scale is ignored.
-        threshold: Minimum confidence threshold (0.0 to 1.0). If confidence < threshold,
-                   result is 'FALLBACK'.
-        model: Optional decision model alias from configuration.
-        target_variable: Optional variable name to store the winning score.
-        app: ChatybotApp instance passed when called within application context.
-
-    Returns:
-        Structured JSON dictionary with score, confidence, probabilities, and model.
-    """
+    """Async evaluation of score against numeric scale or qualitative rubric levels."""
     if levels:
         if isinstance(levels, str):
-            parsed_levels = [lvl.strip() for lvl in levels.split(",") if lvl.strip()]
+            levels_str = levels.strip()
+            if levels_str.startswith("[") and levels_str.endswith("]"):
+                try:
+                    parsed = json.loads(levels_str)
+                    if isinstance(parsed, list):
+                        parsed_levels = [str(x).strip() for x in parsed if str(x).strip()]
+                    else:
+                        parsed_levels = [lvl.strip() for lvl in levels_str.split(",") if lvl.strip()]
+                except Exception:
+                    parsed_levels = [lvl.strip() for lvl in levels_str.split(",") if lvl.strip()]
+            else:
+                parsed_levels = [lvl.strip() for lvl in levels_str.split(",") if lvl.strip()]
         elif isinstance(levels, (list, tuple)):
             parsed_levels = [str(lvl).strip() for lvl in levels if str(lvl).strip()]
         else:
@@ -307,12 +364,137 @@ def decide_score(
             }
         criteria = [str(n) for n in range(lo, hi + 1)]
 
-    return _execute_decision(
+    return await async_execute_decision(
         question_type="score",
         state=state,
         instructions=instructions,
         criteria=criteria,
-        threshold=float(threshold or 0.0),
+        threshold=threshold,
+        model_alias=model,
+        target_variable=target_variable,
+        app=app,
+    )
+
+
+def decide_score(
+    state: str,
+    instructions: str,
+    scale: str | None = "1:10",
+    levels: list[str] | str | None = None,
+    threshold: float = 0.0,
+    model: str | None = None,
+    target_variable: str | None = None,
+    app: Any = None,
+) -> dict[str, Any]:
+    """
+    Evaluate content against a numeric scale or ordered qualitative rubric levels
+    using the default TypeSafe Jev decision model.
+    """
+    return _run_async(
+        async_decide_score(
+            state=state,
+            instructions=instructions,
+            scale=scale,
+            levels=levels,
+            threshold=threshold,
+            model=model,
+            target_variable=target_variable,
+            app=app,
+        )
+    )
+
+
+async def async_decide_choice(
+    state: str,
+    instructions: str,
+    options: dict[str, str] | list[str] | str,
+    threshold: float = 0.0,
+    model: str | None = None,
+    target_variable: str | None = None,
+    app: Any = None,
+) -> dict[str, Any]:
+    """Async selection of the best option from a discrete set of choices."""
+    criteria: dict[str, str] = {}
+
+    if isinstance(options, dict):
+        criteria = {str(k).strip(): str(v).strip() for k, v in options.items() if str(k).strip()}
+    elif isinstance(options, (list, tuple)):
+        for item in options:
+            item_str = str(item).strip()
+            if not item_str:
+                continue
+            if ":" in item_str:
+                k, v = item_str.split(":", 1)
+                criteria[k.strip()] = v.strip()
+            else:
+                criteria[item_str] = item_str
+    elif isinstance(options, str):
+        raw_options = options.strip()
+        parsed_from_json = False
+        if raw_options.startswith("{") and raw_options.endswith("}"):
+            try:
+                parsed = json.loads(raw_options)
+                if isinstance(parsed, dict):
+                    criteria = {str(k).strip(): str(v).strip() for k, v in parsed.items() if str(k).strip()}
+                    parsed_from_json = True
+            except Exception:
+                pass
+        elif raw_options.startswith("[") and raw_options.endswith("]"):
+            try:
+                parsed = json.loads(raw_options)
+                if isinstance(parsed, list):
+                    for item in parsed:
+                        item_str = str(item).strip()
+                        if not item_str:
+                            continue
+                        if ":" in item_str:
+                            k, v = item_str.split(":", 1)
+                            criteria[k.strip()] = v.strip()
+                        else:
+                            criteria[item_str] = item_str
+                    parsed_from_json = True
+            except Exception:
+                pass
+
+        if not parsed_from_json:
+            if ";" in raw_options:
+                pairs = raw_options.split(";")
+            elif "|" in raw_options:
+                pairs = raw_options.split("|")
+            elif ":" in raw_options:
+                pairs = re.split(r",\s*(?=[a-zA-Z0-9_\-]+\s*:)", raw_options)
+            else:
+                pairs = raw_options.split(",")
+
+            for p in pairs:
+                p = p.strip()
+                if not p:
+                    continue
+                if ":" in p:
+                    k, v = p.split(":", 1)
+                    criteria[k.strip()] = v.strip()
+                else:
+                    criteria[p] = p
+    else:
+        return {
+            "status": "error",
+            "message": f"Invalid options format: expected dict or list, got {type(options).__name__}",
+            "result": None,
+        }
+
+    if not criteria:
+        return {
+            "status": "error",
+            "message": "At least one option must be provided for decide_choice.",
+            "result": None,
+        }
+
+    return await async_execute_decision(
+        question_type="choice",
+        state=state,
+        instructions=instructions,
+        criteria=criteria,
+        threshold=threshold,
         model_alias=model,
         target_variable=target_variable,
         app=app,
@@ -331,77 +513,35 @@ def decide_choice(
     """
     Select the best option from a discrete set of choices with calibrated confidence
     using the default TypeSafe Jev decision model.
-
-    Args:
-        state: Target content, draft, context, or code to evaluate.
-        instructions: Instructions explaining the decision criteria.
-        options: Choices to evaluate. Can be:
-                 - A dictionary: {"option_a": "description", "option_b": "description"}
-                 - A list of option names: ["option_a", "option_b"]
-                 - A string formatted as 'key:desc,key:desc' or 'key,key'
-        threshold: Minimum confidence threshold (0.0 to 1.0). If confidence < threshold,
-                   result is 'FALLBACK'.
-        model: Optional decision model alias from configuration.
-        target_variable: Optional variable name to store the winning choice.
-        app: ChatybotApp instance passed when called within application context.
-
-    Returns:
-        Structured JSON dictionary with choice, confidence, probabilities, and model.
     """
-    criteria: dict[str, str] = {}
+    return _run_async(
+        async_decide_choice(
+            state=state,
+            instructions=instructions,
+            options=options,
+            threshold=threshold,
+            model=model,
+            target_variable=target_variable,
+            app=app,
+        )
+    )
 
-    if isinstance(options, dict):
-        criteria = {str(k).strip(): str(v).strip() for k, v in options.items() if str(k).strip()}
-    elif isinstance(options, (list, tuple)):
-        for item in options:
-            item_str = str(item).strip()
-            if not item_str:
-                continue
-            if ":" in item_str:
-                k, v = item_str.split(":", 1)
-                criteria[k.strip()] = v.strip()
-            else:
-                criteria[item_str] = item_str
-    elif isinstance(options, str):
-        raw_options = options.strip()
-        if ";" in raw_options:
-            pairs = raw_options.split(";")
-        elif "|" in raw_options:
-            pairs = raw_options.split("|")
-        elif ":" in raw_options:
-            pairs = re.split(r",\s*(?=[a-zA-Z0-9_\-]+\s*:)", raw_options)
-        else:
-            pairs = raw_options.split(",")
 
-        for p in pairs:
-            p = p.strip()
-            if not p:
-                continue
-            if ":" in p:
-                k, v = p.split(":", 1)
-                criteria[k.strip()] = v.strip()
-            else:
-                criteria[p] = p
-    else:
-        return {
-            "status": "error",
-            "message": f"Invalid options format: expected dict or list, got {type(options).__name__}",
-            "result": None,
-        }
-
-    if not criteria:
-        return {
-            "status": "error",
-            "message": "At least one option must be provided for decide_choice.",
-            "result": None,
-        }
-
-    return _execute_decision(
-        question_type="choice",
+async def async_decide_noul(
+    state: str,
+    instructions: str,
+    threshold: float = 0.0,
+    model: str | None = None,
+    target_variable: str | None = None,
+    app: Any = None,
+) -> dict[str, Any]:
+    """Async evaluation of binary proposition or verification check (true/false)."""
+    return await async_execute_decision(
+        question_type="noul",
         state=state,
         instructions=instructions,
-        criteria=criteria,
-        threshold=float(threshold or 0.0),
+        criteria=None,
+        threshold=threshold,
         model_alias=model,
         target_variable=target_variable,
         app=app,
@@ -419,26 +559,14 @@ def decide_noul(
     """
     Evaluate a binary proposition or verification check (true/false) with calibrated
     probability and confidence using the default TypeSafe Jev decision model.
-
-    Args:
-        state: Target content, assertion, draft, or context to evaluate.
-        instructions: The question, proposition, or verification condition to evaluate.
-        threshold: Minimum confidence threshold (0.0 to 1.0). If confidence < threshold,
-                   result is 'FALLBACK'.
-        model: Optional decision model alias from configuration.
-        target_variable: Optional variable name to store the boolean result ('true'/'false').
-        app: ChatybotApp instance passed when called within application context.
-
-    Returns:
-        Structured JSON dictionary with answer ('true'/'false'), confidence, and probability.
     """
-    return _execute_decision(
-        question_type="noul",
-        state=state,
-        instructions=instructions,
-        criteria=None,
-        threshold=float(threshold or 0.0),
-        model_alias=model,
-        target_variable=target_variable,
-        app=app,
+    return _run_async(
+        async_decide_noul(
+            state=state,
+            instructions=instructions,
+            threshold=threshold,
+            model=model,
+            target_variable=target_variable,
+            app=app,
+        )
     )
