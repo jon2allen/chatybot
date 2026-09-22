@@ -695,6 +695,9 @@ The following tools are packaged by default and can be enabled/disabled dynamica
 | `db_get` | Retrieves a single complete item from a TinyDB database by its integer ID. Uses active DB if `db_name` omitted. | `item_id` (required), `db_name` (optional) |
 | `db_list` | Lists all available TinyDB databases with entry counts and file sizes. | none |
 | `db_summary` | Concise summary table or JSON list of database items (ID, timestamp, prompt snippet, thinking tokens) without heavy content payloads. | `db_name` (optional), `item_range` (optional), `format` (optional), `limit` (optional) |
+| `decide_score` | Evaluates target content against a numeric scale (e.g. '1:10') or qualitative rubric levels using the default TypeSafe Jev decision model. Returns winning score, calibrated confidence (0.00-1.00), and probability distributions. | `state` (required), `instructions` (required), `scale` (optional), `levels` (optional), `threshold` (optional), `target_variable` (optional) |
+| `decide_choice` | Evaluates target content against discrete choices/options with calibrated confidence using the default decision model. | `state` (required), `instructions` (required), `options` (required), `threshold` (optional), `target_variable` (optional) |
+| `decide_noul` | Evaluates a binary proposition or verification condition (true/false) with calibrated confidence and probability using the default decision model. | `state` (required), `instructions` (required), `threshold` (optional), `target_variable` (optional) |
 
 #### **Supported Tool Calling Formats**
 Chatybot's extraction engine automatically recognizes, parses, and normalizes all major LLM tool-calling output syntaxes without requiring provider-specific adapter layers:
