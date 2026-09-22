@@ -272,3 +272,107 @@ def test_dispatcher_route_decide_tools():
         assert kwargs["state"] == "Sample text"
         assert kwargs["scale"] == "1:5"
 
+
+def test_threshold_out_of_range():
+    res_neg = decide_score(
+        state="Test",
+        instructions="Grade",
+        threshold=-0.5,
+    )
+    assert res_neg["status"] == "error"
+    assert "threshold must be between 0.0 and 1.0" in res_neg["message"]
+
+    res_high = decide_score(
+        state="Test",
+        instructions="Grade",
+        threshold=1.5,
+    )
+    assert res_high["status"] == "error"
+    assert "threshold must be between 0.0 and 1.0" in res_high["message"]
+
+
+def test_decide_score_json_string_levels():
+    mock_resp = _mock_score_response(score="good", confidence=0.88)
+    with patch("chatybot.tools.decide_tools.evaluate", new_callable=AsyncMock, return_value=mock_resp) as mock_eval:
+        res = decide_score(
+            state="Draft",
+            instructions="Grade",
+            levels='["poor", "fair", "good"]',
+        )
+    assert res["status"] == "success"
+    assert res["score"] == "good"
+    assert mock_eval.call_args.kwargs["questions"]["q"]["criteria"] == ["poor", "fair", "good"]
+
+
+def test_decide_choice_json_string_options():
+    mock_resp = _mock_choice_response(choice="opt_a", confidence=0.92)
+    with patch("chatybot.tools.decide_tools.evaluate", new_callable=AsyncMock, return_value=mock_resp) as mock_eval:
+        res = decide_choice(
+            state="Draft",
+            instructions="Pick",
+            options='{"opt_a": "First Option", "opt_b": "Second Option"}',
+        )
+    assert res["status"] == "success"
+    assert res["choice"] == "opt_a"
+    assert mock_eval.call_args.kwargs["questions"]["q"]["criteria"] == {
+        "opt_a": "First Option",
+        "opt_b": "Second Option",
+    }
+
+
+def test_decide_noul_case_insensitive_prob():
+    # Probability keys as capitalized string or boolean True
+    mock_resp = {
+        "model": "typesafe/jev-1.13",
+        "answers": {
+            "q": {
+                "type": "noul",
+                "answer": True,
+                "confidence": 0.94,
+                "probabilities": {"True": 0.94, "False": 0.06},
+            }
+        },
+    }
+    with patch("chatybot.tools.decide_tools.evaluate", new_callable=AsyncMock, return_value=mock_resp):
+        res = decide_noul(
+            state="Paris is the capital of France.",
+            instructions="Is this claim true?",
+        )
+    assert res["status"] == "success"
+    assert res["result"] == "true"
+    assert res["top_probability"] == 0.94
+
+
+@pytest.mark.anyio
+async def test_app_dispatch_tool_in_process_with_registers():
+    from chatybot.chatybot_app import ChatybotApp
+
+    app = ChatybotApp()
+    app.initialize()
+    app.tool_overrides["decide_choice"] = True
+
+    tool_call = {
+        "tool": "decide_choice",
+        "arguments": {
+            "state": "Code diff looks clean and tested.",
+            "instructions": "Should this PR be approved?",
+            "options": {"approve": "Safe to merge", "reject": "Needs work"},
+            "target_variable": "merge_decision",
+        },
+    }
+
+    mock_resp = _mock_choice_response(choice="approve", confidence=0.89, probabilities={"approve": 0.89, "reject": 0.11})
+    with patch("chatybot.tools.decide_tools.evaluate", new_callable=AsyncMock, return_value=mock_resp):
+        result_str = await app.dispatch_tool(json.dumps(tool_call))
+
+    assert result_str is not None
+    res_data = json.loads(result_str)
+    assert res_data["status"] == "success"
+    assert res_data["result"]["choice"] == "approve"
+
+    # Verify that in-process dispatch set target_variable and calibration registers
+    assert app.buffer_manager.get_script_var("merge_decision") == "approve"
+    assert app.buffer_manager.get_script_var("merge_decision_conf") == "0.89"
+    assert app.buffer_manager.get_script_var("merge_decision_prob") == "0.89"
+
+

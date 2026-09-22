@@ -3845,6 +3845,50 @@ class ChatybotApp:
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', str(e))
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
                     return err_msg
+            elif tool_name in ("decide_score", "decide_choice", "decide_noul"):
+                is_enabled = self.tool_overrides.get(tool_name, False)
+                if not is_enabled:
+                    cfg = self._load_tools_config()
+                    is_enabled = cfg.get("tools", {}).get(tool_name, {}).get("enabled", False)
+                if not is_enabled:
+                    err_msg = f"Error: Tool '{tool_name}' is currently disabled."
+                    self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
+                    self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', err_msg)
+                    self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '-1')
+                    print(err_msg)
+                    return err_msg
+                try:
+                    from .tools.decide_tools import async_decide_choice, async_decide_noul, async_decide_score
+                    args = tool_call.get("arguments", {}) or {}
+                    if isinstance(args, dict):
+                        if "parameters" in args and isinstance(args["parameters"], dict):
+                            args = args["parameters"]
+                        elif "arguments" in args and isinstance(args["arguments"], dict):
+                            args = args["arguments"]
+
+                    if tool_name == "decide_score":
+                        res = await async_decide_score(app=self, **args)
+                    elif tool_name == "decide_choice":
+                        res = await async_decide_choice(app=self, **args)
+                    else:
+                        res = await async_decide_noul(app=self, **args)
+
+                    result_str = json.dumps(
+                        {"status": res["status"], "tool": tool_name, "result": res},
+                        indent=2,
+                        ensure_ascii=False,
+                    )
+                    self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', result_str)
+                    self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', '')
+                    self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '0')
+                    print(f"Tool dispatched successfully (in-process {tool_name})")
+                    return result_str
+                except Exception as e:
+                    err_msg = f"Error: {tool_name} execution failed: {e}"
+                    self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
+                    self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', str(e))
+                    self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
+                    return err_msg
 
         # Create a temporary file for the invocation
         with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', suffix='.json', delete=False) as tmp_file:
@@ -3934,7 +3978,13 @@ class ChatybotApp:
                         if not target_var and tool_call and isinstance(tool_call, dict):
                             target_var = tool_call.get("arguments", {}).get("target_variable")
                         if target_var and val is not None:
-                            self.buffer_manager.set_script_var(str(target_var).strip(), val, allow_protected=True)
+                            var_name = str(target_var).strip().lstrip("$")
+                            self.buffer_manager.set_script_var(var_name, val, allow_protected=True)
+                            if isinstance(inner_res, dict):
+                                if "confidence" in inner_res:
+                                    self.buffer_manager.set_script_var(f"{var_name}_conf", f"{float(inner_res['confidence']):.2f}", allow_protected=True)
+                                if "top_probability" in inner_res:
+                                    self.buffer_manager.set_script_var(f"{var_name}_prob", f"{float(inner_res['top_probability']):.2f}", allow_protected=True)
                 except Exception:
                     pass
 
