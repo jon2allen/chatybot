@@ -280,6 +280,8 @@ async def cmd_decide(ctx: CommandContext, parts: list, command: str) -> CommandR
             base_url=base_url,
             endpoint_path=endpoint_path,
             api_key=api_key,
+            trace_raw_payload=getattr(app, "trace_raw_payload", False),
+            logging_manager=getattr(app, "logging_manager", None),
         )
     except DecisionAPIError as e:
         print(f"Decision API error ({e.status}): {e.body}")

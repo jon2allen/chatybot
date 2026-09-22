@@ -376,3 +376,26 @@ async def test_app_dispatch_tool_in_process_with_registers():
     assert app.buffer_manager.get_script_var("merge_decision_prob") == "0.89"
 
 
+@pytest.mark.anyio
+async def test_decide_tools_pass_trace_raw_payload():
+    from chatybot.chatybot_app import ChatybotApp
+    from chatybot.tools.decide_tools import async_decide_score
+
+    app = ChatybotApp()
+    app.initialize()
+    app.trace_raw_payload = True
+
+    mock_resp = _mock_score_response(score="9", confidence=0.95)
+    with patch("chatybot.tools.decide_tools.evaluate", new_callable=AsyncMock, return_value=mock_resp) as mock_eval:
+        await async_decide_score(
+            state="Draft",
+            instructions="Rate",
+            scale="1:10",
+            app=app,
+        )
+
+    assert mock_eval.call_count == 1
+    assert mock_eval.call_args.kwargs["trace_raw_payload"] is True
+
+
+

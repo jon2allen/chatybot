@@ -153,6 +153,7 @@ async def async_execute_decision(
 
     questions = {"q": q_body}
 
+    trace_enabled = getattr(app, "trace_raw_payload", False) or os.environ.get("CHATYBOT_TRACE_RAW_PAYLOAD") == "1"
     try:
         response = await evaluate(
             state=state,
@@ -161,6 +162,8 @@ async def async_execute_decision(
             base_url=base_url,
             endpoint_path=endpoint_path,
             api_key=api_key,
+            trace_raw_payload=trace_enabled,
+            logging_manager=getattr(app, "logging_manager", None),
         )
     except DecisionAPIError as e:
         return {

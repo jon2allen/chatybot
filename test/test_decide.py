@@ -623,3 +623,63 @@ async def test_multiple_decision_turns_fifo_persistence(capsys):
     assert decisions_on_disk[1]["state"] == "state 2"
 
 
+@pytest.mark.anyio
+async def test_decide_passes_trace_raw_payload(capsys):
+    """When /trace rawpayload on is set, /decide passes trace_raw_payload=True to evaluate."""
+    app = _make_app(capsys)
+    app.trace_raw_payload = True
+
+    mock_resp = _mock_choice_response(choice="opt_a", confidence=0.90)
+    with patch("chatybot.decision_client.evaluate", new_callable=AsyncMock, return_value=mock_resp) as mock_eval:
+        await app.handle_escape_command('/decide "state" choice "pick" options="opt_a:A,opt_b:B"')
+
+    assert mock_eval.call_count == 1
+    assert mock_eval.call_args.kwargs["trace_raw_payload"] is True
+
+
+@pytest.mark.anyio
+async def test_decision_client_evaluate_tracing(capsys):
+    """decision_client.evaluate prints request and response payload blocks when trace_raw_payload is True."""
+    from unittest.mock import MagicMock
+    from chatybot.decision_client import evaluate
+
+    mock_resp_obj = MagicMock()
+    mock_resp_obj.status = 200
+    mock_resp_obj.text = AsyncMock(return_value=json.dumps({
+        "model": "typesafe/jev-1.13",
+        "answers": {
+            "q": {"type": "choice", "choice": "test_opt", "confidence": 0.95}
+        }
+    }))
+
+    mock_post_ctx = MagicMock()
+    mock_post_ctx.__aenter__ = AsyncMock(return_value=mock_resp_obj)
+    mock_post_ctx.__aexit__ = AsyncMock(return_value=None)
+
+    mock_session = MagicMock()
+    mock_session.post.return_value = mock_post_ctx
+    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_session.__aexit__ = AsyncMock(return_value=None)
+
+    with patch("aiohttp.ClientSession", return_value=mock_session):
+        res = await evaluate(
+            state="Beef short rib",
+            questions={"q": {"type": "choice", "instructions": "Which wine?", "criteria": {"wine1": "desc"}}},
+            model_name="typesafe/jev-1.13",
+            base_url="https://openrouter.ai",
+            endpoint_path="/api/alpha/decisions",
+            api_key="sk-test-12345678901234567890",
+            trace_raw_payload=True,
+        )
+
+    captured = capsys.readouterr()
+    assert "Decision Request Payload:" in captured.out
+    assert "POST https://openrouter.ai/api/alpha/decisions" in captured.out
+    assert "Beef short rib" in captured.out
+    assert "Decision Response Payload:" in captured.out
+    assert "HTTP 200" in captured.out
+    assert "test_opt" in captured.out
+    assert res["answers"]["q"]["choice"] == "test_opt"
+
+
+
