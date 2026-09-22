@@ -3918,6 +3918,8 @@ class ChatybotApp:
                 env["CHATYBOT_SESSION_DIR"] = str(self.session_dir)
             env["CHATYBOT_ENABLE_CHAT_HISTORY"] = "1" if getattr(self, "enable_chat_history", True) else "0"
             env["CHATYBOT_BACKUP_ON_WRITE"] = "1" if getattr(self, "backup_file_on_write", True) else "0"
+            if getattr(self, "trace_raw_payload", False):
+                env["CHATYBOT_TRACE_RAW_PAYLOAD"] = "1"
             try:
                 from . import chatydb
                 active_db = chatydb.get_active_db()
