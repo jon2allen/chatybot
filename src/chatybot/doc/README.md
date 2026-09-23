@@ -1189,7 +1189,7 @@ September 21st, 2026 (v0.8.7)
   - Added `type = "decision"` model configuration support with TypeSafe vendor presets in `chat_config.toml` and interactive editing in `config_tui.py`.
 
 September 18th, 2026 (v0.8.6)
- ----------------------------
+----------------------------
 - **Tool History Append Mode (`/tool append_mode [summary|full|off]`)**:
   - Added configurable history commit modes for autonomous tool loops (`summary` [default], `full`, and `off`).
   - `summary` appends a compact, redacted execution summary of tool calls and exit statuses to the final response, keeping token overhead minimal while reinforcing correct tool invocation signatures for future turns.

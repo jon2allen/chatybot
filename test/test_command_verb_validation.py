@@ -76,6 +76,8 @@ class TestCommandVerbValidation:
             "session list",
             "context detail",
             "env test",
+            "ask which one",
+            "decide between option A and B",
             "   help me",
             "HELP ME",
             "help: explain this"
@@ -141,7 +143,8 @@ class TestCommandVerbValidation:
         spanish_prompts = [
             "calcular 2 + 2",
             "ayuda",
-            "modelo gpt4"
+            "modelo gpt4",
+            "decidir opcion"
         ]
         for prompt in spanish_prompts:
             result = asyncio.run(app.chat_completion(prompt))
@@ -154,7 +157,8 @@ class TestCommandVerbValidation:
         french_prompts = [
             "calculer 5 + 5",
             "aide",
-            "modele claude"
+            "modele claude",
+            "decider option"
         ]
         for prompt in french_prompts:
             result = asyncio.run(app.chat_completion(prompt))
