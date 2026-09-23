@@ -644,3 +644,85 @@ def test_v084_session_new_keywords():
     mgr_ar = LocalizationManager("ar")
     assert mgr_ar.get_reverse_aliases().get("جديد") == "new"
 
+
+def test_v087_decide_command_localization():
+    """Verify /decide command aliases, keywords, and help entries across all locales."""
+    # 1. English
+    mgr_en = LocalizationManager("en")
+    assert mgr_en.resolve_command("/decide") == "/decide"
+    rev_en = mgr_en.get_reverse_aliases()
+    assert rev_en.get("choice") == "choice"
+    assert rev_en.get("score") == "score"
+    assert rev_en.get("noul") == "noul"
+    assert rev_en.get("options") == "options"
+    assert rev_en.get("threshold") == "threshold"
+    assert rev_en.get("withthink") == "withthink"
+    assert rev_en.get("nothink") == "nothink"
+
+    # 2. Spanish
+    mgr_es = LocalizationManager("es")
+    assert mgr_es.resolve_command("/decidir") == "/decide"
+    assert mgr_es.resolve_command("/decide") == "/decide"
+    rev_es = mgr_es.get_reverse_aliases()
+    assert rev_es.get("puntuacion") == "score"
+    assert rev_es.get("booleano") == "noul"
+    assert rev_es.get("opciones") == "options"
+    assert rev_es.get("umbral") == "threshold"
+    assert rev_es.get("conpensar") == "withthink"
+    assert rev_es.get("sinpensar") == "nothink"
+
+    # 3. French
+    mgr_fr = LocalizationManager("fr")
+    assert mgr_fr.resolve_command("/decider") == "/decide"
+    assert mgr_fr.resolve_command("/decide") == "/decide"
+    rev_fr = mgr_fr.get_reverse_aliases()
+    assert rev_fr.get("note") == "score"
+    assert rev_fr.get("booleen") == "noul"
+    assert rev_fr.get("niveaux") == "levels"
+    assert rev_fr.get("seuil") == "threshold"
+    assert rev_fr.get("avecpenser") == "withthink"
+    assert rev_fr.get("sanspenser") == "nothink"
+
+    # 4. Chinese
+    mgr_zh = LocalizationManager("zh")
+    assert mgr_zh.resolve_command("/决策") == "/decide"
+    assert mgr_zh.resolve_command("/decide") == "/decide"
+    rev_zh = mgr_zh.get_reverse_aliases()
+    assert rev_zh.get("评分") == "score"
+    assert rev_zh.get("布尔") == "noul"
+    assert rev_zh.get("选项") == "options"
+    assert rev_zh.get("阈值") == "threshold"
+    assert rev_zh.get("含思考") == "withthink"
+    assert rev_zh.get("无思考") == "nothink"
+
+    # 5. Italian
+    mgr_it = LocalizationManager("it")
+    assert mgr_it.resolve_command("/decidi") == "/decide"
+    assert mgr_it.resolve_command("/decide") == "/decide"
+    rev_it = mgr_it.get_reverse_aliases()
+    assert rev_it.get("punteggio") == "score"
+    assert rev_it.get("booleano") == "noul"
+    assert rev_it.get("opzioni") == "options"
+    assert rev_it.get("soglia") == "threshold"
+    assert rev_it.get("conpensare") == "withthink"
+    assert rev_it.get("senzapensare") == "nothink"
+
+    # 6. Arabic
+    mgr_ar = LocalizationManager("ar")
+    assert mgr_ar.resolve_command("/قرار") == "/decide"
+    assert mgr_ar.resolve_command("/decide") == "/decide"
+    rev_ar = mgr_ar.get_reverse_aliases()
+    assert rev_ar.get("تقييم") == "score"
+    assert rev_ar.get("بولين") == "noul"
+    assert rev_ar.get("خيارات") == "options"
+    assert rev_ar.get("عتبة") == "threshold"
+    assert rev_ar.get("مع_تفكير") == "withthink"
+    assert rev_ar.get("بدون_تفكير") == "nothink"
+
+    # 7. Help command entry for /decide exists in all locales
+    for loc in ["en", "es", "fr", "zh", "it", "ar"]:
+        mgr = LocalizationManager(loc)
+        cmd_info = mgr.get_help_string("commands", "/decide")
+        assert cmd_info is not None, f"/decide help entry missing in {loc}"
+
+

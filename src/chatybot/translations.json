@@ -30,7 +30,8 @@
       "/chatdsl": "/chatdsl",
       "/ask": "/ask",
       "/docs": "/docs",
-      "/doc": "/docs"
+      "/doc": "/docs",
+      "/decide": "/decide"
     },
     "keywords": {
       "set": "set",
@@ -111,7 +112,13 @@
       "summary": "summary",
       "retry": "retry",
       "continue": "continue",
-      "inject": "inject"
+      "inject": "inject",
+      "score": "score",
+      "noul": "noul",
+      "options": "options",
+      "levels": "levels",
+      "scale": "scale",
+      "threshold": "threshold"
     },
     "ui": {
       "language_changed": "Language set to: {lang}",
@@ -167,6 +174,9 @@
         },
         "/docs": {
           "short_desc": "List, view, search, or load bundled documentation, guides, and cookbook examples"
+        },
+        "/decide": {
+          "short_desc": "Evaluate content with a structured decision model (choice, score, noul)"
         }
       }
     }
@@ -419,7 +429,16 @@
       "continue": "continue",
       "inyectar": "inject",
       "inject": "inject",
-      "off": "off"
+      "off": "off",
+      "puntuacion": "score",
+      "puntaje": "score",
+      "score": "score",
+      "booleano": "noul",
+      "noul": "noul",
+      "opciones": "options",
+      "niveles": "levels",
+      "escala": "scale",
+      "umbral": "threshold"
     },
     "ui": {
       "language_changed": "Idioma establecido en: {lang}",
@@ -700,6 +719,9 @@
         },
         "/docs": {
           "short_desc": "Lista, muestra, busca o carga documentación, guías y ejemplos del recetario"
+        },
+        "/decide": {
+          "short_desc": "Evalúa contenido con un modelo de decisión estructurado (choice, score, noul)"
         }
       }
     }
@@ -811,7 +833,7 @@
       "purger": "prune",
       "nettoyer": "clean",
       "prune": "prune",
-      "note": "note",
+      "note": "score",
       "remarque": "note",
       "rejouer": "replay",
       "replay": "replay",
@@ -956,7 +978,14 @@
       "injecter": "inject",
       "inject": "inject",
       "désactiver": "off",
-      "off": "off"
+      "off": "off",
+      "score": "score",
+      "booleen": "noul",
+      "noul": "noul",
+      "options": "options",
+      "niveaux": "levels",
+      "echelle": "scale",
+      "seuil": "threshold"
     },
     "ui": {
       "language_changed": "Langue définie sur : {lang}",
@@ -1237,6 +1266,9 @@
         },
         "/docs": {
           "short_desc": "Liste, affiche, recherche ou charge la documentation, les guides et les exemples"
+        },
+        "/decide": {
+          "short_desc": "Évalue le contenu avec un modèle de décision structuré (choice, score, noul)"
         }
       }
     }
@@ -1486,7 +1518,16 @@
       "continue": "continue",
       "注入": "inject",
       "inject": "inject",
-      "off": "off"
+      "off": "off",
+      "评分": "score",
+      "分数": "score",
+      "score": "score",
+      "布尔": "noul",
+      "noul": "noul",
+      "选项": "options",
+      "级别": "levels",
+      "标度": "scale",
+      "阈值": "threshold"
     },
     "ui": {
       "language_changed": "语言设置为: {lang}",
@@ -1767,6 +1808,9 @@
         },
         "/docs": {
           "short_desc": "列出、查看、搜索或加载内置文档、指南和示例手册"
+        },
+        "/decide": {
+          "short_desc": "使用结构化决策模型评估内容（choice、score、noul）"
         }
       }
     }
@@ -2009,7 +2053,15 @@
       "continua": "continue",
       "continue": "continue",
       "inietta": "inject",
-      "inject": "inject"
+      "inject": "inject",
+      "punteggio": "score",
+      "score": "score",
+      "booleano": "noul",
+      "noul": "noul",
+      "opzioni": "options",
+      "livelli": "levels",
+      "scala": "scale",
+      "soglia": "threshold"
     },
     "ui": {
       "language_changed": "Lingua impostata su: {lang}",
@@ -2290,6 +2342,9 @@
         },
         "/docs": {
           "short_desc": "Elenca, visualizza, cerca o carica documentazione, guide ed esempi"
+        },
+        "/decide": {
+          "short_desc": "Valuta i contenuti con un modello di decisione strutturato (choice, score, noul)"
         }
       }
     }
@@ -2540,7 +2595,16 @@
       "inject": "inject",
       "إيقاف": "off",
       "ايقاف": "off",
-      "off": "off"
+      "off": "off",
+      "تقييم": "score",
+      "درجة": "score",
+      "score": "score",
+      "بولين": "noul",
+      "noul": "noul",
+      "خيارات": "options",
+      "مستويات": "levels",
+      "مقياس": "scale",
+      "عتبة": "threshold"
     },
     "ui": {
       "language_changed": "تغيرت اللغة لـ: {lang}",
@@ -2821,6 +2885,9 @@
         },
         "/docs": {
           "short_desc": "بيعرض، بفتح، ببحث أو بيحمل الوثائق، الأدلة وأمثلة الدليل"
+        },
+        "/decide": {
+          "short_desc": "تقييم المحتوى باستخدام نموذج قرار مهيكل (choice، score، noul)"
         }
       }
     }

@@ -95,7 +95,8 @@ class ChatybotApp:
                 "setdb", "dblist", "searchdb", "dblog", "dbprint", "documents", "rerank",
                 "loadvar", "savevar", "setvar", "notemode", "mem", "dump", "trace", "debug",
                 "run", "run_safe", "run_unsafe", "tool", "proc", "defproc", "endproc", "local", "foreach", "endfor", "break",
-                "session", "replay", "context", "ctx", "context_limit", "auto_truncate", "env", "chatdsl", "docs", "doc"
+                "session", "replay", "context", "ctx", "context_limit", "auto_truncate", "env", "chatdsl", "docs", "doc",
+                "ask", "decide", "str_search", "continue"
             ]
         )
 
@@ -5903,7 +5904,7 @@ class ChatybotApp:
         print("===========================")
         print("Chatybot.py                ")
         print("Created by Jon Allen - 2026")
-        print("Version: 0.8.6             ")
+        print("Version: 0.8.7             ")
         lang_display = self.i18n.get_ui_string("native_lang_display", "Language: English")
         print(f"{lang_display:<27}")
         print("===========================")
