@@ -31,7 +31,8 @@
       "/ask": "/ask",
       "/docs": "/docs",
       "/doc": "/docs",
-      "/decide": "/decide"
+      "/decide": "/decide",
+      "/skill": "/skill"
     },
     "keywords": {
       "set": "set",
@@ -118,7 +119,15 @@
       "options": "options",
       "levels": "levels",
       "scale": "scale",
-      "threshold": "threshold"
+      "threshold": "threshold",
+      "create": "create",
+      "learn": "learn",
+      "apply": "apply",
+      "import": "import",
+      "wizard": "wizard",
+      "enable": "enable",
+      "disable": "disable",
+      "edit": "edit"
     },
     "ui": {
       "language_changed": "Language set to: {lang}",
@@ -266,7 +275,9 @@
       "/preguntar": "/ask",
       "/ask": "/ask",
       "/docs": "/docs",
-      "/doc": "/docs"
+      "/doc": "/docs",
+      "/habilidad": "/skill",
+      "/skill": "/skill"
     },
     "keywords": {
       "informacion": "info",
@@ -438,7 +449,12 @@
       "opciones": "options",
       "niveles": "levels",
       "escala": "scale",
-      "umbral": "threshold"
+      "umbral": "threshold",
+      "crear": "create",
+      "aprender": "learn",
+      "aplicar": "apply",
+      "importar": "import",
+      "asistente": "wizard"
     },
     "ui": {
       "language_changed": "Idioma establecido en: {lang}",
@@ -809,7 +825,9 @@
       "/demander": "/ask",
       "/ask": "/ask",
       "/docs": "/docs",
-      "/doc": "/docs"
+      "/doc": "/docs",
+      "/competence": "/skill",
+      "/skill": "/skill"
     },
     "keywords": {
       "informations": "info",
@@ -985,7 +1003,12 @@
       "options": "options",
       "niveaux": "levels",
       "echelle": "scale",
-      "seuil": "threshold"
+      "seuil": "threshold",
+      "creer": "create",
+      "apprendre": "learn",
+      "appliquer": "apply",
+      "importer": "import",
+      "assistant": "wizard"
     },
     "ui": {
       "language_changed": "Langue définie sur : {lang}",
@@ -1359,7 +1382,9 @@
       "/ask": "/ask",
       "/文档": "/docs",
       "/docs": "/docs",
-      "/doc": "/docs"
+      "/doc": "/docs",
+      "/技能": "/skill",
+      "/skill": "/skill"
     },
     "keywords": {
       "信息": "info",
@@ -1527,7 +1552,12 @@
       "选项": "options",
       "级别": "levels",
       "标度": "scale",
-      "阈值": "threshold"
+      "阈值": "threshold",
+      "创建": "create",
+      "学习": "learn",
+      "应用": "apply",
+      "导入": "import",
+      "向导": "wizard"
     },
     "ui": {
       "language_changed": "语言设置为: {lang}",
@@ -1898,7 +1928,9 @@
       "/chiedi": "/ask",
       "/ask": "/ask",
       "/docs": "/docs",
-      "/doc": "/docs"
+      "/doc": "/docs",
+      "/competenza": "/skill",
+      "/skill": "/skill"
     },
     "keywords": {
       "informazioni": "info",
@@ -2061,7 +2093,12 @@
       "opzioni": "options",
       "livelli": "levels",
       "scala": "scale",
-      "soglia": "threshold"
+      "soglia": "threshold",
+      "crea": "create",
+      "impara": "learn",
+      "applica": "apply",
+      "importa": "import",
+      "procedura": "wizard"
     },
     "ui": {
       "language_changed": "Lingua impostata su: {lang}",
@@ -2433,7 +2470,9 @@
       "/ask": "/ask",
       "/وثائق": "/docs",
       "/docs": "/docs",
-      "/doc": "/docs"
+      "/doc": "/docs",
+      "/مهارة": "/skill",
+      "/skill": "/skill"
     },
     "keywords": {
       "معلومات": "info",
@@ -2604,7 +2643,12 @@
       "خيارات": "options",
       "مستويات": "levels",
       "مقياس": "scale",
-      "عتبة": "threshold"
+      "عتبة": "threshold",
+      "إنشاء": "create",
+      "تعلم": "learn",
+      "تطبيق": "apply",
+      "استيراد": "import",
+      "معالج": "wizard"
     },
     "ui": {
       "language_changed": "تغيرت اللغة لـ: {lang}",

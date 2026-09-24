@@ -96,6 +96,7 @@ class ChatybotApp:
                 "loadvar", "savevar", "setvar", "notemode", "mem", "dump", "trace", "debug",
                 "run", "run_safe", "run_unsafe", "tool", "proc", "defproc", "endproc", "local", "foreach", "endfor", "break",
                 "session", "replay", "context", "ctx", "context_limit", "auto_truncate", "env", "chatdsl", "docs", "doc",
+                "skill",
                 "ask", "decide", "str_search", "continue"
             ]
         )
@@ -1455,6 +1456,10 @@ class ChatybotApp:
                         msg["content"].append({"type": "text", "text": reminder})
                     break
 
+        # Skills injection: match triggers and inject skill content + tool config
+        if not isinstance(prompt, list):
+            current_system_message = self._inject_skills(current_system_message or "", prompt)
+
         if is_old_gemma:
             # Fallback: Prepend system message to the user message for older Gemma models
             if current_system_message:
@@ -2364,6 +2369,10 @@ class ChatybotApp:
                         system_message = instr
             # If fm_tools were built, the SDK handles tool calling natively.
             # No prompt injection needed — tools are registered with the session.
+
+        # Skills injection: match triggers and inject skill content + tool config
+        if not isinstance(prompt, list):
+            system_message = self._inject_skills(system_message or "", prompt)
 
         # --- Create session and generate ---
         session, err = create_session(instructions=system_message, tools=fm_tools)
@@ -5548,6 +5557,149 @@ class ChatybotApp:
         context = '\n'.join(lines)
         self.tool_context = context
         return context
+
+    # ── Skills injection and tool configuration ──────────────────────
+
+    _tool_state_snapshot: dict | None = None
+
+    def _inject_skills(self, system_message: str, user_prompt: str) -> str:
+        """Inject matching skills and configure tools before sending the prompt.
+
+        Called from both chat_completion and _apple_fm_completion after
+        their own system message assembly, before the message is sent
+        to the model.
+        """
+        from .skillsdb import get_matching_skills
+
+        # Check for manually applied skill via /skill apply
+        pending = None
+        if hasattr(self.buffer_manager, "script_vars") and isinstance(self.buffer_manager.script_vars, dict):
+            pending = self.buffer_manager.script_vars.get("_PENDING_SKILL")
+        if pending:
+            self.buffer_manager.set_script_var("_PENDING_SKILL", None, allow_protected=True)
+            matched = [pending]
+        else:
+            matched = get_matching_skills(user_prompt)
+
+        if not matched:
+            return system_message
+
+        # Apply tool configuration from the first matched skill
+        skill = matched[0]
+        tool_config = skill.get("metadata", {}).get("tool_config")
+        if tool_config:
+            self._apply_skill_tool_config(tool_config, skill.get("name", "unknown"))
+
+        # Inject skill content into system prompt
+        skill_block = "\n\n".join(
+            f"## Skill: {s.get('name', 'unknown')}\n{s.get('content', '')}"
+            for s in matched
+        )
+        if system_message:
+            return f"{system_message}\n\n--- Active Skills ---\n{skill_block}"
+        return f"--- Active Skills ---\n{skill_block}"
+
+    def _apply_skill_tool_config(self, config: dict, skill_name: str) -> bool:
+        """Apply tool configuration from a skill's metadata.
+
+        Prompts the user for confirmation before changing tool state.
+        Returns True if applied, False if user declined.
+
+        Changes persist for the session. The user can revert manually
+        with /tool off, /tool disable, /tool auto off.
+        A snapshot of the previous state is saved for /skill restore.
+        """
+        # Build a human-readable summary of what will change
+        changes = []
+        if config.get("mode") == "on" and not self.tool_mode:
+            changes.append("Enable tool mode (ON)")
+        if config.get("mode") == "off" and self.tool_mode:
+            changes.append("Disable tool mode (OFF)")
+        if config.get("enable_tools"):
+            changes.append(f"Enable tools: {', '.join(config['enable_tools'])}")
+        if config.get("disable_tools"):
+            changes.append(f"Disable tools: {', '.join(config['disable_tools'])}")
+        if config.get("auto_loop") and not self.tool_auto:
+            changes.append(f"Enable auto-loop (max_turns={config.get('max_turns', self.max_turns)})")
+        if config.get("max_turns") and config["max_turns"] != self.max_turns:
+            changes.append(f"Set max_turns to {config['max_turns']}")
+
+        if not changes:
+            return True
+
+        # Prompt the user
+        print(f"\n[skill] '{skill_name}' wants to reconfigure tools:")
+        for change in changes:
+            print(f"  - {change}")
+        print("  These changes persist for this session.")
+        print("  You can revert with /tool off, /tool disable, /tool auto off, or /skill restore.")
+
+        try:
+            confirm = input("\nApply these tool changes? (Y/n): ").strip().lower()
+        except (EOFError, KeyboardInterrupt, OSError):
+            print("\n[skill] Tool changes skipped (non-interactive or interrupted).")
+            return False
+
+        if confirm in ("n", "no"):
+            print("[skill] Tool changes declined. Skill guidance will be injected without tool configuration.")
+            return False
+
+        # Save snapshot for /skill restore
+        self._save_tool_state_snapshot()
+
+        # Apply the changes
+        if config.get("mode") == "on" and not self.tool_mode:
+            context = self.generate_tool_context()
+            if context:
+                self.tool_mode = True
+                self.buffer_manager.set_script_var('TOOL_CONTEXT', context)
+        elif config.get("mode") == "off" and self.tool_mode:
+            self.tool_mode = False
+            self.tool_context = ""
+            self.buffer_manager.set_script_var('TOOL_CONTEXT', '')
+
+        for tool_name in config.get("enable_tools", []):
+            self.tool_overrides[tool_name] = True
+        for tool_name in config.get("disable_tools", []):
+            self.tool_overrides[tool_name] = False
+
+        if self.tool_mode:
+            context = self.generate_tool_context()
+            self.buffer_manager.set_script_var('TOOL_CONTEXT', context)
+
+        if config.get("auto_loop"):
+            self.tool_auto = True
+        if config.get("max_turns"):
+            self.max_turns = config["max_turns"]
+
+        print(f"[skill] Tool configuration applied.")
+        return True
+
+    def _save_tool_state_snapshot(self) -> None:
+        """Save current tool state for /skill restore."""
+        self._tool_state_snapshot = {
+            "tool_mode": self.tool_mode,
+            "tool_overrides": dict(self.tool_overrides),
+            "tool_auto": self.tool_auto,
+            "max_turns": self.max_turns,
+        }
+
+    def _restore_tool_state_snapshot(self) -> bool:
+        """Restore tool state from snapshot. Returns True if restored."""
+        snapshot = getattr(self, "_tool_state_snapshot", None)
+        if snapshot is None:
+            return False
+        self.tool_mode = snapshot["tool_mode"]
+        self.tool_overrides = snapshot["tool_overrides"]
+        self.tool_auto = snapshot["tool_auto"]
+        self.max_turns = snapshot["max_turns"]
+        if self.tool_mode:
+            context = self.generate_tool_context()
+            self.buffer_manager.set_script_var('TOOL_CONTEXT', context)
+        else:
+            self.buffer_manager.set_script_var('TOOL_CONTEXT', '')
+        self._tool_state_snapshot = None
+        return True
 
     def _adapt_command_result(self, result: CommandResult) -> bool | str:
         """Translate a typed CommandResult back to the legacy Union[bool, str]
