@@ -68,8 +68,8 @@ def _print_usage() -> None:
     print("  /skill create                   Launch interactive wizard")
     print("  /skill edit <name>              Edit skill in $EDITOR")
     print("  /skill delete <name>            Delete a skill")
-    print("  /skill enable <name>            Enable a skill")
-    print("  /skill disable <name>           Disable a skill")
+    print("  /skill enable <name|all|glob>     Enable skill(s)")
+    print("  /skill disable <name|all|glob>    Disable skill(s)")
     print("  /skill search <query>           Search skills by name/content/tags")
     print("  /skill learn [name]             Learn a skill from current session")
     print("  /skill apply <name>             Inject skill into next prompt")
@@ -351,29 +351,57 @@ def _handle_delete(ctx: CommandContext, parts: list) -> CommandResult:
 
 def _handle_enable(ctx: CommandContext, parts: list) -> CommandResult:
     if len(parts) < 3:
-        print("Usage: /skill enable <name>")
+        print("Usage: /skill enable <name|all|glob_pattern>")
         return CommandResult.ok()
-    name = parts[2].strip('"')
-    skill = skillsdb.get_skill_by_name(name)
-    if not skill:
-        print(f"Skill '{name}' not found.")
-        return CommandResult.ok()
-    skillsdb.patch_skill_metadata(getattr(skill, "doc_id", skill.get("doc_id")), "enabled", True)
-    print(f"Skill '{name}' enabled.")
-    return CommandResult.ok()
+    return _enable_disable_skill(parts[2].strip('"'), enable=True)
 
 
 def _handle_disable(ctx: CommandContext, parts: list) -> CommandResult:
     if len(parts) < 3:
-        print("Usage: /skill disable <name>")
+        print("Usage: /skill disable <name|all|glob_pattern>")
         return CommandResult.ok()
-    name = parts[2].strip('"')
-    skill = skillsdb.get_skill_by_name(name)
-    if not skill:
-        print(f"Skill '{name}' not found.")
+    return _enable_disable_skill(parts[2].strip('"'), enable=False)
+
+
+def _enable_disable_skill(target: str, enable: bool) -> CommandResult:
+    """Enable or disable skills matching a name, 'all', or glob pattern.
+
+    Mirrors the /tool enable|disable interface: exact name, 'all',
+    or fnmatch glob pattern with case-insensitive matching.
+    """
+    import fnmatch
+
+    all_skills = skillsdb.list_skills()
+    if not all_skills:
+        print("No skills found.")
         return CommandResult.ok()
-    skillsdb.patch_skill_metadata(getattr(skill, "doc_id", skill.get("doc_id")), "enabled", False)
-    print(f"Skill '{name}' disabled.")
+
+    all_names = [s.get("name", "") for s in all_skills]
+
+    if target.lower() == "all":
+        matched = all_skills
+    else:
+        pattern = target.lower()
+        matched = [s for s in all_skills if fnmatch.fnmatch(s.get("name", "").lower(), pattern)]
+
+        # Fallback to exact case-insensitive match if no glob chars and nothing matched
+        if not matched and "*" not in target and "?" not in target:
+            for s in all_skills:
+                if s.get("name", "").lower() == target.lower():
+                    matched = [s]
+                    break
+
+    if not matched:
+        print(f"Error: No skills matched pattern '{target}'.")
+        return CommandResult.ok()
+
+    action = "enabled" if enable else "disabled"
+    for skill in matched:
+        skill_id = getattr(skill, "doc_id", skill.get("doc_id"))
+        skillsdb.patch_skill_metadata(skill_id, "enabled", enable)
+        print(f"Skill '{skill.get('name', '?')}' {action}.")
+
+    print(f"{len(matched)} skill(s) {action}.")
     return CommandResult.ok()
 
 
