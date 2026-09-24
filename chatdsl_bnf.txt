@@ -8,37 +8,96 @@
 
 <escape-command> ::= "/" <escape-command-name> [ <whitespace> <escape-command-args> ]
 
-<escape_command-name> ::= "help" | "prompt" | "file" | "showfile" | "clearfile" | 
-                           "filebank" | "filebank1" | "filebank2" | "filebank3" | 
-                           "filebank4" | "filebank5" | "imagebank" | "imagebank1" | 
-                           "imagebank2" | "imagebank3" | "imagebank4" | "imagebank5" | 
-                           "model" | "listmodels" | 
-                           "logging" | "save" | "codeonly" | "codeoff" | "multiline" | 
-                           "system" | "temp" | "maxtokens" | "top_p" | "top_k" | 
-                           "freq_penalty" | "pres_penalty" | "reasoning" | "effort" | "seed" | 
-                           "stream" | "script" | "quit" | "setdb" | "dblist" | 
-                           "searchdb" | "dblog" | "dbprint" | "loadvar" | "savevar" | 
-                           "setvar" | "notemode" | "mem" | "dump" | "trace" | 
-                           "thinking" | "echo" | 
-                           # Phase 2: Image generation
-                           "imagine" | "imagesize" | "imagequality" | "saveimage" | 
-                           "imagedir" | "listimages" | "showimage" | "loadimage"
+<escape-command-name> ::= 
+    # General & Session
+    "help" | "quit" | "exit" | "session" | "replay" | "chatdsl" | "docs" | "doc" |
+    # Buffer & Banks
+    "prompt" | "file" | "showfile" | "clearfile" |
+    "filebank" | "filebank1" | "filebank2" | "filebank3" | "filebank4" | "filebank5" |
+    "imagebank" | "imagebank1" | "imagebank2" | "imagebank3" | "imagebank4" | "imagebank5" |
+    "loadimage" | "loadimage1" | "loadimage2" | "loadimage3" | "loadimage4" | "loadimage5" |
+    # Model & Inference Parameters
+    "model" | "listmodels" | "system" | "temp" | "maxtokens" | "max_tokens" |
+    "top_p" | "top_k" | "freq_penalty" | "pres_penalty" |
+    "reasoning" | "effort" | "thinking" | "thoughtstyle" | "seed" | "stream" |
+    # Output & Display
+    "logging" | "save" | "codeonly" | "codeoff" | "multiline" | "echo" |
+    # Context & Truncation
+    "context" | "ctx" | "context_limit" | "auto_truncate" |
+    # Database (Vector/ChromaDB)
+    "setdb" | "dblist" | "searchdb" | "dblog" | "dbprint" |
+    # Reranking & Document Processing
+    "documents" | "rerank" |
+    # Image Generation
+    "imagine" | "imagesize" | "imagequality" | "saveimage" |
+    "imagedir" | "listimages" | "showimage" |
+    # Variables, Utilities & Diagnostics
+    "setvar" | "loadvar" | "savevar" | "calc" | "str_search" | "env" | "profile" |
+    "notemode" | "mem" | "dump" | "trace" | "debug" |
+    # Interactive & Decision Prompts
+    "ask" | "decide" |
+    # Tools & Execution
+    "run" | "run_safe" | "run_unsafe" | "tool" |
+    # Macros, Procedures & Scripts
+    "def" | "reloadmacros" | "listmacros" | "proc" | "source" | "script"
 
-<script-command> ::= <set-command> | <wait-command> | <if-command>
+<script-command> ::= <set-command>
+                   | <local-command>
+                   | <wait-command>
+                   | <if-command>
+                   | <break-command>
+                   | <foreach-block>
+                   | <proc-definition>
+                   | <macro-call>
 
 <set-command> ::= "set" <whitespace> <variable-name> <whitespace> "=" <whitespace> <variable-value>
 
+<local-command> ::= "local" <whitespace> <variable-name> [ <whitespace> "=" [ <whitespace> <variable-value> ] ]
+
 <wait-command> ::= "wait" <whitespace> <number>
+
+<break-command> ::= "break"
 
 <if-command> ::= "if" <whitespace> <condition> <whitespace> "then" <whitespace> <command>
 
 <condition> ::= [ "not" <whitespace> ] <logical-expression>
 
-<logical-expression> ::= <operand> [ <whitespace> <operator> <whitespace> <operand> ]
+<logical-expression> ::= <binary-expression> | <truthy-expression>
 
-<operator> ::= "==" | "!="
+<binary-expression> ::= <operand> <whitespace> <comparison-operator> <whitespace> <operand>
 
-<operand> ::= <string> | <variable-reference> | <number> | <identifier>
+<comparison-operator> ::= "==" | "!=" | ">=" | "<=" | ">" | "<"
+
+<truthy-expression> ::= <operand>
+
+<operand> ::= <quoted-string> | <variable-reference> | <number> | <identifier>
+
+<foreach-block> ::= "foreach" <whitespace> <item-var> <whitespace> "in" <whitespace> <iterable-expr> <newline>
+                    { <script-line> }
+                    "endfor"
+
+<item-var> ::= <identifier>
+
+<iterable-expr> ::= <range-generator> | <lines-generator> | <variable-name> | <variable-reference>
+
+<range-generator> ::= "range(" <range-args> ")"
+
+<range-args> ::= <number>
+               | <number> ( ":" | ".." ) <number> [ ":" <number> ]
+
+<lines-generator> ::= "lines(" <lines-arg> ")"
+
+<lines-arg> ::= <variable-name> | <filebank-reference> | "FILE_BUFFER" | <variable-reference>
+
+<proc-definition> ::= "defproc" <whitespace> <proc-name> [ "(" [ <param-list> ] ")" ] <newline>
+                      { <script-line> }
+                      "endproc"
+
+<proc-name> ::= <identifier>
+
+<param-list> ::= <identifier> { "," [ <whitespace> ] <identifier> }
+
+<macro-call> ::= "%" <identifier> "(" [ <macro-arg-list> ] ")"
 
 <chat-input> ::= <single-line-text> | <multiline-block>
 
@@ -55,6 +114,23 @@
 <variable-name> ::= <identifier>
 
 <variable-value> ::= <string> | <number> | "true" | "false" | "yes" | "no" | <variable-reference>
+
+<built-in-variables> ::= 
+    # Completion & Pipeline Output Registers
+    "LAST_COMPLETION" | "LAST_RESPONSE" | "AGENTIC_LOOP" | "CHAT_HISTORY" |
+    # Tool Execution Registers
+    "TOOL_CONTEXT" | "TOOL_LIST" | "TOOL_HISTORY" | "TOOL_REPLAY" |
+    "TOOL_DISPATCH_RESULT" | "TOOL_DISPATCH_ERROR" | "TOOL_DISPATCH_EXIT_CODE" |
+    "RUN_COMPLETION" | "RUN_ERROR" | "RUN_EXIT_CODE" |
+    # Decision & Interactive Registers
+    "DECIDE" | "DECIDE_CONF" | "DECIDE_PROB" | "DECIDE_FULL" | "ASK_RESULT" |
+    # Session, Rerank & Utility Registers
+    "SESSION_NAME" | "SESSION_ENABLE" | "SESSION_LIST" | "SESSION_IDS" | "SESSION_QUERY" |
+    "latest_rerank" | "CALC" | "STR_SEARCH" | "REPLAY" |
+    # Procedure Configuration Registers
+    "PROC_MAX_DEPTH"
+
+<identifier> ::= ( <letter> | "_" ) { <letter> | <digit> | "_" }
 
 <digit_1_5> ::= "1" | "2" | "3" | "4" | "5"
 
