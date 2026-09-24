@@ -215,6 +215,63 @@ class TestSkillsdbEnableDisable:
         assert "cached" not in names
 
 
+class TestSkillsdbGlobEnableDisable:
+    """Test /skill enable and disable with glob patterns, 'all', and exact names."""
+
+    def test_enable_all(self):
+        # Disable all defaults first
+        for skill in skillsdb.list_skills():
+            skillsdb.patch_skill_metadata(
+                getattr(skill, "doc_id", skill.get("doc_id")), "enabled", False
+            )
+        # Create a test skill (will be disabled by the above loop)
+        skillsdb.create_skill(name="glob-test-1", content="T")
+        skillsdb.create_skill(name="glob-test-2", content="T")
+
+        # Enable all via glob
+        from chatybot.commands.skills import _enable_disable_skill
+        result = _enable_disable_skill("all", enable=True)
+        assert result.action.value == "handled"
+
+        enabled = skillsdb.list_skills(enabled_only=True)
+        names = [s["name"] for s in enabled]
+        assert "glob-test-1" in names
+        assert "glob-test-2" in names
+
+    def test_disable_glob_pattern(self):
+        skillsdb.create_skill(name="glob-a", content="A")
+        skillsdb.create_skill(name="glob-b", content="B")
+        skillsdb.create_skill(name="other", content="O")
+
+        from chatybot.commands.skills import _enable_disable_skill
+        _enable_disable_skill("glob-*", enable=False)
+
+        enabled = skillsdb.list_skills(enabled_only=True)
+        names = [s["name"] for s in enabled]
+        assert "glob-a" not in names
+        assert "glob-b" not in names
+        assert "other" in names
+
+    def test_enable_exact_name_fallback(self):
+        skillsdb.create_skill(name="exact-name", content="E")
+        # Disable it first
+        skill = skillsdb.get_skill_by_name("exact-name")
+        skillsdb.patch_skill_metadata(
+            getattr(skill, "doc_id", skill.get("doc_id")), "enabled", False
+        )
+
+        from chatybot.commands.skills import _enable_disable_skill
+        _enable_disable_skill("exact-name", enable=True)
+
+        skill = skillsdb.get_skill_by_name("exact-name")
+        assert skill["metadata"]["enabled"] is True
+
+    def test_no_match_returns_ok(self):
+        from chatybot.commands.skills import _enable_disable_skill
+        result = _enable_disable_skill("zzz-no-match-zzz", enable=True)
+        assert result.action.value == "handled"
+
+
 class TestSkillsdbDelete:
     def test_delete_skill(self):
         doc_id = skillsdb.create_skill(name="deletable", content="D")
