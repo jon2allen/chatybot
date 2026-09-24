@@ -17,5 +17,6 @@ from chatybot.commands import (
     replay,  # noqa: F401  (registers /replay)
     rerank,  # noqa: F401  (registers /documents, /rerank)
     session,  # noqa: F401  (registers /session)
+    skills,  # noqa: F401  (registers /skill)
     tools,  # noqa: F401  (registers /run, /run_safe, /run_unsafe, /tool)
 )

@@ -115,6 +115,29 @@ class CorpusManager:
             return True
         return False
 
+    def patch_metadata(self, item_id: int, key: str, value: Any) -> bool:
+        """Patch a single metadata key without replacing the entire dict.
+
+        Reads the current item, merges the key into its metadata, and
+        writes back the full metadata dict. This is necessary because
+        TinyDB's update() replaces the entire field value.
+
+        Args:
+            item_id: The ID of the item to patch.
+            key: The metadata key to set.
+            value: The value to assign.
+
+        Returns:
+            bool: True if the patch was applied, False if the item was not found.
+        """
+        item = self.items.get(doc_id=item_id)
+        if not item:
+            return False
+        current_metadata = item.get('metadata', {})
+        current_metadata[key] = value
+        self.items.update({'metadata': current_metadata}, doc_ids=[item_id])
+        return True
+
     def delete_item(self, item_id: int) -> bool:
         """
         Delete an item from the corpus.
@@ -125,6 +148,8 @@ class CorpusManager:
         Returns:
             bool: True if deletion was successful, False otherwise
         """
+        if not self.items.contains(doc_id=item_id):
+            return False
         return self.items.remove(doc_ids=[item_id]) == [item_id]
 
     def search_items(self, query: str, fields: list[str] = None) -> list[dict]:

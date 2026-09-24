@@ -894,6 +894,43 @@ class HelpSystem:
             },
             see_also=["/model", "/setvar", "/rerank"]
         ))
+
+        self.register_command(CommandHelp(
+            name="/skill",
+            category="skills",
+            short_desc="Manage the skills database",
+            usage="/skill <list|show|create|edit|delete|enable|disable|search|learn|apply|export|import|restore> ...",
+            long_desc=(
+                "Skills are reusable instructions stored in a dedicated TinyDB database. "
+                "When a user prompt matches a skill's trigger phrases, the skill content is "
+                "injected into the system prompt for that turn. Skills with tool_config "
+                "metadata can also configure the agentic tool loop (enable/disable tools, "
+                "set auto-loop and max_turns).\n\n"
+                "Subcommands:\n"
+                "  list [enabled|all]       List skills\n"
+                "  show <name>              Show full skill details\n"
+                "  create                   Launch interactive creation wizard\n"
+                "  edit <name>              Edit skill in $EDITOR\n"
+                "  delete <name>            Delete a skill\n"
+                "  enable <name>            Enable a skill (default for new skills)\n"
+                "  disable <name>           Disable a skill (stays in DB, not triggered)\n"
+                "  search <query>           Search by name, content, description, tags\n"
+                "  learn [name]              Learn a skill from current session turns\n"
+                "  apply <name>             Manually inject skill into next prompt\n"
+                "  export <name> <file>     Export to SKILL.md format\n"
+                "  import <file>            Import from SKILL.md file\n"
+                "  restore                  Restore previous tool configuration"
+            ),
+            examples=[
+                "/skill list",
+                "/skill show code-review",
+                "/skill create",
+                "/skill enable code-review",
+                "/skill learn my-workflow",
+                "/skill restore",
+            ],
+            see_also=["/tool", "/system", "/setdb"]
+        ))
     
     def register_command(self, cmd_help: CommandHelp) -> None:
         """Register a command with the help system."""
