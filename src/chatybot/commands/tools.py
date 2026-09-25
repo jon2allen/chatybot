@@ -62,7 +62,7 @@ async def cmd_run(ctx: CommandContext, parts: list, command: str) -> CommandResu
         return CommandResult.ok()
 
     if stripped_command:
-        processed_cmd, _ = app.buffer_manager.replace_placeholders(stripped_command, include_images=False)
+        processed_cmd, _ = app.buffer_manager.replace_placeholders(stripped_command, include_images=False, expand_injections=False)
         app.execute_shell_command(processed_cmd)
     return CommandResult.ok()
 
