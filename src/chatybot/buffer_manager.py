@@ -8,9 +8,16 @@ import base64
 import contextlib
 import json
 import re
+import shlex
+import subprocess
 from collections import UserDict
 from pathlib import Path
 from typing import Any
+
+# Dynamic Context Injection: !`command` syntax
+DYNAMIC_INJECTION_PATTERN = re.compile(r"!`([^`\r\n]+)`")
+MAX_DYNAMIC_INJECTION_BYTES = 4096
+DYNAMIC_INJECTION_TIMEOUT = 3.0
 
 
 class ScriptVars(UserDict):
@@ -487,7 +494,89 @@ class BufferManager:
             
         return None
 
-    def replace_placeholders(self, prompt: str, include_images: bool = True, clear_unresolved: bool = False) -> tuple[str, list[dict]]:
+    def expand_dynamic_injections(self, text: str) -> str:
+        """Execute inline !`cmd` blocks and substitute stdout.
+
+        Constrained to short, read-oriented commands. Long-running or
+        interactive commands are aborted and directed to the /run facility.
+        Uses shlex.split() + shell=False for security, consistent with
+        execute_shell_command() in chatybot_app.py.
+        """
+        if "!`" not in text:
+            return text
+
+        import time
+
+        app = getattr(self, "app", None)
+        trace = app and getattr(app, "trace_raw_payload", False)
+
+        def _eval_match(match: re.Match) -> str:
+            cmd = match.group(1).strip()
+            if not cmd:
+                return ""
+
+            # 1. Safe Mode Check (three-tier: block / askfirst / allow)
+            if app:
+                danger = app.check_dangerous(cmd)
+                if danger:
+                    if getattr(app, "safe_mode", False):
+                        if trace:
+                            print(f"[trace] dynamic_injection blocked (safe_mode): {cmd}")
+                        return f"[Blocked by safe_mode: '{cmd}' ({danger})]"
+                    elif getattr(app, "safe_mode_askfirst", False):
+                        # Non-interactive prompt expansion: cannot prompt user,
+                        # so default to blocking with a notice.
+                        if trace:
+                            print(f"[trace] dynamic_injection blocked (askfirst): {cmd}")
+                        return f"[Blocked (safe_mode_askfirst, non-interactive): '{cmd}' ({danger})]"
+
+            # 2. Execute with strict constraints (shell=False for security)
+            start = time.perf_counter()
+            try:
+                import glob
+                args = shlex.split(cmd)
+                expanded_args = []
+                for arg in args:
+                    if any(c in arg for c in "*?[]"):
+                        matched_files = glob.glob(arg)
+                        if matched_files:
+                            expanded_args.extend(matched_files)
+                        else:
+                            expanded_args.append(arg)
+                    else:
+                        expanded_args.append(arg)
+
+                res = subprocess.run(
+                    expanded_args,
+                    shell=False,
+                    capture_output=True,
+                    text=True,
+                    timeout=DYNAMIC_INJECTION_TIMEOUT,
+                    stdin=subprocess.DEVNULL,
+                )
+                elapsed = time.perf_counter() - start
+                if trace:
+                    print(f"[trace] dynamic_injection: {cmd} ({elapsed:.3f}s)")
+                output = res.stdout
+                if len(output.encode("utf-8")) > MAX_DYNAMIC_INJECTION_BYTES:
+                    output = output[:MAX_DYNAMIC_INJECTION_BYTES] + "\n[... truncated at 4KB. Use /run for full output ...]"
+
+                if res.returncode != 0 and not output.strip():
+                    err = res.stderr.strip() or f"exit code {res.returncode}"
+                    return f"[{cmd}: {err}]"
+                return output.strip()
+
+            except subprocess.TimeoutExpired:
+                return f"[Command '{cmd}' timed out (>3s). Use /run for long-running commands.]"
+            except ValueError as e:
+                # shlex.split can raise on malformed commands
+                return f"[Command parse error '{cmd}': {e}]"
+            except Exception as e:
+                return f"[Command error '{cmd}': {e}]"
+
+        return DYNAMIC_INJECTION_PATTERN.sub(_eval_match, text)
+
+    def replace_placeholders(self, prompt: str, include_images: bool = True, clear_unresolved: bool = False, expand_injections: bool = True) -> tuple[str, list[dict]]:
         """
         Replace filebank, script variable, and imagebank placeholders in the prompt.
         Supports both ${VAR} and {VAR} syntaxes.
@@ -596,6 +685,12 @@ class BufferManager:
             while "  " in text_prompt:
                 text_prompt = text_prompt.replace("  ", " ")
 
+        # Dynamic Context Injection: expand !`cmd` blocks after variable
+        # substitution so that variables inside the command are resolved
+        # first, but before final stripping.
+        if expand_injections:
+            text_prompt = self.expand_dynamic_injections(text_prompt)
+
         # Strip leading/trailing whitespace only; do not collapse internal
         # whitespace runs in the normal path, which would mutate legitimate
         # user content (e.g. double spaces inside substituted filebank text).
@@ -604,8 +699,9 @@ class BufferManager:
         return text_prompt, multimodal_parts
     
     def replace_placeholders_legacy(self, prompt: str, clear_unresolved: bool = True) -> str:
-        """Legacy method for backward compatibility. Replaces text and ignores images."""
-        text_prompt, _ = self.replace_placeholders(prompt, include_images=False, clear_unresolved=clear_unresolved)
+        """Legacy method for backward compatibility. Replaces text and ignores images.
+        Does not expand dynamic injections (used by /run and other non-prompt paths)."""
+        text_prompt, _ = self.replace_placeholders(prompt, include_images=False, clear_unresolved=clear_unresolved, expand_injections=False)
         return text_prompt
     
     def show_memory_usage(self, search_buffer: list = None, detail: bool = False, debug: bool = False, chat_history: list = None) -> None:

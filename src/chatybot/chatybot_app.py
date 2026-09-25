@@ -765,7 +765,7 @@ class ChatybotApp:
         # 4. Filebanks and script variables
         # Run up to 5 times to resolve nested/recursive placeholder references
         for _ in range(5):
-            new_elem, _ = self.buffer_manager.replace_placeholders(elem, include_images=False, clear_unresolved=False)
+            new_elem, _ = self.buffer_manager.replace_placeholders(elem, include_images=False, clear_unresolved=False, expand_injections=False)
             if new_elem == elem:
                 break
             elem = new_elem
@@ -5595,6 +5595,8 @@ class ChatybotApp:
             f"## Skill: {s.get('name', 'unknown')}\n{s.get('content', '')}"
             for s in matched
         )
+        # Expand !`cmd` blocks in skill content before injecting
+        skill_block = self.buffer_manager.expand_dynamic_injections(skill_block)
         if system_message:
             return f"{system_message}\n\n--- Active Skills ---\n{skill_block}"
         return f"--- Active Skills ---\n{skill_block}"
@@ -6120,7 +6122,8 @@ class ChatybotApp:
                             continue
 
                 # Handle history search command (!) - must be checked before adding to history
-                if prompt.startswith("!"):
+                # Skip if this is a dynamic injection (!`cmd`) which is not a history search
+                if prompt.startswith("!") and not prompt.startswith("!`"):
                     selected_command = await self.handle_history_command(prompt)
                     if selected_command:
                         # Add the selected command to history, not the ! command
