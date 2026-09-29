@@ -277,7 +277,7 @@ class ChatybotApp:
                         else:
                             os.environ["JINA_API_KEY"] = content.strip('"\'')
                     break
-                except Exception:
+                except (OSError, UnicodeDecodeError):
                     pass
 
         # Load configuration

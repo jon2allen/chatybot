@@ -169,7 +169,7 @@ def _write_env_file(path: Path, keys: dict[str, str]):
     path.write_text("\n".join(lines), encoding="utf-8")
     try:
         os.chmod(path, 0o600)
-    except Exception:
+    except OSError:
         pass
 
 

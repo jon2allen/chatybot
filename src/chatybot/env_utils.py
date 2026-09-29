@@ -81,7 +81,7 @@ def load_env_file(filepath: str | Path, override: bool = True) -> dict[str, str]
                         os.environ[k] = v
                     else:
                         os.environ.setdefault(k, v)
-    except Exception:
+    except (OSError, UnicodeDecodeError):
         pass
 
     return parsed
