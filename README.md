@@ -325,6 +325,7 @@ chat --> Hello!           # Start chatting!
 | `/run_safe` | Enable safe mode for shell execution (blocks dangerous commands) | `/run_safe` |
 | `/run_unsafe [askfirst]` | Disable safe mode (runs directly; optional `askfirst` prompts Y/N) | `/run_unsafe` |
 | `/tool <subcommand>` | Manage native tool loop mode, scratchpad directory, inspect prompt context, or dispatch invocations | `/tool scratch on` |
+| `/skill <subcommand>` | Manage the skills database and session-level auto-triggering | `/skill off` |
 | `/setdb <name>` | Select TinyDB database. Use `Null` to deactivate. | `/setdb knowledge` |
 | `/dblist` | List all TinyDB databases | `/dblist` |
 | `/searchdb <q>` | Search current database | `/searchdb "python"` |
@@ -433,6 +434,32 @@ The `/searchdb` command performs a case-insensitive search across the document `
 chat --> Explain these: ${search_results}
 /dblog                    # Save the AI's explanation back to the database
 ```
+
+### **Skills System**
+Skills are reusable, trigger-activated instructions stored in a dedicated TinyDB database (`~/.local/share/chatybot/skills.json`). When a user prompt matches a skill's trigger phrases, the skill content is injected into the system prompt for that turn. Skills can optionally configure the agentic tool loop (enable/disable specific tools, set auto-loop and max_turns).
+
+```bash
+/skill list                 # List all skills
+/skill show code-review     # Show full skill details
+/skill create               # Interactive creation wizard
+/skill enable code-review   # Re-enable a disabled skill
+/skill disable code-review  # Disable a skill (stays in DB, not triggered)
+/skill apply code-review    # Manually inject a skill into the next prompt
+/skill search "debug"       # Search by name, content, description, tags
+/skill learn my-workflow     # Learn a skill from current session turns
+/skill export code-review skill.md  # Export to SKILL.md format
+/skill import skill.md      # Import from SKILL.md file
+/skill restore              # Restore previous tool configuration
+```
+
+**Session-level auto-trigger toggle:**
+
+```bash
+/skill off                  # Disable auto-triggering for this session
+/skill on                   # Re-enable auto-triggering for this session
+```
+
+`/skill off` is a session-scoped toggle — it does not modify individual skill records in the database. When auto-triggering is off, no skills are injected based on trigger phrase matching. Manual injection via `/skill apply` still works regardless of the toggle state. The toggle resets to `on` on the next session.
 
 ### **Semantic Reranking**
 chatybot supports real-time semantic document reranking via the `EasyRerank` library. This allows you to automatically split massive document sources (directories, database records, variables, or conversation history) into semantic chunks, score them against a target query using local or remote cross-encoder models, and inject only the most relevant context back into LLM prompts.

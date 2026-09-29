@@ -158,6 +158,9 @@ class ChatybotApp:
         self.live_tool_context: str = ""
         self.in_tool_loop: bool = False
         self.tool_auto: bool = False
+
+        # Skills auto-trigger toggle (session-scoped, does not persist)
+        self.skills_enabled: bool = True
         self.tool_scratch: bool = False
         self._tool_scratch_user_set: bool = False
         self.backup_file_on_write: bool = True
@@ -5578,6 +5581,9 @@ class ChatybotApp:
         if pending:
             self.buffer_manager.set_script_var("_PENDING_SKILL", None, allow_protected=True)
             matched = [pending]
+        elif not getattr(self, "skills_enabled", True):
+            # Auto-trigger disabled via /skill off; manual apply still works
+            return system_message
         else:
             matched = get_matching_skills(user_prompt)
 
