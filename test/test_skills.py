@@ -131,6 +131,29 @@ class TestSkillsdbCreate:
         skill = skillsdb.get_skill_by_name("guidance-skill")
         assert "tool_config" not in skill["metadata"]
 
+    def test_create_duplicate_name_raises(self):
+        skillsdb.create_skill(name="dup-name", content="First")
+        with pytest.raises(ValueError, match="already exists"):
+            skillsdb.create_skill(name="dup-name", content="Second")
+
+    def test_create_short_trigger_raises(self):
+        with pytest.raises(ValueError, match="too short"):
+            skillsdb.create_skill(name="short-trig", content="X", triggers=["ab"])
+
+    def test_create_single_word_trigger_raises(self):
+        with pytest.raises(ValueError, match="single word"):
+            skillsdb.create_skill(name="single-trig", content="X", triggers=["debug"])
+
+    def test_create_empty_trigger_raises(self):
+        with pytest.raises(ValueError, match="empty"):
+            skillsdb.create_skill(name="empty-trig", content="X", triggers=["  "])
+
+    def test_create_valid_triggers_ok(self):
+        doc_id = skillsdb.create_skill(
+            name="valid-trig", content="X", triggers=["debug this", "fix the error"]
+        )
+        assert doc_id > 0
+
 
 class TestSkillsdbList:
     def test_list_all_skills(self):
@@ -319,7 +342,9 @@ class TestSkillsdbExportImport:
         assert skillsdb.export_skill_to_skillmd("exportable", export_path) is True
         assert os.path.exists(export_path)
 
-        # Import as a new skill
+        # Import as a new skill — delete original first since names must be unique
+        original = skillsdb.get_skill_by_name("exportable")
+        skillsdb.delete_skill(getattr(original, "doc_id", original.get("doc_id")))
         doc_id = skillsdb.import_skill_from_skillmd(export_path)
         assert doc_id is not None
         skill = skillsdb.get_skill_by_name("exportable")

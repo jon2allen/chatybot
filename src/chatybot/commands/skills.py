@@ -18,7 +18,7 @@ from chatybot import skillsdb
 @command(
     "/skill",
     help="Manage the skills database",
-    args="<list|show|create|edit|delete|enable|disable|search|learn|apply|export|import|restore|on|off> ...",
+    args="<list|show|create|edit|delete|enable|disable|search|learn|apply|export|import|restore|on|off|debug|exit> ...",
     category="skills",
 )
 async def cmd_skill(ctx: CommandContext, parts: list, command: str) -> CommandResult:
@@ -59,6 +59,10 @@ async def cmd_skill(ctx: CommandContext, parts: list, command: str) -> CommandRe
         return _handle_on_off(ctx, enable=True)
     elif subcmd == "off":
         return _handle_on_off(ctx, enable=False)
+    elif subcmd == "debug":
+        return _handle_debug(ctx, parts)
+    elif subcmd == "exit":
+        return _handle_exit(ctx)
     else:
         print(f"Unknown subcommand '{subcmd}'.")
         _print_usage()
@@ -66,7 +70,7 @@ async def cmd_skill(ctx: CommandContext, parts: list, command: str) -> CommandRe
 
 
 def _print_usage() -> None:
-    print("Usage: /skill <list|show|create|edit|delete|enable|disable|search|learn|apply|export|import|restore|on|off> ...")
+    print("Usage: /skill <list|show|create|edit|delete|enable|disable|search|learn|apply|export|import|restore|on|off|debug|exit> ...")
     print("  /skill list [enabled|all]       List skills")
     print("  /skill show <name>              Show skill content")
     print("  /skill create                   Launch interactive wizard")
@@ -82,6 +86,8 @@ def _print_usage() -> None:
     print("  /skill restore                  Restore previous tool configuration")
     print("  /skill on                       Enable auto-triggering (session-scoped)")
     print("  /skill off                      Disable auto-triggering (session-scoped)")
+    print("  /skill debug [on|off]           Show skills debug info or toggle trace logging")
+    print("  /skill exit                     Release the active skill lock")
 
 
 def _handle_list(ctx: CommandContext, parts: list) -> CommandResult:
@@ -161,8 +167,15 @@ async def _handle_create(ctx: CommandContext, parts: list) -> CommandResult:
         if not description:
             description = ""
 
-        triggers_input = input("Trigger phrases (comma-separated, 2+ words recommended): ").strip()
+        triggers_input = input("Trigger phrases (comma-separated, 2+ words required): ").strip()
         triggers = [t.strip() for t in triggers_input.split(",") if t.strip()] if triggers_input else []
+        if triggers:
+            try:
+                skillsdb.validate_triggers(triggers)
+            except ValueError as e:
+                print(f"\nWarning: {e}")
+                print("  You can continue, but /skill create will reject these triggers.")
+                print("  Consider using longer, multi-word phrases for better precision.\n")
 
         tags_input = input("Tags for organization (comma-separated, no behavioral effect): ").strip()
         tags = [t.strip() for t in tags_input.split(",") if t.strip()] if tags_input else []
@@ -194,15 +207,20 @@ async def _handle_create(ctx: CommandContext, parts: list) -> CommandResult:
         print("\nSkill creation cancelled.")
         return CommandResult.ok()
 
-    doc_id = skillsdb.create_skill(
-        name=name,
-        content=content,
-        description=description,
-        triggers=triggers,
-        tags=tags,
-        tool_config=tool_config,
-        source="manual",
-    )
+    try:
+        doc_id = skillsdb.create_skill(
+            name=name,
+            content=content,
+            description=description,
+            triggers=triggers,
+            tags=tags,
+            tool_config=tool_config,
+            source="manual",
+        )
+    except ValueError as e:
+        print(f"\nError: {e}")
+        print("Use /skill edit to modify an existing skill, or choose a different name.")
+        return CommandResult.ok()
     print(f"\nSkill '{name}' created (ID: {doc_id}).")
     return CommandResult.ok()
 
@@ -475,14 +493,19 @@ async def _handle_learn(ctx: CommandContext, parts: list) -> CommandResult:
 
     triggers = [t.strip() for t in triggers_input.split(",") if t.strip()] if triggers_input else []
 
-    doc_id = skillsdb.create_skill(
-        name=name,
-        content=content,
-        description=description,
-        triggers=triggers,
-        tags=["learned"],
-        source=f"session:{app.active_session_id or 'unknown'}",
-    )
+    try:
+        doc_id = skillsdb.create_skill(
+            name=name,
+            content=content,
+            description=description,
+            triggers=triggers,
+            tags=["learned"],
+            source=f"session:{app.active_session_id or 'unknown'}",
+        )
+    except ValueError as e:
+        print(f"\nError: {e}")
+        print("Use /skill edit to modify an existing skill, or choose a different name.")
+        return CommandResult.ok()
     print(f"Skill '{name}' learned from session (ID: {doc_id}).")
     return CommandResult.ok()
 
@@ -523,11 +546,115 @@ def _handle_import(ctx: CommandContext, parts: list) -> CommandResult:
         print("Usage: /skill import <file>")
         return CommandResult.ok()
     filepath = parts[2].strip('"')
-    doc_id = skillsdb.import_skill_from_skillmd(filepath)
+    try:
+        doc_id = skillsdb.import_skill_from_skillmd(filepath)
+    except ValueError as e:
+        print(f"Error: {e}")
+        print("Use /skill edit to modify the existing skill, or rename it in the file first.")
+        return CommandResult.ok()
     if doc_id is not None:
         print(f"Skill imported from '{filepath}' (ID: {doc_id}).")
     else:
         print(f"Failed to import skill from '{filepath}'. File not found or invalid format.")
+    return CommandResult.ok()
+
+
+def _handle_exit(ctx: CommandContext) -> CommandResult:
+    """Release the active skill lock.
+
+    When a skill auto-triggers, it becomes the sticky 'active skill' for the
+    session. Subsequent prompts re-use that skill instead of re-scanning
+    triggers, preventing mid-conversation skill hijacking. /skill exit
+    releases the lock so the next prompt triggers normally.
+    """
+    app = ctx.app
+    active = getattr(app, "active_skill", None)
+    if active:
+        print(f"Released active skill lock: '{active}'.")
+        app.active_skill = None
+    else:
+        print("No active skill lock to release.")
+    return CommandResult.ok()
+
+
+def _handle_debug(ctx: CommandContext, parts: list) -> CommandResult:
+    """Show skills debug info or toggle trace logging.
+
+    /skill debug          Show current state: DB path, cache, counts, toggle status
+    /skill debug on       Enable trace logging for skill trigger matching
+    /skill debug off      Disable trace logging
+    """
+    app = ctx.app
+
+    if len(parts) >= 3:
+        state = parts[2].lower().strip()
+        if state == "on":
+            app.trace_skills = True
+            print("Skills trace logging enabled. Trigger matching details will be printed on each prompt.")
+        elif state == "off":
+            app.trace_skills = False
+            print("Skills trace logging disabled.")
+        else:
+            print("Usage: /skill debug [on|off]")
+        return CommandResult.ok()
+
+    # Show current state
+    from chatybot import skillsdb
+
+    print("\n=== Skills Debug Info ===\n")
+
+    # DB state
+    db_path = skillsdb.SKILLS_DB_PATH
+    db_open = skillsdb._skills_manager is not None
+    print(f"DB Path:        {db_path}")
+    print(f"DB Open:        {db_open}")
+
+    if not db_open:
+        print(f"  (DB opens lazily on first /skill command or trigger match)")
+        print(f"  Exists: {os.path.exists(db_path)}")
+    else:
+        all_skills = skillsdb.list_skills()
+        enabled_skills = [s for s in all_skills if s.get("metadata", {}).get("enabled", True)]
+        print(f"Total skills:   {len(all_skills)}")
+        print(f"Enabled:        {len(enabled_skills)}")
+        print(f"Disabled:       {len(all_skills) - len(enabled_skills)}")
+
+    # Cache state
+    cache_state = "warm" if skillsdb._skills_cache is not None else "cold"
+    cache_count = len(skillsdb._skills_cache) if skillsdb._skills_cache is not None else 0
+    print(f"Cache:          {cache_state} ({cache_count} enabled skills cached)")
+
+    # Session state
+    print(f"\nSession state:")
+    print(f"  Auto-trigger:  {'ON' if getattr(app, 'skills_enabled', True) else 'OFF'}")
+    print(f"  Active lock:   {getattr(app, 'active_skill', None) or 'none'}")
+    print(f"  Trace logging: {'ON' if getattr(app, 'trace_skills', False) else 'OFF'}")
+
+    # Tool state snapshot
+    snapshot = getattr(app, "_tool_state_snapshot", None)
+    print(f"  Tool snapshot: {'available' if snapshot else 'none'}")
+
+    # Pending skill from /skill apply
+    pending = None
+    if hasattr(app.buffer_manager, "script_vars") and isinstance(app.buffer_manager.script_vars, dict):
+        pending = app.buffer_manager.script_vars.get("_PENDING_SKILL")
+    print(f"  Pending apply: {pending.get('name', '?') if pending else 'none'}")
+
+    # List enabled skills with triggers
+    if db_open:
+        enabled = skillsdb.list_skills(enabled_only=True)
+        if enabled:
+            print(f"\nEnabled skills and triggers:")
+            for s in enabled:
+                name = s.get("name", "?")
+                triggers = s.get("metadata", {}).get("triggers", [])
+                has_tc = bool(s.get("metadata", {}).get("tool_config"))
+                tc_marker = " [tool_config]" if has_tc else ""
+                print(f"  {name}{tc_marker}")
+                if triggers:
+                    print(f"    triggers: {', '.join(triggers)}")
+
+    print()
     return CommandResult.ok()
 
 
