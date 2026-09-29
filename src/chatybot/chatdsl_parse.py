@@ -9,7 +9,7 @@ import enum
 import json
 import logging
 import sys
-from typing import Any
+from typing import Any, ClassVar
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
@@ -164,7 +164,7 @@ class Tokenizer:
         return self.tokens
 
 class TParser:
-    VALID_ESCAPE_COMMANDS: set[str] = {
+    VALID_ESCAPE_COMMANDS: ClassVar[set[str]] = {
         "help", "prompt", "file", "showfile", "clearfile", "filebank",
         "model", "listmodels", "logging", "save", "codeonly", "codeoff",
         "system", "temp", "maxtokens", "top_p", "top_k", "freq_penalty",

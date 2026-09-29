@@ -31,7 +31,6 @@ _DB_NAME_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
 
 def get_active_db() -> str | None:
     """Return the currently active database name, if any."""
-    global _active_db_name
     return _active_db_name or os.environ.get("CHATYBOT_ACTIVE_DB")
 
 
@@ -107,7 +106,7 @@ def set_db(db_name: str) -> None:
     The database file is placed under the project's ``db`` directory.
     If db_name is 'Null' (case-insensitive), deactivate database support.
     """
-    global _manager, _db_path, _active_db_name, _session_backed_up_dbs
+    global _manager, _db_path, _active_db_name
     if db_name.lower() == "null":
         # Close the previous manager before deactivating so its file handle
         # is released.
@@ -207,7 +206,6 @@ def search_db(query: str) -> None:
 
     An empty query, ``*``, or ``all`` is an explicit "list all" shorthand.
     """
-    global SEARCHBUFFER
     if _manager is None:
         print("No database selected. Use /setdb <dbname> first.")
         return
