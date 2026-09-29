@@ -277,8 +277,8 @@ class ChatybotApp:
                         else:
                             os.environ["JINA_API_KEY"] = content.strip('"\'')
                     break
-                except (OSError, UnicodeDecodeError):
-                    pass
+                except (OSError, UnicodeDecodeError) as e:
+                    print(f"Warning: Could not read key file {key_file}: {e}")
 
         # Load configuration
         self.config_manager.load_config()
