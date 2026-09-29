@@ -333,7 +333,6 @@ class TParser:
         var_name = self.expect(TokenType.IDENTIFIER).raw
         
         # Look ahead for [] suffix
-        is_array = False
         lookahead_idx = self.idx
         while lookahead_idx < len(self.tokens) and self.tokens[lookahead_idx].type == TokenType.WHITESPACE:
             lookahead_idx += 1
@@ -347,7 +346,6 @@ class TParser:
                 self.expect(TokenType.SYMBOL, "[")
                 self.parse_opt_ws()
                 self.expect(TokenType.SYMBOL, "]")
-                is_array = True
                 var_name += "[]"
 
         self.parse_opt_ws()

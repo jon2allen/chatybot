@@ -704,7 +704,7 @@ class BufferManager:
         text_prompt, _ = self.replace_placeholders(prompt, include_images=False, clear_unresolved=clear_unresolved, expand_injections=False)
         return text_prompt
     
-    def show_memory_usage(self, search_buffer: list = None, detail: bool = False, debug: bool = False, chat_history: list = None) -> None:
+    def show_memory_usage(self, search_buffer: list | None = None, detail: bool = False, debug: bool = False, chat_history: list | None = None) -> None:
         """Show size of the file buffer, filebanks, image banks, and script variables in KB."""
         if debug:
             print("\n--- SCRIPT_VARS DEBUG METADATA ---")
@@ -823,7 +823,7 @@ class BufferManager:
                     print(f"  -> Type: {var_type} | Value: \"{val_preview}\"")
         print()
     
-    def dump_variables(self, name: str = "all", search_buffer: list = None, chat_history: list = None) -> None:
+    def dump_variables(self, name: str = "all", search_buffer: list | None = None, chat_history: list | None = None) -> None:
         """Print the contents of a variable or 'all' variables."""
         # Clean variable name by stripping potential placeholder wrappers: ${name}, {name}, $name
         clean_name = name.strip()

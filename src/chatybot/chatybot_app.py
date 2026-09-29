@@ -38,7 +38,6 @@ class LoopBreak(Exception):
 
 
 try:
-    import openai
     from openai import AsyncOpenAI
 except ImportError:
     raise ImportError(
@@ -2310,7 +2309,7 @@ class ChatybotApp:
             full_prompt = "\n\n".join(parts)
         else:
             # String prompt — do buffer/tool_context prep
-            full_prompt, image_list = self.buffer_manager.replace_placeholders(prompt)
+            full_prompt, _image_list = self.buffer_manager.replace_placeholders(prompt)
 
             if self.buffer_manager.prompt_buffer:
                 full_prompt = self.buffer_manager.prompt_buffer + "\n\n" + full_prompt
@@ -3328,7 +3327,7 @@ class ChatybotApp:
 
                         if len(next_meaningful) >= 2:
                             idx1, cmd1 = next_meaningful[0]
-                            idx2, cmd2 = next_meaningful[1]
+                            _idx2, cmd2 = next_meaningful[1]
                             if cmd1 == "/multiline" and cmd2.startswith("/"):
                                 print(f"depreciated line removed: {cmd1}")
                                 commands_list[idx1] = ""
@@ -3678,7 +3677,7 @@ class ChatybotApp:
             return f"{raw_error.strip()}\n\n{guidance}"
         return guidance
 
-    async def dispatch_tool(self, invocation_json: str = None) -> str:
+    async def dispatch_tool(self, invocation_json: str | None = None) -> str:
         """
         Dispatch a tool invocation to the dispatcher.
         
@@ -4960,7 +4959,7 @@ class ChatybotApp:
 
         return "\n".join(summary_lines)
 
-    async def run_tool_loop(self, max_turns: int = 25, initial_tool_results: str = None):
+    async def run_tool_loop(self, max_turns: int = 25, initial_tool_results: str | None = None):
         """
         Execute an autonomous multi-turn tool calling loop with the LLM.
         """
@@ -5269,7 +5268,7 @@ class ChatybotApp:
         if self.trace_agentic_loop:
             self.show_agentic_loop_trace()
 
-    async def execute_tool_loop(self, max_turns: int = 25, initial_tool_results: str = None) -> None:
+    async def execute_tool_loop(self, max_turns: int = 25, initial_tool_results: str | None = None) -> None:
         """
         Executes the autonomous agentic tool loop (Option B - History Management).
         Alias for run_tool_loop for backward compatibility and auto-loop dispatch.
@@ -6275,7 +6274,7 @@ def run():
         action="store_true",
         help="Launch interactive wizard to configure and save API keys"
     )
-    args, unknown = parser.parse_known_args()
+    args, _unknown = parser.parse_known_args()
 
     if args.setup_keys:
         from .setup_keys import main as setup_keys_main
