@@ -87,8 +87,8 @@ async def cmd_rerank(ctx: CommandContext, parts: list, command: str) -> CommandR
                     else:
                         os.environ["JINA_API_KEY"] = content.strip('"\'')
                 break
-            except (OSError, UnicodeDecodeError):
-                pass
+            except (OSError, UnicodeDecodeError) as e:
+                print(f"Warning: Could not read key file {key_file}: {e}")
 
     query_match = re.search(r'^/rerank\s+["\']([^"\']+)["\']', command, re.IGNORECASE)
     if not query_match:

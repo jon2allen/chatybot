@@ -169,8 +169,8 @@ def _write_env_file(path: Path, keys: dict[str, str]):
     path.write_text("\n".join(lines), encoding="utf-8")
     try:
         os.chmod(path, 0o600)
-    except OSError:
-        pass
+    except OSError as e:
+        print(f"Warning: Could not set permissions on {path}: {e}")
 
 
 if __name__ == "__main__":

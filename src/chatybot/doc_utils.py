@@ -55,16 +55,16 @@ def get_readme_content() -> str | None:
     if doc_file.exists() and doc_file.is_file():
         try:
             return doc_file.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            pass
+        except (OSError, UnicodeDecodeError) as e:
+            print(f"Warning: Could not read doc file: {e}")
 
     # 2. Repo root README.md
     repo_readme = Path(__file__).resolve().parent.parent.parent / "README.md"
     if repo_readme.exists() and repo_readme.is_file():
         try:
             return repo_readme.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            pass
+        except (OSError, UnicodeDecodeError) as e:
+            print(f"Warning: Could not read README: {e}")
 
     # 3. Installed package metadata fallback
     try:

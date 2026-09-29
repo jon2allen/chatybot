@@ -81,8 +81,8 @@ def load_env_file(filepath: str | Path, override: bool = True) -> dict[str, str]
                         os.environ[k] = v
                     else:
                         os.environ.setdefault(k, v)
-    except (OSError, UnicodeDecodeError):
-        pass
+    except (OSError, UnicodeDecodeError) as e:
+        print(f"Warning: Could not parse env file {path}: {e}")
 
     return parsed
 

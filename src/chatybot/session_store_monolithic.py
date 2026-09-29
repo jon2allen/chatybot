@@ -626,8 +626,8 @@ class MonolithicJsonSessionStore(BaseSessionStore):
                         shutil.copyfileobj(f_in, f_out)
                     os.remove(gz_fp)
                     count += 1
-                except OSError:
-                    pass
+                except OSError as e:
+                    print(f"Warning: Could not decompress session file: {e}")
 
             self._invalidate_cache()
             return count

@@ -28,8 +28,8 @@ def normalize_path(path: str) -> str:
         try:
             # Decode unicode-escaped representations while preserving standard path slashes
             path = path.encode('utf-8').decode('unicode-escape')
-        except (UnicodeDecodeError, UnicodeEncodeError):
-            pass
+        except (UnicodeDecodeError, UnicodeEncodeError) as e:
+            print(f"Warning: Could not decode path: {e}")
 
     return path
 
@@ -512,8 +512,8 @@ def grep_search(
                         })
                         if len(results) >= max_matches:
                             return True
-        except OSError:
-            pass
+        except OSError as e:
+            print(f"Warning: Could not search file {file_path}: {e}")
         return False
 
     if os.path.isfile(path):
