@@ -21,9 +21,10 @@ existing behavior exactly):
    existing localization flow for all locales.
 """
 
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING, Awaitable, Callable
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from chatybot.commands.context import CommandContext

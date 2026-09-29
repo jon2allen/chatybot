@@ -307,7 +307,7 @@ async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandRes
 
         # Collect all available tools
         all_tools = []
-        for tool_name in tools.keys():
+        for tool_name in tools:
             all_tools.append(tool_name)
         if app.mcp_manager and app.mcp_manager.cached_schemas:
             for server_name, tools_list in app.mcp_manager.cached_schemas.items():
@@ -1063,7 +1063,6 @@ def _parse_tool_replay_tokens(tokens, ctx):
     turn_id is the session turn whose agentic_loop we replay (None = most
     recent turn with an agentic loop). mode is one of summary/at/diff/step.
     """
-    app = ctx.app
     limit = None
     turn_id = None
     mode = "summary"

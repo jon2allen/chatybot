@@ -778,7 +778,7 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
                 include_scratch = True
             elif arg_lower in ("--no-scratch", "no-scratch"):
                 include_scratch = False
-            elif arg_lower.startswith("session=") or arg_lower.startswith("session_id=") or arg_lower.startswith("sid="):
+            elif arg_lower.startswith(("session=", "session_id=", "sid=")):
                 sess_filter = arg.split("=", 1)[1].strip("\"'")
             elif arg_lower.startswith("since="):
                 since_val = arg.split("=", 1)[1].strip("\"'")
@@ -802,7 +802,7 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
                 target_var = arg.split("=", 1)[1].strip()
             elif arg_lower.startswith("engine="):
                 engine_name = arg.split("=", 1)[1].strip()
-            elif arg_lower.startswith("terms=") or arg_lower.startswith("text=") or arg_lower.startswith("query="):
+            elif arg_lower.startswith(("terms=", "text=", "query=")):
                 val = arg.split("=", 1)[1].strip("\"'")
                 if val:
                     terms.extend(val.split())

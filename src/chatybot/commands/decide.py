@@ -27,7 +27,6 @@ Per-var registers (when var=<name> is given):
 import os
 import re
 import traceback
-
 from typing import Any
 
 from chatybot.commands.context import CommandContext
@@ -129,7 +128,7 @@ async def cmd_decide(ctx: CommandContext, parts: list, command: str) -> CommandR
         elif "$" in state or "{" in state:
             # Replace defined variables and placeholders while preserving exact whitespace
             keys_to_resolve = list(bm.script_vars.keys()) + ["LAST_RESPONSE", "CHAT_HISTORY"] + list(bm.file_banks.keys())
-            sorted_keys = sorted(list(set(keys_to_resolve)), key=len, reverse=True)
+            sorted_keys = sorted(set(keys_to_resolve), key=len, reverse=True)
             for k in sorted_keys:
                 val = bm.resolve_text_variable(k)
                 if val is not None:
@@ -245,7 +244,7 @@ async def cmd_decide(ctx: CommandContext, parts: list, command: str) -> CommandR
                 pass
 
     if not decision_model_config:
-        for alias, config in app.config_manager.config.get("models", {}).items():
+        for config in app.config_manager.config.get("models", {}).values():
             if config.get("type") == "decision":
                 decision_model_config = config
                 break
@@ -269,7 +268,7 @@ async def cmd_decide(ctx: CommandContext, parts: list, command: str) -> CommandR
         return CommandResult.ok()
 
     # ── Call the API ───────────────────────────────────────────────
-    from ..decision_client import evaluate, DecisionAPIError
+    from ..decision_client import DecisionAPIError, evaluate
 
     print(f"Evaluating with {model_name}...")
     try:

@@ -610,7 +610,7 @@ class BufferManager:
 
         # 3. Sort keys by length descending to prevent shorter variable names matching prefixes of longer ones
         keys_to_resolve = list(self.script_vars.keys()) + ['LAST_RESPONSE', 'CHAT_HISTORY'] + list(self.file_banks.keys())
-        sorted_keys = sorted(list(set(keys_to_resolve)), key=len, reverse=True)
+        sorted_keys = sorted(set(keys_to_resolve), key=len, reverse=True)
 
         for key in sorted_keys:
             var_type = self.script_vars.get_type(key) if key in self.script_vars else "text"

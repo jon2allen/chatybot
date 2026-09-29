@@ -209,8 +209,7 @@ class TParser:
 
     def match(self, t_type: TokenType, val: Any = None) -> bool:
         if self.current.type != t_type: return False
-        if val is not None and self.current.raw != val: return False
-        return True
+        return not (val is not None and self.current.raw != val)
 
     def expect(self, t_type: TokenType, val: Any = None) -> Token:
         if not self.match(t_type, val):

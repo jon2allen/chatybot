@@ -77,9 +77,7 @@ class MCPClientManager:
             
         try:
             is_persistent = cfg.get("persistent", False)
-            parsed_url = urlparse(server_url)
-            host = parsed_url.hostname or "localhost"
-            port = parsed_url.port or (443 if parsed_url.scheme == "https" else 80)
+            urlparse(server_url)
             
             # Create HTTP client for communicating with FastMCP server
             http_client = httpx.AsyncClient(base_url=server_url, timeout=30.0)

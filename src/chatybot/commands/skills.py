@@ -10,9 +10,9 @@ import shlex
 import subprocess
 import tempfile
 
+from chatybot import skillsdb
 from chatybot.commands.context import CommandContext
 from chatybot.commands.registry import CommandResult, command
-from chatybot import skillsdb
 
 
 @command(
@@ -22,7 +22,6 @@ from chatybot import skillsdb
     category="skills",
 )
 async def cmd_skill(ctx: CommandContext, parts: list, command: str) -> CommandResult:
-    app = ctx.app
     if len(parts) < 2:
         _print_usage()
         return CommandResult.ok()
@@ -400,7 +399,7 @@ def _enable_disable_skill(target: str, enable: bool) -> CommandResult:
         print("No skills found.")
         return CommandResult.ok()
 
-    all_names = [s.get("name", "") for s in all_skills]
+    [s.get("name", "") for s in all_skills]
 
     if target.lower() == "all":
         matched = all_skills
@@ -610,7 +609,7 @@ def _handle_debug(ctx: CommandContext, parts: list) -> CommandResult:
     print(f"DB Open:        {db_open}")
 
     if not db_open:
-        print(f"  (DB opens lazily on first /skill command or trigger match)")
+        print("  (DB opens lazily on first /skill command or trigger match)")
         print(f"  Exists: {os.path.exists(db_path)}")
     else:
         all_skills = skillsdb.list_skills()
@@ -625,7 +624,7 @@ def _handle_debug(ctx: CommandContext, parts: list) -> CommandResult:
     print(f"Cache:          {cache_state} ({cache_count} enabled skills cached)")
 
     # Session state
-    print(f"\nSession state:")
+    print("\nSession state:")
     print(f"  Auto-trigger:  {'ON' if getattr(app, 'skills_enabled', True) else 'OFF'}")
     print(f"  Active lock:   {getattr(app, 'active_skill', None) or 'none'}")
     print(f"  Trace logging: {'ON' if getattr(app, 'trace_skills', False) else 'OFF'}")
@@ -644,7 +643,7 @@ def _handle_debug(ctx: CommandContext, parts: list) -> CommandResult:
     if db_open:
         enabled = skillsdb.list_skills(enabled_only=True)
         if enabled:
-            print(f"\nEnabled skills and triggers:")
+            print("\nEnabled skills and triggers:")
             for s in enabled:
                 name = s.get("name", "?")
                 triggers = s.get("metadata", {}).get("triggers", [])

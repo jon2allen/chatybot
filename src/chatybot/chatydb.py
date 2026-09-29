@@ -254,9 +254,8 @@ def search_db(query: str) -> None:
                 if q in str(val).lower():
                     in_metadata = True
                     break
-        elif metadata:
-            if q in str(metadata).lower():
-                in_metadata = True
+        elif metadata and q in str(metadata).lower():
+            in_metadata = True
 
         if q in name.lower() or q in content.lower() or in_metadata:
             results.append(item)
@@ -405,7 +404,7 @@ def dblog(include_thinking: bool = False) -> None:
         print("Last chat completion logged to the database.")
 
 
-def load_var(var_name: str, extra: str = None) -> None:
+def load_var(var_name: str, extra: str | None = None) -> None:
     """Load content into a SCRIPT_VAR in chatybot.
 
     If 'extra' is None, use current ``SEARCHBUFFER``.
@@ -526,9 +525,9 @@ def save_var(var_name: str, filename: str) -> None:
 
 
 def dbprint(
-    target_file: str = None,
+    target_file: str | None = None,
     table_mode: bool = False,
-    item_range: str | int = None,
+    item_range: str | int | None = None,
 ) -> None:
     """Print database contents in full detail or as a concise summary table.
 

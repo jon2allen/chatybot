@@ -23,10 +23,10 @@ def find_legacy_sessions(sessions_dir: str) -> list[str]:
     legacy_files = []
     for f in os.listdir(sessions_dir):
         # Ignore subdirectories, hidden files, lock files, and tmp files
-        if f.startswith(".") or f.endswith(".lock") or f.endswith(".tmp"):
+        if f.startswith(".") or f.endswith((".lock", ".tmp")):
             continue
         fp = os.path.join(sessions_dir, f)
-        if os.path.isfile(fp) and (f.endswith(".json") or f.endswith(".json.gz")):
+        if os.path.isfile(fp) and (f.endswith((".json", ".json.gz"))):
             legacy_files.append(fp)
 
     return sorted(legacy_files)
@@ -256,7 +256,7 @@ def main():
     )
 
     args = parser.parse_args()
-    migrated, errors = run_migration(
+    _migrated, errors = run_migration(
         sessions_dir=args.sessions_dir,
         backup_dir=args.backup_dir,
         dry_run=args.dry_run,

@@ -95,15 +95,14 @@ def get_env_status(config_models: dict | None = None) -> list[dict]:
 
     # 3. Add any environment variable from os.environ matching API, KEY, TOKEN, SECRET, HF, etc.
     api_pattern = re.compile(r'(api|key|token|secret|huggingface|hf_)', re.IGNORECASE)
-    for env_k in os.environ.keys():
-        if api_pattern.search(env_k):
-            if env_k not in results:
-                results[env_k] = {
-                    "name": env_k,
-                    "vendor": "",
-                    "source": "Environment",
-                    "in_template": False,
-                }
+    for env_k in os.environ:
+        if api_pattern.search(env_k) and env_k not in results:
+            results[env_k] = {
+                "name": env_k,
+                "vendor": "",
+                "source": "Environment",
+                "in_template": False,
+            }
 
     # 4. Populate status & masked values
     final_list = []

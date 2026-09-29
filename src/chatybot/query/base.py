@@ -120,4 +120,4 @@ def get_query_engine(name: str | None = None) -> BaseQueryEngine:
 
 def list_query_engines() -> list[str]:
     """Return names of all registered query engines."""
-    return sorted(list(_ENGINE_REGISTRY.keys()))
+    return sorted(_ENGINE_REGISTRY.keys())

@@ -81,7 +81,7 @@ def _resolve_decision_config(model_alias: str | None = None, app: Any = None) ->
                     pass
 
         if not decision_model_config:
-            for _, cfg in config_manager.config.get("models", {}).items():
+            for cfg in config_manager.config.get("models", {}).values():
                 if isinstance(cfg, dict) and cfg.get("type") == "decision":
                     decision_model_config = cfg
                     break

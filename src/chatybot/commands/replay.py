@@ -132,7 +132,6 @@ def _render_at(snapshot, system_prompt: str) -> None:
     for i, m in enumerate(snapshot.messages):
         role = m.get("role", "?")
         content = m.get("content", "")
-        tokens = 0
         # cheap per-message token estimate via the limiter is not available
         # here without the limiter; show a char count proxy instead.
         clen = len(content) if isinstance(content, str) else 0

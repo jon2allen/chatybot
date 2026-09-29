@@ -75,7 +75,7 @@ def list_directory(path: str = ".", details: bool = False) -> list[Any]:
     except Exception as e:
         return [f"Error listing directory: {e}"]
 
-def read_file(path: str, start_line: int = None, end_line: int = None) -> str:
+def read_file(path: str, start_line: int | None = None, end_line: int | None = None) -> str:
     """Read contents of a file with optional line range filtering."""
     path = normalize_path(path)
     if os.name != 'nt':
@@ -200,7 +200,7 @@ def enforce_list_payload_limits(results: list[Any], tool_name: str, max_items: i
     return results
 
 
-def find_files(path: str = ".", pattern: str = "*", search_term: str = None, details: bool = False) -> list[Any]:
+def find_files(path: str = ".", pattern: str = "*", search_term: str | None = None, details: bool = False) -> list[Any]:
     """Find files and directories matching pattern, optionally containing search_term and metadata."""
     path = normalize_path(path)
     results = []
@@ -295,8 +295,7 @@ def run_command(command: str, shell: bool = True) -> str:
             result = subprocess.run(
                 command,
                 shell=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                capture_output=True,
                 text=True,
                 timeout=30
             )
@@ -304,8 +303,7 @@ def run_command(command: str, shell: bool = True) -> str:
             result = subprocess.run(
                 shlex.split(command),
                 shell=False,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                capture_output=True,
                 text=True,
                 timeout=30
             )
@@ -629,7 +627,7 @@ def diagnose_target_mismatch(content: str, target: str, search_start_line: int =
     if matches:
         line_num, matched_lines = matches[0]
         actual_first_line = matched_lines[0][1]
-        target_first_line = [l for l in target_lines if l.strip()][0]
+        target_first_line = next(l for l in target_lines if l.strip())
         target_spaces = len(target_first_line) - len(target_first_line.lstrip(" "))
         actual_spaces = len(actual_first_line) - len(actual_first_line.lstrip(" "))
 
@@ -658,8 +656,8 @@ def replace_file_content(
     path: str,
     target: str,
     replacement: str,
-    start_line: int = None,
-    end_line: int = None,
+    start_line: int | None = None,
+    end_line: int | None = None,
     app: Any = None,
 ) -> str:
     """

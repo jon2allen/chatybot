@@ -86,7 +86,7 @@ def get_context_metrics(
             if hasattr(app.buffer_manager, "file_buffer") and app.buffer_manager.file_buffer:
                 buffer_text_parts.append(str(app.buffer_manager.file_buffer))
             if hasattr(app.buffer_manager, "file_banks") and app.buffer_manager.file_banks:
-                for bank_name, bank_content in app.buffer_manager.file_banks.items():
+                for bank_content in app.buffer_manager.file_banks.values():
                     if bank_content:
                         buffer_text_parts.append(str(bank_content))
 

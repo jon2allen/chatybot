@@ -47,10 +47,10 @@ async def cmd_model(ctx: CommandContext, parts: list, command: str) -> CommandRe
                 client = app.get_openai_client(model_alias)
                 model_info = await client.models.retrieve(model_name)
                 if hasattr(model_info, "context_window"):
-                    context_window = getattr(model_info, "context_window")
+                    context_window = model_info.context_window
                     source = "API (Live)"
                 elif hasattr(model_info, "max_context_length"):
-                    context_window = getattr(model_info, "max_context_length")
+                    context_window = model_info.max_context_length
                     source = "API (Live)"
                 elif isinstance(model_info, dict):
                     context_window = model_info.get("context_window") or model_info.get("max_context_length")

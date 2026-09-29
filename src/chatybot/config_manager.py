@@ -48,7 +48,7 @@ class ConfigManager:
             raise ValueError(f"Failed to parse or validate config at '{config_path}': {e}")
 
         # Check model aliases against recommended length and warn if exceeded
-        for alias in self.config.get("models", {}).keys():
+        for alias in self.config.get("models", {}):
             if len(alias) > MAX_MODEL_ALIAS_LEN:
                 print(
                     f"[Warning: Model alias '{alias}' is {len(alias)} characters "

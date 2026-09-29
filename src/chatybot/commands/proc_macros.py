@@ -211,7 +211,7 @@ def _parse_selection_indices(selection_str: str, total_count: int) -> list:
             if 1 <= val <= total_count:
                 selected_indices.add(val - 1)
 
-    return sorted(list(selected_indices))
+    return sorted(selected_indices)
 
 
 def _extract_session_items(app) -> list:

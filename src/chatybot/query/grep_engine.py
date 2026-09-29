@@ -70,9 +70,7 @@ class GrepQueryEngine(BaseQueryEngine):
                 return not (request.since_dt or request.until_dt)
             if request.since_dt and dt_val < request.since_dt:
                 return False
-            if request.until_dt and dt_val > request.until_dt:
-                return False
-            return True
+            return not (request.until_dt and dt_val > request.until_dt)
 
         matched_session_ids = set()
         total_matches_count = 0
@@ -376,7 +374,7 @@ class GrepQueryEngine(BaseQueryEngine):
                     pass
 
         sessions_list = []
-        for sid in sorted(list(matched_session_ids)):
+        for sid in sorted(matched_session_ids):
             sz = get_session_size_bytes(sid)
             sessions_list.append({
                 "session_id": sid,
@@ -386,7 +384,7 @@ class GrepQueryEngine(BaseQueryEngine):
         return QueryResponse(
             total_matches=total_matches_count if not request.ids_only else len(matched_session_ids),
             matches=matches,
-            session_ids=sorted(list(matched_session_ids)),
+            session_ids=sorted(matched_session_ids),
             sessions=sessions_list,
             engine=self.name,
         )

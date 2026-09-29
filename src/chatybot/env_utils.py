@@ -37,7 +37,7 @@ def parse_env_line(line: str) -> tuple[str, str] | None:
     if not line or line.startswith("#"):
         return None
     
-    if line.startswith("export ") or line.startswith("export\t"):
+    if line.startswith(("export ", "export\t")):
         line = line.split(maxsplit=1)[1].strip()
 
     if "=" not in line:

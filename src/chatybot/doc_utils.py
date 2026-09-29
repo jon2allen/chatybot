@@ -4,12 +4,8 @@ Provides access to bundled package documentation and guides.
 """
 
 import sys
+from importlib.resources import files
 from pathlib import Path
-
-if sys.version_info >= (3, 11):
-    from importlib.resources import files
-else:
-    from importlib_resources import files
 
 
 def get_doc_dir() -> Path:
@@ -68,10 +64,7 @@ def get_readme_content() -> str | None:
 
     # 3. Installed package metadata fallback
     try:
-        if sys.version_info >= (3, 10):
-            from importlib.metadata import metadata
-        else:
-            from importlib_metadata import metadata
+        from importlib.metadata import metadata
 
         meta = metadata("chatybot")
         desc = meta.get("Description")
