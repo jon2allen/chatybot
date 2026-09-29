@@ -51,3 +51,9 @@ chatybot = [
     "doc/*",
     "doc/**/*",
 ]
+
+[tool.ruff.lint]
+# Datetime rules intentionally ignored:
+# All timestamps in chatybot are local-time, single-machine, single-user.
+# Naive datetimes are intentional for display strings, filenames, and session metadata.
+ignore = ["DTZ001", "DTZ005", "DTZ006", "DTZ007"]

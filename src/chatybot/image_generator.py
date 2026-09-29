@@ -518,7 +518,7 @@ class ImageGenerator:
             "prompt": prompt,
             "model": model,
             "vendor": vendor,
-            "timestamp": datetime.now().isoformat() + "Z",
+            "timestamp": datetime.now(tz=datetime.UTC).isoformat(),
             "size": size,
             "quality": quality,
         }
