@@ -23,6 +23,7 @@ SKILLS_DB_PATH = os.path.join(
 
 _skills_manager: CorpusManager | None = None
 _skills_cache: list[dict] | None = None
+_trace_skills: bool = False
 
 
 def _ensure_manager() -> CorpusManager:
@@ -88,8 +89,14 @@ def get_matching_skills(user_prompt: str, top_k: int = 1) -> list[dict]:
             if re.search(pattern, prompt_lower):
                 score = len(trigger_lower.split())
                 scored.append((score, skill))
+                if _trace_skills:
+                    print(f"[trace:skills]   trigger '{trigger}' matched skill '{skill.get('name', '?')}' (score={score})")
                 break
     scored.sort(key=lambda x: x[0], reverse=True)
+    if _trace_skills:
+        print(f"[trace:skills] Scanned {len(all_skills)} enabled skill(s), {len(scored)} matched")
+        if len(scored) > top_k:
+            print(f"[trace:skills] Truncated to top_k={top_k} (discarded {len(scored) - top_k})")
     return [s for _, s in scored[:top_k]]
 
 
@@ -111,6 +118,28 @@ def get_skill_by_name(name: str) -> dict | None:
     return None
 
 
+def validate_triggers(triggers: list[str]) -> None:
+    """Validate trigger phrases. Raises ValueError if any trigger is too short.
+
+    Minimum 3 characters and 2 words. Short or single-word triggers cause
+    false-positive matches against common vocabulary.
+    """
+    for trigger in triggers:
+        stripped = trigger.strip()
+        if not stripped:
+            raise ValueError("Trigger cannot be empty")
+        if len(stripped) < 3:
+            raise ValueError(
+                f"Trigger '{stripped}' is too short (minimum 3 characters). "
+                f"Short triggers cause false-positive matches."
+            )
+        if len(stripped.split()) < 2:
+            raise ValueError(
+                f"Trigger '{stripped}' is a single word (minimum 2 words required). "
+                f"Single-word triggers match too broadly."
+            )
+
+
 def create_skill(
     name: str,
     content: str,
@@ -120,10 +149,17 @@ def create_skill(
     tool_config: dict | None = None,
     source: str = "manual",
 ) -> int:
-    """Create a new skill and return its doc_id."""
+    """Create a new skill and return its doc_id.
+
+    Raises ValueError if a skill with the same name already exists or if
+    any trigger phrase fails validation.
+    """
     manager = _ensure_manager()
+    if get_skill_by_name(name) is not None:
+        raise ValueError(f"A skill named '{name}' already exists")
     if triggers is None:
         triggers = []
+    validate_triggers(triggers)
     if tags is None:
         tags = []
     metadata: dict[str, Any] = {

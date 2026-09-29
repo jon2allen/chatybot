@@ -160,6 +160,8 @@ class ChatybotApp:
 
         # Skills auto-trigger toggle (session-scoped, does not persist)
         self.skills_enabled: bool = True
+        self.trace_skills: bool = False
+        self.active_skill: str | None = None
         self.tool_scratch: bool = False
         self._tool_scratch_user_set: bool = False
         self.backup_file_on_write: bool = True
@@ -5571,7 +5573,12 @@ class ChatybotApp:
         their own system message assembly, before the message is sent
         to the model.
         """
-        from .skillsdb import get_matching_skills
+        from .skillsdb import get_matching_skills, get_skill_by_name
+
+        trace = getattr(self, "trace_skills", False)
+        if trace:
+            import chatybot.skillsdb as _sd
+            _sd._trace_skills = True
 
         # Check for manually applied skill via /skill apply
         pending = None
@@ -5580,20 +5587,61 @@ class ChatybotApp:
         if pending:
             self.buffer_manager.set_script_var("_PENDING_SKILL", None, allow_protected=True)
             matched = [pending]
+            self.active_skill = pending.get("name")
+            if trace:
+                print(f"[trace:skills] Manual apply: '{pending.get('name', '?')}' (locked as active_skill)")
         elif not getattr(self, "skills_enabled", True):
             # Auto-trigger disabled via /skill off; manual apply still works
+            if trace:
+                print("[trace:skills] Auto-trigger OFF (skills_enabled=False), skipping scan")
             return system_message
+        elif getattr(self, "active_skill", None):
+            # Sticky session lock: re-use the locked skill instead of re-scanning
+            locked = get_skill_by_name(self.active_skill)
+            if locked and locked.get("metadata", {}).get("enabled", True):
+                matched = [locked]
+                if trace:
+                    print(f"[trace:skills] Sticky lock: re-using active_skill '{self.active_skill}'")
+            else:
+                # Skill was deleted or disabled since lock was set
+                if trace:
+                    print(f"[trace:skills] Sticky lock: '{self.active_skill}' no longer available, clearing lock")
+                self.active_skill = None
+                matched = get_matching_skills(user_prompt)
+                if trace:
+                    if matched:
+                        names = [s.get("name", "?") for s in matched]
+                        print(f"[trace:skills] Matched {len(matched)} skill(s): {', '.join(names)}")
+                    else:
+                        print("[trace:skills] No skills matched")
         else:
             matched = get_matching_skills(user_prompt)
+            if trace:
+                if matched:
+                    names = [s.get("name", "?") for s in matched]
+                    print(f"[trace:skills] Matched {len(matched)} skill(s): {', '.join(names)}")
+                else:
+                    print("[trace:skills] No skills matched")
 
         if not matched:
+            if trace:
+                print("[trace:skills] No injection (no matches)")
             return system_message
 
-        # Apply tool configuration from the first matched skill
+        # Lock the first matched skill as active for subsequent turns
         skill = matched[0]
+        skill_name = skill.get("name", "unknown")
+        if self.active_skill != skill_name:
+            self.active_skill = skill_name
+            if trace:
+                print(f"[trace:skills] Locked '{skill_name}' as active_skill")
         tool_config = skill.get("metadata", {}).get("tool_config")
         if tool_config:
+            if trace:
+                print(f"[trace:skills] Applying tool_config from '{skill.get('name', '?')}'")
             self._apply_skill_tool_config(tool_config, skill.get("name", "unknown"))
+        elif trace:
+            print(f"[trace:skills] No tool_config on '{skill.get('name', '?')}' (guidance only)")
 
         # Inject skill content into system prompt
         skill_block = "\n\n".join(
@@ -5602,6 +5650,8 @@ class ChatybotApp:
         )
         # Expand !`cmd` blocks in skill content before injecting
         skill_block = self.buffer_manager.expand_dynamic_injections(skill_block)
+        if trace:
+            print(f"[trace:skills] Injected {len(matched)} skill(s) into system prompt ({len(skill_block)} chars)")
         if system_message:
             return f"{system_message}\n\n--- Active Skills ---\n{skill_block}"
         return f"--- Active Skills ---\n{skill_block}"
