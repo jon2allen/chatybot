@@ -55,7 +55,7 @@ def get_readme_content() -> str | None:
     if doc_file.exists() and doc_file.is_file():
         try:
             return doc_file.read_text(encoding="utf-8")
-        except Exception:
+        except (OSError, UnicodeDecodeError):
             pass
 
     # 2. Repo root README.md
@@ -63,7 +63,7 @@ def get_readme_content() -> str | None:
     if repo_readme.exists() and repo_readme.is_file():
         try:
             return repo_readme.read_text(encoding="utf-8")
-        except Exception:
+        except (OSError, UnicodeDecodeError):
             pass
 
     # 3. Installed package metadata fallback

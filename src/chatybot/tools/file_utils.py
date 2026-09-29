@@ -28,7 +28,7 @@ def normalize_path(path: str) -> str:
         try:
             # Decode unicode-escaped representations while preserving standard path slashes
             path = path.encode('utf-8').decode('unicode-escape')
-        except Exception:
+        except (UnicodeDecodeError, UnicodeEncodeError):
             pass
 
     return path
@@ -512,7 +512,7 @@ def grep_search(
                         })
                         if len(results) >= max_matches:
                             return True
-        except Exception:
+        except OSError:
             pass
         return False
 

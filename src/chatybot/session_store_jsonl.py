@@ -89,7 +89,7 @@ class JsonlSessionStore(BaseSessionStore):
                         lock_dt = datetime.fromisoformat(lock_time_str)
                         if (now_ts - lock_dt.timestamp()) > 86400.0:
                             is_stale = True
-                    except Exception:
+                    except (ValueError, TypeError):
                         pass
                 else:
                     # No timestamp: fallback to file mtime

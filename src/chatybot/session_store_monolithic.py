@@ -79,7 +79,7 @@ class MonolithicJsonSessionStore(BaseSessionStore):
                         lock_dt = datetime.fromisoformat(lock_time_str)
                         if (now_ts - lock_dt.timestamp()) > 86400.0:
                             is_stale = True
-                    except Exception:
+                    except (ValueError, TypeError):
                         pass
                 else:
                     if (now_ts - os.path.getmtime(lock_path)) > 86400.0:
@@ -626,7 +626,7 @@ class MonolithicJsonSessionStore(BaseSessionStore):
                         shutil.copyfileobj(f_in, f_out)
                     os.remove(gz_fp)
                     count += 1
-                except Exception:
+                except OSError:
                     pass
 
             self._invalidate_cache()

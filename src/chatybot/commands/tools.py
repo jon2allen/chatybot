@@ -617,7 +617,7 @@ async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandRes
             finally:
                 try:
                     os.unlink(temp_path)
-                except Exception:
+                except OSError:
                     pass
             return CommandResult.ok()
 
@@ -1805,7 +1805,7 @@ async def _handle_tool_retry(ctx: CommandContext, parts: list, command: str) -> 
     finally:
         try:
             os.unlink(temp_path)
-        except Exception:
+        except OSError:
             pass
 
     return CommandResult.ok()
