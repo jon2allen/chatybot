@@ -11,6 +11,7 @@ invalidated on any mutation.
 
 import copy
 import os
+import re
 from datetime import datetime
 from typing import Any
 
@@ -64,10 +65,11 @@ def _invalidate_cache() -> None:
 def get_matching_skills(user_prompt: str) -> list[dict]:
     """Return enabled skills whose triggers match the user prompt.
 
-    Matching: case-insensitive substring. For each enabled skill, each
-    trigger phrase is checked against the user prompt. If any trigger
-    phrase appears as a substring of the lowercased prompt, the skill
-    is included.
+    Matching: case-insensitive word-boundary regex. For each enabled skill,
+    each trigger phrase is checked against the user prompt using \b word
+    boundaries to prevent substring false positives (e.g. trigger "log"
+    matching "biology"). If any trigger phrase matches, the skill is
+    included.
     """
     prompt_lower = user_prompt.lower()
     all_skills = _get_enabled_skills()
@@ -75,7 +77,11 @@ def get_matching_skills(user_prompt: str) -> list[dict]:
     for skill in all_skills:
         triggers = skill.get("metadata", {}).get("triggers", [])
         for trigger in triggers:
-            if trigger.lower() in prompt_lower:
+            trigger_lower = trigger.lower()
+            prefix = r"\b" if trigger_lower[:1].isalnum() else ""
+            suffix = r"\b" if trigger_lower[-1:].isalnum() else ""
+            pattern = prefix + re.escape(trigger_lower) + suffix
+            if re.search(pattern, prompt_lower):
                 matched.append(skill)
                 break
     return matched
