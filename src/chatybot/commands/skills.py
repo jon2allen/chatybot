@@ -18,7 +18,7 @@ from chatybot import skillsdb
 @command(
     "/skill",
     help="Manage the skills database",
-    args="<list|show|create|edit|delete|enable|disable|search|learn|apply|export|import|restore> ...",
+    args="<list|show|create|edit|delete|enable|disable|search|learn|apply|export|import|restore|on|off> ...",
     category="skills",
 )
 async def cmd_skill(ctx: CommandContext, parts: list, command: str) -> CommandResult:
@@ -55,6 +55,10 @@ async def cmd_skill(ctx: CommandContext, parts: list, command: str) -> CommandRe
         return _handle_import(ctx, parts)
     elif subcmd == "restore":
         return _handle_restore(ctx)
+    elif subcmd == "on":
+        return _handle_on_off(ctx, enable=True)
+    elif subcmd == "off":
+        return _handle_on_off(ctx, enable=False)
     else:
         print(f"Unknown subcommand '{subcmd}'.")
         _print_usage()
@@ -62,7 +66,7 @@ async def cmd_skill(ctx: CommandContext, parts: list, command: str) -> CommandRe
 
 
 def _print_usage() -> None:
-    print("Usage: /skill <list|show|create|edit|delete|enable|disable|search|learn|apply|export|import|restore> ...")
+    print("Usage: /skill <list|show|create|edit|delete|enable|disable|search|learn|apply|export|import|restore|on|off> ...")
     print("  /skill list [enabled|all]       List skills")
     print("  /skill show <name>              Show skill content")
     print("  /skill create                   Launch interactive wizard")
@@ -76,6 +80,8 @@ def _print_usage() -> None:
     print("  /skill export <name> <file>     Export to SKILL.md format")
     print("  /skill import <file>            Import from SKILL.md file")
     print("  /skill restore                  Restore previous tool configuration")
+    print("  /skill on                       Enable auto-triggering (session-scoped)")
+    print("  /skill off                      Disable auto-triggering (session-scoped)")
 
 
 def _handle_list(ctx: CommandContext, parts: list) -> CommandResult:
@@ -522,6 +528,22 @@ def _handle_import(ctx: CommandContext, parts: list) -> CommandResult:
         print(f"Skill imported from '{filepath}' (ID: {doc_id}).")
     else:
         print(f"Failed to import skill from '{filepath}'. File not found or invalid format.")
+    return CommandResult.ok()
+
+
+def _handle_on_off(ctx: CommandContext, enable: bool) -> CommandResult:
+    """Toggle session-level skills auto-triggering.
+
+    /skill off disables auto-triggering for the current session without
+    touching individual skill enabled flags in the database. /skill apply
+    still works when auto-triggering is off. /skill on re-enables it.
+    """
+    ctx.app.skills_enabled = enable
+    state = "enabled" if enable else "disabled"
+    print(f"Skills auto-triggering {state} for this session.")
+    if not enable:
+        print("  /skill apply still works for manual injection.")
+        print("  Use /skill on to re-enable auto-triggering.")
     return CommandResult.ok()
 
 

@@ -899,7 +899,7 @@ class HelpSystem:
             name="/skill",
             category="skills",
             short_desc="Manage the skills database",
-            usage="/skill <list|show|create|edit|delete|enable|disable|search|learn|apply|export|import|restore> ...",
+            usage="/skill <list|show|create|edit|delete|enable|disable|search|learn|apply|export|import|restore|on|off> ...",
             long_desc=(
                 "Skills are reusable instructions stored in a dedicated TinyDB database. "
                 "When a user prompt matches a skill's trigger phrases, the skill content is "
@@ -919,13 +919,17 @@ class HelpSystem:
                 "  apply <name>             Manually inject skill into next prompt\n"
                 "  export <name> <file>     Export to SKILL.md format\n"
                 "  import <file>            Import from SKILL.md file\n"
-                "  restore                  Restore previous tool configuration"
+                "  restore                  Restore previous tool configuration\n"
+                "  on                       Enable auto-triggering for this session\n"
+                "  off                      Disable auto-triggering for this session"
             ),
             examples=[
                 "/skill list",
                 "/skill show code-review",
                 "/skill create",
                 "/skill enable code-review",
+                "/skill off",
+                "/skill on",
                 "/skill learn my-workflow",
                 "/skill restore",
             ],
