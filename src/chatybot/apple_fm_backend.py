@@ -31,7 +31,7 @@ def is_platform_supported() -> bool:
         version_str = platform.mac_ver()[0]
         parts = tuple(int(x) for x in version_str.split(".")[:2])
         return parts >= (26, 0)
-    except Exception:
+    except (ValueError, TypeError):
         return False
 
 

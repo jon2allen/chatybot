@@ -354,7 +354,7 @@ class ChatybotApp:
                 readline.set_completer(self.input_history_completer)
                 readline.parse_and_bind("tab: complete")
                 readline.set_completer_delims(" \t\n;")
-            except Exception:
+            except (ValueError, AttributeError):
                 pass 
 
         # Register save and cleanup functions to be called on exit
@@ -1162,7 +1162,7 @@ class ChatybotApp:
                 for line in self.input_history:
                     try:
                         readline.add_history(line)
-                    except Exception:
+                    except (ValueError, AttributeError):
                         pass
         except FileNotFoundError:
             pass
@@ -1950,7 +1950,7 @@ class ChatybotApp:
                             if isinstance(tc_args, str):
                                 try:
                                     tc_args = json.loads(tc_args)
-                                except Exception:
+                                except json.JSONDecodeError:
                                     pass
                             tool_calls_list.append({
                                 "tool": tc_name,
@@ -2038,7 +2038,7 @@ class ChatybotApp:
                         if isinstance(tc_args, str):
                             try:
                                 tc_args = json.loads(tc_args)
-                            except Exception:
+                            except json.JSONDecodeError:
                                 pass
                         tool_calls_list.append({
                             "tool": tc_name,
@@ -2122,7 +2122,7 @@ class ChatybotApp:
                     details = getattr(response.usage, "completion_tokens_details", None)
                     if details is not None:
                         self.last_reasoning_tokens = int(getattr(details, "reasoning_tokens", 0) or 0)
-                except Exception:
+                except (ValueError, TypeError):
                     pass
 
             if think_tokens_estimate + regular_tokens_estimate > 0 and out_tokens > 0:
@@ -2608,7 +2608,7 @@ class ChatybotApp:
                     else:
                         print("Invalid set command format. Usage: set <name> = <value>")
                         return True
-                except Exception as e:
+                except (ValueError, TypeError) as e:
                     print(f"Error parsing set command: {e}")
                     return True
 
@@ -2645,7 +2645,7 @@ class ChatybotApp:
                     else:
                         print("Invalid local command format. Usage: local <name> = <value>")
                         return True
-                except Exception as e:
+                except (ValueError, TypeError) as e:
                     print(f"Error parsing local command: {e}")
                     return True
 
@@ -3709,7 +3709,7 @@ class ChatybotApp:
         else:
             try:
                 tool_call = json.loads(invocation_json)
-            except Exception:
+            except json.JSONDecodeError:
                 pass
         
         if tool_call and isinstance(tool_call, dict):
@@ -4001,12 +4001,12 @@ class ChatybotApp:
                                     self.buffer_manager.set_script_var(f"{var_name}_conf", f"{float(inner_res['confidence']):.2f}", allow_protected=True)
                                 if "top_probability" in inner_res:
                                     self.buffer_manager.set_script_var(f"{var_name}_prob", f"{float(inner_res['top_probability']):.2f}", allow_protected=True)
-                except Exception:
+                except (json.JSONDecodeError, TypeError):
                     pass
 
                 return result.stdout
             
-        except Exception as e:
+        except (json.JSONDecodeError, TypeError) as e:
             print(f"Error dispatching tool: {e}")
             self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
             self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', str(e))
@@ -4272,7 +4272,7 @@ class ChatybotApp:
                 data = json.loads(cleaned)
                 if isinstance(data, dict):
                     return sanitize_json_types(data)
-            except Exception:
+            except json.JSONDecodeError:
                 pass
 
             try:
@@ -4280,7 +4280,7 @@ class ChatybotApp:
                 data = json.loads(repaired)
                 if isinstance(data, dict):
                     return sanitize_json_types(data)
-            except Exception:
+            except json.JSONDecodeError:
                 pass
 
             try:
@@ -4288,7 +4288,7 @@ class ChatybotApp:
                 data = json.loads(fixed)
                 if isinstance(data, dict):
                     return sanitize_json_types(data)
-            except Exception:
+            except json.JSONDecodeError:
                 pass
 
             try:
@@ -6189,7 +6189,7 @@ class ChatybotApp:
                             if readline:
                                 try:
                                     readline.add_history(selected_command)
-                                except Exception:
+                                except (ValueError, AttributeError):
                                     pass
                         
                         # Execute the selected command
@@ -6204,7 +6204,7 @@ class ChatybotApp:
                     if readline:
                         try:
                             readline.add_history(prompt)
-                        except Exception:
+                        except (ValueError, AttributeError):
                             pass
 
                 if not prompt.strip():

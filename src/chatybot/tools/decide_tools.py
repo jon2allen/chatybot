@@ -440,7 +440,7 @@ async def async_decide_choice(
                 if isinstance(parsed, dict):
                     criteria = {str(k).strip(): str(v).strip() for k, v in parsed.items() if str(k).strip()}
                     parsed_from_json = True
-            except Exception:
+            except json.JSONDecodeError:
                 pass
         elif raw_options.startswith("[") and raw_options.endswith("]"):
             try:
@@ -456,7 +456,7 @@ async def async_decide_choice(
                         else:
                             criteria[item_str] = item_str
                     parsed_from_json = True
-            except Exception:
+            except json.JSONDecodeError:
                 pass
 
         if not parsed_from_json:

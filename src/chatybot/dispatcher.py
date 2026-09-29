@@ -109,7 +109,7 @@ def validate_and_route(invocation: dict[str, Any], config: dict[str, Any]) -> tu
             overrides = json.loads(overrides_env)
             if tool_name in overrides:
                 is_enabled = overrides[tool_name]
-        except Exception:
+        except json.JSONDecodeError:
             pass
 
     if not is_enabled:

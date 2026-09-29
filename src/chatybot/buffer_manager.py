@@ -5,6 +5,7 @@ Manages file buffers, file banks, script variables, and image banks
 """
 
 import base64
+import binascii
 import contextlib
 import json
 import re
@@ -116,7 +117,7 @@ class ScriptVars(UserDict):
                     self.types[key] = "array"
                     super().__setitem__(key, parsed)  # Store as native list
                     return
-            except Exception:
+            except json.JSONDecodeError:
                 pass
 
         str_val = str(value) if value is not None else ""
@@ -140,7 +141,7 @@ class ScriptVars(UserDict):
                 parsed = json.loads(str_val_stripped)
                 self.types[key] = "array" if isinstance(parsed, list) else "json"
                 return
-            except Exception:
+            except json.JSONDecodeError:
                 pass
                 
         # 4. Fallback for general binary base64
@@ -198,7 +199,7 @@ class BufferManager:
         try:
             base64.b64decode(prefix[:check_len], validate=True)
             return True
-        except Exception:
+        except (binascii.Error, ValueError):
             return False
 
     def load_file_to_buffer(self, file_path: str) -> None:
@@ -488,7 +489,7 @@ class BufferManager:
                     parsed = json.loads(val)
                     if isinstance(parsed, list):
                         return "\n".join(map(str, parsed))
-                except Exception:
+                except json.JSONDecodeError:
                     pass
             return str(val)
             
