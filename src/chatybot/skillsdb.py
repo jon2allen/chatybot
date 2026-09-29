@@ -62,7 +62,7 @@ def _invalidate_cache() -> None:
     _skills_cache = None
 
 
-def get_matching_skills(user_prompt: str) -> list[dict]:
+def get_matching_skills(user_prompt: str, top_k: int = 1) -> list[dict]:
     """Return enabled skills whose triggers match the user prompt.
 
     Matching: case-insensitive word-boundary regex. For each enabled skill,
@@ -70,10 +70,14 @@ def get_matching_skills(user_prompt: str) -> list[dict]:
     boundaries to prevent substring false positives (e.g. trigger "log"
     matching "biology"). If any trigger phrase matches, the skill is
     included.
+
+    Ranking: matched skills are scored by the word count of the trigger
+    phrase that matched. Longer (more specific) triggers rank higher.
+    Only the top_k skills are returned (default 1).
     """
     prompt_lower = user_prompt.lower()
     all_skills = _get_enabled_skills()
-    matched = []
+    scored = []
     for skill in all_skills:
         triggers = skill.get("metadata", {}).get("triggers", [])
         for trigger in triggers:
@@ -82,9 +86,11 @@ def get_matching_skills(user_prompt: str) -> list[dict]:
             suffix = r"\b" if trigger_lower[-1:].isalnum() else ""
             pattern = prefix + re.escape(trigger_lower) + suffix
             if re.search(pattern, prompt_lower):
-                matched.append(skill)
+                score = len(trigger_lower.split())
+                scored.append((score, skill))
                 break
-    return matched
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return [s for _, s in scored[:top_k]]
 
 
 def list_skills(enabled_only: bool = False) -> list[dict]:
