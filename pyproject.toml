@@ -56,4 +56,17 @@ chatybot = [
 # Datetime rules intentionally ignored:
 # All timestamps in chatybot are local-time, single-machine, single-user.
 # Naive datetimes are intentional for display strings, filenames, and session metadata.
-ignore = ["DTZ001", "DTZ005", "DTZ006", "DTZ007"]
+# Async blocking rules intentionally ignored:
+# chatybot runs a single-coroutine event loop with no concurrent tasks
+# (no asyncio.create_task, gather, or TaskGroup anywhere in the codebase).
+# Blocking open() and subprocess.run() calls inside async functions are
+# harmless because nothing else is running on the event loop simultaneously.
+# Re-enable these rules if subagents or concurrent task execution is added.
+ignore = [
+    "DTZ001",
+    "DTZ005",
+    "DTZ006",
+    "DTZ007",
+    "ASYNC230",
+    "ASYNC221",
+]
