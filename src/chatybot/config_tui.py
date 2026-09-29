@@ -14,7 +14,7 @@ try:
     import curses.textpad
 except ImportError:
     curses = None
-from typing import Any
+from typing import Any, ClassVar
 
 from .config_model import (
     MAX_MODEL_ALIAS_LEN,
@@ -726,7 +726,7 @@ class ConfigTUI:
             self.set_status(f"Error cloning model: {e!s}", is_error=True)
             return False
 
-    REPLACE_FIELDS = [
+    REPLACE_FIELDS: ClassVar[list[tuple[str, str, str]]] = [
         ("api_key", "API Key Env Var", "str"),
         ("base_url", "Base URL Endpoint", "str"),
         ("temperature", "Temperature", "float"),

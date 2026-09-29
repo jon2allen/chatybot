@@ -1,12 +1,12 @@
 import json
 import os
-from typing import Any
+from typing import Any, ClassVar
 
 
 class LocalizationManager:
     """Manages system command aliases, script keywords, and UI strings across multiple languages."""
     
-    LANG_MAP = {
+    LANG_MAP: ClassVar[dict[str, str]] = {
         "en": "en", "english": "en",
         "es": "es", "spanish": "es",
         "fr": "fr", "french": "fr",
