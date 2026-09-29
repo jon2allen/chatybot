@@ -36,7 +36,7 @@ class LocalizationManager:
             return True
         return False
 
-    def get_ui_string(self, key: str, default: str = None, **kwargs) -> str:
+    def get_ui_string(self, key: str, default: str | None = None, **kwargs) -> str:
         locale_data = self.catalog.get(self.locale, self.catalog.get("en", {}))
         template = locale_data.get("ui", {}).get(key, default or key)
         try:
@@ -44,7 +44,7 @@ class LocalizationManager:
         except Exception:
             return template
 
-    def get_help_string(self, section: str, key: str, default: str = None) -> str:
+    def get_help_string(self, section: str, key: str, default: str | None = None) -> str:
         locale_data = self.catalog.get(self.locale, self.catalog.get("en", {}))
         help_data = locale_data.get("help", {})
         val = help_data.get(section, {}).get(key, default)
@@ -54,7 +54,7 @@ class LocalizationManager:
             val = en_data.get(section, {}).get(key, default or key)
         return val
 
-    def print(self, key: str, default: str = None, **kwargs) -> None:
+    def print(self, key: str, default: str | None = None, **kwargs) -> None:
         print(self.get_ui_string(key, default, **kwargs))
 
     def resolve_command(self, raw_cmd: str) -> str:
@@ -65,7 +65,7 @@ class LocalizationManager:
         if cmd_lower in locale_aliases:
             return locale_aliases[cmd_lower]
         # Fallback to checking all locales
-        for loc, data in self.catalog.items():
+        for data in self.catalog.values():
             aliases = {k.lower(): v for k, v in data.get("aliases", {}).items()}
             if cmd_lower in aliases:
                 return aliases[cmd_lower]
@@ -76,7 +76,7 @@ class LocalizationManager:
         reverse_map = {}
         
         # 1. Add all translations from all locales as a baseline/fallback
-        for loc, data in self.catalog.items():
+        for data in self.catalog.values():
             keywords = data.get("keywords", {})
             for localized, canonical in keywords.items():
                 reverse_map[localized.lower()] = canonical
@@ -150,7 +150,7 @@ class LocalizationManager:
         if len(parts) > 1:
             args = parts[1]
             keywords_map = {}
-            for loc, data in self.catalog.items():
+            for data in self.catalog.values():
                 keywords_map.update(data.get("keywords", {}))
             keywords_map.update(self.catalog.get(self.locale, {}).get("keywords", {}))
             

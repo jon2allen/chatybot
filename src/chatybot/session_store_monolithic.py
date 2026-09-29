@@ -297,7 +297,7 @@ class MonolithicJsonSessionStore(BaseSessionStore):
         # 2. Metadata match
         if os.path.exists(self.sessions_dir):
             for fname in os.listdir(self.sessions_dir):
-                if (fname.endswith(".json") or fname.endswith(".json.gz")) and not fname.startswith("."):
+                if (fname.endswith((".json", ".json.gz"))) and not fname.startswith("."):
                     fp = os.path.join(self.sessions_dir, fname)
                     try:
                         open_fn = gzip.open if fname.endswith(".gz") else open
@@ -329,7 +329,7 @@ class MonolithicJsonSessionStore(BaseSessionStore):
         files = [
             f
             for f in os.listdir(self.sessions_dir)
-            if (f.endswith(".json") or f.endswith(".json.gz")) and not f.startswith(".")
+            if (f.endswith((".json", ".json.gz"))) and not f.startswith(".")
         ]
 
         for fname in files:
@@ -446,7 +446,7 @@ class MonolithicJsonSessionStore(BaseSessionStore):
             count = 0
             for f in os.listdir(self.sessions_dir):
                 fpath = os.path.join(self.sessions_dir, f)
-                if (f.endswith(".json") or f.endswith(".json.gz") or f.endswith(".lock")) and not f.startswith("."):
+                if (f.endswith((".json", ".json.gz", ".lock"))) and not f.startswith("."):
                     try:
                         os.remove(fpath)
                         if not f.endswith(".lock"):
@@ -654,7 +654,7 @@ class MonolithicJsonSessionStore(BaseSessionStore):
             for fname in os.listdir(self.sessions_dir):
                 if fname in active_names or fname.startswith("."):
                     continue
-                if (fname.endswith(".json") or fname.endswith(".json.gz")) and not fname.startswith("."):
+                if (fname.endswith((".json", ".json.gz"))) and not fname.startswith("."):
                     fp = os.path.join(self.sessions_dir, fname)
                     try:
                         sz = os.path.getsize(fp)
@@ -715,7 +715,7 @@ class MonolithicJsonSessionStore(BaseSessionStore):
         count = 0
 
         for fname in os.listdir(self.sessions_dir):
-            if (fname.endswith(".json") or fname.endswith(".json.gz")) and not fname.startswith("."):
+            if (fname.endswith((".json", ".json.gz"))) and not fname.startswith("."):
                 fp = os.path.join(self.sessions_dir, fname)
                 try:
                     sz = os.path.getsize(fp)

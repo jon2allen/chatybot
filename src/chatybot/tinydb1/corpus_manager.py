@@ -25,7 +25,7 @@ class CorpusManager:
         self.db.close()
 
     def add_item(self, item_type: str, name: str, content: str,
-                metadata: dict[str, Any] = None) -> int:
+                metadata: dict[str, Any] | None = None) -> int:
         """
         Add a new item to the corpus.
 
@@ -88,8 +88,8 @@ class CorpusManager:
         """
         return self.items.search(self.Item.metadata[key] == value)
 
-    def update_item(self, item_id: int, name: str = None, content: str = None,
-                   metadata: dict[str, Any] = None) -> bool:
+    def update_item(self, item_id: int, name: str | None = None, content: str | None = None,
+                   metadata: dict[str, Any] | None = None) -> bool:
         """
         Update an existing item.
 
@@ -152,7 +152,7 @@ class CorpusManager:
             return False
         return self.items.remove(doc_ids=[item_id]) == [item_id]
 
-    def search_items(self, query: str, fields: list[str] = None) -> list[dict]:
+    def search_items(self, query: str, fields: list[str] | None = None) -> list[dict]:
         """
         Search for items by content in specified fields.
 

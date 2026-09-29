@@ -588,7 +588,7 @@ class ProfileTUI:
     def draw_dialog_border(self, win, title: str):
         win.erase()
         win.box()
-        h, w = win.getmaxyx()
+        _h, w = win.getmaxyx()
         title_disp = f" {title} "
         if len(title_disp) < w - 4:
             win.addstr(0, (w - len(title_disp)) // 2, title_disp, curses.color_pair(1) | curses.A_BOLD)

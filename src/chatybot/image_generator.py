@@ -157,7 +157,6 @@ class ImageGenerator:
         effective_model = model_name or "dall-e-3"
         effective_size = size or "1024x1024"
         effective_quality = quality or "standard"
-        effective_endpoint = endpoint or "/images/generations"
         
         # Create client
         client = openai.OpenAI(
@@ -400,27 +399,26 @@ class ImageGenerator:
             payload["quality"] = quality
         
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    f"{effective_base_url}{effective_endpoint}",
-                    json=payload
-                ) as resp:
-                    if resp.status != 200:
-                        error_text = await resp.text()
-                        raise ValueError(f"Ollama error ({resp.status}): {error_text}")
-                    
-                    data = await resp.json()
-                    
-                    # Ollama returns image as base64 in 'image' field
-                    if "image" in data:
-                        image_data = data["image"]
-                        file_path = self._save_image(
-                            image_data, prompt, vendor="ollama", 
-                            model=effective_model, size=size, quality=quality
-                        )
-                        return file_path, image_data
-                    else:
-                        raise ValueError(f"Unexpected response from Ollama: {data}")
+            async with aiohttp.ClientSession() as session, session.post(
+                f"{effective_base_url}{effective_endpoint}",
+                json=payload
+            ) as resp:
+                if resp.status != 200:
+                    error_text = await resp.text()
+                    raise ValueError(f"Ollama error ({resp.status}): {error_text}")
+                
+                data = await resp.json()
+                
+                # Ollama returns image as base64 in 'image' field
+                if "image" in data:
+                    image_data = data["image"]
+                    file_path = self._save_image(
+                        image_data, prompt, vendor="ollama", 
+                        model=effective_model, size=size, quality=quality
+                    )
+                    return file_path, image_data
+                else:
+                    raise ValueError(f"Unexpected response from Ollama: {data}")
                         
         except Exception as e:
             raise ValueError(f"Ollama image generation failed: {e!s}")
@@ -463,7 +461,6 @@ class ImageGenerator:
         # Determine file format based on vendor
         # Most image models produce PNG by default
         format_ext = ".png"
-        mime_type = "image/png"
         
         # Generate filename
         filename = f"prompt_{counter:03d}{format_ext}"

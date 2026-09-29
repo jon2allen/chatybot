@@ -76,10 +76,7 @@ def is_code_file(file_path):
         # 5. Final Classification Logic
         non_code_types = ['Text only', 'Markdown', 'ChaiScript', 'Gettext catalog']
 
-        if isinstance(lexer, (MarkdownLexer, TextLexer)) or lexer.name in non_code_types:
-            return False
-
-        return True
+        return not (isinstance(lexer, (MarkdownLexer, TextLexer)) or lexer.name in non_code_types)
 
     except Exception:
         return False

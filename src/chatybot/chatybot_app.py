@@ -26,9 +26,10 @@ import re
 import shutil
 import signal
 import time
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from .pattern import PatternMatcher
 
@@ -2559,7 +2560,7 @@ class ChatybotApp:
                         var_value = match.group(2).strip()
 
                         # Handle quoted values
-                        if var_value.startswith('"') or var_value.startswith("'"):
+                        if var_value.startswith(('"', "'")):
                             q = var_value[0]
                             # Search for ending quote and error on escape characters as requested
                             closing_idx = -1
@@ -3602,8 +3603,7 @@ class ChatybotApp:
             result = subprocess.run(
                 shlex.split(command),
                 shell=False,  # CRITICAL: Prevents shell injection
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                capture_output=True,
                 text=True,
                 timeout=timeout,
                 cwd=os.getcwd()
@@ -3872,7 +3872,11 @@ class ChatybotApp:
                     print(err_msg)
                     return err_msg
                 try:
-                    from .tools.decide_tools import async_decide_choice, async_decide_noul, async_decide_score
+                    from .tools.decide_tools import (
+                        async_decide_choice,
+                        async_decide_noul,
+                        async_decide_score,
+                    )
                     args = tool_call.get("arguments", {}) or {}
                     if isinstance(args, dict):
                         if "parameters" in args and isinstance(args["parameters"], dict):
@@ -4100,12 +4104,11 @@ class ChatybotApp:
                     i += 1
                     continue
                 
-                if not in_quote:
-                    if char == '#' or s[i:i+2] == '//':
-                        # Skip until next newline or end of string
-                        while i < n and s[i] != '\n':
-                            i += 1
-                        continue
+                if not in_quote and (char == '#' or s[i:i+2] == '//'):
+                    # Skip until next newline or end of string
+                    while i < n and s[i] != '\n':
+                        i += 1
+                    continue
                 
                 cleaned_chars.append(char)
                 i += 1
@@ -4231,27 +4234,26 @@ class ChatybotApp:
                     i += 1
                     continue
 
-                if not in_quote:
-                    if char.isalpha() or char == '_':
-                        start = i
-                        while i < n and (buf_str[i].isalnum() or buf_str[i] == '_'):
-                            i += 1
-                        ident = buf_str[start:i]
-                        peek = i
-                        while peek < n and buf_str[peek].isspace():
-                            peek += 1
-                        if peek < n and buf_str[peek] == ':':
-                            out.append(f'"{ident}"')
+                if not in_quote and (char.isalpha() or char == '_'):
+                    start = i
+                    while i < n and (buf_str[i].isalnum() or buf_str[i] == '_'):
+                        i += 1
+                    ident = buf_str[start:i]
+                    peek = i
+                    while peek < n and buf_str[peek].isspace():
+                        peek += 1
+                    if peek < n and buf_str[peek] == ':':
+                        out.append(f'"{ident}"')
+                    else:
+                        if ident == "True":
+                            out.append("true")
+                        elif ident == "False":
+                            out.append("false")
+                        elif ident == "None":
+                            out.append("null")
                         else:
-                            if ident == "True":
-                                out.append("true")
-                            elif ident == "False":
-                                out.append("false")
-                            elif ident == "None":
-                                out.append("null")
-                            else:
-                                out.append(ident)
-                        continue
+                            out.append(ident)
+                    continue
 
                 out.append(char)
                 i += 1
@@ -5220,9 +5222,7 @@ class ChatybotApp:
             loop_messages = list(temp_history[prefix_len:])
             
             # Ensure the final terminal assistant response is captured
-            if not loop_messages or loop_messages[-1].get("role") != "assistant":
-                loop_messages.append({"role": "assistant", "content": final_natural_language_response})
-            elif loop_messages[-1].get("content") != final_natural_language_response:
+            if not loop_messages or loop_messages[-1].get("role") != "assistant" or loop_messages[-1].get("content") != final_natural_language_response:
                 loop_messages.append({"role": "assistant", "content": final_natural_language_response})
 
             new_turns = []
@@ -5729,7 +5729,7 @@ class ChatybotApp:
         if config.get("max_turns"):
             self.max_turns = config["max_turns"]
 
-        print(f"[skill] Tool configuration applied.")
+        print("[skill] Tool configuration applied.")
         return True
 
     def _save_tool_state_snapshot(self) -> None:
@@ -5774,7 +5774,7 @@ class ChatybotApp:
         elif result.action == CommandAction.EXIT:
             self.logging_manager.stop_logging()
             self.save_input_history()
-            exit(0)
+            sys.exit(0)
         return True
 
     async def handle_escape_command(self, command: str) -> bool | str:

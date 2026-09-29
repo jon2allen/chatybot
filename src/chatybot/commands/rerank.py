@@ -125,7 +125,7 @@ async def cmd_rerank(ctx: CommandContext, parts: list, command: str) -> CommandR
             pass
 
     if not rerank_model_config:
-        for alias, config in app.config_manager.config.get("models", {}).items():
+        for config in app.config_manager.config.get("models", {}).values():
             if config.get("type") == "reranker":
                 rerank_model_config = config
                 break
@@ -332,7 +332,7 @@ async def cmd_rerank(ctx: CommandContext, parts: list, command: str) -> CommandR
 
         print(f"Ingesting directory '{source_id}' with Batched Top-N pre-filtering (limit_batch_size={limit_batch_size}, limit_top_n={limit_top_n}, max_limit={max_limit})...")
 
-        pre_filtered_chunks, reached_limit = processor.process_with_batched_top_n(
+        pre_filtered_chunks, _reached_limit = processor.process_with_batched_top_n(
             chunk_size=item,
             top_n=limit_top_n,
             max_limit=max_limit,

@@ -370,7 +370,7 @@ class ProfileEditor:
 
     def edit_text(self, stdscr, field_id: str) -> None:
         curses.curs_set(1)
-        val = getattr(self, field_id)
+        getattr(self, field_id)
         
         # Determine cursor position on screen
         # We'll just read simple input line using a curses-friendly block

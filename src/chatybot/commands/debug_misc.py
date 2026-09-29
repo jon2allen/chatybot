@@ -460,7 +460,7 @@ async def cmd_calc(ctx: CommandContext, parts: list, command: str) -> CommandRes
     expr_str = ""
     var_target = "CALC"
 
-    if rem_str.startswith('"') or rem_str.startswith("'"):
+    if rem_str.startswith(('"', "'")):
         q = rem_str[0]
         end_q = rem_str.rfind(q)
         if end_q > 0:
@@ -670,7 +670,7 @@ async def cmd_setvar(ctx: CommandContext, parts: list, command: str) -> CommandR
                     any(raw_val_stripped.startswith(p) for p in ["iVBOR", "/9j/", "UklGR"])
                 )
                 is_new_json = False
-                if raw_val_stripped.startswith("{") or raw_val_stripped.startswith("["):
+                if raw_val_stripped.startswith(("{", "[")):
                     try:
                         json.loads(raw_val_stripped)
                         is_new_json = True
@@ -796,7 +796,7 @@ async def cmd_docs(ctx: CommandContext, parts: list, command: str) -> CommandRes
                 page_num = max(1, int(arg.split("=", 1)[1]))
             except ValueError:
                 page_num = 1
-        elif arg_lower.startswith("var=") or arg_lower.startswith("target="):
+        elif arg_lower.startswith(("var=", "target=")):
             target_var = arg.split("=", 1)[1].strip().lstrip("$")
         elif arg_lower.startswith("limit="):
             try:
@@ -825,7 +825,7 @@ async def cmd_docs(ctx: CommandContext, parts: list, command: str) -> CommandRes
             return CommandResult.ok()
 
         # Group matches by file
-        file_counts = set(m.filename for m in matches)
+        file_counts = {m.filename for m in matches}
         op_desc = f" [{search_op}]" if len(search_terms) > 1 else ""
         print(f"\nFound {len(matches)} match(es) across {len(file_counts)} file(s){op_desc}:")
         print("=" * 60)
@@ -856,7 +856,7 @@ async def cmd_docs(ctx: CommandContext, parts: list, command: str) -> CommandRes
         print("=" * 60)
         # Group by category / folder
         root_docs = [d for d in docs if "/" not in d and "\\" not in d]
-        cookbooks = [d for d in docs if d.startswith("cookbook/") or d.startswith("cookbook\\")]
+        cookbooks = [d for d in docs if d.startswith(("cookbook/", "cookbook\\"))]
         sub_docs = [d for d in docs if d not in root_docs and d not in cookbooks]
         
         if root_docs:

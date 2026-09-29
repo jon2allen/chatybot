@@ -372,7 +372,7 @@ class ConfigTUI:
     def draw_dialog_border(self, win, title: str):
         win.erase()
         win.box()
-        h, w = win.getmaxyx()
+        _h, w = win.getmaxyx()
         title_disp = f" {title} "
         if len(title_disp) < w - 4:
             win.addstr(0, (w - len(title_disp)) // 2, title_disp, curses.color_pair(1) | curses.A_BOLD)
@@ -745,7 +745,7 @@ class ConfigTUI:
 
         vendors = set()
         if self.config and self.config.models:
-            for _, m in self.config.models.items():
+            for m in self.config.models.values():
                 v = getattr(m, "vendor", None) or getattr(m, "detected_vendor", "")
                 if v:
                     vendors.add(v.lower())
@@ -968,7 +968,7 @@ class ConfigTUI:
             self.draw_dialog_border(win, "Bulk Find & Replace Settings")
 
             # Field info
-            cur_field_key, cur_field_label, cur_field_type = self.REPLACE_FIELDS[field_idx]
+            cur_field_key, cur_field_label, _cur_field_type = self.REPLACE_FIELDS[field_idx]
             cur_scope_label, cur_scope_type, cur_scope_value = scopes[scope_idx]
             cur_mode_key, cur_mode_label = modes[mode_idx]
 
@@ -1638,14 +1638,10 @@ class ConfigTUI:
     def is_field_hidden(self, key: str, form_data: dict) -> bool:
         if form_data["type"] == "apple_fm":
             # apple_fm has no base_url, api_key, or image generation
-            if key in ("base_url", "api_key", "image_generation", "image_endpoint", "image_modalities"):
-                return True
-            return False
+            return key in ("base_url", "api_key", "image_generation", "image_endpoint", "image_modalities")
         if key in ("image_generation", "image_endpoint", "image_modalities") and form_data["type"] in ("reranker", "decision"):
             return True
-        if key in ("image_endpoint", "image_modalities") and form_data["image_generation"] == "false":
-            return True
-        return False
+        return bool(key in ("image_endpoint", "image_modalities") and form_data["image_generation"] == "false")
 
     @staticmethod
     def _cycle_index(opts: list, curr_val: str) -> int:
