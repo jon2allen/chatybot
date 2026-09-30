@@ -990,6 +990,8 @@ set my_limit = 16000
 |---------|----------|--------|-------------|
 | `!` | History | `! <search>` | Search command history |
 
+> **Note:** The `` !`cmd` `` syntax (bang followed by backtick) is **dynamic context injection**, not history search. It executes a short shell command and substitutes its output into the prompt. See `prompt_injection.md` for details.
+
 ## Scripting Keywords
 
 | English | Syntax | Description |
@@ -1287,6 +1289,7 @@ def expert_prompt(topic) = "Act as an expert in {topic}."
 - **ChatDSL Language Guide** (`chatdsl_language.md`) - Complete language reference with command mappings
 - **ChatDSL Skill Guide** (`chatdsl_skill.md`) - Comprehensive scripting patterns
 - **ChatDSL Macro Implementation** (`chatdsl_macro_implementation.md`) - Technical implementation report
+- **Dynamic Context Injection** (`prompt_injection.md`) - `` !`cmd` `` inline command execution specification
 
 ## Configuration Files
 

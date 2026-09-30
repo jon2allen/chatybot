@@ -855,6 +855,8 @@ src/chatybot/profiles/          # Profili predefiniti
 |---------------|-----------|----------|-------------|
 | `!` | Cronologia | `! <ricerca>` | Cerca nella cronologia dei comandi |
 
+> **Nota:** La sintassi `` !`cmd` `` (punto esclamativo seguito da un accento grave) è un'**iniezione di contesto dinamico**, non una ricerca nella cronologia. Esegue un breve comando shell e sostituisce il suo output nel prompt. Vedere `prompt_injection.md` per i dettagli.
+
 ## Parole Chiave di Scripting
 
 | Inglese | Italiano | Sintassi | Descrizione |
@@ -1189,6 +1191,7 @@ def expert_prompt(topic) = "Act as an expert in {topic}."
 - **Guida al linguaggio ChatDSL** (`chatdsl_language.md`) - Riferimento completo con mappatura dei comandi
 - **Guía delle competenze ChatDSL** (`chatdsl_skill.md`) - Modelli di scripting completi
 - **Implementazione delle Macro ChatDSL** (`chatdsl_macro_implementation.md`) - Relazione tecnica di implementazione
+- **Iniezione di Contesto Dinamico** (`prompt_injection.md`) - Specifica per l'esecuzione di comandi inline `` !`cmd` ``
 
 ## File di Configurazione
 
