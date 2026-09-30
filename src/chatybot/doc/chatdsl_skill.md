@@ -1028,3 +1028,89 @@ Compare {filebank1} and {filebank2}
 - **chatdsl_bnf.txt**: Formal grammar specification
 - **script_param_implementation.md**: Parameter passing details
 - **dsl_test/**: Test scripts demonstrating all features
+
+---
+
+## The Skills System
+
+Skills are reusable instructions stored in a TinyDB database. When a user prompt
+matches a skill's trigger phrases, the skill content is injected into the system
+prompt for that turn. Skills can also configure the agentic tool loop via
+`tool_config` metadata.
+
+### Managing Skills with /skill
+
+The `/skill` command provides 17 subcommands:
+
+| Subcommand | Purpose |
+|------------|---------|
+| `list [enabled\|all]` | List skills |
+| `show <name>` | Show full skill details |
+| `create` | Launch interactive creation wizard |
+| `edit <name>` | Edit skill in $EDITOR (content, metadata, tool_config) |
+| `delete <name>` | Delete a skill |
+| `enable <name\|all\|glob>` | Enable a skill (supports glob patterns) |
+| `disable <name\|all\|glob>` | Disable a skill (stays in DB, not triggered) |
+| `search <query>` | Search by name, content, description, tags |
+| `learn [name]` | Learn a skill from current session turns |
+| `apply <name>` | Manually inject skill into next prompt |
+| `export <name> <file>` | Export to SKILL.md format |
+| `import <file>` | Import from SKILL.md file |
+| `restore` | Restore previous tool configuration |
+| `on` | Enable auto-triggering for this session |
+| `off` | Disable auto-triggering for this session |
+| `debug [on\|off]` | Show debug info or toggle trace logging |
+| `exit` | Release the active skill lock |
+
+### Trigger Matching
+
+Skills have trigger phrases in their metadata. When a user prompt matches a trigger,
+the skill is auto-injected. Trigger matching uses:
+
+- **Word-boundary regex** — prevents false positives (trigger "log" won't match
+  "biology" or "catalog").
+- **Specificity ranking** — longer triggers (more words) rank higher. Only the
+  most specific matched skill is injected per turn by default.
+- **Validation** — triggers must be at least 3 characters and 2 words.
+
+### Sticky Skill Lock
+
+When a skill is auto-triggered, it stays active as a "sticky lock" for subsequent
+prompts instead of re-scanning triggers each turn. Use `/skill exit` to release
+the lock and return to normal trigger scanning.
+
+### Dynamic Loading During Tool Loops
+
+Two in-process tools let the LLM discover and load skills on-demand during the
+autonomous tool loop:
+
+- **`search_skills`** — Search by keyword (name, description, tags). Returns
+  compact metadata only, no instruction content. Prevents context pollution.
+- **`call_skill`** — Load a skill's full instructions by name. Applies any
+  `tool_config` silently. Returns a `tool_state` summary and current `depth`.
+
+These are LLM tool calls, not ChatDSL commands. Enable them with:
+
+    /tool enable search_skills,call_skill
+
+Then start the tool loop. The model calls these tools as JSON tool calls during
+the loop — the user does not type them as script lines.
+
+### Delegation Safety
+
+- **Cycle detection:** If the same skill is loaded twice in one tool loop,
+  `call_skill` returns an error with the full chain.
+- **Depth limit:** Maximum 5 skill delegations per tool loop
+  (`MAX_SKILLS_PER_TURN = 5`).
+- **Tracking scope:** Delegations are tracked across all turns of a single
+  `run_tool_loop()` invocation, then cleared on loop termination.
+- **Recovery:** Use `/skill restore` to revert tool configuration changes
+  applied by skills during the loop.
+
+### search_skills vs. skillsdb.search_skills()
+
+The `search_skills` tool deliberately reimplements search rather than calling
+`skillsdb.search_skills()`. The database version searches across `content`
+too, which would load instruction text into the model's context during
+discovery. The tool version excludes `content` from both the search corpus
+and the result set. This duplication is intentional.

@@ -1,0 +1,15 @@
+# Recipe 8.5 - Skill-aware tool loops
+# Goal: enable skill discovery and loading during autonomous tool loops.
+# Run: /script doc/cookbook/08_5_skill_aware_loops.chatdsl
+
+/model devstral_1
+/tool on
+/tool enable search_skills,call_skill
+/tool auto on
+/tool max_turns 20
+
+/system You can use search_skills to discover available skills and call_skill to load their instructions. When a task matches a skill's purpose, load it and follow its guidance.
+
+chat --> Analyze the codebase and suggest improvements.
+
+/tool loop 20 force

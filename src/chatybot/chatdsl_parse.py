@@ -191,7 +191,9 @@ class TParser:
         "language", "lang",
         # Context budgeting, replay & diagnostics
         "context", "context_limit", "auto_truncate", "ctx", "session", "replay",
-        "env", "str_search", "debug", "config", "setup_keys", "migrate_sessions"
+        "env", "str_search", "debug", "config", "setup_keys", "migrate_sessions",
+        # Skills & Decision engine
+        "skill", "decide"
     }
 
     def __init__(self, tokens: list[Token], verbose: bool = False):

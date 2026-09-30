@@ -1020,8 +1020,37 @@ chat --> Check the markdown files in docs/ and ask me which one should be refact
    *(or `"reason": "background process"` if placed in the background).*
 4. The model observes this payload in its tool result and understands no human operator is available to answer; it will either fall back to a safe default action autonomously or report its recommendation in natural language.
 
----
+### 8.5 Skill-aware tool loops
+- **Goal:** Enable skill discovery and loading during autonomous tool loops so the model can find and use relevant skills on its own.
+- **Commands:** `/tool on`, `/tool enable search_skills,call_skill`, `/tool auto on`, `/tool loop`.
+- **Script:** `cookbook/08_5_skill_aware_loops.chatdsl`
+- **Run:** `/script doc/cookbook/08_5_skill_aware_loops.chatdsl`
 
+```dsl
+/model devstral_1
+/tool on
+/tool enable search_skills,call_skill
+/tool auto on
+/tool max_turns 20
+
+/system You can use search_skills to discover available skills and call_skill to load their instructions. When a task matches a skill's purpose, load it and follow its guidance.
+
+chat --> Analyze the codebase and suggest improvements.
+
+/tool loop 20 force
+```
+
+**Walkthrough**
+1. `/tool enable search_skills,call_skill` activates both skill tools alongside any other enabled tools.
+2. The `/system` instruction tells the model it can discover and load skills. Without this, the model may not know to use the tools.
+3. During the loop, the model calls `search_skills` to find relevant skills, then `call_skill` to load them.
+4. Loaded skill instructions guide the model's subsequent actions within the same loop.
+
+**Variations:**
+- `/tool enable all` enables every tool including `search_skills` and `call_skill`.
+- Combine with `/tool scratch on` (Recipe 8.3) so the model can write and test scripts as part of a skill's workflow.
+
+---
 
 ## Chapter 9 — Image Generation & Vision
 
@@ -1875,6 +1904,223 @@ Summarize the consensus algorithms mentioned and who discussed them.
 
 ---
 
+## Chapter 15 — Dynamic Skill Loading & Delegation
+
+Skills are reusable instructions stored in a TinyDB database. Two in-process tools — `search_skills` and `call_skill` — let the LLM discover and load skills on-demand during the autonomous tool loop. These are **LLM tool calls** (JSON), not ChatDSL script commands. The user enables them with `/tool enable` and the model calls them during `/tool loop`.
+
+### 15.1 Discovering skills with `search_skills`
+- **Goal:** Let the model discover available skills by keyword during an autonomous tool loop, without loading full instruction content into context.
+- **Commands:** `/tool on`, `/tool enable search_skills,call_skill`, `/tool auto on`, `/tool loop`.
+- **Script:** `cookbook/15_1_skill_discovery.chatdsl`
+- **Run:** `/script doc/cookbook/15_1_skill_discovery.chatdsl`
+
+```dsl
+/model devstral_1
+/tool on
+/tool enable search_skills,call_skill
+/tool auto on
+/tool max_turns 20
+
+chat --> I want to review some code. Find a relevant skill and use it to review the files in src/.
+
+/tool loop 20 force
+```
+
+**Walkthrough**
+1. `/tool enable search_skills,call_skill` activates both skill tools. They are in-process tools (no subprocess overhead), dispatched directly in `dispatch_tool()`.
+2. The model calls `search_skills` as a tool call (JSON), e.g. `{"tool": "search_skills", "arguments": {"query": "code review"}}`.
+3. `search_skills` returns compact metadata only — name, description, tags — for each match. No instruction content. Five results cost roughly 150 tokens instead of 3,000.
+4. The model reads the results and decides which skill to load next.
+
+**What the model sees (example tool result):**
+```json
+{
+  "status": "success",
+  "count": 1,
+  "total_matched": 1,
+  "skills": [
+    {"name": "code-review", "description": "Review code for quality, bugs, and style", "tags": ["code", "review", "quality"]}
+  ]
+}
+```
+
+**Variations:**
+- `search_skills` with empty query returns all enabled skills: `{"query": ""}` or `{"query": "*"}`.
+- Adjust `limit` to control result count: `{"query": "test", "limit": 3}`.
+
+### 15.2 Loading skill instructions with `call_skill`
+- **Goal:** Load a skill's full instructions by name so the model can follow them during the tool loop.
+- **Commands:** `/tool on`, `/tool enable search_skills,call_skill`, `/tool auto on`, `/tool loop`.
+- **Script:** `cookbook/15_2_skill_loading.chatdsl`
+- **Run:** `/script doc/cookbook/15_2_skill_loading.chatdsl`
+
+```dsl
+/model devstral_1
+/tool on
+/tool enable search_skills,call_skill
+/tool auto on
+/tool max_turns 20
+
+chat --> Load the "code-review" skill and use it to review src/auth.py.
+
+/tool loop 20 force
+```
+
+**Walkthrough**
+1. The model calls `call_skill` as a tool call: `{"tool": "call_skill", "arguments": {"name": "code-review"}}`.
+2. `call_skill` looks up the skill by name. Name matching is case-insensitive and normalizes hyphens/underscores: `code_review`, `Code-Review`, and `code-review` all resolve to the same skill.
+3. The skill's full instruction `content` is returned to the model. The model follows those instructions for the remainder of the loop.
+4. If the skill has a `tool_config`, it is applied silently (no user prompt). The result includes a `tool_state` summary so the model knows what tools changed.
+
+**What the model sees (example tool result):**
+```json
+{
+  "status": "success",
+  "skill": {
+    "name": "code-review",
+    "description": "Review code for quality, bugs, and style",
+    "content": "You are a code reviewer. Analyze the following code for..."
+  },
+  "tool_state": {
+    "changed": true,
+    "changes": ["enabled: read_file, grep_search"],
+    "message": "Tool configuration updated for skill 'code-review'. Use /skill restore to revert."
+  },
+  "depth": 1
+}
+```
+
+**Variations:**
+- If the skill has no `tool_config`, the `tool_state` field is omitted from the result.
+- The `depth` field shows how many skills have been loaded in this tool loop so far.
+
+### 15.3 Skill delegation chains
+- **Goal:** Chain multiple skills in a single tool loop, where one skill's instructions tell the model to load another skill.
+- **Commands:** `/tool on`, `/tool enable search_skills,call_skill`, `/tool auto on`, `/tool loop`.
+- **Script:** `cookbook/15_3_skill_delegation.chatdsl`
+- **Run:** `/script doc/cookbook/15_3_skill_delegation.chatdsl`
+
+```dsl
+/model devstral_1
+/tool on
+/tool enable search_skills,call_skill
+/tool auto on
+/tool max_turns 30
+
+chat --> Research the codebase architecture. Use skills to guide your analysis.
+
+/tool loop 30 force
+```
+
+**Walkthrough**
+1. The model calls `call_skill("domain-modeling")`. The domain-modeling skill's instructions might say: "Call the Skill tool for 'code-review' to review the architecture you identified."
+2. The model then calls `call_skill("code-review")` in a subsequent turn. The `_turn_skills_loaded` list now contains `["domain-modeling", "code-review"]`.
+3. The model follows both skills' instructions, combining their guidance.
+4. `depth` in each result increments: 1, then 2.
+
+**What the model sees (second call result):**
+```json
+{
+  "status": "success",
+  "skill": {
+    "name": "code-review",
+    "description": "Review code for quality, bugs, and style",
+    "content": "..."
+  },
+  "depth": 2
+}
+```
+
+**Variations:**
+- Skills can delegate to skills that delegate further. The chain continues until the depth limit or the model stops calling `call_skill`.
+
+### 15.4 Skills with tool configuration
+- **Goal:** Load a skill that modifies the available tool set mid-loop, and understand what changed.
+- **Commands:** `/tool on`, `/tool enable search_skills,call_skill`, `/tool auto on`, `/tool loop`, `/skill restore`.
+- **Script:** `cookbook/15_4_skill_tool_config.chatdsl`
+- **Run:** `/script doc/cookbook/15_4_skill_tool_config.chatdsl`
+
+```dsl
+/model devstral_1
+/tool on
+/tool enable search_skills,call_skill
+/tool auto on
+/tool max_turns 25
+
+chat --> I need to debug an error in src/. Find and load a debugging skill.
+
+/tool loop 25 force
+
+# After the loop, restore original tool configuration
+/skill restore
+```
+
+**Walkthrough**
+1. The model calls `call_skill("debug-error")`. This skill has a `tool_config` that enables `read_file` and `grep_search`.
+2. `call_skill` applies the `tool_config` **silently** — no user prompt. This is intentional: prompting mid-loop is disruptive since the model is in a multi-turn sequence.
+3. A snapshot of the previous tool state is saved (only the first time — subsequent skills don't overwrite the original snapshot).
+4. The result includes `tool_state` with `changed: true` and a list of changes, so the model knows what tools are now available.
+5. After the loop, `/skill restore` rolls back to the original tool configuration saved before the first skill applied its changes.
+
+**Why silent application?** The pre-turn `_apply_skill_tool_config()` path (triggered by `/skill apply`) prompts the user for confirmation. But mid-loop, the model is in a multi-turn autonomous sequence — interrupting to ask for approval at an arbitrary point is disruptive. The snapshot ensures the user can always revert with `/skill restore`.
+
+**Variations:**
+- A skill's `tool_config` can also set `mode: on/off`, `auto_loop`, and `max_turns`.
+- If multiple skills with `tool_config` are loaded in the same loop, only the first saves a snapshot. `/skill restore` always rolls back to the user's original state, not an intermediate state.
+
+### 15.5 Recursion limits and cycle detection
+- **Goal:** Understand the safety mechanisms that prevent unbounded skill chaining.
+- **Commands:** (no user commands — these are automatic protections)
+- **Script:** `cookbook/15_5_recursion_limits.chatdsl`
+- **Run:** `/script doc/cookbook/15_5_recursion_limits.chatdsl`
+
+```dsl
+/model devstral_1
+/tool on
+/tool enable search_skills,call_skill
+/tool auto on
+/tool max_turns 30
+
+# Create two skills that delegate to each other (for demonstration)
+/skill create
+# ... create skill "loop-a" with content: "Call the Skill tool for 'loop-b'"
+# ... create skill "loop-b" with content: "Call the Skill tool for 'loop-a'"
+
+chat --> Load the "loop-a" skill and follow its instructions.
+
+/tool loop 30 force
+```
+
+**Walkthrough**
+1. The model calls `call_skill("loop-a")`. Depth becomes 1.
+2. loop-a's instructions say to load loop-b. The model calls `call_skill("loop-b")`. Depth becomes 2.
+3. loop-b's instructions say to load loop-a. The model calls `call_skill("loop-a")` again.
+4. Cycle detection triggers. `call_skill` returns an error:
+
+```json
+{
+  "status": "error",
+  "reason": "Circular skill delegation detected: loop-a -> loop-b -> loop-a. Skill 'loop-a' was already loaded in this tool loop. Remove the circular reference in the skill instructions."
+}
+```
+
+5. The model sees the error and stops trying to load the duplicate skill.
+
+**Two protections, independent:**
+
+| Protection | Trigger | Limit | Error message includes |
+|------------|---------|-------|-----------------------|
+| Cycle detection | Same skill loaded twice in one tool loop | N/A (immediate) | Full chain: `A -> B -> A` |
+| Depth limit | Total unique skills loaded in one tool loop | 5 (`MAX_SKILLS_PER_TURN`) | Chain so far + limit number |
+
+**Tracking scope:** `_turn_skills_loaded` persists across all turns of a single `run_tool_loop()` invocation. It is cleared when the loop terminates normally or on `KeyboardInterrupt`. This means cycle detection works across turns: Turn 1 loads "A", Turn 5 tries "A" again -> detected.
+
+**Variations:**
+- The depth limit is a constant (`MAX_SKILLS_PER_TURN = 5` in `skill_utils.py`). It is not user-configurable.
+- To reset mid-session, end the current tool loop and start a new one.
+
+---
+
 ## Appendix A — Recipe index
 
 | # | Recipe | Commands exercised | Generalizes / source |
@@ -1940,6 +2186,12 @@ Summarize the consensus algorithms mentioned and who discussed them.
 | 14.8 | Multi-locale marketing | `/language` + `foreach` locales | novel |
 | 14.9 | Self-improving prompt macro | `%macro` + judge + `/reloadmacros` | novel |
 | 14.10 | Personal KB harvester | `/run` + `/rerank` + `/dblog` + `/searchdb` | novel |
+| 8.5 | Skill-aware tool loops | `/tool enable search_skills,call_skill` `/tool loop` | new |
+| 15.1 | Discovering skills | `search_skills` `/tool enable` `/tool loop` | new |
+| 15.2 | Loading skill instructions | `call_skill` `/tool enable` `/tool loop` | new |
+| 15.3 | Skill delegation chains | `call_skill` x2 `/tool loop` | new |
+| 15.4 | Skills with tool config | `call_skill` `tool_state` `/skill restore` | new |
+| 15.5 | Recursion limits & cycle detection | `call_skill` (error paths) | new |
 
 ---
 
@@ -1954,13 +2206,14 @@ Summarize the consensus algorithms mentioned and who discussed them.
 | 5 Rerank & Retrieval | (covered in `RERANK_FEATURE_SPEC.md`, `BATCH_N_WALKTHROUGH.md`) |
 | 6 Database | HowTo: Database Integration; Database Commands |
 | 7 Shell Execution | HowTo: Shell Execution & Capturing Output |
-| 8 Tool Loops | HowTo: Set Up Tool Calling Loop; Tool Loop Commands |
+| 8 Tool Loops | HowTo: Set Up Tool Calling Loop; Tool Loop Commands; **Dynamic Skill Loading** (new) |
 | 9 Image Generation | HowTo: Image Generation Workflow; Image Generation Commands |
 | 10 Profiles | HowTo: Profile Management; Profile Commands |
 | 11 Macros | Macro Syntax; `chatdsl_macro_implementation.md` |
 | 12 Localization | Multi-Language Support; `multilingual_cross_reference.md` |
 | 13 Diagnostics | Diagnostics & Monitoring; Diagnostics Commands |
 | 14 Novel Use Cases | (no existing counterpart) |
+| 15 Dynamic Skill Loading | (new — see Dynamic Skill Loading section in `chatdsl_guide_v1.md`) |
 
 ---
 
