@@ -306,9 +306,7 @@ async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandRes
         target_value = (subcmd == "enable")
 
         # Collect all available tools
-        all_tools = []
-        for tool_name in tools:
-            all_tools.append(tool_name)
+        all_tools = list(tools)
         if app.mcp_manager and app.mcp_manager.cached_schemas:
             for server_name, tools_list in app.mcp_manager.cached_schemas.items():
                 for tool in tools_list:

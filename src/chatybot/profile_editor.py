@@ -363,10 +363,8 @@ class ProfileEditor:
                 if self.save():
                     return 0
                     
-            elif ch == 1:  # Ctrl+A
-                # Save and apply
-                if self.save():
-                    return 2
+            elif ch == 1 and self.save():  # Ctrl+A
+                return 2
 
     def edit_text(self, stdscr, field_id: str) -> None:
         curses.curs_set(1)
