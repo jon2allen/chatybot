@@ -709,7 +709,7 @@ class HelpSystem:
             name="/docs",
             category="system",
             short_desc="List, view, search, or load bundled documentation, guides, and cookbook examples",
-            usage="/docs [filename|search <terms...>|cookbook|path] [page=N] [or|and] [limit=N] [var=<varname>]",
+            usage="/docs [filename|search <terms...>|cookbook|path] [page=N|line=N] [or|and] [limit=N] [var=<varname>]",
             long_desc="List, display, search, or load bundled documentation guides, specs, and ChatDSL cookbook recipes.\n\n"
                       "In interactive REPL mode, opens a full-screen syntax-highlighted pager (less/pydoc with ANSI color styling).\n"
                       "In script context (/script, /source), documents are rendered in incremental readable pages (40 lines/page).\n"
@@ -719,6 +719,7 @@ class HelpSystem:
                       "  /docs                      - List all available bundled guides and recipes\n"
                       "  /docs <filename>           - View document (REPL: highlighted pager; Script: chunked)\n"
                       "  /docs <filename> page=N    - View specific page chunk (in script mode)\n"
+                      "  /docs <filename> line=N    - Center on a specific line (from search results)\n"
                       "  /docs <filename> var=<var> - Load document content into script_var $<var>\n"
                       "  /docs search <terms...>    - Search across documentation files with snippets\n"
                       "  /docs cookbook             - List all ChatDSL cookbook recipe files\n"
@@ -731,6 +732,7 @@ class HelpSystem:
                 "/docs search chatdsl var=results",
                 "/docs chatdsl_guide.md",
                 "/docs chatdsl_cookbook.md page=2",
+                "/docs chatdsl_cookbook.md line=928",
                 "/docs cookbook/01_1_first_automation.chatdsl",
                 "/docs cookbook/01_1_first_automation.chatdsl var=my_template",
                 "/docs path",

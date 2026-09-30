@@ -1198,6 +1198,16 @@ chat --> Create a blog post outline about ${topic}
 
 ### Change log
 
+September 30th, 2026
+--------------------
+- **`/docs` Line-Based Navigation & Search-to-View Workflow**:
+  - Added `line=N` parameter to `/docs <filename>` — centers the target line in a 40-line chunk with context above and below, so search results (which return `filename:line_number`) can be jumped to directly.
+  - Fixed `page=N` being silently ignored in REPL mode — `page=N` (when N > 1) now uses chunked display in both REPL and script contexts instead of falling through to the full-screen pager.
+  - Added Prev/Next navigation footers to both `line=` and `page=` modes, enabling back-and-forth paging through the file from any entry point.
+  - Updated `/docs search` output to suggest the exact `line=` command for the first match (e.g. `Jump to first match: /docs chatdsl_cookbook.md line=928`).
+  - Updated `/docs` help text, usage string, and examples in `chaty_help.py`.
+  - Added 7 new tests in `test/test_doc_utils.py` (22 total, all passing).
+
 September 29th, 2026
 --------------------
 - **Agentic Skill Discovery & Delegation Tools (`search_skills`, `call_skill`)**:

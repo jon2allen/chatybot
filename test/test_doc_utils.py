@@ -97,6 +97,7 @@ def test_display_doc_script_mode(capsys):
     assert "Line 40" in out1
     assert "Line 41" not in out1
     assert "Next: /docs sample.md page=2" in out1
+    assert "Prev:" not in out1
 
     # Page 2 (lines 41-80)
     display_doc(sample_content, "sample.md", in_script=True, page_size=40, page_num=2)
@@ -104,13 +105,143 @@ def test_display_doc_script_mode(capsys):
     assert "Page 2/3" in out2
     assert "Line 41" in out2
     assert "Line 80" in out2
+    assert "Prev: /docs sample.md page=1" in out2
+    assert "Next: /docs sample.md page=3" in out2
 
     # Page 3 (lines 81-100, final)
     display_doc(sample_content, "sample.md", in_script=True, page_size=40, page_num=3)
     out3 = capsys.readouterr().out
     assert "Page 3/3" in out3
     assert "Line 100" in out3
-    assert "End of sample.md" in out3
+    assert "Prev: /docs sample.md page=2" in out3
+    assert "Next:" not in out3
+
+
+def test_display_doc_line_num_centering(capsys):
+    """Verify display_doc with line_num centers the target line in the page."""
+    from chatybot.doc_utils import display_doc
+
+    sample_content = "\n".join(f"Line {i}" for i in range(1, 101))
+
+    # line=50 with page_size=40 -> center at 50, start_idx = 50-1-20 = 29, shows lines 30-69
+    display_doc(sample_content, "sample.md", in_script=True, page_size=40, line_num=50)
+    out = capsys.readouterr().out
+    assert "Line 30" in out
+    assert "Line 50" in out
+    assert "Line 69" in out
+    assert "Line 29" not in out
+    assert "Line 70" not in out
+    assert "Lines 30-69" in out
+    # Footer should suggest line= (not page=) since we arrived via line=
+    assert "line=90" in out  # Next: end_idx=69, next_line = 70 + 20 = 90
+    assert "line=10" in out  # Prev: start_idx=29, prev_line = 29-40+1+20 = 10
+    assert "page=" not in out
+
+
+def test_display_doc_line_num_near_start(capsys):
+    """Verify line_num near the start clamps to beginning (no negative offset)."""
+    from chatybot.doc_utils import display_doc
+
+    sample_content = "\n".join(f"Line {i}" for i in range(1, 101))
+
+    # line=5 with page_size=40 -> start_idx clamps to 0, shows lines 1-40
+    display_doc(sample_content, "sample.md", in_script=True, page_size=40, line_num=5)
+    out = capsys.readouterr().out
+    assert "Line 1" in out
+    assert "Line 5" in out
+    assert "Line 40" in out
+    assert "Lines 1-40" in out
+    # No Prev since we're at the start (start_idx=0)
+    assert "Prev:" not in out
+    # Next: end_idx=40, next_line = 41 + 20 = 61
+    assert "line=61" in out
+
+
+def test_display_doc_line_num_near_end(capsys):
+    """Verify line_num near the end clamps so the page doesn't overshoot."""
+    from chatybot.doc_utils import display_doc
+
+    sample_content = "\n".join(f"Line {i}" for i in range(1, 101))
+
+    # line=95 with page_size=40 -> start_idx = 95-1-20 = 74, but clamped to 60 (100-40), shows lines 61-100
+    display_doc(sample_content, "sample.md", in_script=True, page_size=40, line_num=95)
+    out = capsys.readouterr().out
+    assert "Line 61" in out
+    assert "Line 95" in out
+    assert "Line 100" in out
+    assert "Line 60" not in out
+    # No Next since we're at the end (end_idx=100=total_lines)
+    assert "Next:" not in out
+    # Prev: start_idx=60, prev_line = 60-40+1+20 = 41
+    assert "line=41" in out
+
+
+@pytest.mark.anyio
+async def test_cmd_docs_line_param(capsys):
+    """Test /docs <filename> line=N centers on the specified line."""
+    app = _make_app(capsys)
+    app.script_context = True
+
+    await app.handle_escape_command("/docs chatdsl_cookbook.md line=100")
+    out = capsys.readouterr().out
+    assert "Lines" in out
+    # Line 100 should be within the displayed range (centered with 40-line pages)
+    # start_idx = max(0, 100-1-20) = 79, so lines 80-119
+    assert "Line" in out
+    # Should not start at line 1
+    assert "Lines 1-" not in out
+
+
+@pytest.mark.anyio
+async def test_cmd_docs_line_param_repl(capsys):
+    """Test /docs <filename> line=N works in REPL (non-script) mode, not just script mode."""
+    app = _make_app(capsys)
+    # Deliberately NOT setting script_context — simulates REPL mode
+
+    await app.handle_escape_command("/docs chatdsl_cookbook.md line=200")
+    out = capsys.readouterr().out
+    # Must show chunked output with line range, not the full file in a pager
+    assert "Lines" in out
+    assert "Page" in out
+    # Line 200 centered: start_idx = max(0, 200-1-20) = 179, so lines 180-219
+    assert "Lines 180-" in out
+    # Footer should suggest line= for continuation, not page=
+    assert "line=" in out
+    assert "page=" not in out
+    # Must NOT start at line 1
+    assert "Lines 1-" not in out
+    # Should have both Prev and Next
+    assert "Prev:" in out
+    assert "Next:" in out
+
+
+@pytest.mark.anyio
+async def test_cmd_docs_page_param_repl(capsys):
+    """Test /docs <filename> page=N works in REPL (non-script) mode, not just script mode."""
+    app = _make_app(capsys)
+    # Deliberately NOT setting script_context — simulates REPL mode
+
+    await app.handle_escape_command("/docs chatdsl_cookbook.md page=2")
+    out = capsys.readouterr().out
+    # Must show chunked output, not the full file in a pager
+    assert "Page 2/" in out
+    assert "Lines 41-" in out
+    # Must NOT start at line 1
+    assert "Lines 1-" not in out
+    # Footer should suggest page= for continuation
+    assert "page=1" in out
+    assert "page=3" in out
+
+
+@pytest.mark.anyio
+async def test_cmd_docs_search_suggests_line(capsys):
+    """Test /docs search output suggests line= command for first match."""
+    app = _make_app(capsys)
+
+    await app.handle_escape_command("/docs search cookbook limit=3")
+    out = capsys.readouterr().out
+    assert "line=" in out
+    assert "Jump to first match" in out
 
 
 @pytest.mark.anyio
