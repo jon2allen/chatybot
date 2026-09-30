@@ -145,15 +145,60 @@ def display_doc(
     in_script: bool = False,
     page_size: int = 40,
     page_num: int = 1,
+    line_num: int | None = None,
 ) -> None:
     """
     Display document content.
     - If interactive (REPL / not in_script): Uses syntax highlighting + terminal pager (Option 2).
     - If in script context (or requested chunk): Uses incremental chunked stepper (Option 4).
+
+    When line_num is given, the chunk is centered on that line (line_num appears
+    roughly in the middle of the page). This takes precedence over page_num.
     """
     lines = content.splitlines()
     total_lines = len(lines)
     total_pages = (total_lines + page_size - 1) // page_size if total_lines > 0 else 1
+
+    # When line_num is set or a specific page is requested, always use chunked
+    # display (even in REPL mode) so the user lands on the right chunk instead
+    # of the file start in the full-screen pager.
+    if line_num is not None or page_num > 1:
+        if line_num is not None:
+            line_num = max(1, min(line_num, total_lines))
+            start_idx = max(0, line_num - 1 - page_size // 2)
+            start_idx = min(start_idx, max(0, total_lines - page_size))
+            page_num = start_idx // page_size + 1
+        else:
+            page_num = max(1, min(page_num, total_pages))
+            start_idx = (page_num - 1) * page_size
+        end_idx = min(start_idx + page_size, total_lines)
+        chunk_lines = lines[start_idx:end_idx]
+        chunk_text = "\n".join(chunk_lines)
+
+        highlighted = highlight_content(chunk_text, filename)
+        print(f"\n--- {filename} [Page {page_num}/{total_pages} (Lines {start_idx + 1}-{end_idx} of {total_lines})] ---")
+        print(highlighted)
+        if start_idx > 0 or end_idx < total_lines:
+            nav_parts = []
+            if start_idx > 0:
+                if line_num is not None:
+                    prev_line = max(1, start_idx - page_size + 1 + page_size // 2)
+                    nav_parts.append(f"Prev: /docs {filename} line={prev_line}")
+                else:
+                    nav_parts.append(f"Prev: /docs {filename} page={page_num - 1}")
+            if end_idx < total_lines:
+                if line_num is not None:
+                    next_line = end_idx + 1 + page_size // 2
+                    nav_parts.append(f"Next: /docs {filename} line={next_line}")
+                else:
+                    nav_parts.append(f"Next: /docs {filename} page={page_num + 1}")
+            footer = " | ".join(nav_parts)
+            if end_idx < total_lines:
+                footer += f" | lines {end_idx + 1}-{total_lines} remaining"
+            print(f"--- [{footer}] ---")
+        else:
+            print(f"--- [End of {filename}] ---")
+        return
 
     if in_script:
         # Option 4: Non-interactive / script-friendly chunked output
@@ -166,8 +211,16 @@ def display_doc(
         highlighted = highlight_content(chunk_text, filename)
         print(f"\n--- {filename} [Page {page_num}/{total_pages} (Lines {start_idx + 1}-{end_idx} of {total_lines})] ---")
         print(highlighted)
-        if page_num < total_pages:
-            print(f"--- [Next: /docs {filename} page={page_num + 1} | lines {end_idx + 1}-{total_lines} remaining] ---")
+        if page_num > 1 or end_idx < total_lines:
+            nav_parts = []
+            if page_num > 1:
+                nav_parts.append(f"Prev: /docs {filename} page={page_num - 1}")
+            if end_idx < total_lines:
+                nav_parts.append(f"Next: /docs {filename} page={page_num + 1}")
+            footer = " | ".join(nav_parts)
+            if end_idx < total_lines:
+                footer += f" | lines {end_idx + 1}-{total_lines} remaining"
+            print(f"--- [{footer}] ---")
         else:
             print(f"--- [End of {filename}] ---")
         return
