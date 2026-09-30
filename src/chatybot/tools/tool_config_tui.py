@@ -362,16 +362,15 @@ class ToolConfigTUI:
             pass
         
         # Try to load config
-        if not self.config:
-            if not self.load_config():
-                # Show error screen and wait for keypress to exit
-                stdscr.clear()
-                stdscr.addstr(2, 2, "Tool Config TUI Loader Error", curses.color_pair(4) | curses.A_BOLD)
-                stdscr.addstr(4, 2, self.status_message)
-                stdscr.addstr(6, 2, "Press any key to exit...")
-                stdscr.refresh()
-                stdscr.getch()
-                return
+        if not self.config and not self.load_config():
+            # Show error screen and wait for keypress to exit
+            stdscr.clear()
+            stdscr.addstr(2, 2, "Tool Config TUI Loader Error", curses.color_pair(4) | curses.A_BOLD)
+            stdscr.addstr(4, 2, self.status_message)
+            stdscr.addstr(6, 2, "Press any key to exit...")
+            stdscr.refresh()
+            stdscr.getch()
+            return
         
         while True:
             self.draw_main_screen(stdscr)

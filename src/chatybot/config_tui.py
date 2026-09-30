@@ -112,16 +112,15 @@ class ConfigTUI:
         curses.init_pair(4, curses.COLOR_RED, -1)      # Error / Alert
         curses.init_pair(5, curses.COLOR_GREEN, -1)    # Success / OK
 
-        if not self.config:
-            if not self.load_config():
-                # Show error screen and wait for keypress to exit
-                stdscr.clear()
-                stdscr.addstr(2, 2, "Chatybot TUI Loader Error", curses.color_pair(4) | curses.A_BOLD)
-                stdscr.addstr(4, 2, self.status_message)
-                stdscr.addstr(6, 2, "Press any key to exit...")
-                stdscr.refresh()
-                stdscr.getch()
-                return
+        if not self.config and not self.load_config():
+            # Show error screen and wait for keypress to exit
+            stdscr.clear()
+            stdscr.addstr(2, 2, "Chatybot TUI Loader Error", curses.color_pair(4) | curses.A_BOLD)
+            stdscr.addstr(4, 2, self.status_message)
+            stdscr.addstr(6, 2, "Press any key to exit...")
+            stdscr.refresh()
+            stdscr.getch()
+            return
 
         while True:
             h, w = stdscr.getmaxyx()

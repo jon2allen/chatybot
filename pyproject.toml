@@ -62,6 +62,11 @@ chatybot = [
 # Blocking open() and subprocess.run() calls inside async functions are
 # harmless because nothing else is running on the event loop simultaneously.
 # Re-enable these rules if subagents or concurrent task execution is added.
+# Context manager rule intentionally ignored:
+# SIM115 flags open() calls not wrapped in a with statement, but several
+# file handles (log file, debug fd, temp file for editor) are intentionally
+# kept open for the session lifetime. Converting to with would require
+# restructuring or ExitStack for no functional benefit.
 ignore = [
     "DTZ001",
     "DTZ005",
@@ -69,4 +74,5 @@ ignore = [
     "DTZ007",
     "ASYNC230",
     "ASYNC221",
+    "SIM115",
 ]

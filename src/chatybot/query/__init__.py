@@ -2,7 +2,7 @@
 Query subsystem package for Chatybot.
 """
 
-import chatybot.query.grep_engine  # Registers 'grep' engine
+from chatybot.query import grep_engine  # Registers 'grep' engine  # noqa: F401
 from chatybot.query.base import (
     BaseQueryEngine,
     QueryMatch,
