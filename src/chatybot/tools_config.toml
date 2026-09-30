@@ -549,3 +549,30 @@ type = "string"
 description = "Optional script variable name to store the boolean answer"
 optional = true
 
+[tools.search_skills]
+enabled = true
+description = "Search available skills by keyword (name, description, tags). Returns a compact list of matching skill names and descriptions without loading full content. Use when the user asks to find a skill or when looking for a relevant skill to load."
+module = "chatybot.tools.skill_utils"
+function = "search_skills"
+
+[tools.search_skills.parameters.query]
+type = "string"
+description = "Keyword to search across skill names, descriptions, and tags. Leave empty or '*' to list all skills."
+optional = true
+
+[tools.search_skills.parameters.limit]
+type = "integer"
+description = "Maximum number of skill summaries to return (default 10)"
+optional = true
+
+[tools.call_skill]
+enabled = true
+description = "Load a skill's full instructions by name. Use when a skill or user tells you to load another skill (e.g. 'Call the Skill tool for grilling'). Returns the skill's instruction content for you to follow."
+module = "chatybot.tools.skill_utils"
+function = "call_skill"
+
+[tools.call_skill.parameters.name]
+type = "string"
+description = "The exact or normalized name of the skill to load"
+optional = false
+

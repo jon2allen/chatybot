@@ -668,7 +668,7 @@ async def test_decision_client_evaluate_tracing(capsys):
             model_name="typesafe/jev-1.13",
             base_url="https://openrouter.ai",
             endpoint_path="/api/alpha/decisions",
-            api_key="sk-test-12345678901234567890",
+            api_key="fake-api-key-122333",  # Not a real credential; HTTP is mocked
             trace_raw_payload=True,
         )
 

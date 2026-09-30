@@ -3907,6 +3907,61 @@ class ChatybotApp:
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', str(e))
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
                     return err_msg
+            elif tool_name in ("call_skill", "search_skills"):
+                is_enabled = self.tool_overrides.get(tool_name, True)
+                if not is_enabled:
+                    err_msg = f"Error: Tool '{tool_name}' is currently disabled."
+                    self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
+                    self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', err_msg)
+                    self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '-1')
+                    print(err_msg)
+                    return err_msg
+                try:
+                    from .tools import skill_utils
+                    args = tool_call.get("arguments", {}) or {}
+                    if isinstance(args, dict):
+                        if "parameters" in args and isinstance(args["parameters"], dict):
+                            args = args["parameters"]
+                        elif "arguments" in args and isinstance(args["arguments"], dict):
+                            args = args["arguments"]
+
+                    if tool_name == "call_skill":
+                        res = skill_utils.call_skill(
+                            name=args.get("name", ""),
+                            app=self,
+                        )
+                    else:
+                        # Coerce limit safely: model may pass a string or invalid value
+                        raw_limit = args.get("limit", 10)
+                        try:
+                            limit_val = int(raw_limit)
+                        except (TypeError, ValueError):
+                            limit_val = 10
+                        res = skill_utils.search_skills(
+                            query=args.get("query", ""),
+                            limit=limit_val,
+                            app=self,
+                        )
+
+                    result_str = json.dumps(
+                        {"status": res["status"], "tool": tool_name, "result": res},
+                        indent=2,
+                        ensure_ascii=False,
+                    )
+                    self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', result_str)
+                    self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', '')
+                    self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '0')
+                    if res["status"] == "success":
+                        print(f"Tool dispatched successfully (in-process {tool_name})")
+                    else:
+                        print(f"{tool_name} failed: {res.get('reason', 'unknown')}")
+                    return result_str
+                except Exception as e:
+                    err_msg = f"Error: {tool_name} tool execution failed: {e}"
+                    self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
+                    self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', str(e))
+                    self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
+                    return err_msg
 
         # Create a temporary file for the invocation
         with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', suffix='.json', delete=False) as tmp_file:
@@ -4037,7 +4092,8 @@ class ChatybotApp:
             "run_command", "read_file", "write_file", "list_directory", "find_files",
             "replace_file_content", "patch_file", "file_info", "delete_file",
             "make_directory", "remove_directory", "read_url", "extract_code",
-            "ask_user", "get_context_metrics", "session_search", "session_get"
+            "ask_user", "get_context_metrics", "session_search", "session_get",
+            "call_skill", "search_skills"
         }
         try:
             cfg = self._load_tools_config()
@@ -4997,6 +5053,7 @@ class ChatybotApp:
         
         # Enable tool loop state
         self.in_tool_loop = True
+        self._turn_skills_loaded = []  # Track skills loaded in this tool loop
 
         # Preserve user-set rate limits across loop initializations
         if self._cached_rate_limit_delay is not None:
