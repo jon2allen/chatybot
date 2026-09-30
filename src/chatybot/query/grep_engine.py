@@ -206,102 +206,101 @@ class GrepQueryEngine(BaseQueryEngine):
                         )
 
         # 2. Search Persisted Sessions (via Session Store)
-        if not request.active_only:
-            if store:
+        if not request.active_only and store:
+            try:
+                saved_sessions = store.list_sessions(limit=None, since_dt=request.since_dt)
+            except Exception:
+                saved_sessions = []
+
+            for s_summary in saved_sessions:
+                sid = s_summary.get("sid")
+                # Skip active session if we already searched it in-memory
+                if sid == active_sid:
+                    continue
+                if request.session_id and request.session_id != sid:
+                    continue
+                if request.ids_only and sid in matched_session_ids:
+                    continue
+
+                # Load full session turns with per-session error isolation
                 try:
-                    saved_sessions = store.list_sessions(limit=None, since_dt=request.since_dt)
+                    meta, loaded_turns = store.load_session(sid)
                 except Exception:
-                    saved_sessions = []
+                    continue
 
-                for s_summary in saved_sessions:
-                    sid = s_summary.get("sid")
-                    # Skip active session if we already searched it in-memory
-                    if sid == active_sid:
-                        continue
-                    if request.session_id and request.session_id != sid:
-                        continue
-                    if request.ids_only and sid in matched_session_ids:
-                        continue
+                # Search session notes if present in meta
+                s_notes = meta.get("notes") or meta.get("session_notes")
+                persisted_session_size: int | None = None
 
-                    # Load full session turns with per-session error isolation
-                    try:
-                        meta, loaded_turns = store.load_session(sid)
-                    except Exception:
-                        continue
-
-                    # Search session notes if present in meta
-                    s_notes = meta.get("notes") or meta.get("session_notes")
-                    persisted_session_size: int | None = None
-
-                    if s_notes:
-                        matched_ok, hit_terms = check_text_match(str(s_notes))
-                        if matched_ok:
-                            total_matches_count += 1
-                            matched_session_ids.add(sid)
-                            if len(matches) < request.limit and not request.ids_only:
-                                if persisted_session_size is None:
-                                    persisted_session_size = get_session_size_bytes(sid, turns_fallback=loaded_turns, notes_fallback=s_notes, cached_summary=s_summary)
-                                snippet_text = str(s_notes) if request.full else make_snippet(str(s_notes), hit_terms)
-                                matches.append(
-                                    QueryMatch(
-                                        source="session",
-                                        session_id=sid,
-                                        turn_id=None,
-                                        role="note",
-                                        timestamp=meta.get("updated_at") or meta.get("created_at"),
-                                        matched_terms=hit_terms,
-                                        snippet=snippet_text,
-                                        full_text=str(s_notes),
-                                        size_bytes=persisted_session_size,
-                                        metadata={"custom_name": meta.get("custom_name"), "type": "note"},
-                                    )
+                if s_notes:
+                    matched_ok, hit_terms = check_text_match(str(s_notes))
+                    if matched_ok:
+                        total_matches_count += 1
+                        matched_session_ids.add(sid)
+                        if len(matches) < request.limit and not request.ids_only:
+                            if persisted_session_size is None:
+                                persisted_session_size = get_session_size_bytes(sid, turns_fallback=loaded_turns, notes_fallback=s_notes, cached_summary=s_summary)
+                            snippet_text = str(s_notes) if request.full else make_snippet(str(s_notes), hit_terms)
+                            matches.append(
+                                QueryMatch(
+                                    source="session",
+                                    session_id=sid,
+                                    turn_id=None,
+                                    role="note",
+                                    timestamp=meta.get("updated_at") or meta.get("created_at"),
+                                    matched_terms=hit_terms,
+                                    snippet=snippet_text,
+                                    full_text=str(s_notes),
+                                    size_bytes=persisted_session_size,
+                                    metadata={"custom_name": meta.get("custom_name"), "type": "note"},
                                 )
-                            if request.ids_only:
-                                continue
-
-                    # Search loaded turns
-                    for t_idx, turn in enumerate(loaded_turns, 1):
-                        ts_raw = turn.get("timestamp") or turn.get("created_at")
-                        turn_dt = parse_datetime_expr(str(ts_raw)) if ts_raw else None
-                        if not is_within_date(turn_dt):
+                            )
+                        if request.ids_only:
                             continue
 
-                        # Extract text
-                        content_parts = []
-                        if turn.get("prompt"):
-                            content_parts.append(f"user: {turn['prompt']}")
-                        if turn.get("response"):
-                            content_parts.append(f"assistant: {turn['response']}")
-                        if turn.get("text"):
-                            content_parts.append(str(turn['text']))
-                        if turn.get("tool_calls"):
-                            content_parts.append(f"tool_calls: {turn['tool_calls']!s}")
+                # Search loaded turns
+                for t_idx, turn in enumerate(loaded_turns, 1):
+                    ts_raw = turn.get("timestamp") or turn.get("created_at")
+                    turn_dt = parse_datetime_expr(str(ts_raw)) if ts_raw else None
+                    if not is_within_date(turn_dt):
+                        continue
 
-                        full_content = "\n".join(content_parts)
-                        matched_ok, hit_terms = check_text_match(full_content)
-                        if matched_ok:
-                            total_matches_count += 1
-                            matched_session_ids.add(sid)
-                            if len(matches) < request.limit and not request.ids_only:
-                                if persisted_session_size is None:
-                                    persisted_session_size = get_session_size_bytes(sid, turns_fallback=loaded_turns, notes_fallback=s_notes, cached_summary=s_summary)
-                                snippet_text = full_content if request.full else make_snippet(full_content, hit_terms)
-                                matches.append(
-                                    QueryMatch(
-                                        source="session",
-                                        session_id=sid,
-                                        turn_id=turn.get("turn_id") or t_idx,
-                                        role=turn.get("role", "exchange"),
-                                        timestamp=str(ts_raw) if ts_raw else None,
-                                        matched_terms=hit_terms,
-                                        snippet=snippet_text,
-                                        full_text=full_content,
-                                        size_bytes=persisted_session_size,
-                                        metadata={"custom_name": meta.get("custom_name")},
-                                    )
+                    # Extract text
+                    content_parts = []
+                    if turn.get("prompt"):
+                        content_parts.append(f"user: {turn['prompt']}")
+                    if turn.get("response"):
+                        content_parts.append(f"assistant: {turn['response']}")
+                    if turn.get("text"):
+                        content_parts.append(str(turn['text']))
+                    if turn.get("tool_calls"):
+                        content_parts.append(f"tool_calls: {turn['tool_calls']!s}")
+
+                    full_content = "\n".join(content_parts)
+                    matched_ok, hit_terms = check_text_match(full_content)
+                    if matched_ok:
+                        total_matches_count += 1
+                        matched_session_ids.add(sid)
+                        if len(matches) < request.limit and not request.ids_only:
+                            if persisted_session_size is None:
+                                persisted_session_size = get_session_size_bytes(sid, turns_fallback=loaded_turns, notes_fallback=s_notes, cached_summary=s_summary)
+                            snippet_text = full_content if request.full else make_snippet(full_content, hit_terms)
+                            matches.append(
+                                QueryMatch(
+                                    source="session",
+                                    session_id=sid,
+                                    turn_id=turn.get("turn_id") or t_idx,
+                                    role=turn.get("role", "exchange"),
+                                    timestamp=str(ts_raw) if ts_raw else None,
+                                    matched_terms=hit_terms,
+                                    snippet=snippet_text,
+                                    full_text=full_content,
+                                    size_bytes=persisted_session_size,
+                                    metadata={"custom_name": meta.get("custom_name")},
                                 )
-                            if request.ids_only:
-                                break
+                            )
+                        if request.ids_only:
+                            break
 
         # 3. Search Scratch Area (Files in scratch dir) - skip if ids_only is strictly for sessions
         if request.include_scratch and not request.ids_only:
