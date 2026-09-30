@@ -779,6 +779,7 @@ async def cmd_docs(ctx: CommandContext, parts: list, command: str) -> CommandRes
     raw_args = command.split()[1:] if len(command.split()) > 1 else []
     sub = ""
     page_num = 1
+    line_num = None
     target_var = None
     search_terms = []
     search_op = "AND"
@@ -796,6 +797,11 @@ async def cmd_docs(ctx: CommandContext, parts: list, command: str) -> CommandRes
                 page_num = max(1, int(arg.split("=", 1)[1]))
             except ValueError:
                 page_num = 1
+        elif arg_lower.startswith("line="):
+            try:
+                line_num = max(1, int(arg.split("=", 1)[1]))
+            except ValueError:
+                line_num = None
         elif arg_lower.startswith(("var=", "target=")):
             target_var = arg.split("=", 1)[1].strip().lstrip("$")
         elif arg_lower.startswith("limit="):
@@ -837,7 +843,10 @@ async def cmd_docs(ctx: CommandContext, parts: list, command: str) -> CommandRes
             print(f"{header}\n{body}")
             formatted_lines.append(f"{header}\n{body}")
 
-        print("\nView full document with: /docs <filename> [page=N]\n")
+        print(f"\nView full document with: /docs <filename> [page=N|line=N]\n")
+        if matches:
+            first = matches[0]
+            print(f"Jump to first match: /docs {first.filename} line={first.line_number}\n")
 
         if target_var:
             saved_data = [m.to_dict() for m in matches]
@@ -876,6 +885,7 @@ async def cmd_docs(ctx: CommandContext, parts: list, command: str) -> CommandRes
         print("\nUsage:")
         print("  /docs <filename>       - View documentation file (REPL: highlighted pager, Script: chunked)")
         print("  /docs <filename> page=N - View specific page (40 lines/page in script context)")
+        print("  /docs <filename> line=N - Center on a specific line number (from search results)")
         print("  /docs <filename> var=<name> - Load full doc content into a script variable")
         print("  /docs search <terms...> - Search documentation with Grep engine matching")
         print("  /docs cookbook         - List all cookbook recipes")
@@ -933,6 +943,7 @@ async def cmd_docs(ctx: CommandContext, parts: list, command: str) -> CommandRes
             in_script=in_script,
             page_size=40,
             page_num=page_num,
+            line_num=line_num,
         )
     except Exception as e:
         print(f"Error reading documentation file '{target}': {e}")
