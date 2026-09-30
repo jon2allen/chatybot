@@ -713,6 +713,8 @@ The following tools are packaged by default and can be enabled/disabled dynamica
 | `session_search` | Searches across active and saved session turns, notes, and scratchpads with boolean logic and date filtering. | `query` (required), `operator` (optional), `since` (optional), `until` (optional), `range` (optional), `include_scratch` (optional), `limit` (optional), `ids_only` (optional), `full` (optional), `target_variable` (optional) |
 | `session_get` | Extracts read-only prompt, response, thinking, or full exchange text from a past or active session without switching sessions. | `session_id` (required), `turn_id` (optional), `part` (optional), `target_variable` (optional) |
 | `ask_user` | Prompts the user interactively for input (choice, yesno, or text). | `prompt` (required), `choices` (optional), `question_type` (optional), `target_variable` (optional) |
+| `search_skills` | Searches available skills by keyword (name, description, tags) and returns compact metadata summaries without instruction content. | `query` (optional), `limit` (optional) |
+| `call_skill` | Loads a skill's full instructions by name on demand with name normalization, silent tool configuration, and recursion cycle protection. | `name` (required) |
 
 **Optional Tools** (disabled by default, enable with `/tool enable <name>`):
 
@@ -1195,6 +1197,74 @@ chat --> Create a blog post outline about ${topic}
 ```
 
 ### Change log
+
+September 29th, 2026
+--------------------
+- **Agentic Skill Discovery & Delegation Tools (`search_skills`, `call_skill`)**:
+  - Added `search_skills` tool in `src/chatybot/tools/skill_utils.py` returning compact metadata summaries (`name`, `description`, `tags`) with instruction `content` stripped to guarantee zero context pollution.
+  - Added `call_skill` tool with case-insensitivity and hyphen/underscore normalization, silent mid-loop `tool_config` application (with tool state diff report and snapshot preservation), and recursion/cycle protection (max 5 delegations per tool loop).
+  - Registered `[tools.search_skills]` and `[tools.call_skill]` in `tools_config.toml`.
+  - Implemented in-process dispatching in `chatybot_app.py`'s `dispatch_tool()` handler, with `_turn_skills_loaded` tracking across `run_tool_loop()` turns.
+  - Added tool_config serialization support to `/skill edit` in `commands/skills.py`.
+  - Added comprehensive unit test suite in `test/test_skill_tools.py` (14 passing tests) and updated `/help` documentation.
+- **Skill Tracing & Sticky Lock (`/skill debug`, `/skill exit`)**:
+  - Added `/skill debug [on|off]` subcommand for real-time trace logging of trigger scanning and ranking.
+  - Added sticky session lock: auto-triggered skills stay locked as `app.active_skill` for subsequent turns until `/skill exit` or manual override.
+  - Enforced trigger validation: minimum 3 characters and minimum 2 words to eliminate short false-positive triggers.
+  - Added duplicate skill name checks in `create_skill` raising `ValueError`.
+- **Comprehensive Code Modernization & Linter Compliance (Ruff)**:
+  - Narrowed 36 blind/silent exception handlers to specific exception types (`JSONDecodeError`, `OSError`, `UnicodeDecodeError`, `ValueError`).
+  - Replaced silent `except: pass` blocks with warning prints on key I/O failures across logging, session management, and file tools.
+  - Configured suppression rules in `pyproject.toml` for `ASYNC230`/`ASYNC221` (single-coroutine event loop) and `SIM115` (session-lifetime file handles).
+  - Cleaned up import aliasing (`PLR0402` in `query/__init__.py`) and simplified nested conditional checks across TUI and command modules.
+
+September 28th, 2026
+--------------------
+- **Trigger Matching Engine Hardening & Specificity Ranking**:
+  - Replaced naive substring trigger matching with word-boundary regex (`\b`) in `get_matching_skills` to eliminate substring false positives (e.g. trigger "log" matching "biology", "catalog", or "logging").
+  - Implemented trigger specificity ranking (`top_k=1` default) scoring matches by word count of the matched trigger phrase; longer triggers rank higher, injecting only the single most specific skill per turn.
+- **Session-Level Auto-Trigger Control (`/skill on`, `/skill off`)**:
+  - Added `/skill on` and `/skill off` subcommands to dynamically toggle auto-triggering within the active session.
+  - Added session-scoped `skills_enabled` flag on `ChatybotApp` (session-scoped, defaults on).
+  - Updated `/skill` help text, usage string, and command reference tables.
+
+September 25th, 2026
+--------------------
+- **Dynamic Context Injection (!`cmd`) in Prompts & Skills**:
+  - Implemented inline shell execution (`!`cmd``) in `BufferManager` with strict guardrails: 3.0s execution timeout, 4KB output cap, non-interactive stdin (`DEVNULL`), and `safe_mode` / `safe_mode_askfirst` checks via `app.check_dangerous()`.
+  - Added automatic glob wildcard expansion (`*`, `?`, `[]`) for arguments under `shell=False`.
+  - Added `expand_injections` flag to `replace_placeholders` to prevent double-execution in `/run`.
+  - Expanded dynamic command injections inside skill bodies in `_inject_skills`.
+  - Disambiguated `!` history recall from `!\`` dynamic command injection at start of line.
+  - Added comprehensive test suite in `test/test_dynamic_injection.py` (23 passing tests).
+  - Documented architectural roadmap in `skill_concerns.md` and revised specification in `prompt_injection.md`.
+
+September 24th, 2026
+--------------------
+- **Pattern Matching for Skill Management (`/skill enable`, `/skill disable`)**:
+  - `/skill enable` and `/skill disable` now support glob patterns matching `/tool enable|disable` behavior (`all`, fnmatch patterns like `code-*`).
+  - Added exact case-insensitive name fallback when no glob characters are present and no pattern matched.
+  - Standardized shared `_enable_disable_skill` helper and updated usage strings.
+
+September 23rd, 2026
+--------------------
+- **Skills Database System (`/skill`, `skillsdb.py`)**:
+  - Added TinyDB-backed skills store (`~/.local/share/chatybot/skills.json`) with cached trigger index and lazy initialization.
+  - Introduced `/skill` command suite with 13 subcommands (`list`, `show`, `create`, `edit`, `delete`, `enable`, `disable`, `search`, `learn`, `apply`, `export`, `import`, `restore`).
+  - Added pre-turn prompt injection (`_inject_skills`) and interactive tool reconfiguration (`_apply_skill_tool_config`) with user diff confirmation and rollback snapshotting (`/skill restore`).
+  - Supported open `SKILL.md` format (YAML frontmatter + markdown body) for export/import.
+  - Seeded 7 default built-in skills (`code-review`, `debug-error`, `write-test`, `research-agent`, `compare-models`, `batch-translate`, `db-research-log`).
+  - Wired skill injection into both standard completion (OpenAI API) and on-device Apple Foundation Models (`_apple_fm_completion`).
+  - Added 26 unit tests covering CRUD, trigger matching, enable/disable, search, and export/import.
+- **ChatDSL Grammar & Specification**:
+  - Synchronized ChatDSL BNF specification (`chatdsl_bnf.txt`) to v0.8.7.
+
+September 22nd, 2026
+--------------------
+- **Raw Payload Tracing for Structured Decisions**:
+  - Added `/trace rawpayload on` support for `/decide` command and `decide_*` decision tools.
+  - Dumps formatted request JSON (endpoint, headers, token/byte metrics) and response JSON (status, probabilities, calibrated confidence).
+  - Forwarded logging manager to log decision payloads and propagated tracing environment variables to subprocess dispatcher.
 
 September 21st, 2026 (v0.8.7)
 ----------------------------
