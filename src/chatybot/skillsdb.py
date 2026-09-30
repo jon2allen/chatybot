@@ -277,8 +277,6 @@ def import_skill_from_skillmd(filepath: str) -> int | None:
     body = parts[2].strip()
 
     # Simple YAML parsing for our flat key: value format
-    import re
-
     meta_fields: dict[str, Any] = {}
     for line in frontmatter_text.splitlines():
         line = line.strip()
