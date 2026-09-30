@@ -5,6 +5,7 @@ Registers the /skill command with subcommands:
   learn, apply, export, import, restore
 """
 
+import json
 import os
 import shlex
 import subprocess
@@ -271,6 +272,11 @@ def _handle_edit(ctx: CommandContext, parts: list) -> CommandResult:
         tf.write(f"# Triggers: {', '.join(meta.get('triggers', []))}\n")
         tf.write(f"# Tags: {', '.join(meta.get('tags', []))}\n")
         tf.write(f"# Enabled: {meta.get('enabled', True)}\n")
+        tool_config = meta.get("tool_config")
+        if tool_config:
+            tf.write(f"# Tool Config: {json.dumps(tool_config)}\n")
+        else:
+            tf.write("# Tool Config:\n")
         tf.write("# --- Edit content below this line ---\n")
         tf.write(skill.get("content", ""))
         temp_path = tf.name
@@ -305,6 +311,8 @@ def _handle_edit(ctx: CommandContext, parts: list) -> CommandResult:
     parsed_triggers = None
     parsed_tags = None
     parsed_enabled = None
+    parsed_tool_config = None
+    tool_config_seen = False  # Track whether the line was present
 
     for line in lines:
         if not header_parsed:
@@ -321,6 +329,15 @@ def _handle_edit(ctx: CommandContext, parts: list) -> CommandResult:
                 parsed_tags = [t.strip() for t in val.split(",") if t.strip()]
             elif line.startswith("# Enabled:"):
                 parsed_enabled = line[len("# Enabled:"):].strip().lower() in ("true", "1", "yes", "on")
+            elif line.startswith("# Tool Config:"):
+                tool_config_seen = True
+                val = line[len("# Tool Config:"):].strip()
+                if val:
+                    try:
+                        parsed_tool_config = json.loads(val)
+                    except json.JSONDecodeError as e:
+                        print(f"Warning: Tool Config JSON parse error: {e}. Tool config not updated.")
+                        parsed_tool_config = None
             elif line.startswith("# Skill:"):
                 pass  # skip header
         else:
@@ -341,6 +358,12 @@ def _handle_edit(ctx: CommandContext, parts: list) -> CommandResult:
         new_meta["tags"] = parsed_tags
     if parsed_enabled is not None:
         new_meta["enabled"] = parsed_enabled
+    if tool_config_seen:
+        if parsed_tool_config is not None:
+            new_meta["tool_config"] = parsed_tool_config
+        else:
+            # User left Tool Config empty -- remove existing config
+            new_meta.pop("tool_config", None)
 
     skillsdb.update_skill(skill_id, content=new_content, metadata=new_meta)
     print(f"Skill '{name}' updated.")
