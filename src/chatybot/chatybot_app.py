@@ -5261,7 +5261,8 @@ class ChatybotApp:
             
         # Clean up loop state
         self.in_tool_loop = False
-        
+        self._turn_skills_loaded = []
+
         # If final_natural_language_response is not set, fallback
         if not final_natural_language_response:
             final_natural_language_response = current_response
@@ -6275,6 +6276,7 @@ class ChatybotApp:
                 # Reset tool loop state if interrupted during tool operations
                 if hasattr(self, 'in_tool_loop') and self.in_tool_loop:
                     self.in_tool_loop = False
+                    self._turn_skills_loaded = []
                 
                 if self.control_c_count >= 2:
                     # Second Ctrl+C - exit program

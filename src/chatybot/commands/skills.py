@@ -422,8 +422,6 @@ def _enable_disable_skill(target: str, enable: bool) -> CommandResult:
         print("No skills found.")
         return CommandResult.ok()
 
-    [s.get("name", "") for s in all_skills]
-
     if target.lower() == "all":
         matched = all_skills
     else:
