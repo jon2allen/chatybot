@@ -552,6 +552,36 @@ Chatybot maintains reserved, read-only system variables populated by commands. U
 
 ---
 
+## Dynamic Skill Loading
+
+The skills system provides two mechanisms for using skills:
+
+1. **Auto-triggering** — When a user prompt matches a skill's trigger phrases,
+   the skill is injected into the system prompt automatically. Toggle with
+   `/skill on` and `/skill off`.
+
+2. **On-demand loading** — During the tool loop, the LLM can discover and load
+   skills using two in-process tools:
+
+   - `search_skills(query, limit)` — Find skills by keyword. Returns metadata
+     only (name, description, tags) to avoid context pollution.
+   - `call_skill(name)` — Load a skill's full instructions. Applies any
+     `tool_config` silently and returns a `tool_state` summary.
+
+   Enable both with `/tool enable search_skills,call_skill` before starting
+   the tool loop. The model calls these as tool calls (JSON), not as ChatDSL
+   script commands.
+
+Safety features:
+- Circular delegation detection (same skill loaded twice in one loop)
+- Depth limit: 5 skill delegations per tool loop
+- `/skill restore` reverts tool configuration changes
+
+See the [Cookbook Chapter 15](chatdsl_cookbook.md) for recipes and the
+[Skill Guide](chatdsl_skill.md) for the full `/skill` command reference.
+
+---
+
 ## HowTo: Shell Execution & Capturing Output (/run)
 
 The `/run` command executes a shell command and automatically captures its outputs into script variables:
@@ -990,6 +1020,8 @@ set my_limit = 16000
 |---------|----------|--------|-------------|
 | `!` | History | `! <search>` | Search command history |
 
+> **Note:** The `` !`cmd` `` syntax (bang followed by backtick) is **dynamic context injection**, not history search. It executes a short shell command and substitutes its output into the prompt. See `prompt_injection.md` for details.
+
 ## Scripting Keywords
 
 | English | Syntax | Description |
@@ -1287,6 +1319,7 @@ def expert_prompt(topic) = "Act as an expert in {topic}."
 - **ChatDSL Language Guide** (`chatdsl_language.md`) - Complete language reference with command mappings
 - **ChatDSL Skill Guide** (`chatdsl_skill.md`) - Comprehensive scripting patterns
 - **ChatDSL Macro Implementation** (`chatdsl_macro_implementation.md`) - Technical implementation report
+- **Dynamic Context Injection** (`prompt_injection.md`) - `` !`cmd` `` inline command execution specification
 
 ## Configuration Files
 

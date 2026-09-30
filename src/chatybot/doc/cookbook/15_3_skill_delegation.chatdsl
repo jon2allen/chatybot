@@ -1,0 +1,13 @@
+# Recipe 15.3 - Skill delegation chains
+# Goal: chain multiple skills in a single tool loop.
+# Run: /script doc/cookbook/15_3_skill_delegation.chatdsl
+
+/model devstral_1
+/tool on
+/tool enable search_skills,call_skill
+/tool auto on
+/tool max_turns 30
+
+chat --> Research the codebase architecture. Use skills to guide your analysis.
+
+/tool loop 30 force

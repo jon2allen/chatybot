@@ -855,6 +855,8 @@ src/chatybot/profiles/          # Perfiles preestablecidos
 |---------------|-----------|----------|-------------|
 | `!` | Historial | `! <búsqueda>` | Buscar en el historial de comandos |
 
+> **Nota:** La sintaxis `` !`cmd` `` (signo de exclamación seguido de un acento grave) es una **inyección de contexto dinámico**, no una búsqueda en el historial. Ejecuta un comando shell corto y sustituye su salida en el prompt. Ver `prompt_injection.md` para más detalles.
+
 ## Palabras Clave de Scripting
 
 | Inglés | Español | Sintaxis | Descripción |
@@ -1189,6 +1191,7 @@ def expert_prompt(topic) = "Act as an expert in {topic}."
 - **Guía del Lenguaje ChatDSL** (`chatdsl_language.md`) - Referencia completa del lenguaje con asignaciones de comandos
 - **Guía de Habilidades ChatDSL** (`chatdsl_skill.md`) - Patrones de scripting completos
 - **Implementación de Macros ChatDSL** (`chatdsl_macro_implementation.md`) - Informe de implementación técnica
+- **Inyección de Contexto Dinámico** (`prompt_injection.md`) - Especificación de ejecución de comandos inline `` !`cmd` ``
 
 ## Archivos de Configuración
 

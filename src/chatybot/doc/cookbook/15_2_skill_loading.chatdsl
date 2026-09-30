@@ -1,0 +1,13 @@
+# Recipe 15.2 - Loading skill instructions with call_skill
+# Goal: load a skill's full instructions by name during a tool loop.
+# Run: /script doc/cookbook/15_2_skill_loading.chatdsl
+
+/model devstral_1
+/tool on
+/tool enable search_skills,call_skill
+/tool auto on
+/tool max_turns 20
+
+chat --> Load the "code-review" skill and use it to review src/auth.py.
+
+/tool loop 20 force

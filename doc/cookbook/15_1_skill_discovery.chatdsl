@@ -1,0 +1,13 @@
+# Recipe 15.1 - Discovering skills with search_skills
+# Goal: let the model discover available skills by keyword during a tool loop.
+# Run: /script doc/cookbook/15_1_skill_discovery.chatdsl
+
+/model devstral_1
+/tool on
+/tool enable search_skills,call_skill
+/tool auto on
+/tool max_turns 20
+
+chat --> I want to review some code. Find a relevant skill and use it to review the files in src/.
+
+/tool loop 20 force

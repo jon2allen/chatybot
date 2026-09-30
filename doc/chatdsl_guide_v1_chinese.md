@@ -847,6 +847,8 @@ src/chatybot/profiles/          # 系统预装的配置文件模板目录
 |---------|----------|--------|-------------|
 | `!` | 历史 | `! <搜索关键字>` | 在当前命令执行历史记录中过滤出包含该关键字的命令行 |
 
+> **注意：** `` !`命令` `` 语法（感叹号后跟反引号）是**动态上下文注入**，而非历史搜索。它会执行一个简短的 shell 命令并将输出替换到提示词中。详见 `prompt_injection.md`。
+
 ## 解释器保留关键字
 
 | 英文原词 | 中文翻译 | 语法结构格式 | 用途说明 |
@@ -1181,6 +1183,7 @@ def expert_prompt(topic) = "Act as an expert in {topic}."
 - **ChatDSL 语言指南** (`chatdsl_language.md`) - 命令到翻译对照以及详尽变量语法的完全参考
 - **ChatDSL 技能设计手册** (`chatdsl_skill.md`) - 面向中高级脚本的开发设计模式参考
 - **ChatDSL 宏解析器实现说明书** (`chatdsl_macro_implementation.md`) - PEG 语法解析与底层宏替换报告
+- **动态上下文注入** (`prompt_injection.md`) - `` !`命令` `` 内联命令执行规范
 
 ## 相关配置文件说明
 

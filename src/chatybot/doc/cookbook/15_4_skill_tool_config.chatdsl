@@ -1,0 +1,16 @@
+# Recipe 15.4 - Skills with tool configuration
+# Goal: load a skill that modifies the tool set mid-loop, then restore.
+# Run: /script doc/cookbook/15_4_skill_tool_config.chatdsl
+
+/model devstral_1
+/tool on
+/tool enable search_skills,call_skill
+/tool auto on
+/tool max_turns 25
+
+chat --> I need to debug an error in src/. Find and load a debugging skill.
+
+/tool loop 25 force
+
+# Restore original tool configuration after the loop
+/skill restore
