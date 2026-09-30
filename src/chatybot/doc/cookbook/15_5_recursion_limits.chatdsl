@@ -1,0 +1,17 @@
+# Recipe 15.5 - Recursion limits and cycle detection
+# Goal: understand the safety mechanisms that prevent unbounded skill chaining.
+# Run: /script doc/cookbook/15_5_recursion_limits.chatdsl
+#
+# Setup: create two skills that delegate to each other:
+#   /skill create  ->  name: loop-a, content: "Call the Skill tool for 'loop-b'"
+#   /skill create  ->  name: loop-b, content: "Call the Skill tool for 'loop-a'"
+
+/model devstral_1
+/tool on
+/tool enable search_skills,call_skill
+/tool auto on
+/tool max_turns 30
+
+chat --> Load the "loop-a" skill and follow its instructions.
+
+/tool loop 30 force
