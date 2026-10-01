@@ -1198,8 +1198,8 @@ chat --> Create a blog post outline about ${topic}
 
 ### Change log
 
-September 30th, 2026
---------------------
+September 30th, 2026 (v0.8.8)
+----------------------------
 - **`/docs` Line-Based Navigation & Search-to-View Workflow**:
   - Added `line=N` parameter to `/docs <filename>` — centers the target line in a 40-line chunk with context above and below, so search results (which return `filename:line_number`) can be jumped to directly.
   - Fixed `page=N` being silently ignored in REPL mode — `page=N` (when N > 1) now uses chunked display in both REPL and script contexts instead of falling through to the full-screen pager.

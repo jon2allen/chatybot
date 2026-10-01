@@ -1,4 +1,4 @@
-__version__ = "0.8.7"
+__version__ = "0.8.8"
 
 from .doc_utils import (
     DocSearchMatch,
