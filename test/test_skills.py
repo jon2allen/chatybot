@@ -378,7 +378,9 @@ class TestDefaultSkills:
         assert tc is not None
         assert tc["mode"] == "on"
         assert "read_file" in tc["enable_tools"]
+        assert "run_command" in tc["enable_tools"]
         assert "write_file" in tc["disable_tools"]
+        assert "run_command" not in tc["disable_tools"]
         assert tc["auto_loop"] is True
 
     def test_default_skill_without_tool_config(self):
