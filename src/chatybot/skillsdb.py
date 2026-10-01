@@ -352,8 +352,8 @@ DEFAULT_SKILLS: list[dict[str, Any]] = [
             "source": "default",
             "tool_config": {
                 "mode": "on",
-                "enable_tools": ["read_file", "grep_search", "find_files", "list_directory"],
-                "disable_tools": ["write_file", "run_command", "replace_file_content"],
+                "enable_tools": ["read_file", "grep_search", "find_files", "list_directory", "run_command"],
+                "disable_tools": ["write_file", "replace_file_content"],
                 "auto_loop": True,
                 "max_turns": 25,
             },
