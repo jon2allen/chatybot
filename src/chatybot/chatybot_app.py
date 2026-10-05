@@ -2379,6 +2379,10 @@ class ChatybotApp:
         if not isinstance(prompt, list):
             system_message = self._inject_skills(system_message or "", prompt)
 
+        # Reset AGENTIC_LOOP record for fresh turn
+        if not self.in_tool_loop and hasattr(self, "buffer_manager") and self.buffer_manager is not None:
+            self.buffer_manager.set_script_var('AGENTIC_LOOP', [], allow_protected=True)
+
         # --- Create session and generate ---
         session, err = create_session(instructions=system_message, tools=fm_tools)
         if err:
@@ -2455,10 +2459,13 @@ class ChatybotApp:
                     full_response += chunk
             else:
                 full_response = await respond(session, full_prompt, options=gen_options)
-                print(full_response, end="")
-
+                print(full_response, end="", flush=True)
             elapsed_time = time.time() - start_time
             print(f"\nExecution time: {elapsed_time:.2f} seconds")
+
+            # Show agentic loop trace if enabled
+            if self.trace_agentic_loop:
+                self.show_agentic_loop_trace()
 
             # --- Post-processing (mirrors chat_completion) ---
             if self.logging_manager.logging_active:
