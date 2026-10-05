@@ -243,3 +243,71 @@ class TestBuildTools:
         tools = build_tools(MockApp())
         # Should still include ask_user
         assert any(t.name == "ask_user" for t in tools)
+
+
+class TestToolExecutionTracing:
+    """Tests for tool execution output and trace_agentic_loop recording."""
+
+    @pytest.mark.anyio
+    async def test_call_prints_tool_and_records_agentic_loop(self, capsys):
+        from chatybot.apple_fm_backend import _create_tool_wrapper
+
+        class MockBufferManager:
+            def __init__(self):
+                self.vars = {}
+
+            def get_script_var(self, name):
+                return self.vars.get(name)
+
+            def set_script_var(self, name, val, allow_protected=False):
+                self.vars[name] = val
+
+        class MockApp:
+            def __init__(self):
+                self.buffer_manager = MockBufferManager()
+                self.trace_agentic_loop = True
+                self.dispatched = []
+
+            async def dispatch_tool(self, invocation):
+                self.dispatched.append(invocation)
+                self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '0')
+                return "File content mock"
+
+        app = MockApp()
+        tool_meta = {
+            "description": "Read file",
+            "parameters": {"path": {"type": "string", "description": "path", "optional": False}},
+        }
+        tool_cls = _create_tool_wrapper("read_file", tool_meta, app=app)
+        tool_instance = tool_cls()
+
+        class MockArgs:
+            def value(self, py_type, for_property):
+                if for_property == "path":
+                    return "README.md"
+                return None
+
+        result = await tool_instance.call(MockArgs())
+        assert result == "File content mock"
+        assert len(app.dispatched) == 1
+
+        captured = capsys.readouterr().out
+        # Option #3 verification
+        assert "[Apple FM] LLM requested tool: read_file" in captured
+        assert "Arguments: {\"path\": \"README.md\"}" in captured
+        assert "Tool Result: File content mock" in captured
+
+        # Trace mode verification
+        assert "--- [Trace: Apple FM Tool Execution] ---" in captured
+        assert "Tool: read_file" in captured
+        assert "Exit Code: 0" in captured
+
+        # AGENTIC_LOOP record verification
+        records = app.buffer_manager.get_script_var("AGENTIC_LOOP")
+        assert isinstance(records, list)
+        assert len(records) == 1
+        assert records[0]["tool"] == "read_file"
+        assert records[0]["arguments"] == {"path": "README.md"}
+        assert records[0]["status"] == "success"
+        assert records[0]["exit_code"] == 0
+
