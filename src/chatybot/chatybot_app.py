@@ -4807,7 +4807,125 @@ class ChatybotApp:
                     calls.append(call_obj)
             return calls
 
+        def extract_dots_tool_calls(s: str) -> list[dict[str, Any]]:
+            """
+            Extract tool calls formatted using Dots / dots_free native syntax:
+            <dots_function_call> ... </dots_function_call>
+            Handles well-formed invoke blocks as well as malformed variations (e.g. <invoke_name">,
+            <invoke_parameters> JSON, premature/orphaned </invoke> or </parameter> tags).
+            """
+            calls = []
+            dots_pattern = re.compile(
+                r'<dots_function_call[^>]*>(.*?)</dots_function_call>',
+                re.IGNORECASE | re.DOTALL
+            )
+            for m in dots_pattern.finditer(s):
+                block = m.group(1).strip()
+                if not block:
+                    continue
+
+                tool_name = None
+                # Check for <invoke_name">, <invoke_name>, <invoke="name">, <invoke name="name">, etc.
+                tool_match = re.search(r'<invoke_name["\'\s]*>\s*([a-zA-Z0-9_\-\.]+)', block, re.IGNORECASE)
+                if not tool_match:
+                    tool_match = re.search(
+                        r'<invoke(?:\s*name=|=|\s*=|\s+)["\'=\s]*([a-zA-Z0-9_\-\.]+)["\'\s]*',
+                        block,
+                        re.IGNORECASE
+                    )
+                if not tool_match:
+                    tool_match = re.search(
+                        r'<(?:tool|function)(?:=|\s*name=|\s*=|\s+)["\'=\s]*([a-zA-Z0-9_\-\.]+)["\'\s]*',
+                        block,
+                        re.IGNORECASE
+                    )
+                if not tool_match:
+                    for t in known_tools:
+                        if re.search(rf'<{re.escape(t)}\b[^>]*>', block, re.IGNORECASE):
+                            tool_name = t
+                            break
+
+                if tool_match and not tool_name:
+                    cand = tool_match.group(1).strip()
+                    if cand.lower() not in ("dots_function_call", "action", "tool_call"):
+                        tool_name = cand
+
+                if not tool_name:
+                    continue
+
+                server_match = re.search(
+                    r'<server_name[^>]*>(.*?)</server_name>',
+                    block,
+                    re.IGNORECASE | re.DOTALL
+                )
+                if server_match:
+                    s_name = server_match.group(1).strip()
+                    if s_name.lower() not in ("", "none", "null", "local") and not tool_name.startswith("mcp__"):
+                        tool_name = f"mcp__{s_name}__{tool_name}"
+
+                if "." in tool_name:
+                    tool_name = tool_name.split(".")[-1]
+
+                args = {}
+
+                # 1. Check for <invoke_parameters> or <parameters> containing JSON
+                param_container_match = re.search(
+                    r'<(?:invoke_parameters|parameters|arguments)[^>]*>(.*?)</(?:invoke_parameters|parameters|arguments)>',
+                    block,
+                    re.IGNORECASE | re.DOTALL
+                )
+                if param_container_match:
+                    p_body = param_container_match.group(1).strip()
+                    parsed_json = parse_json_or_dict(p_body)
+                    if isinstance(parsed_json, dict):
+                        args = parsed_json
+
+                # 2. Check for <parameter name="key">val</parameter> (extract all, ignoring premature </invoke> tags)
+                if not args:
+                    param_pattern = re.compile(
+                        r'<(?:parameter|param)\s+name=["\'\s]*([a-zA-Z0-9_\-\.]+)["\'\s]*[^>]*>(.*?)</(?:parameter|param)>',
+                        re.IGNORECASE | re.DOTALL
+                    )
+                    param_matches = list(param_pattern.finditer(block))
+                    if param_matches:
+                        for pm in param_matches:
+                            p_name = pm.group(1).strip()
+                            raw_val = pm.group(2)
+                            args[p_name] = parse_xml_param_value(raw_val)
+                    else:
+                        param_pattern_eq = re.compile(
+                            r'<(?:parameter|param)=["\']?([a-zA-Z0-9_\-\.]+)["\']?[^>]*>(.*?)</(?:parameter|param)>',
+                            re.IGNORECASE | re.DOTALL
+                        )
+                        param_matches_eq = list(param_pattern_eq.finditer(block))
+                        if param_matches_eq:
+                            for pm in param_matches_eq:
+                                p_name = pm.group(1).strip()
+                                raw_val = pm.group(2)
+                                args[p_name] = parse_xml_param_value(raw_val)
+                        else:
+                            # Self-closing parameter tags: <parameter name="key" value="val"/>
+                            sc_param_pattern = re.compile(
+                                r'<(?:parameter|param)(?:\s+name=|=)["\']?([a-zA-Z0-9_\-\.]+)["\']?\s+value=["\']([^"\']*)["\'][^>]*/?>',
+                                re.IGNORECASE
+                            )
+                            for sc_m in sc_param_pattern.finditer(block):
+                                p_name = sc_m.group(1).strip()
+                                raw_val = sc_m.group(2)
+                                args[p_name] = parse_xml_param_value(raw_val)
+
+                call_obj = {"tool": tool_name, "arguments": args}
+                if call_obj not in calls:
+                    calls.append(call_obj)
+
+            return calls
+
         tool_calls = []
+
+        dots_tool_calls = extract_dots_tool_calls(text)
+        for docall in dots_tool_calls:
+            if docall not in tool_calls:
+                tool_calls.append(docall)
 
         xml_tool_calls = extract_xml_tool_calls(text)
         for xcall in xml_tool_calls:

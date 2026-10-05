@@ -1380,9 +1380,9 @@ def _extract_retry_candidate(raw_text: str, app) -> dict:
         "ask_user": "prompt",
     }
 
-    # 2. Check for XML tag variants: <invoke="name">, <invoke="=" name">, <function=name>, <tool name="name">, <invokename="name">
+    # 2. Check for XML tag variants: <invoke="name">, <invoke="=" name">, <function=name>, <tool name="name">, <invokename="name">, <invoke_name">
     tag_name_match = re.search(
-        r'<(?:invoke|function|tool|call|dots_function_call|action)(?:=|\s*name=|\s*=|\s+)["\'=\s]*([a-zA-Z0-9_\-\.]+)["\'\s]*',
+        r'<(?:invoke_name|invoke|function|tool|call|dots_function_call|action)(?:=|\s*name=|\s*=|\s+|["\'\s]*>[\s\n]*)["\'=\s]*([a-zA-Z0-9_\-\.]+)',
         raw_text,
         re.IGNORECASE,
     )
@@ -1400,7 +1400,7 @@ def _extract_retry_candidate(raw_text: str, app) -> dict:
 
     # Check for parameter blocks: <parameter name="key">val</parameter> or <param=key>val</param>
     param_matches = list(re.finditer(
-        r'<(?:parameter|param)\s+name=["\']([^"\']+)["\'][^>]*>(.*?)</(?:parameter|param)>',
+        r'<(?:parameter|param)\s+name=["\']?([a-zA-Z0-9_\-\.]+)["\']?[^>]*>(.*?)</(?:parameter|param)>',
         raw_text,
         re.IGNORECASE | re.DOTALL,
     ))
@@ -1414,6 +1414,21 @@ def _extract_retry_candidate(raw_text: str, app) -> dict:
         k = pm.group(1).strip()
         v = pm.group(2).strip()
         args[k] = v
+
+    # Check for invoke_parameters / arguments JSON block
+    if not args:
+        inv_params_match = re.search(
+            r'<(?:invoke_parameters|parameters|arguments)[^>]*>(.*?)</(?:invoke_parameters|parameters|arguments)>',
+            raw_text,
+            re.IGNORECASE | re.DOTALL,
+        )
+        if inv_params_match:
+            try:
+                parsed_json = json.loads(inv_params_match.group(1).strip())
+                if isinstance(parsed_json, dict):
+                    args.update(parsed_json)
+            except Exception:
+                pass
 
     # If direct tool XML tag matched (<read_file><path>...</path></read_file>), extract inner parameter tags
     if detected_tool and not args:

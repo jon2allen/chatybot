@@ -393,3 +393,118 @@ def test_extract_tool_calls_dots_invoke_loose_equals_syntax():
     assert calls[0]["arguments"]["path"] == "3kingdoms_culture.chatdsl"
 
 
+def test_extract_tool_calls_dots_malformed_variations():
+    """Verify dots_free malformed XML variations (invoke_name, premature/orphaned invoke, invoke_parameters JSON) are properly rescued."""
+    app = ChatybotApp()
+
+    # Turn 1: <invoke_name"> + <invoke_parameters> JSON + orphaned </invoke>
+    t1 = """<dots_function_call>
+<invoke_name">
+grep_search
+</invoke_name>
+<invoke_parameters>
+{"query": "def extract_tool_calls", "path": "./src/chatybot/chatybot_app.py", "max_matches": 5}
+</invoke_parameters>
+</invoke>
+</dots_function_call>"""
+    c1 = app.extract_tool_calls(t1)
+    assert len(c1) == 1
+    assert c1[0]["tool"] == "grep_search"
+    assert c1[0]["arguments"] == {"query": "def extract_tool_calls", "path": "./src/chatybot/chatybot_app.py", "max_matches": 5}
+
+    # Turn 2: <invoke_name> + grep_search"> + phantom </parameter> + orphaned </invoke>
+    t2 = """<dots_function_call>
+<invoke_name>
+grep_search">
+</parameter>
+<parameter name="query">
+dots_function_call
+</parameter>
+</invoke>
+</dots_function_call>"""
+    c2 = app.extract_tool_calls(t2)
+    assert len(c2) == 1
+    assert c2[0]["tool"] == "grep_search"
+    assert c2[0]["arguments"] == {"query": "dots_function_call"}
+
+    # Turn 3: <invoke_name"> + grep_search"> + phantom </parameter> + multiple parameters + orphaned </invoke>
+    t3 = """<dots_function_call>
+<invoke_name">
+grep_search">
+</parameter>
+<parameter name="query">
+dots_function_call
+</parameter>
+<parameter name="max_matches">
+50
+</parameter>
+</invoke>
+</dots_function_call>"""
+    c3 = app.extract_tool_calls(t3)
+    assert len(c3) == 1
+    assert c3[0]["tool"] == "grep_search"
+    assert c3[0]["arguments"] == {"query": "dots_function_call", "max_matches": 50}
+
+    # Turn 6: multiple dots calls with premature </invoke> before parameters
+    t6 = """<dots_function_call>
+<invoke_name">
+read_file">
+</invoke>
+<parameter name="path">
+./src/chatybot/commands/tools.py
+</parameter>
+<parameter name="start_line">
+1370
+</parameter>
+<parameter name="end_line">
+1420
+</parameter>
+</invoke>
+</dots_function_call>
+<dots_function_call>
+<invoke_name">
+read_file">
+</invoke>
+<parameter name="path">
+./src/chatybot/chatybot_app.py
+</parameter>
+<parameter name="start_line">
+4830
+</parameter>
+<parameter name="end_line">
+4870
+</parameter>
+</invoke>
+</dots_function_call>"""
+    c6 = app.extract_tool_calls(t6)
+    assert len(c6) == 2
+    assert c6[0]["tool"] == "read_file"
+    assert c6[0]["arguments"]["path"] == "./src/chatybot/commands/tools.py"
+    assert c6[0]["arguments"]["start_line"] == 1370
+    assert c6[0]["arguments"]["end_line"] == 1420
+    assert c6[1]["tool"] == "read_file"
+    assert c6[1]["arguments"]["path"] == "./src/chatybot/chatybot_app.py"
+    assert c6[1]["arguments"]["start_line"] == 4830
+    assert c6[1]["arguments"]["end_line"] == 4870
+
+
+def test_parse_raw_tool_attempt_dots_malformed():
+    """Verify _extract_retry_candidate fallback recognizes dots invoke_name and invoke_parameters."""
+    from chatybot.commands.tools import _extract_retry_candidate
+    app = ChatybotApp()
+    t = """<dots_function_call>
+<invoke_name">
+grep_search">
+</parameter>
+<parameter name="query">
+dots_function_call
+</parameter>
+</invoke>
+</dots_function_call>"""
+    res = _extract_retry_candidate(t, app)
+    assert res["is_valid"] is True
+    assert res["tool"] == "grep_search"
+    assert res["arguments"] == {"query": "dots_function_call"}
+
+
+
