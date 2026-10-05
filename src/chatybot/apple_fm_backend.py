@@ -16,6 +16,8 @@ import json
 import logging
 import platform
 import sys
+import time
+from datetime import datetime
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -322,7 +324,19 @@ def _create_tool_wrapper(tool_name: str, tool_meta: dict, app) -> type:
             invocation = json.dumps({"tool": tool_name, "arguments": arg_dict})
             logger.debug("Apple FM tool call: %s", invocation)
 
+            # Option #3: Default real-time notification in line with loop
+            if tool_name == "ask_user":
+                print("\n[Apple FM] Prompting user for input...")
+            else:
+                arg_preview = json.dumps(arg_dict, ensure_ascii=False)
+                print(f"\n[Apple FM] LLM requested tool: {tool_name}")
+                print(f"   Arguments: {arg_preview}")
+
+            _tool_t0 = time.perf_counter()
+            _tool_ts = datetime.now().isoformat()
             try:
+                if not app:
+                    raise RuntimeError("Application instance unavailable for tool execution")
                 result = await app.dispatch_tool(invocation)
                 result_str = str(result) if result else ""
                 # Truncate to prevent ExceededContextWindowSizeError.
@@ -331,9 +345,66 @@ def _create_tool_wrapper(tool_name: str, tool_meta: dict, app) -> type:
                 max_chars = 4000
                 if len(result_str) > max_chars:
                     result_str = result_str[:max_chars] + "\n...[truncated]"
-                return result_str
+
+                # Retrieve tool exit code from buffer_manager if available
+                exit_code_val = 0
+                buffer_mgr = getattr(app, "buffer_manager", None)
+                if buffer_mgr is not None and hasattr(buffer_mgr, "get_script_var"):
+                    raw_exit_code = buffer_mgr.get_script_var("TOOL_DISPATCH_EXIT_CODE")
+                    try:
+                        exit_code_val = int(raw_exit_code) if raw_exit_code is not None else 0
+                    except (ValueError, TypeError):
+                        exit_code_val = 0
             except Exception as e:
-                return f"Error: {e}"
+                result_str = f"Error: {e}"
+                exit_code_val = 1
+
+            _tool_duration_ms = round((time.perf_counter() - _tool_t0) * 1000, 1)
+
+            # Option #3: Default tool result preview
+            if tool_name != "ask_user":
+                preview = result_str if len(result_str) <= 500 else result_str[:500] + "\n...[truncated]"
+                print(f"Tool Result: {preview}")
+
+            # /trace agentic_loop on: Output full tool call payload and response
+            is_trace = getattr(app, "trace_agentic_loop", False)
+            if is_trace:
+                print(f"\n--- [Trace: Apple FM Tool Execution] ---")
+                print(f"  Tool: {tool_name}")
+                print(f"  Arguments: {json.dumps(arg_dict, indent=2, ensure_ascii=False)}")
+                print(f"  Duration: {_tool_duration_ms} ms")
+                print(f"  Exit Code: {exit_code_val}")
+                print(f"  Result:\n{result_str}")
+                print(f"----------------------------------------\n")
+
+            # Record into AGENTIC_LOOP if buffer_manager is present
+            if hasattr(app, "buffer_manager") and app.buffer_manager is not None:
+                tool_record = {
+                    "turn": 1,
+                    "tool": tool_name,
+                    "arguments": arg_dict,
+                    "result": result_str,
+                    "exit_code": exit_code_val,
+                    "status": "success" if exit_code_val == 0 else "error",
+                    "timestamp": _tool_ts,
+                    "duration_ms": _tool_duration_ms,
+                }
+                current_loop = app.buffer_manager.get_script_var('AGENTIC_LOOP') or []
+                if not isinstance(current_loop, list):
+                    current_loop = []
+                current_loop.append(tool_record)
+                app.buffer_manager.set_script_var('AGENTIC_LOOP', current_loop, allow_protected=True)
+
+            # Log if logging active
+            if getattr(app, "logging_manager", None) and getattr(app.logging_manager, "logging_active", False):
+                app.logging_manager.log_message(
+                    f"Apple FM Tool Execution:\n"
+                    f"  Tool: {tool_name}\n"
+                    f"  Arguments: {json.dumps(arg_dict, ensure_ascii=False)}\n"
+                    f"  Result: {result_str}"
+                )
+
+            return result_str
 
     return _ChatybotTool
 
