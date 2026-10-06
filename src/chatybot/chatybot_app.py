@@ -4912,8 +4912,8 @@ class ChatybotApp:
                     continue
 
                 tool_name = None
-                # Check for <invoke_name">, <invoke_name>, <invoke="name">, <invoke name="name">, etc.
-                tool_match = re.search(r'<invoke_name["\'\s]*>\s*([a-zA-Z0-9_\-\.]+)', block, re.IGNORECASE)
+                # Check for <invoke_name">, <invoke_name>, <tool_name>, <invoke="name">, <invoke name="name">, etc.
+                tool_match = re.search(r'<(?:invoke_name|tool_name|function_name)["\'\s]*>\s*([a-zA-Z0-9_\-\.]+)', block, re.IGNORECASE)
                 if not tool_match:
                     tool_match = re.search(
                         r'<invoke(?:\s*name=|=|\s*=|\s+)["\'=\s]*([a-zA-Z0-9_\-\.]+)["\'\s]*',
@@ -4937,6 +4937,13 @@ class ChatybotApp:
                     if cand.lower() not in reserved_tool_tags:
                         tool_name = cand
 
+                if tool_name and "." in tool_name:
+                    cand_split = tool_name.split(".")[-1]
+                    if cand_split.lower() not in reserved_tool_tags:
+                        tool_name = cand_split
+                    elif tool_name.startswith(("functions.", "tools.", "default_api.", "api.")):
+                        tool_name = tool_name.split(".", 1)[1]
+
                 if not tool_name or tool_name.lower() in reserved_tool_tags:
                     continue
 
@@ -4949,9 +4956,6 @@ class ChatybotApp:
                     s_name = server_match.group(1).strip()
                     if s_name.lower() not in ("", "none", "null", "local") and not tool_name.startswith("mcp__"):
                         tool_name = f"mcp__{s_name}__{tool_name}"
-
-                if "." in tool_name:
-                    tool_name = tool_name.split(".")[-1]
 
                 args = {}
 
