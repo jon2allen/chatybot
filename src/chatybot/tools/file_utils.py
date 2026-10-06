@@ -451,16 +451,56 @@ def create_file_backup(file_path: str, app: Any = None) -> str | None:
         return None
 
 
+def _resolve_parent_directory_collisions(dir_name: str, app: Any = None) -> list[str]:
+    """Check each directory component in dir_name and auto-heal/relocate any component that exists as a regular file."""
+    resolved_notes = []
+    # Collect components from root to target directory
+    parts = []
+    curr = os.path.abspath(dir_name)
+    while curr and curr != os.path.dirname(curr):
+        parts.append(curr)
+        curr = os.path.dirname(curr)
+    parts.reverse()
+
+    for p in parts:
+        if os.path.exists(p) and not os.path.isdir(p):
+            # Attempt to backup the colliding file
+            backup_file = create_file_backup(p, app=app)
+            # Determine a friendly relocated path
+            p_dir = os.path.dirname(p)
+            p_base = os.path.basename(p)
+            # If the file looks like a markdown or text file, suggest/relocate to .md or _backup
+            new_name = f"{p_base}.bak"
+            relocated = os.path.join(p_dir, new_name)
+            counter = 1
+            while os.path.exists(relocated):
+                relocated = os.path.join(p_dir, f"{p_base}.bak{counter}")
+                counter += 1
+            try:
+                os.rename(p, relocated)
+                resolved_notes.append(f"Auto-healed collision: existing file '{p}' was relocated to '{relocated}' so directory could be created.")
+            except Exception as e:
+                raise RuntimeError(f"Parent path component '{p}' is an existing regular file and could not be relocated ({e}). Cannot create directory '{dir_name}'.")
+
+    return resolved_notes
+
+
 def write_file(path: str, content: str, append: bool = False, app: Any = None) -> str:
     """Write or append contents to a file, preserving a backup in session data before modification."""
     path = normalize_path(path)
     try:
+        # Check if the target file path itself is actually an existing directory
+        if os.path.isdir(path):
+            return f"Error writing file: Target path '{path}' is an existing directory, not a file. Specify a filename inside the directory (e.g. '{os.path.join(path, 'README.md')}')."
+
         backup_path = None
         if os.path.exists(path):
             backup_path = create_file_backup(path, app=app)
 
+        auto_healed_notes = []
         dir_name = os.path.dirname(path)
         if dir_name:
+            auto_healed_notes = _resolve_parent_directory_collisions(dir_name, app=app)
             os.makedirs(dir_name, exist_ok=True)
         mode = 'a' if append else 'w'
         with open(path, mode, encoding='utf-8') as f:
@@ -469,6 +509,8 @@ def write_file(path: str, content: str, append: bool = False, app: Any = None) -
         msg = f"Success: {action} file '{path}'"
         if backup_path:
             msg += f" (pre-edit backup saved: '{backup_path}')"
+        if auto_healed_notes:
+            msg += " " + " ".join(auto_healed_notes)
         return msg
     except Exception as e:
         return f"Error writing file: {e}"
