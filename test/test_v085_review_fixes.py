@@ -541,6 +541,18 @@ def test_extract_tool_calls_unwraps_nested_json_and_action_envelopes():
     assert len(calls2) == 1
     assert calls2[0]["tool"] == "run_command"
 
+    # 3. Stringified nested envelope inside arguments
+    text3 = r'''```json
+{"tool": "json", "arguments": "{\"tool\": \"replace_file_content\", \"path\": \"/Users/test/benchmark.c\", \"target\": \"static double get_time_seconds(void) {\", \"replacement\": \"double get_time_seconds(void) {\"}\n}\n"}
+```'''
+    calls3 = app.extract_tool_calls(text3)
+    assert len(calls3) == 1
+    assert calls3[0]["tool"] == "replace_file_content"
+    assert calls3[0]["arguments"]["path"] == "/Users/test/benchmark.c"
+    assert calls3[0]["arguments"]["target"] == "static double get_time_seconds(void) {"
+    assert calls3[0]["arguments"]["replacement"] == "double get_time_seconds(void) {"
+
+
 
 def test_read_file_tolerates_list_and_string_ranges():
     """Verify read_file parses start_line when provided as a list [start, end] or string range '[start, end]' / 'start-end'."""
