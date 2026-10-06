@@ -506,5 +506,19 @@ dots_function_call
     assert res["tool"] == "grep_search"
     assert res["arguments"] == {"query": "dots_function_call"}
 
+def test_extract_tool_calls_ignores_reserved_xml_tags_in_markdown():
+    """Verify that mentioning XML tags (e.g. <invoke="name"> and </invoke>) in markdown text does not produce phantom tool calls."""
+    app = ChatybotApp()
+    text = """
+The second commit adds a rescue function that can handle corrupted opening tag variants such as:
+- <invoke_name"> (extra quote)
+- <invoke_name> (missing closing bracket)
+- <invoke="name"> (wrong attribute syntax)
 
+It also:
+- Extracts JSON arguments from `<invoke_parameters>` containers
+- Tolerates premature </invoke> closures and phantom </parameter> tags within dots blocks
+"""
+    calls = app.extract_tool_calls(text)
+    assert calls == []
 
