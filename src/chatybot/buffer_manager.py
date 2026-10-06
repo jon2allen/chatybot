@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Buffer Manager Module
 Manages file buffers, file banks, script variables, and image banks
@@ -393,7 +392,7 @@ class BufferManager:
                 if chat_hist_val is not None:
                     try:
                         parsed = json.loads(chat_hist_val)
-                    except Exception:
+                    except (json.JSONDecodeError, TypeError):
                         parsed = []
                     try:
                         return str(parsed[index])
@@ -409,7 +408,7 @@ class BufferManager:
                 if isinstance(var_value, str):
                     try:
                         parsed = json.loads(var_value)
-                    except Exception:
+                    except (json.JSONDecodeError, TypeError):
                         parsed = None
                 if not isinstance(parsed, list):
                     raise ValueError(f"Variable '{var_name}' is marked as array but contents could not be parsed")
@@ -431,7 +430,7 @@ class BufferManager:
                 if isinstance(var_value, str):
                     try:
                         parsed = json.loads(var_value)
-                    except Exception:
+                    except (json.JSONDecodeError, TypeError):
                         parsed = None
                 if not isinstance(parsed, list):
                     return str(var_value)
@@ -802,7 +801,7 @@ class BufferManager:
                         parsed = json.loads(var_value)
                         if not isinstance(parsed, list):
                             parsed = [parsed]
-                    except Exception:
+                    except (json.JSONDecodeError, TypeError):
                         parsed = [var_value]
                 
                 num_items = len(parsed)
