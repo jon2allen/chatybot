@@ -99,7 +99,7 @@ optional = false
 
 [tools.write_file]
 enabled = true
-description = "Write or append content to a file"
+description = "Write content to a file (overwrites existing files by default; no need to delete/rm first) or append with append=true"
 module = "chatybot.tools.file_utils"
 function = "write_file"
 
