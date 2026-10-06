@@ -4133,6 +4133,11 @@ class ChatybotApp:
         from typing import Any
 
         known_tools = self.get_known_tool_names()
+        reserved_tool_tags = {
+            "name", "invoke", "invoke_name", "parameter", "parameters",
+            "param", "arguments", "args", "dots_function_call", "action",
+            "tool_call", "tool_use", "tool", "function", "call"
+        }
 
         def clean_json_string(s: str) -> str:
             # Remove single line comments starting with // or #, respecting quotes across newlines
@@ -4577,9 +4582,10 @@ class ChatybotApp:
                         p_name = sc_match.group(1).strip()
                         raw_val = sc_match.group(2)
                         args[p_name] = parse_xml_param_value(raw_val)
-                call_obj = {"tool": tool_name, "arguments": args}
-                if call_obj not in xml_calls:
-                    xml_calls.append(call_obj)
+                if tool_name.lower() not in reserved_tool_tags and (tool_name in known_tools or tool_name.startswith("mcp__")):
+                    call_obj = {"tool": tool_name, "arguments": args}
+                    if call_obj not in xml_calls:
+                        xml_calls.append(call_obj)
 
             # 4. Standard XML function= / invoke= style: <function=name> or <invoke=name> or <invoke="name"> or <invokename="name">
             fn_pattern = re.compile(
@@ -4633,9 +4639,10 @@ class ChatybotApp:
                                         args = parsed
                                 except Exception:
                                     pass
-                call_obj = {"tool": tool_name, "arguments": args}
-                if call_obj not in xml_calls:
-                    xml_calls.append(call_obj)
+                if tool_name.lower() not in reserved_tool_tags and (tool_name in known_tools or tool_name.startswith("mcp__")):
+                    call_obj = {"tool": tool_name, "arguments": args}
+                    if call_obj not in xml_calls:
+                        xml_calls.append(call_obj)
             return xml_calls
 
         def extract_kv_tool_calls(s: str) -> list[dict[str, Any]]:
@@ -4854,10 +4861,10 @@ class ChatybotApp:
 
                 if tool_match and not tool_name:
                     cand = tool_match.group(1).strip()
-                    if cand.lower() not in ("dots_function_call", "action", "tool_call"):
+                    if cand.lower() not in reserved_tool_tags:
                         tool_name = cand
 
-                if not tool_name:
+                if not tool_name or tool_name.lower() in reserved_tool_tags:
                     continue
 
                 server_match = re.search(
@@ -5095,7 +5102,15 @@ class ChatybotApp:
                                 i = j - 1
             i += 1
 
-        return tool_calls
+        # Discard phantom or reserved tool invocations
+        filtered_tool_calls = []
+        for tc in tool_calls:
+            tname = tc.get("tool", "")
+            if not tname or tname.lower() in reserved_tool_tags:
+                continue
+            filtered_tool_calls.append(tc)
+
+        return filtered_tool_calls
 
     def format_tool_loop_summary(self, agentic_loop: list[dict[str, Any]]) -> str:
         """
