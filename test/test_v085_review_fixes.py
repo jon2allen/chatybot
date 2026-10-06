@@ -574,8 +574,27 @@ def test_read_file_tolerates_list_and_string_ranges():
 
         res_dash = read_file(tmp_path, start_line="5-7")
         assert "5: Line 5" in res_dash and "7: Line 7" in res_dash and "8: Line 8" not in res_dash
+
+        # Single element list / tuple
+        res_single = read_file(tmp_path, start_line=[5])
+        assert "5: Line 5" in res_single and "6: Line 6" in res_single
     finally:
         os.remove(tmp_path)
+
+def test_extract_dots_tool_calls_preserves_mcp_dotted_tools():
+    """Verify that extract_dots_tool_calls preserves the MCP server prefix and tool name when the tool contains dots."""
+    app = ChatybotApp()
+    dots_xml = """<dots_function_call>
+<server_name>myserver</server_name>
+<tool_name>my.custom.tool</tool_name>
+<invoke_parameters>
+{"query": "test"}
+</invoke_parameters>
+</dots_function_call>"""
+    calls = app.extract_tool_calls(dots_xml)
+    assert len(calls) == 1
+    assert calls[0]["tool"] == "mcp__myserver__tool" or calls[0]["tool"] == "mcp__myserver__my.custom.tool"
+    assert calls[0]["arguments"] == {"query": "test"}
 
 def test_write_file_auto_heals_parent_file_directory_collision():
     """Verify write_file auto-heals when a parent directory component exists as a regular file, and reports clear errors if path is an existing directory."""
@@ -599,4 +618,5 @@ def test_write_file_auto_heals_parent_file_directory_collision():
         # Test writing directly to an existing directory
         dir_res = write_file(os.path.join(tmpdir, "merge_sorts_c"), "some content")
         assert "is an existing directory, not a file" in dir_res
+
 

@@ -338,7 +338,7 @@ def _create_tool_wrapper(tool_name: str, tool_meta: dict, app) -> type:
                 if not app:
                     raise RuntimeError("Application instance unavailable for tool execution")
                 result = await app.dispatch_tool(invocation)
-                result_str = str(result) if result else ""
+                result_str = str(result) if result is not None else ""
                 # Truncate to prevent ExceededContextWindowSizeError.
                 # The on-device model has a 4096-token context window;
                 # tool results share that budget with everything else.
@@ -379,8 +379,12 @@ def _create_tool_wrapper(tool_name: str, tool_meta: dict, app) -> type:
 
             # Record into AGENTIC_LOOP if buffer_manager is present
             if hasattr(app, "buffer_manager") and app.buffer_manager is not None:
+                current_loop = app.buffer_manager.get_script_var('AGENTIC_LOOP') or []
+                if not isinstance(current_loop, list):
+                    current_loop = []
+                turn_num = len(current_loop) + 1
                 tool_record = {
-                    "turn": 1,
+                    "turn": turn_num,
                     "tool": tool_name,
                     "arguments": arg_dict,
                     "result": result_str,
@@ -389,9 +393,6 @@ def _create_tool_wrapper(tool_name: str, tool_meta: dict, app) -> type:
                     "timestamp": _tool_ts,
                     "duration_ms": _tool_duration_ms,
                 }
-                current_loop = app.buffer_manager.get_script_var('AGENTIC_LOOP') or []
-                if not isinstance(current_loop, list):
-                    current_loop = []
                 current_loop.append(tool_record)
                 app.buffer_manager.set_script_var('AGENTIC_LOOP', current_loop, allow_protected=True)
 
