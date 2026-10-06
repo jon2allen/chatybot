@@ -522,3 +522,46 @@ It also:
     calls = app.extract_tool_calls(text)
     assert calls == []
 
+def test_extract_tool_calls_unwraps_nested_json_and_action_envelopes():
+    """Verify that models emitting nested envelopes (e.g. {"tool": "json", "arguments": {"tool": "write_file", ...}}) unwrap cleanly."""
+    app = ChatybotApp()
+    
+    # 1. Nested json wrapper
+    text1 = '''```json
+{"tool": "json", "arguments": {"tool": "write_file", "arguments": {"path": "src/main.rs", "content": "fn main() {}"}}}
+```'''
+    calls1 = app.extract_tool_calls(text1)
+    assert len(calls1) == 1
+    assert calls1[0]["tool"] == "write_file"
+    assert calls1[0]["arguments"]["path"] == "src/main.rs"
+
+    # 2. Action envelope
+    text2 = '{"action": {"tool": "run_command", "arguments": {"command": "cargo build"}}}'
+    calls2 = app.extract_tool_calls(text2)
+    assert len(calls2) == 1
+    assert calls2[0]["tool"] == "run_command"
+
+
+def test_read_file_tolerates_list_and_string_ranges():
+    """Verify read_file parses start_line when provided as a list [start, end] or string range '[start, end]' / 'start-end'."""
+    from chatybot.tools.file_utils import read_file
+    import tempfile
+    import os
+
+    with tempfile.NamedTemporaryFile("w", delete=False) as f:
+        for i in range(1, 50):
+            f.write(f"Line {i}\n")
+        tmp_path = f.name
+
+    try:
+        res_list = read_file(tmp_path, start_line=[5, 7])
+        assert "5: Line 5" in res_list and "7: Line 7" in res_list and "8: Line 8" not in res_list
+
+        res_str = read_file(tmp_path, start_line="[5, 7]")
+        assert "5: Line 5" in res_str and "7: Line 7" in res_str and "8: Line 8" not in res_str
+
+        res_dash = read_file(tmp_path, start_line="5-7")
+        assert "5: Line 5" in res_dash and "7: Line 7" in res_dash and "8: Line 8" not in res_dash
+    finally:
+        os.remove(tmp_path)
+
