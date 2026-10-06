@@ -4136,7 +4136,8 @@ class ChatybotApp:
         reserved_tool_tags = {
             "name", "invoke", "invoke_name", "parameter", "parameters",
             "param", "arguments", "args", "dots_function_call", "action",
-            "tool_call", "tool_use", "tool", "function", "call"
+            "tool_call", "tool_use", "tool", "function", "call",
+            "json", "python", "bash", "sh", "text"
         }
 
         def clean_json_string(s: str) -> str:
@@ -4374,6 +4375,19 @@ class ChatybotApp:
         def normalize_tool_call(data: Any) -> dict[str, Any] | None:
             if isinstance(data, dict):
                 data = sanitize_json_types(data)
+                
+                # Check for nested envelopes (e.g. {"tool": "json", "arguments": {"tool": "write_file", ...}}
+                # or {"action": {"tool": "write_file", ...}})
+                for envelope_key in ("tool", "name", "function", "action"):
+                    if envelope_key in data:
+                        env_val = str(data[envelope_key]).lower()
+                        if env_val in ("json", "tool", "call", "action", "function", "bash", "execute"):
+                            args_cand = data.get("arguments") if "arguments" in data else data.get("args") if "args" in data else data.get("parameters")
+                            if isinstance(args_cand, dict):
+                                nested = normalize_tool_call(args_cand)
+                                if nested and nested.get("tool", "").lower() not in reserved_tool_tags:
+                                    return nested
+
                 if "tool" in data:
                     tool_name = str(data["tool"])
                     if "." in tool_name:
@@ -5046,9 +5060,14 @@ class ChatybotApp:
                         args = parse_json_or_dict(candidate)
                         if args is None:
                             args = {}
-                        call_obj = {"tool": explicit_tool_name, "arguments": args}
-                        if call_obj not in tool_calls:
-                            tool_calls.append(call_obj)
+                        if explicit_tool_name.lower() in reserved_tool_tags and isinstance(args, dict):
+                            norm = normalize_tool_call(args)
+                            if norm and norm not in tool_calls:
+                                tool_calls.append(norm)
+                        else:
+                            call_obj = {"tool": explicit_tool_name, "arguments": args}
+                            if call_obj not in tool_calls:
+                                tool_calls.append(call_obj)
                         i = j - 1
                     else:
                         data = parse_json_or_dict(candidate)
@@ -5102,11 +5121,14 @@ class ChatybotApp:
                                 i = j - 1
             i += 1
 
-        # Discard phantom or reserved tool invocations
+        # Discard phantom or reserved tool invocations and validate registered tools
         filtered_tool_calls = []
         for tc in tool_calls:
             tname = tc.get("tool", "")
             if not tname or tname.lower() in reserved_tool_tags:
+                continue
+            # Validate against registered tools if known_tools is populated
+            if known_tools and tname not in known_tools and not tname.startswith("mcp__"):
                 continue
             filtered_tool_calls.append(tc)
 

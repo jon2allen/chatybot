@@ -91,6 +91,25 @@ def read_file(path: str, start_line: int | None = None, end_line: int | None = N
             lines = f.readlines()
             
             start = 1
+            # Normalize and unpack start_line / end_line if given as list, tuple, or range string
+            if isinstance(start_line, (list, tuple)) and len(start_line) >= 2:
+                try:
+                    start_line, end_line = int(start_line[0]), int(start_line[1])
+                except (ValueError, TypeError):
+                    pass
+            elif isinstance(start_line, str) and any(c in start_line for c in ("[", "]", ",", "-", ":")):
+                digits = re.findall(r"\d+", start_line)
+                if len(digits) >= 2:
+                    try:
+                        start_line, end_line = int(digits[0]), int(digits[1])
+                    except (ValueError, TypeError):
+                        pass
+                elif len(digits) == 1:
+                    try:
+                        start_line = int(digits[0])
+                    except (ValueError, TypeError):
+                        pass
+
             # Apply line range filtering if specified
             if start_line is not None or end_line is not None:
                 start = 1 if start_line is None else max(1, int(start_line))
