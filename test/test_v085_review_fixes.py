@@ -565,3 +565,26 @@ def test_read_file_tolerates_list_and_string_ranges():
     finally:
         os.remove(tmp_path)
 
+def test_write_file_auto_heals_parent_file_directory_collision():
+    """Verify write_file auto-heals when a parent directory component exists as a regular file, and reports clear errors if path is an existing directory."""
+    from chatybot.tools.file_utils import write_file
+    import tempfile
+    import os
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Create a file that collides with the intended folder name
+        blocking_path = os.path.join(tmpdir, "merge_sorts_c")
+        with open(blocking_path, "w") as f:
+            f.write("# README content accidentally saved as merge_sorts_c")
+
+        # Now write to a file inside that directory
+        nested_file = os.path.join(tmpdir, "merge_sorts_c", "common.h")
+        res = write_file(nested_file, "#define COMMON_H 1")
+        assert "Success: Wrote to file" in res
+        assert os.path.isfile(nested_file)
+        assert os.path.isfile(os.path.join(tmpdir, "merge_sorts_c.bak"))
+
+        # Test writing directly to an existing directory
+        dir_res = write_file(os.path.join(tmpdir, "merge_sorts_c"), "some content")
+        assert "is an existing directory, not a file" in dir_res
+
