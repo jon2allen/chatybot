@@ -4338,6 +4338,8 @@ class ChatybotApp:
             return obj
 
         def parse_json_or_dict(s: str) -> dict[str, Any] | None:
+            if not isinstance(s, str):
+                return None
             try:
                 cleaned = clean_json_string(s)
                 data = json.loads(cleaned)
@@ -4370,9 +4372,46 @@ class ChatybotApp:
             except Exception:
                 pass
 
+            # If s contains extra trailing text/braces or leading junk, attempt to isolate the first balanced {...}
+            if "{" in s:
+                first_brace = s.find("{")
+                brace_count = 0
+                in_quote = False
+                escaped = False
+                quote_char = None
+                for idx in range(first_brace, len(s)):
+                    ch = s[idx]
+                    if escaped:
+                        escaped = False
+                    elif ch == '\\':
+                        escaped = True
+                    elif ch in ('"', "'"):
+                        if not in_quote:
+                            in_quote = True
+                            quote_char = ch
+                        elif ch == quote_char:
+                            in_quote = False
+                    elif not in_quote:
+                        if ch == '{':
+                            brace_count += 1
+                        elif ch == '}':
+                            brace_count -= 1
+                            if brace_count == 0:
+                                sub = s[first_brace:idx + 1]
+                                if sub != s:
+                                    res = parse_json_or_dict(sub)
+                                    if res:
+                                        return res
+                                break
+
             return None
 
         def normalize_tool_call(data: Any) -> dict[str, Any] | None:
+            if isinstance(data, str):
+                parsed = parse_json_or_dict(data)
+                if isinstance(parsed, dict):
+                    data = parsed
+
             if isinstance(data, dict):
                 data = sanitize_json_types(data)
                 
@@ -4383,6 +4422,10 @@ class ChatybotApp:
                         env_val = str(data[envelope_key]).lower()
                         if env_val in ("json", "tool", "call", "action", "function", "bash", "execute"):
                             args_cand = data.get("arguments") if "arguments" in data else data.get("args") if "args" in data else data.get("parameters")
+                            if isinstance(args_cand, str):
+                                parsed_cand = parse_json_or_dict(args_cand)
+                                if isinstance(parsed_cand, dict):
+                                    args_cand = parsed_cand
                             if isinstance(args_cand, dict):
                                 nested = normalize_tool_call(args_cand)
                                 if nested and nested.get("tool", "").lower() not in reserved_tool_tags:
@@ -4395,24 +4438,40 @@ class ChatybotApp:
                     data["tool"] = tool_name
                     if "arguments" not in data:
                         data["arguments"] = {k: v for k, v in data.items() if k != "tool"}
+                    elif isinstance(data["arguments"], str):
+                        parsed_args = parse_json_or_dict(data["arguments"])
+                        if isinstance(parsed_args, dict):
+                            data["arguments"] = parsed_args
                     return data
                 elif "tool_name" in data:
                     tool_name = str(data["tool_name"])
                     if "." in tool_name:
                         tool_name = tool_name.split(".")[-1]
                     args = data.get("arguments") if "arguments" in data else data.get("args") if "args" in data else data.get("parameters") if "parameters" in data else {k: v for k, v in data.items() if k not in ("tool_name", "tool_call_id")}
+                    if isinstance(args, str):
+                        parsed_args = parse_json_or_dict(args)
+                        if isinstance(parsed_args, dict):
+                            args = parsed_args
                     return {"tool": tool_name, "arguments": args}
                 elif "name" in data:
                     tool_name = str(data["name"])
                     if "." in tool_name:
                         tool_name = tool_name.split(".")[-1]
                     args = data.get("arguments") if "arguments" in data else data.get("args") if "args" in data else data.get("parameters") if "parameters" in data else {k: v for k, v in data.items() if k != "name"}
+                    if isinstance(args, str):
+                        parsed_args = parse_json_or_dict(args)
+                        if isinstance(parsed_args, dict):
+                            args = parsed_args
                     return {"tool": tool_name, "arguments": args}
                 elif "function" in data:
                     tool_name = str(data["function"])
                     if "." in tool_name:
                         tool_name = tool_name.split(".")[-1]
                     args = data.get("arguments") if "arguments" in data else data.get("args") if "args" in data else {k: v for k, v in data.items() if k != "function"}
+                    if isinstance(args, str):
+                        parsed_args = parse_json_or_dict(args)
+                        if isinstance(parsed_args, dict):
+                            args = parsed_args
                     return {"tool": tool_name, "arguments": args}
                 elif len(data) == 1:
                     k, v = next(iter(data.items()))
@@ -5121,14 +5180,11 @@ class ChatybotApp:
                                 i = j - 1
             i += 1
 
-        # Discard phantom or reserved tool invocations and validate registered tools
+        # Discard phantom or reserved tool invocations
         filtered_tool_calls = []
         for tc in tool_calls:
             tname = tc.get("tool", "")
             if not tname or tname.lower() in reserved_tool_tags:
-                continue
-            # Validate against registered tools if known_tools is populated
-            if known_tools and tname not in known_tools and not tname.startswith("mcp__"):
                 continue
             filtered_tool_calls.append(tc)
 
