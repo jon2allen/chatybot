@@ -4330,9 +4330,11 @@ class ChatybotApp:
             return clean_json_string("".join(out))
 
         def sanitize_json_types(obj: Any) -> Any:
-            """Recursively normalize non-JSON types (e.g. Python set/frozenset to list, tuples to lists)."""
+            """Recursively normalize non-JSON types (e.g. Python set/frozenset to list, tuples to lists, Ellipsis to '...')."""
+            if obj is Ellipsis:
+                return "..."
             if isinstance(obj, dict):
-                return {k: sanitize_json_types(v) for k, v in obj.items()}
+                return {str(k): sanitize_json_types(v) for k, v in obj.items()}
             elif isinstance(obj, (list, tuple, set, frozenset)):
                 return [sanitize_json_types(item) for item in obj]
             return obj
@@ -4719,6 +4721,25 @@ class ChatybotApp:
             return xml_calls
 
         def extract_kv_tool_calls(s: str) -> list[dict[str, Any]]:
+            primary_tool_params = {
+                "read_file": "path",
+                "list_directory": "path",
+                "file_info": "path",
+                "delete_file": "path",
+                "make_directory": "path",
+                "remove_directory": "path",
+                "run_command": "command",
+                "read_url": "url",
+                "ask_user": "prompt",
+                "find_files": "path",
+                "write_file": "path",
+                "session_get": "session_id",
+                "session_search": "query",
+                "search_skills": "query",
+                "call_skill": "skill_name",
+                "extract_code": "text",
+            }
+
             calls = []
             blocks = []
             fence_pattern = re.compile(
@@ -4726,22 +4747,24 @@ class ChatybotApp:
                 re.DOTALL | re.IGNORECASE
             )
             for m in fence_pattern.finditer(s):
-                blocks.append(m.group(1))
+                blocks.append((m.group(1), m.end()))
 
-            for block in blocks:
-                lines = [line.rstrip() for line in block.splitlines()]
+            for block_text, block_end in blocks:
+                lines = [line.rstrip() for line in block_text.splitlines()]
                 tool_name = None
                 args = {}
-                for line in lines:
+                for line_idx, line in enumerate(lines):
                     if not line.strip():
                         continue
+                    
+                    # 1. Match tool: <name> header
                     m_tool = re.match(
                         r'^\s*(?:tool|tool_name|function)\s*:\s*["\']?([a-zA-Z0-9_\-\.]+)["\']?\s*$',
                         line,
                         re.IGNORECASE
                     )
                     if m_tool:
-                        if tool_name and (tool_name in known_tools or tool_name.startswith("mcp__")):
+                        if tool_name and (tool_name in known_tools or tool_name.startswith("mcp__") or tool_name in primary_tool_params):
                             call_obj = {"tool": tool_name, "arguments": args}
                             if call_obj not in calls:
                                 calls.append(call_obj)
@@ -4750,6 +4773,41 @@ class ChatybotApp:
                         if "." in tool_name:
                             tool_name = tool_name.split(".")[-1]
                         continue
+
+                    # 2. Match single-line direct tool invocation: <tool_name>: <primary_val> [optional secondary parameters]
+                    m_direct = re.match(
+                        r'^\s*([a-zA-Z0-9_\-\.]+)\s*:\s*(.+)$',
+                        line
+                    )
+                    if m_direct and not tool_name:
+                        cand_tool = m_direct.group(1).strip()
+                        if "." in cand_tool:
+                            cand_tool = cand_tool.split(".")[-1]
+                        if cand_tool.lower() not in reserved_tool_tags and (cand_tool in known_tools or cand_tool.startswith("mcp__") or cand_tool in primary_tool_params):
+                            tool_name = cand_tool
+                            raw_val = m_direct.group(2).strip()
+                            # Parse secondary parameters (e.g. - pattern: *.pdf or - start_line: 5)
+                            parts = re.split(r'\s+(?:--?|,\s*)\s*(?=[a-zA-Z0-9_]+\s*[:=])', raw_val)
+                            primary_param = primary_tool_params.get(tool_name, "path")
+                            args[primary_param] = parse_xml_param_value(parts[0].strip().strip('"\''))
+                            for part in parts[1:]:
+                                kv = re.split(r'\s*[:=]\s*', part, maxsplit=1)
+                                if len(kv) == 2:
+                                    args[kv[0].strip()] = parse_xml_param_value(kv[1].strip().strip('"\''))
+
+                            # For write_file, check if content is provided in next lines or subsequent code block
+                            if tool_name == "write_file" and "content" not in args:
+                                rest_of_s = s[block_end:] if block_end < len(s) else ""
+                                content_match = re.search(r'(?:content|Content)\s*:\s*(?:```[a-zA-Z0-9_]*\s*\n(.*?)\n```|(.*))', rest_of_s, re.DOTALL)
+                                if content_match:
+                                    args["content"] = content_match.group(1) if content_match.group(1) is not None else content_match.group(2).strip()
+                                else:
+                                    remaining = "\n".join(lines[line_idx+1:])
+                                    rem_match = re.search(r'(?:content|Content)\s*:\s*(.*)', remaining, re.DOTALL)
+                                    if rem_match:
+                                        args["content"] = rem_match.group(1).strip()
+                            continue
+
                     if tool_name:
                         m_args_header = re.match(
                             r'^\s*(?:arguments|parameters|args)\s*:\s*(.*)$',
@@ -4768,7 +4826,7 @@ class ChatybotApp:
                             p_name = m_param.group(1).strip()
                             p_val = m_param.group(2).strip()
                             args[p_name] = parse_xml_param_value(p_val)
-                if tool_name and (tool_name in known_tools or tool_name.startswith("mcp__")):
+                if tool_name and (tool_name in known_tools or tool_name.startswith("mcp__") or tool_name in primary_tool_params):
                     call_obj = {"tool": tool_name, "arguments": args}
                     if call_obj not in calls:
                         calls.append(call_obj)
@@ -5249,6 +5307,12 @@ class ChatybotApp:
         from datetime import datetime
 
         def _default(o):
+            if o is Ellipsis:
+                return "..."
+            if isinstance(o, (set, frozenset)):
+                return list(o)
+            if hasattr(o, "to_dict") and callable(o.to_dict):
+                return o.to_dict()
             if hasattr(o, '__dict__'):
                 return o.__dict__
             return str(o)
@@ -5470,7 +5534,7 @@ class ChatybotApp:
                 break
             # Request next completion from LLM using the temporary history context
             current_loop = self.buffer_manager.get_script_var('AGENTIC_LOOP') or []
-            current_size_bytes = len(json.dumps(current_loop).encode('utf-8'))
+            current_size_bytes = len(safe_json_dumps(current_loop).encode('utf-8'))
             current_size_kb = current_size_bytes / 1024
             if previous_loop_size > 0:
                 growth_pct = ((current_size_bytes - previous_loop_size) / previous_loop_size) * 100
