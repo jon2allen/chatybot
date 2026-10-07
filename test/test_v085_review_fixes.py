@@ -620,3 +620,56 @@ def test_write_file_auto_heals_parent_file_directory_collision():
         assert "is an existing directory, not a file" in dir_res
 
 
+def test_extract_tool_calls_single_line_invocations():
+    """Verify that models emitting single-line markdown pseudocode invocations are properly extracted."""
+    app = ChatybotApp()
+
+    # 1. Simple single line inside code fence
+    text1 = """I'll start by looking at the contents of the Downloads directory.
+```
+list_directory: /home/jonallen/Downloads
+```"""
+    calls1 = app.extract_tool_calls(text1)
+    assert len(calls1) == 1
+    assert calls1[0]["tool"] == "list_directory"
+    assert calls1[0]["arguments"] == {"path": "/home/jonallen/Downloads"}
+
+    # 2. Single line with secondary parameter (- pattern: ...)
+    text2 = """```
+find_files: /home/jonallen/Downloads - pattern: *.pdf
+```"""
+    calls2 = app.extract_tool_calls(text2)
+    assert len(calls2) == 1
+    assert calls2[0]["tool"] == "find_files"
+    assert calls2[0]["arguments"]["path"] == "/home/jonallen/Downloads"
+    assert calls2[0]["arguments"]["pattern"] == "*.pdf"
+
+    # 3. Single line with range parameters
+    text3 = """```
+read_file: /home/jonallen/notes.txt - start_line: 10 - end_line: 25
+```"""
+    calls3 = app.extract_tool_calls(text3)
+    assert len(calls3) == 1
+    assert calls3[0]["tool"] == "read_file"
+    assert calls3[0]["arguments"]["path"] == "/home/jonallen/notes.txt"
+    assert calls3[0]["arguments"]["start_line"] == 10
+    assert calls3[0]["arguments"]["end_line"] == 25
+
+    # 4. write_file followed by detached Content: ```python ... ```
+    text4 = """I found the PDF. Now I'll write a Python script to extract text.
+```
+write_file: /tmp/extract_pdf.py
+```
+Content:
+```python
+import pdfplumber
+print("hello")
+```"""
+    calls4 = app.extract_tool_calls(text4)
+    assert len(calls4) == 1
+    assert calls4[0]["tool"] == "write_file"
+    assert calls4[0]["arguments"]["path"] == "/tmp/extract_pdf.py"
+    assert "import pdfplumber" in calls4[0]["arguments"]["content"]
+
+
+
