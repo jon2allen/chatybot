@@ -52,3 +52,27 @@ def test_extract_tool_calls_single_key_format(app):
     assert calls_find[0]["arguments"] == {"path": "Downloads/fsa", "pattern": "*.pdf"}
 
 
+def test_extract_tool_calls_normalizes_ellipsis(app):
+    """Verify that extract_tool_calls normalizes Python Ellipsis (...) literals to strings."""
+    text = '{"tool": "read_file", "arguments": {"path": "/tmp/test.py", "lines": [1, 2, ...]}}'
+    calls = app.extract_tool_calls(text)
+    assert len(calls) == 1
+    assert calls[0]["tool"] == "read_file"
+    assert calls[0]["arguments"]["lines"] == [1, 2, "..."]
+
+
+@pytest.mark.anyio
+async def test_execute_tool_loop_handles_ellipsis_in_agentic_loop(app):
+    """Verify that execute_tool_loop handles Ellipsis without TypeError during size calculation and logging."""
+    app.enable_chat_history = True
+    app.chat_history = [("Initial prompt", '{"tool": "read_file", "arguments": {"path": "/tmp/test.py", "lines": [1, 2, ...]}}')]
+    
+    app.dispatch_tool = AsyncMock(return_value='{"status": "ok", "truncated": ...}')
+    app.chat_completion = AsyncMock(return_value="All done.")
+    
+    # Should not raise TypeError: Object of type ellipsis is not JSON serializable
+    await app.execute_tool_loop(max_turns=2)
+    assert app.dispatch_tool.called
+
+
+
