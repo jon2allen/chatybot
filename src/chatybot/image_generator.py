@@ -7,7 +7,7 @@ Handles text-to-image generation across different vendors
 import base64
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -518,7 +518,7 @@ class ImageGenerator:
             "prompt": prompt,
             "model": model,
             "vendor": vendor,
-            "timestamp": datetime.now(tz=datetime.UTC).isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "size": size,
             "quality": quality,
         }
