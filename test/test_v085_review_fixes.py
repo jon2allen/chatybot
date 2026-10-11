@@ -673,3 +673,30 @@ print("hello")
 
 
 
+
+
+def test_extract_tool_calls_dotted_mcp_tool_single_line():
+    """Verify that dotted mcp__ tool names pass whitelist validation in single-line invocations."""
+    app = ChatybotApp()
+    text = "```\nmcp__server.read_file: /tmp/test.py\n```"
+    calls = app.extract_tool_calls(text)
+    assert len(calls) == 1
+    assert calls[0]["tool"] == "read_file"
+    assert calls[0]["arguments"]["path"] == "/tmp/test.py"
+
+
+def test_extract_tool_calls_multi_tool_kv_blocks():
+    """Verify that multiple tool: header blocks flush correctly through the shared whitelist helper."""
+    app = ChatybotApp()
+    text = """```
+tool: read_file
+path: /tmp/a.py
+tool: list_directory
+path: /tmp
+```"""
+    calls = app.extract_tool_calls(text)
+    assert len(calls) == 2
+    assert calls[0]["tool"] == "read_file"
+    assert calls[0]["arguments"]["path"] == "/tmp/a.py"
+    assert calls[1]["tool"] == "list_directory"
+    assert calls[1]["arguments"]["path"] == "/tmp"
