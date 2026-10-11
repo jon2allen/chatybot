@@ -4740,6 +4740,9 @@ class ChatybotApp:
                 "extract_code": "text",
             }
 
+            def is_known_tool(name: str) -> bool:
+                return name in known_tools or name.startswith("mcp__") or name in primary_tool_params
+
             calls = []
             blocks = []
             fence_pattern = re.compile(
@@ -4764,7 +4767,7 @@ class ChatybotApp:
                         re.IGNORECASE
                     )
                     if m_tool:
-                        if tool_name and (tool_name in known_tools or tool_name.startswith("mcp__") or tool_name in primary_tool_params):
+                        if tool_name and is_known_tool(tool_name):
                             call_obj = {"tool": tool_name, "arguments": args}
                             if call_obj not in calls:
                                 calls.append(call_obj)
@@ -4783,7 +4786,7 @@ class ChatybotApp:
                         cand_tool = m_direct.group(1).strip()
                         if "." in cand_tool:
                             cand_tool = cand_tool.split(".")[-1]
-                        if cand_tool.lower() not in reserved_tool_tags and (cand_tool in known_tools or cand_tool.startswith("mcp__") or cand_tool in primary_tool_params):
+                        if cand_tool.lower() not in reserved_tool_tags and is_known_tool(cand_tool):
                             tool_name = cand_tool
                             raw_val = m_direct.group(2).strip()
                             # Parse secondary parameters (e.g. - pattern: *.pdf or - start_line: 5)
@@ -4826,7 +4829,7 @@ class ChatybotApp:
                             p_name = m_param.group(1).strip()
                             p_val = m_param.group(2).strip()
                             args[p_name] = parse_xml_param_value(p_val)
-                if tool_name and (tool_name in known_tools or tool_name.startswith("mcp__") or tool_name in primary_tool_params):
+                if tool_name and is_known_tool(tool_name):
                     call_obj = {"tool": tool_name, "arguments": args}
                     if call_obj not in calls:
                         calls.append(call_obj)
