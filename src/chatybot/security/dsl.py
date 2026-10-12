@@ -208,11 +208,15 @@ class SecurityDSLParser:
         param_name = default_param
 
         # Check explicit parameter name: where path contains ..., where command contains ...
-        m_param_explicit = re.match(r'^(?:where|with|if)?\s*(path|command|file|content|url)\s+(contains|ends with|ending with|starts with|starting with|equals|is|matches)\s+["\']?([^"\']+)["\']?', rest, re.IGNORECASE)
+        m_param_explicit = re.match(
+            r'^(?:where|with|if|that|which)?\s*(path|command|file|content|url)\s+(contains|ends with|ending with|starts with|starting with|equals|is|matches)\s+(?:["\']([^"\']+)["\']|(\S+))',
+            rest,
+            re.IGNORECASE,
+        )
         if m_param_explicit:
             param_name = m_param_explicit.group(1).lower()
             op_raw = m_param_explicit.group(2).lower()
-            val = m_param_explicit.group(3).strip()
+            val = (m_param_explicit.group(3) or m_param_explicit.group(4)).strip()
             if "ends" in op_raw or "ending" in op_raw:
                 operator = "endswith"
             elif "starts" in op_raw or "starting" in op_raw:
@@ -224,14 +228,16 @@ class SecurityDSLParser:
             else:
                 operator = "contains"
         else:
-            # Pattern: ending with <val> / with extension <val>
-            # Check "with <val> in it" or "containing <val>" or "with <val>"
-            m_with_in_it = re.search(r'\b(?:with|containing|has|having)\s+(?:["\']([^"\']+)["\']|(\S+))\s+in\s+it\b', rest, re.IGNORECASE)
-            m_end = re.search(r'\b(?:ending with|with extension)\s+(?:["\']([^"\']+)["\']|(\S+))', rest, re.IGNORECASE)
-            m_start = re.search(r'\b(?:starting with|under)\s+(?:["\']([^"\']+)["\']|(\S+))', rest, re.IGNORECASE)
+            # Pattern matching without explicit param name:
+            # - "with <val> in it", "contains <val>", "containing <val>"
+            # - "ending with <val>", "ends with <val>", "with extension <val>"
+            # - "starting with <val>", "under <val>", "in <val>"
+            m_with_in_it = re.search(r'\b(?:that\s+|which\s+|where\s+)?(?:with|containing|contains|has|having)\s+(?:["\']([^"\']+)["\']|(\S+))\s+in\s+it\b', rest, re.IGNORECASE)
+            m_end = re.search(r'\b(?:that\s+|which\s+|where\s+)?(?:ending with|ends with|with extension)\s+(?:["\']([^"\']+)["\']|(\S+))', rest, re.IGNORECASE)
+            m_start = re.search(r'\b(?:that\s+|which\s+|where\s+)?(?:starting with|starts with|under)\s+(?:["\']([^"\']+)["\']|(\S+))', rest, re.IGNORECASE)
             m_in_path = re.search(r'\bin\s+(?:["\']([^"\']+)["\']|(\S+))', rest, re.IGNORECASE)
-            m_match = re.search(r'\bmatching\s+(?:["\']([^"\']+)["\']|(\S+))', rest, re.IGNORECASE)
-            m_contains = re.search(r'\b(?:with|containing|has|having)\s+(?:["\']([^"\']+)["\']|(\S+))', rest, re.IGNORECASE)
+            m_match = re.search(r'\b(?:that\s+|which\s+|where\s+)?matching\s+(?:["\']([^"\']+)["\']|(\S+))', rest, re.IGNORECASE)
+            m_contains = re.search(r'\b(?:that\s+|which\s+|where\s+)?(?:contains|containing|with|has|having)\s+(?:["\']([^"\']+)["\']|(\S+))', rest, re.IGNORECASE)
 
             if m_with_in_it:
                 operator = "contains"
