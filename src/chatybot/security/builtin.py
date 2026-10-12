@@ -136,17 +136,25 @@ class BuiltinPolicyEngine(BasePolicyEngine):
                 print(f"  [Definition: Baseline Tool] [{action_tag}] '{t_name}' -> verdict={t_verdict}")
 
     def evaluate(self, request: PolicyRequest) -> PolicyDecision:
-        tool = request.tool
+        tool_raw = request.tool or ""
+        tool = tool_raw.strip().lower()
         params = request.parameters or {}
 
         decision: PolicyDecision
         # Tier 0: System Protections (Protected Paths & Dangerous Command Patterns)
         if tool in ("read_file", "write_file", "delete_file", "list_directory", "file_info"):
             target_path = params.get("path") or params.get("target") or params.get("dir")
+            if not target_path:
+                for k, v in params.items():
+                    if k.lower() in ("path", "target", "dir", "file"):
+                        target_path = v
+                        break
             if target_path and isinstance(target_path, str):
                 abs_path = os.path.abspath(os.path.expanduser(target_path))
+                abs_path_lower = abs_path.lower()
                 for denied in self.denied_paths:
-                    if abs_path == denied or abs_path.startswith(denied + os.sep):
+                    denied_lower = denied.lower()
+                    if abs_path_lower == denied_lower or abs_path_lower.startswith(denied_lower + os.sep):
                         decision = PolicyDecision(
                             verdict=Verdict.DENY,
                             reason=f"Access to protected path '{target_path}' is denied by policy.",
@@ -156,9 +164,15 @@ class BuiltinPolicyEngine(BasePolicyEngine):
                         return decision
 
         if tool == "run_command":
-            cmd = str(params.get("command", "")).strip()
+            cmd = str(params.get("command") or params.get("cmd") or "").strip()
+            if not cmd:
+                for k, v in params.items():
+                    if k.lower() in ("command", "cmd"):
+                        cmd = str(v).strip()
+                        break
+            cmd_lower = cmd.lower()
             for pattern in self.denied_command_patterns:
-                if pattern in cmd:
+                if pattern.lower() in cmd_lower:
                     decision = PolicyDecision(
                         verdict=Verdict.DENY,
                         reason=f"Dangerous command pattern '{pattern}' is strictly denied by policy.",
@@ -210,18 +224,18 @@ class BuiltinPolicyEngine(BasePolicyEngine):
                 return decision
 
         # Tier 4: Baseline Tool Defaults
-        rule_val = self.rules.get(tool)
+        rule_val = self.rules.get(tool) or self.rules.get(tool_raw)
         verdict = Verdict(rule_val) if rule_val else self.default_verdict
 
         if verdict == Verdict.ALLOW:
             decision = PolicyDecision(
                 verdict=Verdict.ALLOW,
-                reason=f"Tool '{tool}' is permitted by policy.",
+                reason=f"Tool '{tool_raw}' is permitted by policy.",
             )
         elif verdict == Verdict.DENY:
             decision = PolicyDecision(
                 verdict=Verdict.DENY,
-                reason=f"Tool '{tool}' is denied by policy.",
+                reason=f"Tool '{tool_raw}' is denied by policy.",
             )
         else:
             # Verdict.ASK
@@ -235,15 +249,15 @@ class BuiltinPolicyEngine(BasePolicyEngine):
 
             decision = PolicyDecision(
                 verdict=Verdict.ASK,
-                reason=f"Execution of '{tool}' requires user confirmation.",
+                reason=f"Execution of '{tool_raw}' requires user confirmation.",
                 prompt_details=PolicyPromptDetails(
-                    title=f"Authorize Tool: {tool}",
-                    message=f"The assistant is requesting to run '{tool}'.",
+                    title=f"Authorize Tool: {tool_raw}",
+                    message=f"The assistant is requesting to run '{tool_raw}'.",
                     risk_level=risk,
                 ),
             )
 
         if self.debug:
             tag = "ACCEPT" if decision.verdict == Verdict.ALLOW else decision.verdict.value.upper()
-            print(f"[Security Debug] [{tag}] Tier 4 Baseline Tool: {tool} -> {decision.reason}")
+            print(f"[Security Debug] [{tag}] Tier 4 Baseline Tool: {tool_raw} -> {decision.reason}")
         return decision

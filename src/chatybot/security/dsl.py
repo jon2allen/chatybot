@@ -49,23 +49,45 @@ class SecurityRuleAST:
         return f"action={action_name}, tool={self.tool or '*'}, match=({match_desc}){reason_desc}"
 
     def matches(self, request: PolicyRequest) -> bool:
-        # 1. Match tool
-        if self.tool and self.tool != "any" and request.tool != self.tool:
+        req_tool = (request.tool or "").strip().lower()
+        rule_tool = (self.tool or "").strip().lower()
+
+        # 1. Match tool (case-insensitive)
+        if rule_tool and rule_tool != "any" and req_tool != rule_tool:
             return False
 
         if self.operator == "always":
             return True
 
-        # 2. Extract parameter value
+        # 2. Extract parameter value (case-insensitive parameter key lookup)
         params = request.parameters or {}
         candidate_val = params.get(self.param_name)
 
+        if candidate_val is None:
+            param_lower = self.param_name.lower()
+            for k, v in params.items():
+                if k.lower() == param_lower:
+                    candidate_val = v
+                    break
+
         # Fallback aliases for common parameter keys
         if candidate_val is None:
-            if self.param_name == "path":
-                candidate_val = params.get("target") or params.get("file") or params.get("dir")
-            elif self.param_name == "command":
-                candidate_val = params.get("cmd")
+            if self.param_name.lower() in ("path", "file"):
+                for alias in ("target", "file", "dir", "path"):
+                    for k, v in params.items():
+                        if k.lower() == alias:
+                            candidate_val = v
+                            break
+                    if candidate_val is not None:
+                        break
+            elif self.param_name.lower() in ("command", "cmd"):
+                for alias in ("cmd", "command"):
+                    for k, v in params.items():
+                        if k.lower() == alias:
+                            candidate_val = v
+                            break
+                    if candidate_val is not None:
+                        break
 
         if candidate_val is None:
             return False
@@ -74,7 +96,7 @@ class SecurityRuleAST:
         val_lower = val_str.lower()
         pat_lower = self.value.lower()
 
-        # 3. Match operator
+        # 3. Match operator (all case-insensitive)
         if self.operator == "contains":
             return pat_lower in val_lower
         elif self.operator == "endswith":
