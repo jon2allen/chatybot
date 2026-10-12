@@ -610,3 +610,23 @@ async def test_dispatch_tool_async_security_confirmation_and_audit(monkeypatch):
     assert any("[Security Audit] BLOCKED tool 'read_file'" in m for m in logged_messages)
 
 
+def test_regex_validation_default_tools_and_cleanups(caplog):
+    """Verify regex compile validation at parse time and newly registered DEFAULT_TOOL_RULES."""
+    import logging
+    from chatybot.security.dsl import SecurityDSLParser
+
+    # 1. Invalid regex in DSL rule is caught and logged as warning at parse time
+    with caplog.at_level(logging.WARNING):
+        bad_rule = SecurityDSLParser.parse_rule('deny read file matching "[a-z"')
+    assert bad_rule is None
+    assert any("Invalid regex pattern '[a-z'" in r.message for r in caplog.records)
+
+    # 2. DEFAULT_TOOL_RULES includes find_files (allow), session_get (allow), replace_file_content (ask), patch_file (ask)
+    engine = BuiltinPolicyEngine()
+    assert engine.evaluate(PolicyRequest(tool="find_files", parameters={"path": "./safe"})).verdict == Verdict.ALLOW
+    assert engine.evaluate(PolicyRequest(tool="session_get", parameters={"key": "k"})).verdict == Verdict.ALLOW
+    assert engine.evaluate(PolicyRequest(tool="replace_file_content", parameters={"target_file": "./safe.py"})).verdict == Verdict.ASK
+    assert engine.evaluate(PolicyRequest(tool="patch_file", parameters={"file": "./safe.py"})).verdict == Verdict.ASK
+
+
+
