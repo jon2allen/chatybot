@@ -92,7 +92,11 @@ class BuiltinPolicyEngine(BasePolicyEngine):
             for cp in self.denied_command_patterns:
                 print(f"  [Definition: Command Pattern] [SPECIAL DENY] Pattern: {cp}")
 
+        self.deny_dsl_rules: list[SecurityRuleAST] = []
+        self.ask_dsl_rules: list[SecurityRuleAST] = []
+        self.allow_dsl_rules: list[SecurityRuleAST] = []
         self.dsl_rules: list[SecurityRuleAST] = []
+
         if dsl_rules:
             if self.debug:
                 print(f"[Security Debug] Parsing and compiling {len(dsl_rules)} Security DSL rule definitions...")
@@ -103,9 +107,17 @@ class BuiltinPolicyEngine(BasePolicyEngine):
                 parsed = SecurityDSLParser.parse_rule(raw_trimmed)
                 if parsed:
                     self.dsl_rules.append(parsed)
+                    if parsed.action == Verdict.DENY:
+                        self.deny_dsl_rules.append(parsed)
+                        action_tag = "SPECIAL DENY (Tier 1)"
+                    elif parsed.action == Verdict.ASK:
+                        self.ask_dsl_rules.append(parsed)
+                        action_tag = "SPECIAL ASK (Tier 2)"
+                    else:
+                        self.allow_dsl_rules.append(parsed)
+                        action_tag = "SPECIAL ACCEPT (Tier 3)"
+
                     if self.debug:
-                        action_name = parsed.action.value.upper()
-                        action_tag = "SPECIAL ACCEPT" if action_name == "ALLOW" else f"SPECIAL {action_name}"
                         print(f"  [Definition #{idx}] [{action_tag}] Raw: '{parsed.raw_text}'")
                         print(f"    -> Parsed: {parsed.format_definition()}")
                 else:
@@ -128,7 +140,7 @@ class BuiltinPolicyEngine(BasePolicyEngine):
         params = request.parameters or {}
 
         decision: PolicyDecision
-        # 1. Check path restrictions for file/directory tools
+        # Tier 0: System Protections (Protected Paths & Dangerous Command Patterns)
         if tool in ("read_file", "write_file", "delete_file", "list_directory", "file_info"):
             target_path = params.get("path") or params.get("target") or params.get("dir")
             if target_path and isinstance(target_path, str):
@@ -140,10 +152,9 @@ class BuiltinPolicyEngine(BasePolicyEngine):
                             reason=f"Access to protected path '{target_path}' is denied by policy.",
                         )
                         if self.debug:
-                            print(f"[Security Debug] [SPECIAL DENY] Protected Path: '{target_path}' -> {decision.reason}")
+                            print(f"[Security Debug] [SPECIAL DENY] Tier 0 Protected Path: '{target_path}' -> {decision.reason}")
                         return decision
 
-        # 2. Check command restrictions for run_command
         if tool == "run_command":
             cmd = str(params.get("command", "")).strip()
             for pattern in self.denied_command_patterns:
@@ -153,31 +164,52 @@ class BuiltinPolicyEngine(BasePolicyEngine):
                         reason=f"Dangerous command pattern '{pattern}' is strictly denied by policy.",
                     )
                     if self.debug:
-                        print(f"[Security Debug] [SPECIAL DENY] Dangerous Command: '{pattern}' in '{cmd}' -> {decision.reason}")
+                        print(f"[Security Debug] [SPECIAL DENY] Tier 0 Dangerous Command: '{pattern}' in '{cmd}' -> {decision.reason}")
                     return decision
 
-        # 3. Evaluate high-priority Security DSL rules
-        for dsl_rule in self.dsl_rules:
+        # Tier 1: Deny-Overrides Evaluation (All DENY DSL rules evaluated first)
+        for dsl_rule in self.deny_dsl_rules:
             if dsl_rule.matches(request):
                 reason = dsl_rule.reason or f"Matched security DSL rule: '{dsl_rule.raw_text}'"
-                prompt_details = None
-                if dsl_rule.action == Verdict.ASK:
-                    prompt_details = PolicyPromptDetails(
-                        title=f"Security Policy: {dsl_rule.action.value.upper()}",
-                        message=f"Action matched rule: '{dsl_rule.raw_text}'",
-                        risk_level="high" if tool == "run_command" else "medium",
-                    )
                 decision = PolicyDecision(
-                    verdict=dsl_rule.action,
+                    verdict=Verdict.DENY,
+                    reason=reason,
+                )
+                if self.debug:
+                    print(f"[Security Debug] [SPECIAL DENY] Tier 1 Rule: '{dsl_rule.raw_text}' -> {reason}")
+                return decision
+
+        # Tier 2: Ask Rules (Check all ASK DSL rules)
+        for dsl_rule in self.ask_dsl_rules:
+            if dsl_rule.matches(request):
+                reason = dsl_rule.reason or f"Matched security DSL rule: '{dsl_rule.raw_text}'"
+                prompt_details = PolicyPromptDetails(
+                    title=f"Security Policy: {dsl_rule.action.value.upper()}",
+                    message=f"Action matched rule: '{dsl_rule.raw_text}'",
+                    risk_level="high" if tool == "run_command" else "medium",
+                )
+                decision = PolicyDecision(
+                    verdict=Verdict.ASK,
                     reason=reason,
                     prompt_details=prompt_details,
                 )
                 if self.debug:
-                    action_tag = "SPECIAL ACCEPT" if dsl_rule.action == Verdict.ALLOW else f"SPECIAL {dsl_rule.action.value.upper()}"
-                    print(f"[Security Debug] [{action_tag}] DSL Rule: '{dsl_rule.raw_text}' -> {reason}")
+                    print(f"[Security Debug] [SPECIAL ASK] Tier 2 Rule: '{dsl_rule.raw_text}' -> {reason}")
                 return decision
 
-        # 4. Lookup baseline tool rule
+        # Tier 3: Allow Rules (Check all ALLOW DSL rules)
+        for dsl_rule in self.allow_dsl_rules:
+            if dsl_rule.matches(request):
+                reason = dsl_rule.reason or f"Matched security DSL rule: '{dsl_rule.raw_text}'"
+                decision = PolicyDecision(
+                    verdict=Verdict.ALLOW,
+                    reason=reason,
+                )
+                if self.debug:
+                    print(f"[Security Debug] [SPECIAL ACCEPT] Tier 3 Rule: '{dsl_rule.raw_text}' -> {reason}")
+                return decision
+
+        # Tier 4: Baseline Tool Defaults
         rule_val = self.rules.get(tool)
         verdict = Verdict(rule_val) if rule_val else self.default_verdict
 
@@ -213,5 +245,5 @@ class BuiltinPolicyEngine(BasePolicyEngine):
 
         if self.debug:
             tag = "ACCEPT" if decision.verdict == Verdict.ALLOW else decision.verdict.value.upper()
-            print(f"[Security Debug] [{tag}] Baseline Tool: {tool} -> {decision.reason}")
+            print(f"[Security Debug] [{tag}] Tier 4 Baseline Tool: {tool} -> {decision.reason}")
         return decision
