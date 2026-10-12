@@ -286,4 +286,34 @@ def test_contains_synonyms_parsing():
     assert dec_clean.verdict == Verdict.ALLOW
 
 
+def test_all_rules_are_case_insensitive():
+    """Verify that all rules, tools, parameters, and patterns evaluate case-insensitively."""
+    rules = [
+        'deny read file with zaragoza in it',
+        'allow read file ending with .md',
+        'ask before run command with sudo',
+    ]
+    engine = BuiltinPolicyEngine(dsl_rules=rules)
+
+    # 1. Mixed case tool and mixed case path value
+    dec1 = engine.evaluate(PolicyRequest(tool="READ_FILE", parameters={"Path": "ZARAGOZA.MD"}))
+    assert dec1.verdict == Verdict.DENY
+
+    # 2. Mixed case target path for allow rule
+    dec2 = engine.evaluate(PolicyRequest(tool="Read_File", parameters={"path": "DOCUMENTATION.MD"}))
+    assert dec2.verdict == Verdict.ALLOW
+
+    # 3. Mixed case command parameter and value
+    dec3 = engine.evaluate(PolicyRequest(tool="RUN_COMMAND", parameters={"COMMAND": "SUDO systemctl restart"}))
+    assert dec3.verdict == Verdict.ASK
+
+    # 4. Tier 0 Protected path with uppercase
+    dec_path = engine.evaluate(PolicyRequest(tool="READ_FILE", parameters={"path": "/ETC/PASSWD"}))
+    assert dec_path.verdict == Verdict.DENY
+
+    # 5. Tier 0 Dangerous command with uppercase
+    dec_cmd = engine.evaluate(PolicyRequest(tool="RUN_COMMAND", parameters={"command": "RM -RF /"}))
+    assert dec_cmd.verdict == Verdict.DENY
+
+
 
