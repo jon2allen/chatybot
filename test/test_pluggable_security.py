@@ -714,3 +714,34 @@ async def test_non_interactive_ask_resolution(monkeypatch, tmp_path):
         res_allowed = await app_allow.dispatch_tool(json.dumps({"tool": "write_file", "arguments": {"path": target, "content": "data"}}))
         assert "Successfully wrote" in res_allowed or os.path.exists(target)
         assert any("AUTO-APPROVED tool 'write_file' via non_interactive_ask policy" in m for m in logged_allow)
+
+
+@pytest.mark.anyio
+async def test_no_security_cli_mode(monkeypatch):
+    """Verify that no_security=True (--no-security) completely disables security evaluation."""
+    import json
+    from chatybot.chatybot_app import ChatybotApp
+
+    app = ChatybotApp(no_security=True)
+    app.initialize()
+    assert app.security_manager.enabled is False
+
+    # Fail immediately if any input() prompt is attempted
+    def fail_input(*args, **kwargs):
+        raise AssertionError("input() should not be called when security is disabled")
+    monkeypatch.setattr("asyncio.to_thread", fail_input)
+
+    # 1. Normal ASK tool runs without prompting or security checks
+    with tempfile.TemporaryDirectory() as tmpdir:
+        target = os.path.join(tmpdir, "out.txt")
+        res = await app.dispatch_tool(json.dumps({"tool": "write_file", "arguments": {"path": target, "content": "hello"}}))
+        assert "Successfully wrote" in res or os.path.exists(target)
+
+    # 2. Protected paths (/etc/passwd) are NOT blocked by security policy
+    res_path = await app.dispatch_tool(json.dumps({"tool": "read_file", "arguments": {"path": "/etc/passwd"}}))
+    assert "Error: Security Policy Blocked" not in res_path
+
+    # 3. Dangerous commands (chatybot / rm -rf) are NOT blocked by security policy
+    res_cmd = await app.dispatch_tool(json.dumps({"tool": "run_command", "arguments": {"command": "echo test_cmd"}}))
+    assert "Error: Security Policy Blocked" not in res_cmd
+

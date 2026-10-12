@@ -76,11 +76,13 @@ class ChatybotApp:
         no_tools: bool = False,
         security_debug: bool = False,
         auto_approve: bool = False,
+        no_security: bool = False,
     ):
         """Initialize the Chatybot application."""
         self.no_tools: bool = no_tools
         self.security_debug: bool = security_debug
         self.auto_approve: bool = auto_approve
+        self.no_security: bool = no_security
         self.single_run_mode: bool = False
         # Initialize managers
         from .localization import LocalizationManager
@@ -357,7 +359,10 @@ class ChatybotApp:
         # Initialize Security Manager (pluggable security policy gateway)
         try:
             from .security.manager import SecurityManager
-            self.security_manager = SecurityManager(debug=self.security_debug)
+            self.security_manager = SecurityManager(
+                enabled=not self.no_security,
+                debug=self.security_debug,
+            )
         except Exception as e:
             print(f"[Security Warning] Failed to initialize SecurityManager: {e}")
             self.security_manager = None
@@ -6576,6 +6581,9 @@ class ChatybotApp:
             engine_name = type(self.security_manager.engine).__name__
             rule_count = len(getattr(self.security_manager.engine, "dsl_rules", []))
             print(f"Security: Active ({engine_name}, {rule_count} DSL rules loaded)")
+        else:
+            print("Security: Disabled")
+
 
         # Load and execute profile script if specified via command line or config
         profile_path = getattr(self, 'profile_to_load', None)
@@ -6786,6 +6794,11 @@ def run():
         help="Automatically approve security confirmation prompts (ASK verdicts) without interactive prompting"
     )
     parser.add_argument(
+        "--no-security",
+        action="store_true",
+        help="Completely disable security policy evaluation (reverts to unconstrained tool execution)"
+    )
+    parser.add_argument(
         "--setup-keys",
         action="store_true",
         help="Launch interactive wizard to configure and save API keys"
@@ -6802,7 +6815,7 @@ def run():
         sys.exit(tui_main(config_path=args.config))
 
     if args.profile_list:
-        tmp = ChatybotApp(config_path=args.config, lang=args.lang, no_tools=args.no_tools, security_debug=args.security, auto_approve=args.auto_approve)
+        tmp = ChatybotApp(config_path=args.config, lang=args.lang, no_tools=args.no_tools, security_debug=args.security, auto_approve=args.auto_approve, no_security=args.no_security)
         tmp.initialize()
         from .profile_manager import ProfileManager
         pm = ProfileManager(getattr(tmp, 'profile_dir', '~/.config/chatybot/profiles'))
@@ -6822,7 +6835,7 @@ def run():
         sys.exit(0)
 
     if args.profile_edit is not None:
-        tmp = ChatybotApp(config_path=args.config, lang=args.lang, no_tools=args.no_tools, security_debug=args.security, auto_approve=args.auto_approve)
+        tmp = ChatybotApp(config_path=args.config, lang=args.lang, no_tools=args.no_tools, security_debug=args.security, auto_approve=args.auto_approve, no_security=args.no_security)
         tmp.initialize()
         from .profile_tui import run_profile_tui
         sys.exit(run_profile_tui(
@@ -6838,7 +6851,9 @@ def run():
         no_tools=args.no_tools,
         security_debug=args.security,
         auto_approve=args.auto_approve,
+        no_security=args.no_security,
     )
+
     # Also set the module-level app variable
     current_module = sys.modules[__name__]
     current_module.app = app
