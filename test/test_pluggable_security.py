@@ -357,7 +357,41 @@ def test_mcp_tool_matching_and_arbitrary_field_targeting():
     assert dec7.verdict == Verdict.ASK
 
 
+def test_tier0_filesystem_tools_and_parameter_aliases():
+    """Verify that Tier 0 path protection covers all filesystem tools and parameter aliases."""
+    engine = BuiltinPolicyEngine()
 
+    # 1. remove_directory on ~/.ssh -> DENY
+    dec1 = engine.evaluate(PolicyRequest(tool="remove_directory", parameters={"path": "~/.ssh"}))
+    assert dec1.verdict == Verdict.DENY
+
+    # 2. make_directory on /etc/new_dir -> DENY
+    dec2 = engine.evaluate(PolicyRequest(tool="make_directory", parameters={"dir": "/etc/new_dir"}))
+    assert dec2.verdict == Verdict.DENY
+
+    # 3. replace_file_content on /etc/passwd -> DENY
+    dec3 = engine.evaluate(PolicyRequest(tool="replace_file_content", parameters={"target_file": "/etc/passwd"}))
+    assert dec3.verdict == Verdict.DENY
+
+    # 4. patch_file on ~/.ssh/authorized_keys -> DENY
+    dec4 = engine.evaluate(PolicyRequest(tool="patch_file", parameters={"file": "~/.ssh/authorized_keys"}))
+    assert dec4.verdict == Verdict.DENY
+
+    # 5. find_files in /etc -> DENY
+    dec5 = engine.evaluate(PolicyRequest(tool="find_files", parameters={"directory": "/etc"}))
+    assert dec5.verdict == Verdict.DENY
+
+    # 6. write_file with 'filename' alias on /etc/passwd -> DENY
+    dec6 = engine.evaluate(PolicyRequest(tool="write_file", parameters={"filename": "/etc/passwd", "content": "root:x:0:0"}))
+    assert dec6.verdict == Verdict.DENY
+
+    # 7. write_file with 'filepath' alias on /etc/passwd -> DENY
+    dec7 = engine.evaluate(PolicyRequest(tool="write_file", parameters={"filepath": "/etc/passwd", "content": "root:x:0:0"}))
+    assert dec7.verdict == Verdict.DENY
+
+    # 8. Unprotected paths proceed normally to baseline / DSL evaluation
+    dec_safe = engine.evaluate(PolicyRequest(tool="make_directory", parameters={"path": "./safe_tmp_dir"}))
+    assert dec_safe.verdict == Verdict.ASK
 
 
 def _write_guard(tmpdir, name, body):
