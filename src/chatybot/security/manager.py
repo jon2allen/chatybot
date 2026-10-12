@@ -4,7 +4,9 @@ Coordinates configuration loading, engine selection, and policy evaluation.
 Configuration is loaded from ~/.config/chatybot/security.toml (outside tools_config and chat_config).
 """
 
+import logging
 import os
+import shutil
 from typing import Any
 import tomllib
 
@@ -12,6 +14,8 @@ from chatybot.security.base import BasePolicyEngine
 from chatybot.security.builtin import BuiltinPolicyEngine
 from chatybot.security.adapters.stdio_binary import StdioBinaryPolicyEngine
 from chatybot.security.models import PolicyDecision, PolicyRequest, Verdict
+
+logger = logging.getLogger(__name__)
 
 
 class SecurityManager:
@@ -32,11 +36,19 @@ class SecurityManager:
             self._load_config_and_initialize()
 
     def _load_config_and_initialize(self) -> None:
-        config_to_load = self.config_path
-        if not os.path.exists(config_to_load):
-            bundled_default = os.path.join(os.path.dirname(__file__), "default_security.toml")
-            if os.path.exists(bundled_default):
-                config_to_load = bundled_default
+        bundled_default = os.path.join(os.path.dirname(__file__), "default_security.toml")
+
+        # First run seed: if user config does not exist, copy from bundled default template
+        if not os.path.exists(self.config_path):
+            try:
+                os.makedirs(os.path.dirname(self.config_path), exist_ok=True)
+                if os.path.exists(bundled_default):
+                    shutil.copy2(bundled_default, self.config_path)
+                    logger.info("[Security Sync] Initialized local security policy at '%s'", self.config_path)
+            except Exception as e:
+                logger.warning("[Security Sync] Could not seed default security policy to '%s': %s", self.config_path, e)
+
+        config_to_load = self.config_path if os.path.exists(self.config_path) else bundled_default
 
         if os.path.exists(config_to_load):
             try:
