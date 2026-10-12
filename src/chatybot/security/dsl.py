@@ -25,10 +25,13 @@ Grammar Specification:
   ReasonClause  ::= "BECAUSE" STRING
 """
 
+import logging
 import re
 from dataclasses import dataclass
 from typing import Any
 from chatybot.security.models import PolicyDecision, PolicyPromptDetails, PolicyRequest, Verdict
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -97,7 +100,7 @@ class SecurityRuleAST:
                             results.extend(extract_values(v, "*"))
 
                     # Also search inside nested dictionaries/lists when looking for a specific target_field
-                    if isinstance(v, (dict, list)) and target_field not in ("*", "any"):
+                    if isinstance(v, (dict, list)) and target_field not in ("*", "any") and not is_match:
                         results.extend(extract_values(v, target_field))
             elif isinstance(data, list):
                 for item in data:
@@ -131,8 +134,12 @@ class SecurityRuleAST:
                 try:
                     if bool(re.search(self.value, val_str, re.IGNORECASE)):
                         return True
-                except re.error:
-                    pass
+                except re.error as exc:
+                    logger.warning(
+                        "[Security Warning] Regex evaluation error with pattern '%s': %s",
+                        self.value,
+                        exc,
+                    )
 
         return False
 
@@ -310,8 +317,11 @@ class SecurityDSLParser:
                 operator = "startswith"
                 val = (m_start.group(1) or m_start.group(2)).strip()
             elif m_in_path:
+                in_cand = (m_in_path.group(1) or m_in_path.group(2)).strip()
+                if in_cand.lower() in ("it", "this"):
+                    return None
                 operator = "startswith"
-                val = (m_in_path.group(1) or m_in_path.group(2)).strip()
+                val = in_cand
             elif m_match:
                 operator = "matches"
                 val = (m_match.group(1) or m_match.group(2)).strip()
@@ -327,6 +337,18 @@ class SecurityDSLParser:
 
         # Clean trailing "in it" or quotes if any
         val = re.sub(r'\s+in\s+it$', '', val, flags=re.IGNORECASE).strip().strip('"\'')
+
+        if operator == "matches":
+            try:
+                re.compile(val)
+            except re.error as exc:
+                logger.warning(
+                    "[Security Warning] Invalid regex pattern '%s' in rule '%s': %s",
+                    val,
+                    raw_line,
+                    exc,
+                )
+                return None
 
         return SecurityRuleAST(
             raw_text=raw_line,
