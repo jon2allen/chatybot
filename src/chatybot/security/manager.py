@@ -31,12 +31,10 @@ class SecurityManager:
         )
         self.config: dict[str, Any] = {}
         self.fail_safe = Verdict.DENY
-        self.engine: BasePolicyEngine = None  # type: ignore
+        self.engine: BasePolicyEngine | None = None
 
         if self.enabled:
             self._load_config_and_initialize()
-        else:
-            self.engine = BuiltinPolicyEngine(debug=debug)
 
     def _load_config_and_initialize(self) -> None:
         bundled_default = os.path.join(os.path.dirname(__file__), "default_security.toml")
@@ -59,10 +57,20 @@ class SecurityManager:
                 with open(config_to_load, "rb") as f:
                     self.config = tomllib.load(f)
             except Exception as e:
-                # Log warning and fall back to built-in default engine
+                logger.warning(
+                    "[Security Config] Failed to parse security policy file '%s': %s. Falling back to defaults.",
+                    config_to_load,
+                    e,
+                )
+                if self.debug:
+                    print(f"[Security Warning] Failed to parse security policy file '{config_to_load}': {e}. Falling back to defaults.")
                 self.config = {}
 
-        self.fail_safe = Verdict(self.config.get("fail_safe", "deny"))
+        raw_fail_safe = str(self.config.get("fail_safe", "deny")).strip().lower()
+        try:
+            self.fail_safe = Verdict(raw_fail_safe)
+        except ValueError:
+            self.fail_safe = Verdict.DENY
         engine_type = self.config.get("engine", "builtin").lower()
 
         if self.debug:

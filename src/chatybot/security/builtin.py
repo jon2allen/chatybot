@@ -75,11 +75,15 @@ class BuiltinPolicyEngine(BasePolicyEngine):
         debug: bool = False,
     ):
         self.debug = debug
-        self.rules = dict(self.DEFAULT_TOOL_RULES)
+        self.rules = {k.lower(): str(v).lower() for k, v in self.DEFAULT_TOOL_RULES.items()}
         if rules:
-            self.rules.update(rules)
+            self.rules.update({k.lower(): str(v).lower() for k, v in rules.items()})
 
-        self.default_verdict = Verdict(default_verdict)
+        raw_default = str(default_verdict or "ask").strip().lower()
+        try:
+            self.default_verdict = Verdict(raw_default)
+        except ValueError:
+            self.default_verdict = Verdict.ASK
         self.denied_paths = [
             os.path.abspath(os.path.expanduser(p))
             for p in (denied_paths or self.DEFAULT_DENIED_PATHS)
@@ -250,8 +254,14 @@ class BuiltinPolicyEngine(BasePolicyEngine):
                 return decision
 
         # Tier 4: Baseline Tool Defaults
-        rule_val = self.rules.get(tool) or self.rules.get(tool_raw)
-        verdict = Verdict(rule_val) if rule_val else self.default_verdict
+        rule_val = self.rules.get(tool)
+        if rule_val:
+            try:
+                verdict = Verdict(rule_val.lower())
+            except ValueError:
+                verdict = self.default_verdict
+        else:
+            verdict = self.default_verdict
 
         if verdict == Verdict.ALLOW:
             decision = PolicyDecision(
