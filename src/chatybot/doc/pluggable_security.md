@@ -121,6 +121,24 @@ Chatybot provides two controls to resolve `ASK` verdicts in non-interactive cont
 
 > **Hard Invariant:** Neither `-y` nor `non_interactive_ask="allow"` can bypass Tier 0 protections (`denied_paths`, `denied_patterns`) or Tier 1 `DENY` DSL rules. Only `ASK` verdicts are affected.
 
+### Completely Disabling Security (`--no-security`)
+
+To completely bypass the security policy subsystem and restore legacy behavior (running tools unconstrained without confirmation prompts, path checks, or command filtering):
+
+```bash
+chatybot --no-security
+chatybot --script run_tests.chatdsl --no-security
+```
+
+When `--no-security` is provided:
+- `SecurityManager.enabled` is set to `False`.
+- The startup banner displays `Security: Disabled`.
+- All tool invocations immediately evaluate to `Verdict.ALLOW`, bypassing all evaluation tiers (Tier 0 through Tier 4).
+
+> **Intentional Design Decision (CLI Only):** Complete security disablement is strictly available **only via the CLI flag `--no-security`**, not as an option in `security.toml`. Disabling all protections is a decision that must be explicitly reaffirmed by the operator for each session, preventing an unmonitored persistent config change or an agent modifying `security.toml` to disable protection permanently.
+
+> **Why `chatybot` is blocked in `run_command`:** Because flags like `--no-security` and `-y` provide broad permissions, `"chatybot"` is explicitly included in `[builtin.command_rules].denied_patterns` and `dsl_rules`. Without this block, an LLM agent with shell access could spawn a child process (e.g. `chatybot --script attack.chatdsl --no-security` or `python -m chatybot --run "..." -y`) to break out of policy boundaries. Restricting `chatybot` invocations ensures privileged CLI flags can only be granted directly by a human operator at the physical terminal.
+
 ---
 
 ## 2. Builtin Engine: Evaluation Tiers
