@@ -255,4 +255,35 @@ def test_deny_overrides_tiering_system():
     assert dec_normal.reason == "documentation files are always safe"
 
 
+def test_contains_synonyms_parsing():
+    """Verify 'contains <val>' synonym works interchangeably with 'with <val> in it'."""
+    rules = [
+        'deny read file contains "zaragoza"',
+        'deny read file that contains "secret"',
+        'deny run command contains "sudo"',
+        'block read file containing "token"',
+    ]
+    engine = BuiltinPolicyEngine(dsl_rules=rules)
+
+    # 1. contains "zaragoza"
+    dec1 = engine.evaluate(PolicyRequest(tool="read_file", parameters={"path": "zaragoza.md"}))
+    assert dec1.verdict == Verdict.DENY
+
+    # 2. that contains "secret"
+    dec2 = engine.evaluate(PolicyRequest(tool="read_file", parameters={"path": "/tmp/my_secret_file.txt"}))
+    assert dec2.verdict == Verdict.DENY
+
+    # 3. run command contains "sudo"
+    dec3 = engine.evaluate(PolicyRequest(tool="run_command", parameters={"command": "sudo apt update"}))
+    assert dec3.verdict == Verdict.DENY
+
+    # 4. containing "token"
+    dec4 = engine.evaluate(PolicyRequest(tool="read_file", parameters={"path": "app_token_config.json"}))
+    assert dec4.verdict == Verdict.DENY
+
+    # 5. Clean request passes
+    dec_clean = engine.evaluate(PolicyRequest(tool="read_file", parameters={"path": "normal.md"}))
+    assert dec_clean.verdict == Verdict.ALLOW
+
+
 
