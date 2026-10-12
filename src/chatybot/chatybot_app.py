@@ -69,10 +69,19 @@ app = None  # Global app instance for database functions to access
 class ChatybotApp:
     """Main application class for Chatybot."""
 
-    def __init__(self, config_path: str | None = None, lang: str = "en", no_tools: bool = False, security_debug: bool = False):
+    def __init__(
+        self,
+        config_path: str | None = None,
+        lang: str = "en",
+        no_tools: bool = False,
+        security_debug: bool = False,
+        auto_approve: bool = False,
+    ):
         """Initialize the Chatybot application."""
         self.no_tools: bool = no_tools
         self.security_debug: bool = security_debug
+        self.auto_approve: bool = auto_approve
+        self.single_run_mode: bool = False
         # Initialize managers
         from .localization import LocalizationManager
         self.i18n = LocalizationManager(locale=lang)
@@ -3736,10 +3745,18 @@ class ChatybotApp:
             sec_mgr = getattr(self, "security_manager", None)
             if sec_mgr is not None and tool_name:
                 from .security.models import Verdict
+                is_interactive = (
+                    sys.stdin.isatty()
+                    and not getattr(self, "script_context", False)
+                    and not getattr(self, "single_run_mode", False)
+                )
                 sec_decision = sec_mgr.evaluate(
                     tool=tool_name,
                     parameters=tool_args if isinstance(tool_args, dict) else {},
-                    context={"session_id": getattr(self, "session_id", ""), "interactive": True},
+                    context={
+                        "session_id": getattr(self, "session_id", ""),
+                        "interactive": is_interactive,
+                    },
                 )
                 if sec_decision.verdict == Verdict.DENY:
                     deny_msg = f"Security Policy Blocked: {sec_decision.reason}"
@@ -3753,32 +3770,56 @@ class ChatybotApp:
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
                     return f"Error: {deny_msg}"
                 elif sec_decision.verdict == Verdict.ASK:
-                    risk = sec_decision.prompt_details.risk_level if sec_decision.prompt_details else "medium"
-                    msg = sec_decision.prompt_details.message if sec_decision.prompt_details else f"Authorize '{tool_name}'?"
-                    print(f"\n[Security Confirmation Required] ({risk.upper()} risk)")
-                    print(f"  Tool: {tool_name}")
-                    print(f"  Reason: {sec_decision.reason}")
-                    try:
-                        ans = await asyncio.to_thread(input, "Proceed with execution? [y/N]: ")
-                        ans = ans.strip().lower()
-                    except (EOFError, KeyboardInterrupt):
-                        ans = "n"
-                    if ans not in ("y", "yes"):
-                        cancel_msg = f"Security Authorization Denied: User declined execution of '{tool_name}'."
+                    if getattr(self, "auto_approve", False):
                         if self.security_debug:
-                            print(f"[Security Debug] [DENY] User rejected authorization for tool '{tool_name}'.")
+                            print(f"[Security Debug] [AUTO-APPROVE] Tool '{tool_name}' auto-approved via --yes flag.")
                         if hasattr(self, "logging_manager") and getattr(self.logging_manager, "logging_active", False):
-                            self.logging_manager.log_message(f"[Security Audit] USER DECLINED tool '{tool_name}'. Reason: {sec_decision.reason}")
-                        print(f"[Security] {cancel_msg}")
-                        self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
-                        self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', cancel_msg)
-                        self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
-                        return f"Error: {cancel_msg}"
+                            self.logging_manager.log_message(f"[Security Audit] AUTO-APPROVED tool '{tool_name}' via --yes flag. Reason: {sec_decision.reason}")
+                    elif not is_interactive:
+                        non_interactive_policy = getattr(sec_mgr, "non_interactive_ask", "deny").lower()
+                        if non_interactive_policy == "allow":
+                            if self.security_debug:
+                                print(f"[Security Debug] [AUTO-APPROVE] Tool '{tool_name}' auto-approved via non_interactive_ask policy.")
+                            if hasattr(self, "logging_manager") and getattr(self.logging_manager, "logging_active", False):
+                                self.logging_manager.log_message(f"[Security Audit] AUTO-APPROVED tool '{tool_name}' via non_interactive_ask policy. Reason: {sec_decision.reason}")
+                        else:
+                            cancel_msg = f"Security Policy Blocked: Non-interactive execution of '{tool_name}' rejected by non_interactive_ask policy (Reason: {sec_decision.reason})."
+                            if self.security_debug:
+                                print(f"[Security Debug] [DENY] Non-interactive execution of '{tool_name}' blocked by policy.")
+                            print(f"\n[Security Block] {cancel_msg}")
+                            if hasattr(self, "logging_manager") and getattr(self.logging_manager, "logging_active", False):
+                                self.logging_manager.log_message(f"[Security Audit] BLOCKED non-interactive tool '{tool_name}'. Reason: {sec_decision.reason}")
+                            self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
+                            self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', cancel_msg)
+                            self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
+                            return f"Error: {cancel_msg}"
                     else:
-                        if self.security_debug:
-                            print(f"[Security Debug] [ACCEPT] User approved execution of tool '{tool_name}'.")
-                        if hasattr(self, "logging_manager") and getattr(self.logging_manager, "logging_active", False):
-                            self.logging_manager.log_message(f"[Security Audit] USER APPROVED tool '{tool_name}'. Reason: {sec_decision.reason}")
+                        risk = sec_decision.prompt_details.risk_level if sec_decision.prompt_details else "medium"
+                        msg = sec_decision.prompt_details.message if sec_decision.prompt_details else f"Authorize '{tool_name}'?"
+                        print(f"\n[Security Confirmation Required] ({risk.upper()} risk)")
+                        print(f"  Tool: {tool_name}")
+                        print(f"  Reason: {sec_decision.reason}")
+                        try:
+                            ans = await asyncio.to_thread(input, "Proceed with execution? [y/N]: ")
+                            ans = ans.strip().lower()
+                        except (EOFError, KeyboardInterrupt):
+                            ans = "n"
+                        if ans not in ("y", "yes"):
+                            cancel_msg = f"Security Authorization Denied: User declined execution of '{tool_name}'."
+                            if self.security_debug:
+                                print(f"[Security Debug] [DENY] User rejected authorization for tool '{tool_name}'.")
+                            if hasattr(self, "logging_manager") and getattr(self.logging_manager, "logging_active", False):
+                                self.logging_manager.log_message(f"[Security Audit] USER DECLINED tool '{tool_name}'. Reason: {sec_decision.reason}")
+                            print(f"[Security] {cancel_msg}")
+                            self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
+                            self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', cancel_msg)
+                            self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
+                            return f"Error: {cancel_msg}"
+                        else:
+                            if self.security_debug:
+                                print(f"[Security Debug] [ACCEPT] User approved execution of tool '{tool_name}'.")
+                            if hasattr(self, "logging_manager") and getattr(self.logging_manager, "logging_active", False):
+                                self.logging_manager.log_message(f"[Security Audit] USER APPROVED tool '{tool_name}'. Reason: {sec_decision.reason}")
                 elif sec_decision.verdict == Verdict.ALLOW:
                     if self.security_debug:
                         print(f"[Security Debug] [ACCEPT] Permitted execution of tool '{tool_name}'.")
@@ -6739,6 +6780,12 @@ def run():
         help="Enable security debugging (print policy rules on load and verbose decision traces)"
     )
     parser.add_argument(
+        "-y", "--yes", "--auto-approve",
+        action="store_true",
+        dest="auto_approve",
+        help="Automatically approve security confirmation prompts (ASK verdicts) without interactive prompting"
+    )
+    parser.add_argument(
         "--setup-keys",
         action="store_true",
         help="Launch interactive wizard to configure and save API keys"
@@ -6755,7 +6802,7 @@ def run():
         sys.exit(tui_main(config_path=args.config))
 
     if args.profile_list:
-        tmp = ChatybotApp(config_path=args.config, lang=args.lang, no_tools=args.no_tools, security_debug=args.security)
+        tmp = ChatybotApp(config_path=args.config, lang=args.lang, no_tools=args.no_tools, security_debug=args.security, auto_approve=args.auto_approve)
         tmp.initialize()
         from .profile_manager import ProfileManager
         pm = ProfileManager(getattr(tmp, 'profile_dir', '~/.config/chatybot/profiles'))
@@ -6775,7 +6822,7 @@ def run():
         sys.exit(0)
 
     if args.profile_edit is not None:
-        tmp = ChatybotApp(config_path=args.config, lang=args.lang, no_tools=args.no_tools, security_debug=args.security)
+        tmp = ChatybotApp(config_path=args.config, lang=args.lang, no_tools=args.no_tools, security_debug=args.security, auto_approve=args.auto_approve)
         tmp.initialize()
         from .profile_tui import run_profile_tui
         sys.exit(run_profile_tui(
@@ -6785,12 +6832,19 @@ def run():
         ))
 
     global app
-    app = ChatybotApp(config_path=args.config, lang=args.lang, no_tools=args.no_tools, security_debug=args.security)
+    app = ChatybotApp(
+        config_path=args.config,
+        lang=args.lang,
+        no_tools=args.no_tools,
+        security_debug=args.security,
+        auto_approve=args.auto_approve,
+    )
     # Also set the module-level app variable
     current_module = sys.modules[__name__]
     current_module.app = app
 
     if args.script:
+        app.script_context = True
         async def run_script():
             app.initialize()
             if app.mcp_manager:
@@ -6809,6 +6863,7 @@ def run():
         sys.exit(0)
 
     elif args.run:
+        app.single_run_mode = True
         async def run_query():
             app.initialize()
             if app.mcp_manager:

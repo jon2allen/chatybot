@@ -8,6 +8,11 @@ Chatybot checks **every tool call** made by a model (built-in tools and MCP tool
 | `ASK`   | User is prompted `Proceed with execution? [y/N]`. Anything other than `y`/`yes` cancels. |
 | `DENY`  | Tool is blocked; the model receives `Error: Security Policy Blocked: <reason>`. |
 
+> **Non-interactive and script execution.** The `ASK` prompt normally reads from stdin via `input()`. When running non-interactively (ChatDSL scripts `--script`, single run `--run`, or headless environments where stdin is not a TTY):
+> - If `-y` / `--yes` / `--auto-approve` is passed on the CLI, `ASK` verdicts are automatically approved.
+> - Otherwise, the dispatcher consults `non_interactive_ask` in `security.toml` (`"deny"` by default, or `"allow"`). When set to `"deny"`, the tool is immediately blocked with an explanatory error without hanging or calling `input()`.
+> - **Critical invariant:** neither `-y` nor `non_interactive_ask` can override Tier 0 protections or Tier 1 `DENY` rules — hard denials are always enforced.
+
 The policy engine is **pluggable**: the default is an in-process Python engine (`builtin`), but it can be swapped for an external program.
 
 ---
@@ -49,12 +54,14 @@ model tool call ──► ChatybotApp.dispatch_tool
 ### Top-level keys
 
 ```toml
-version   = "1.0"
-engine    = "builtin"   # "builtin" | "binary"   ("wasm"/"socket" are reserved, not yet implemented)
-fail_safe = "deny"      # verdict used if the engine crashes, times out, or returns garbage
+version             = "1.0"
+engine              = "builtin"   # "builtin" | "binary"   ("wasm"/"socket" are reserved, not yet implemented)
+fail_safe           = "deny"      # verdict used if the engine crashes, times out, or returns garbage
+non_interactive_ask = "deny"      # "deny" (default) | "allow" - how to resolve ASK when non-interactive
 ```
 
 All verdict values are case-insensitive (`"DENY"`, `"deny"`, `"Deny"` all work). An unrecognised `fail_safe` value falls back to `deny`.
+
 
 ### Startup and debugging
 
@@ -88,6 +95,32 @@ When session logging is active, security outcomes are written to the log:
 
 The confirmation prompt runs via `asyncio.to_thread`, so it does not block the event loop (streams, MCP sessions) while waiting for input.
 
+### Non-interactive and script execution (`-y` / `--yes`)
+
+In unattended environments — running ChatDSL scripts (`--script`), one-shot executions (`--run`), headless CI jobs, or cron commands where `sys.stdin.isatty()` is false — interactive confirmation via `input()` is not possible.
+
+Chatybot provides two controls to resolve `ASK` verdicts in non-interactive contexts:
+
+1. **CLI Flag (`-y`, `--yes`, `--auto-approve`):**
+   ```bash
+   chatybot --script run_tests.chatdsl -y
+   chatybot --run "summarize repo" --yes
+   ```
+   When `-y` is passed by the human operator, any tool call evaluated to `ASK` is automatically approved and executed, logging `[Security Audit] AUTO APPROVED (-y) tool '<tool>'`.
+
+2. **Config Key (`non_interactive_ask`):**
+   In `security.toml`:
+   ```toml
+   non_interactive_ask = "deny"   # "deny" (default) | "allow"
+   ```
+   When `-y` is **not** provided and the session is non-interactive:
+   - `"deny"` (default): Fails fast. The tool call is immediately blocked with `Error: Security Policy Blocked: Action requires confirmation but session is non-interactive (non_interactive_ask='deny')`. It never attempts `input()` and logs `[Security Audit] BLOCKED (non-interactive) tool '<tool>'`.
+   - `"allow"`: Automatically permits the tool and logs `[Security Audit] AUTO APPROVED (non_interactive_ask=allow) tool '<tool>'`.
+
+> **Security Note on ChatDSL scripts:** In-script security bypass directives (e.g. `!security allow`) were intentionally excluded by design. Allowing scripts to self-escalate privileges would introduce an LLM privilege escalation vulnerability (an agent could generate or modify a `.chatdsl` script to bypass safety boundaries). Auto-approval must be explicitly granted by the human operator via `-y` on the command line or configured in `security.toml`.
+
+> **Hard Invariant:** Neither `-y` nor `non_interactive_ask="allow"` can bypass Tier 0 protections (`denied_paths`, `denied_patterns`) or Tier 1 `DENY` DSL rules. Only `ASK` verdicts are affected.
+
 ---
 
 ## 2. Builtin Engine: Evaluation Tiers
@@ -103,6 +136,8 @@ The builtin engine uses **deny-overrides** evaluation (the model used by AWS IAM
 | **4** | Baseline per-tool verdicts, then `default_verdict` | whatever is configured |
 
 The first tier that matches decides. Consequence: a specific `deny` always beats a general `allow`.
+
+Within a single tier, rules are evaluated in **file order** and the first matching rule wins — its reason is the one surfaced. If two `deny` rules both match, only the earlier one's reason is returned; later rules in the same tier are not consulted.
 
 ```toml
 dsl_rules = [
@@ -124,14 +159,18 @@ denied_paths = ["/etc", "/var/root", "/boot", "/System", "~/.ssh", "~/.gnupg", "
 - Every path-like argument is checked: `path`, `file`, `target`, `dir`, `directory`, `filename`, `filepath`, `source`, `destination`, `dest`, and any key ending in `path`, `file`, or `dir` (e.g. `target_file`).
 - Paths are expanded (`~`) and made absolute; matching is a case-insensitive prefix match on whole path components (`/etc` blocks `/etc/passwd`, not `/etcetera`).
 
+> **`run_command` is not covered by path restrictions.** Tier 0 path protection applies only to the filesystem tools listed above. A shell command such as `cat /etc/passwd` or `rm ~/.ssh/config` bypasses `denied_paths` entirely — it is caught only by the command-pattern substring match (next section) or by DSL rules. If you need to block shell access to protected paths, add explicit DSL rules such as `deny run command with /etc in it`.
+
 ### Tier 0 — Catastrophic command patterns
 
 ```toml
 [builtin.command_rules]
-denied_patterns = ["rm -rf /", "rm -rf /*", "mkfs", "dd if=/dev/zero", "> /dev/sda", "> /dev/disk"]
+denied_patterns = ["rm -rf /", "rm -rf /*", ":(){ :|:& };:", "mkfs", "dd if=/dev/zero", "> /dev/sda", "> /dev/disk"]
 ```
 
 Applies to `run_command`. Matching is a **case-insensitive substring** match — intentionally over-broad. `man mkfs` or `echo "rm -rf /"` will also be blocked. False positives here are considered safer than false negatives.
+
+The engine's built-in code defaults (`DEFAULT_DENIED_COMMAND_PATTERNS`) include the fork-bomb pattern `:(){ :|:& };:` even when the config file omits it. However, the seeded `security.toml` is what runs in practice — keep the fork-bomb entry in your config so protection does not depend on a parse failure falling back to code defaults.
 
 ### Tier 4 — Baseline tool verdicts
 
@@ -155,11 +194,25 @@ read_url   = "allow"
 call_skill = "deny"
 ```
 
+### Risk levels on ASK prompts
+
+When a verdict is `ASK`, the confirmation banner shows a risk level (`LOW`/`MEDIUM`/`HIGH`):
+
+| Source | Risk level |
+|---|---|
+| Tier 2 DSL `ask` rule, tool is `run_command` | `high` |
+| Tier 2 DSL `ask` rule, any other tool | `medium` |
+| Tier 4 baseline, tool is `run_command`, `delete_file`, or `remove_directory` | `high` |
+| Tier 4 baseline, tool is `read_file` | `low` |
+| Tier 4 baseline, anything else | `medium` |
+
+External binary engines supply `risk_level` in their `prompt_details` response (defaults to `medium` if omitted).
+
 ---
 
 ## 3. Security DSL
 
-DSL rules are plain-English lines in `[builtin] dsl_rules`. They are parsed once at startup.
+DSL rules are plain-English lines in `[builtin] dsl_rules` (the alias `rules_dsl` is also accepted). They are parsed once at startup.
 
 ```
 <Action> <ToolTarget> <Condition> [because "<reason>"]
@@ -173,7 +226,7 @@ DSL rules are plain-English lines in `[builtin] dsl_rules`. They are parsed once
 | `deny`, `block`, `never`, `do not` | DENY |
 | `ask`, `prompt`, `require confirmation` | ASK |
 
-Connector words after the action are optional: `ask before ...`, `deny to ...`.
+Connector words after the action are optional and stripped before the tool target is parsed: `before`, `to`, `on`, `tool`, `call`, and `mcp` (e.g. `ask before run command ...`, `deny to write file ...`, `ask on call skill ...`).
 
 ### Tool targets
 
@@ -218,7 +271,9 @@ Regexes are validated at load time; an invalid regex logs `Invalid regex pattern
 
 - `run command ...` → the `command` argument.
 - `read file`, `delete file`, `file_info` → the path argument.
-- Everything else (including `write file` and MCP tools) → **all arguments** by default.
+- Everything else (including `write file`, `list_directory`, and MCP tools) → **all arguments** by default.
+
+> **`list_directory` scans all fields.** Because `list directory` is not in the path-default set, a rule like `deny list directory starting with /etc` inspects every argument, not just the `dir`/`path` key. Target the field explicitly with `deny list directory where path starts with /etc` if you only want the path checked.
 
 Target a specific field explicitly:
 
@@ -390,7 +445,7 @@ If the binary path does not exist, Chatybot falls back to the builtin engine.
 }
 ```
 
-Any of the following produces the `fail_safe` verdict: timeout, non-zero exit code, empty output, invalid JSON, a non-object response, or an unknown `status`.
+Any of the following produces the `fail_safe` verdict: timeout, non-zero exit code, empty output, invalid JSON, a non-object response, an unknown `status`, or a `modified_parameters` value that is present but not a JSON object.
 
 ---
 
@@ -398,5 +453,8 @@ Any of the following produces the `fail_safe` verdict: timeout, non-zero exit co
 
 - Command matching is text-based, not shell-parsed. Prefix and substring rules cannot reason about pipes, subshells, or chaining — see the git section.
 - Tier 0 path checks resolve `~` and relative paths but do not resolve symlinks.
+- `run_command` is not covered by Tier 0 path restrictions — a shell command can read or modify protected paths unless a DSL rule or command pattern catches it.
+- **SecurityManager init failure is fail-open.** If `SecurityManager()` raises during startup (e.g. a corrupt config, missing dependency), it is set to `None` and `dispatch_tool` skips the security check entirely. Every tool call is then allowed. This contradicts the `fail_safe` philosophy, which only governs runtime engine errors, not initialization failures.
+- **Non-interactive sessions require explicit auto-approval or policy configuration.** By default (`non_interactive_ask = "deny"`), non-interactive sessions fail fast on `ASK` verdicts without blocking on input. Operators must explicitly pass `-y` / `--yes` or set `non_interactive_ask = "allow"` for automated script execution.
 - `wasm` and `socket` engine sections in the template are reserved for future adapters and are not yet active.
 - `modified_parameters` from external engines is carried in the decision but not yet applied by the dispatcher.

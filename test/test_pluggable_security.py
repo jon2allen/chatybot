@@ -594,7 +594,9 @@ async def test_dispatch_tool_async_security_confirmation_and_audit(monkeypatch):
     logged_messages = []
     monkeypatch.setattr(app.logging_manager, "log_message", lambda msg: logged_messages.append(msg))
 
-    # 1. User denies ASK tool
+    # 1. User denies ASK tool in interactive session
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+
     async def mock_input(fn, *args, **kwargs):
         return "n"
 
@@ -629,4 +631,71 @@ def test_regex_validation_default_tools_and_cleanups(caplog):
     assert engine.evaluate(PolicyRequest(tool="patch_file", parameters={"file": "./safe.py"})).verdict == Verdict.ASK
 
 
+@pytest.mark.anyio
+async def test_auto_approve_yes_flag(monkeypatch):
+    """Verify that auto_approve=True (-y / --yes) approves ASK tools without prompting, but DENY still blocks."""
+    import json
+    from chatybot.chatybot_app import ChatybotApp
 
+    app = ChatybotApp(auto_approve=True)
+    app.initialize()
+    app.logging_manager.logging_active = True
+    logged_messages = []
+    monkeypatch.setattr(app.logging_manager, "log_message", lambda msg: logged_messages.append(msg))
+
+    def fail_input(*args, **kwargs):
+        raise AssertionError("input() should not be called when auto_approve is True")
+    monkeypatch.setattr("asyncio.to_thread", fail_input)
+
+    # 1. ASK tool (write_file) auto-approved
+    with tempfile.TemporaryDirectory() as tmpdir:
+        target = os.path.join(tmpdir, "out.txt")
+        res = await app.dispatch_tool(json.dumps({"tool": "write_file", "arguments": {"path": target, "content": "auto"}}))
+        assert "Successfully wrote" in res or os.path.exists(target)
+        assert any("[Security Audit] AUTO-APPROVED tool 'write_file' via --yes flag" in m for m in logged_messages)
+
+    # 2. Tier 0 DENY tool (read_file /etc/passwd) is STILL BLOCKED even with auto_approve=True!
+    logged_messages.clear()
+    res_deny = await app.dispatch_tool(json.dumps({"tool": "read_file", "arguments": {"path": "/etc/passwd"}}))
+    assert "Error: Security Policy Blocked" in res_deny
+    assert any("[Security Audit] BLOCKED tool 'read_file'" in m for m in logged_messages)
+
+
+@pytest.mark.anyio
+async def test_non_interactive_ask_resolution(monkeypatch, tmp_path):
+    """Verify non_interactive_ask policy (deny vs allow) when running non-interactively."""
+    import json
+    from chatybot.chatybot_app import ChatybotApp
+
+    # 1. non_interactive_ask = "deny" (default)
+    app_deny = ChatybotApp(auto_approve=False)
+    app_deny.initialize()
+    app_deny.script_context = True  # Marks non-interactive
+    app_deny.logging_manager.logging_active = True
+    logged_deny = []
+    monkeypatch.setattr(app_deny.logging_manager, "log_message", lambda msg: logged_deny.append(msg))
+
+    def fail_input(*args, **kwargs):
+        raise AssertionError("input() should not be called in non-interactive mode")
+    monkeypatch.setattr("asyncio.to_thread", fail_input)
+
+    res_blocked = await app_deny.dispatch_tool(json.dumps({"tool": "write_file", "arguments": {"path": "test.txt", "content": "data"}}))
+    assert "rejected by non_interactive_ask policy" in res_blocked
+    assert any("BLOCKED non-interactive tool 'write_file'" in m for m in logged_deny)
+
+    # 2. non_interactive_ask = "allow"
+    cfg = tmp_path / "allow_sec.toml"
+    cfg.write_text('non_interactive_ask = "allow"\n')
+    app_allow = ChatybotApp(auto_approve=False)
+    app_allow.initialize()
+    app_allow.security_manager.non_interactive_ask = "allow"
+    app_allow.script_context = True
+    app_allow.logging_manager.logging_active = True
+    logged_allow = []
+    monkeypatch.setattr(app_allow.logging_manager, "log_message", lambda msg: logged_allow.append(msg))
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        target = os.path.join(tmpdir, "allowed.txt")
+        res_allowed = await app_allow.dispatch_tool(json.dumps({"tool": "write_file", "arguments": {"path": target, "content": "data"}}))
+        assert "Successfully wrote" in res_allowed or os.path.exists(target)
+        assert any("AUTO-APPROVED tool 'write_file' via non_interactive_ask policy" in m for m in logged_allow)

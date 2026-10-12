@@ -31,6 +31,7 @@ class SecurityManager:
         )
         self.config: dict[str, Any] = {}
         self.fail_safe = Verdict.DENY
+        self.non_interactive_ask: str = "deny"
         self.engine: BasePolicyEngine | None = None
 
         if self.enabled:
@@ -71,6 +72,10 @@ class SecurityManager:
             self.fail_safe = Verdict(raw_fail_safe)
         except ValueError:
             self.fail_safe = Verdict.DENY
+
+        raw_non_interactive = str(self.config.get("non_interactive_ask", "deny")).strip().lower()
+        self.non_interactive_ask = "allow" if raw_non_interactive == "allow" else "deny"
+
         engine_type = self.config.get("engine", "builtin").lower()
 
         if self.debug:
