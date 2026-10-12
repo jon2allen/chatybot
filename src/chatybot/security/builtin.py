@@ -15,10 +15,13 @@ from chatybot.security.models import (
 )
 
 
+from chatybot.security.dsl import SecurityDSLParser, SecurityRuleAST
+
+
 class BuiltinPolicyEngine(BasePolicyEngine):
     """
-    Default in-process policy engine with baseline tri-state rules,
-    path traversal guards, and command filtering.
+    Default in-process policy engine with Security DSL evaluation,
+    baseline tri-state rules, path traversal guards, and command filtering.
     """
 
     DEFAULT_TOOL_RULES: dict[str, str] = {
@@ -60,6 +63,7 @@ class BuiltinPolicyEngine(BasePolicyEngine):
     def __init__(
         self,
         rules: dict[str, str] | None = None,
+        dsl_rules: list[str] | None = None,
         default_verdict: str = "ask",
         denied_paths: list[str] | None = None,
         denied_command_patterns: list[str] | None = None,
@@ -67,6 +71,13 @@ class BuiltinPolicyEngine(BasePolicyEngine):
         self.rules = dict(self.DEFAULT_TOOL_RULES)
         if rules:
             self.rules.update(rules)
+
+        self.dsl_rules: list[SecurityRuleAST] = []
+        if dsl_rules:
+            for r_str in dsl_rules:
+                parsed = SecurityDSLParser.parse_rule(r_str)
+                if parsed:
+                    self.dsl_rules.append(parsed)
 
         self.default_verdict = Verdict(default_verdict)
         self.denied_paths = [
@@ -103,7 +114,24 @@ class BuiltinPolicyEngine(BasePolicyEngine):
                         reason=f"Dangerous command pattern '{pattern}' is strictly denied by policy.",
                     )
 
-        # 3. Lookup configured tool rule
+        # 3. Evaluate high-priority Security DSL rules
+        for dsl_rule in self.dsl_rules:
+            if dsl_rule.matches(request):
+                reason = dsl_rule.reason or f"Matched security DSL rule: '{dsl_rule.raw_text}'"
+                prompt_details = None
+                if dsl_rule.action == Verdict.ASK:
+                    prompt_details = PolicyPromptDetails(
+                        title=f"Security Policy: {dsl_rule.action.value.upper()}",
+                        message=f"Action matched rule: '{dsl_rule.raw_text}'",
+                        risk_level="high" if tool == "run_command" else "medium",
+                    )
+                return PolicyDecision(
+                    verdict=dsl_rule.action,
+                    reason=reason,
+                    prompt_details=prompt_details,
+                )
+
+        # 4. Lookup baseline tool rule
         rule_val = self.rules.get(tool)
         verdict = Verdict(rule_val) if rule_val else self.default_verdict
 

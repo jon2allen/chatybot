@@ -118,3 +118,40 @@ else:
     finally:
         if os.path.exists(script_path):
             os.remove(script_path)
+
+
+def test_security_dsl_rules():
+    """Verify Security DSL parser and matching engine."""
+    dsl_rules = [
+        "do not read file with api_key in it",
+        "never write file ending with .env",
+        "ask before run command with sudo",
+        "deny delete file in /var",
+        "allow read file ending with .md because 'documentation is safe'",
+    ]
+
+    engine = BuiltinPolicyEngine(dsl_rules=dsl_rules)
+
+    # 1. "do not read file with api_key in it"
+    dec = engine.evaluate(PolicyRequest(tool="read_file", parameters={"path": "/tmp/my_api_key.txt"}))
+    assert dec.verdict == Verdict.DENY
+    assert "do not read file with api_key in it" in dec.reason
+
+    # Clean file read should still be allowed
+    dec_ok = engine.evaluate(PolicyRequest(tool="read_file", parameters={"path": "/tmp/normal_file.txt"}))
+    assert dec_ok.verdict == Verdict.ALLOW
+
+    # 2. "never write file ending with .env"
+    dec_env = engine.evaluate(PolicyRequest(tool="write_file", parameters={"path": "/project/.env"}))
+    assert dec_env.verdict == Verdict.DENY
+
+    # 3. "ask before run command with sudo"
+    dec_sudo = engine.evaluate(PolicyRequest(tool="run_command", parameters={"command": "sudo apt update"}))
+    assert dec_sudo.verdict == Verdict.ASK
+    assert dec_sudo.prompt_details.risk_level == "high"
+
+    # 4. Explicit reason clause: "allow read file ending with .md because 'documentation is safe'"
+    dec_md = engine.evaluate(PolicyRequest(tool="read_file", parameters={"path": "/docs/readme.md"}))
+    assert dec_md.verdict == Verdict.ALLOW
+    assert dec_md.reason == "documentation is safe"
+
