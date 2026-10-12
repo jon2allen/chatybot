@@ -316,4 +316,45 @@ def test_all_rules_are_case_insensitive():
     assert dec_cmd.verdict == Verdict.DENY
 
 
+def test_mcp_tool_matching_and_arbitrary_field_targeting():
+    """Verify that MCP tool naming, wildcard patterns, and arbitrary payload fields are supported."""
+    rules = [
+        'deny mcp__postgres__query where query contains "DROP TABLE"',
+        'deny mcp__slack__* where channel equals "#confidential"',
+        'deny create_issue where repo contains "internal"',
+        'deny any tool where any field contains "PRIVATE KEY"',
+        'deny write file where content contains "super_secret"',
+        'deny write file with "token123" in content',
+    ]
+    engine = BuiltinPolicyEngine(dsl_rules=rules)
+
+    # 1. Exact MCP tool name with arbitrary 'query' parameter
+    dec1 = engine.evaluate(PolicyRequest(tool='mcp__postgres__query', parameters={'query': 'DROP TABLE users;', 'db': 'prod'}))
+    assert dec1.verdict == Verdict.DENY
+
+    # 2. MCP wildcard (mcp__slack__*) matching 'mcp__slack__post_message' and 'channel' field
+    dec2 = engine.evaluate(PolicyRequest(tool='mcp__slack__post_message', parameters={'channel': '#confidential', 'msg': 'hello'}))
+    assert dec2.verdict == Verdict.DENY
+
+    # 3. Base tool name suffix ('create_issue') matching 'mcp__github__create_issue' and 'repo' field
+    dec3 = engine.evaluate(PolicyRequest(tool='mcp__github__create_issue', parameters={'repo': 'my-org/internal-core', 'title': 'bug'}))
+    assert dec3.verdict == Verdict.DENY
+
+    # 4. Any tool / any field recursive scanning inside nested payload
+    dec4 = engine.evaluate(PolicyRequest(tool='mcp__aws__s3_upload', parameters={'metadata': {'auth': 'BEGIN PRIVATE KEY ...'}}))
+    assert dec4.verdict == Verdict.DENY
+
+    # 5. write_file content inspection via 'where content contains'
+    dec5 = engine.evaluate(PolicyRequest(tool='write_file', parameters={'path': 'out.txt', 'content': 'here is super_secret pass'}))
+    assert dec5.verdict == Verdict.DENY
+
+    # 6. write_file with 'with "token123" in content' phrasing
+    dec6 = engine.evaluate(PolicyRequest(tool='write_file', parameters={'path': 'app.env', 'content': 'APP_KEY=token123'}))
+    assert dec6.verdict == Verdict.DENY
+
+    # 7. Safe query allowed through to baseline
+    dec7 = engine.evaluate(PolicyRequest(tool='mcp__postgres__query', parameters={'query': 'SELECT * FROM users;', 'db': 'prod'}))
+    assert dec7.verdict == Verdict.ASK
+
+
 

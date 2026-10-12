@@ -49,67 +49,90 @@ class SecurityRuleAST:
         return f"action={action_name}, tool={self.tool or '*'}, match=({match_desc}){reason_desc}"
 
     def matches(self, request: PolicyRequest) -> bool:
+        import fnmatch
+
         req_tool = (request.tool or "").strip().lower()
         rule_tool = (self.tool or "").strip().lower()
 
-        # 1. Match tool (case-insensitive)
-        if rule_tool and rule_tool != "any" and req_tool != rule_tool:
-            return False
+        # 1. Match tool (case-insensitive, with glob and base tool suffix support)
+        if rule_tool and rule_tool not in ("any", "*", "all"):
+            if req_tool != rule_tool:
+                # Glob pattern (e.g. mcp__* or *postgres* or mcp__slack__*)
+                if not fnmatch.fnmatch(req_tool, rule_tool):
+                    # Suffix / base name matching (e.g. rule is "create_issue" and req_tool is "mcp__github__create_issue")
+                    if not (req_tool.endswith("__" + rule_tool) or req_tool.endswith(":" + rule_tool) or req_tool.endswith("." + rule_tool)):
+                        return False
 
         if self.operator == "always":
             return True
 
-        # 2. Extract parameter value (case-insensitive parameter key lookup)
+        # 2. Extract parameter candidate values recursively across payload
         params = request.parameters or {}
-        candidate_val = params.get(self.param_name)
 
-        if candidate_val is None:
-            param_lower = self.param_name.lower()
-            for k, v in params.items():
-                if k.lower() == param_lower:
-                    candidate_val = v
-                    break
+        def extract_values(data: Any, target_field: str) -> list[str]:
+            results: list[str] = []
+            if isinstance(data, dict):
+                for k, v in data.items():
+                    k_lower = k.lower()
+                    is_match = False
+                    if target_field in ("*", "any"):
+                        is_match = True
+                    elif k_lower == target_field.lower():
+                        is_match = True
+                    elif target_field.lower() in ("content", "contents", "body", "text") and k_lower in (
+                        "content", "contents", "body", "text", "data", "code", "replacementcontent"
+                    ):
+                        is_match = True
+                    elif target_field.lower() in ("path", "file") and k_lower in (
+                        "path", "file", "target", "dir", "filename", "filepath"
+                    ):
+                        is_match = True
+                    elif target_field.lower() in ("command", "cmd") and k_lower in ("command", "cmd"):
+                        is_match = True
 
-        # Fallback aliases for common parameter keys
-        if candidate_val is None:
-            if self.param_name.lower() in ("path", "file"):
-                for alias in ("target", "file", "dir", "path"):
-                    for k, v in params.items():
-                        if k.lower() == alias:
-                            candidate_val = v
-                            break
-                    if candidate_val is not None:
-                        break
-            elif self.param_name.lower() in ("command", "cmd"):
-                for alias in ("cmd", "command"):
-                    for k, v in params.items():
-                        if k.lower() == alias:
-                            candidate_val = v
-                            break
-                    if candidate_val is not None:
-                        break
+                    if is_match:
+                        if isinstance(v, (str, int, float, bool)):
+                            results.append(str(v))
+                        elif isinstance(v, (dict, list)):
+                            results.extend(extract_values(v, "*"))
 
-        if candidate_val is None:
+                    # Also search inside nested dictionaries/lists when looking for a specific target_field
+                    if isinstance(v, (dict, list)) and target_field not in ("*", "any"):
+                        results.extend(extract_values(v, target_field))
+            elif isinstance(data, list):
+                for item in data:
+                    results.extend(extract_values(item, target_field))
+            elif isinstance(data, (str, int, float, bool)) and target_field in ("*", "any"):
+                results.append(str(data))
+            return results
+
+        candidate_values = extract_values(params, self.param_name)
+        if not candidate_values:
             return False
 
-        val_str = str(candidate_val).strip()
-        val_lower = val_str.lower()
         pat_lower = self.value.lower()
 
-        # 3. Match operator (all case-insensitive)
-        if self.operator == "contains":
-            return pat_lower in val_lower
-        elif self.operator == "endswith":
-            return val_lower.endswith(pat_lower)
-        elif self.operator == "startswith":
-            return val_lower.startswith(pat_lower)
-        elif self.operator == "equals":
-            return val_lower == pat_lower
-        elif self.operator == "matches":
-            try:
-                return bool(re.search(self.value, val_str, re.IGNORECASE))
-            except re.error:
-                return False
+        # 3. Match operator (all case-insensitive) across all candidate values
+        for val_str in candidate_values:
+            val_lower = val_str.lower()
+            if self.operator == "contains":
+                if pat_lower in val_lower:
+                    return True
+            elif self.operator == "endswith":
+                if val_lower.endswith(pat_lower):
+                    return True
+            elif self.operator == "startswith":
+                if val_lower.startswith(pat_lower):
+                    return True
+            elif self.operator == "equals":
+                if val_lower == pat_lower:
+                    return True
+            elif self.operator == "matches":
+                try:
+                    if bool(re.search(self.value, val_str, re.IGNORECASE)):
+                        return True
+                except re.error:
+                    pass
 
         return False
 
@@ -189,8 +212,9 @@ class SecurityDSLParser:
 
         rest = working_line[action_len:].strip()
 
-        # Strip optional connector words like "before" ("ask before run command...")
+        # Strip optional connector words like "before", "to", "on", "tool", "call", "mcp"
         rest = re.sub(r'^(?:before|to|on)\s+', '', rest, flags=re.IGNORECASE)
+        rest = re.sub(r'^(?:tool|call|mcp)\s+', '', rest, flags=re.IGNORECASE)
 
         # 2. Parse ToolTarget
         tool_target = None
@@ -206,37 +230,41 @@ class SecurityDSLParser:
         if tool_matched_key:
             rest = rest[len(tool_matched_key):].strip()
         else:
-            # Check for direct single-word tool identifier
-            m_direct = re.match(r'^([a-zA-Z0-9_\-\*]+)\b', rest)
+            # Check for direct tool identifier or pattern (e.g. mcp__postgres__query, mcp__*, *postgres*, create_issue)
+            m_direct = re.match(r'^([a-zA-Z0-9_\-\*\:\.]+)(?:\s+|$)', rest)
             if m_direct:
                 tool_target = m_direct.group(1)
                 rest = rest[m_direct.end():].strip()
 
         # Default parameter name based on resolved tool
-        default_param = "command" if tool_target == "run_command" else "path"
+        if tool_target == "run_command":
+            default_param = "command"
+        elif tool_target in ("read_file", "delete_file", "file_info"):
+            default_param = "path"
+        else:
+            default_param = "*"
 
         # 3. Parse Condition & Operator
-        # Normalize connectors: "where", "with", "containing", "matching"
-        # Syntax examples:
-        # - with api_key in it / containing api_key
-        # - ending with .env / with extension .env
-        # - starting with /etc
-        # - equals /tmp/foo
-        # - matching regex r"..."
-        
-        # Check operator variants
         operator = "contains"
         val = ""
         param_name = default_param
 
-        # Check explicit parameter name: where path contains ..., where command contains ...
+        # Check explicit parameter name:
+        # - where <param> contains ..., where any field contains ..., where * contains ...
         m_param_explicit = re.match(
-            r'^(?:where|with|if|that|which)?\s*(path|command|file|content|url)\s+(contains|ends with|ending with|starts with|starting with|equals|is|matches)\s+(?:["\']([^"\']+)["\']|(\S+))',
+            r'^(?:where|with|if|that|which)?\s*(?:(?:the\s+)?(?:field|parameter|param|arg|argument)\s+)?'
+            r'(any\s+(?:field|parameter|param|arg|argument)|\*|(?!that\b|which\b|where\b|with\b|if\b|the\b|field\b|param\b|parameter\b|arg\b|argument\b|contains\b|containing\b|ends\b|ending\b|starts\b|starting\b|equals\b|matches\b|is\b)[a-zA-Z0-9_\.\-]+)\s+'
+            r'(contains|ends with|ending with|starts with|starting with|equals|is|matches)\s+'
+            r'(?:["\']([^"\']+)["\']|(\S+))',
             rest,
             re.IGNORECASE,
         )
         if m_param_explicit:
-            param_name = m_param_explicit.group(1).lower()
+            raw_param = m_param_explicit.group(1).lower()
+            if raw_param.startswith("any") or raw_param == "*":
+                param_name = "*"
+            else:
+                param_name = raw_param
             op_raw = m_param_explicit.group(2).lower()
             val = (m_param_explicit.group(3) or m_param_explicit.group(4)).strip()
             if "ends" in op_raw or "ending" in op_raw:
@@ -251,19 +279,30 @@ class SecurityDSLParser:
                 operator = "contains"
         else:
             # Pattern matching without explicit param name:
-            # - "with <val> in it", "contains <val>", "containing <val>"
+            # - "with <val> in <field>", "with <val> in it", "contains <val>", "containing <val>"
             # - "ending with <val>", "ends with <val>", "with extension <val>"
             # - "starting with <val>", "under <val>", "in <val>"
-            m_with_in_it = re.search(r'\b(?:that\s+|which\s+|where\s+)?(?:with|containing|contains|has|having)\s+(?:["\']([^"\']+)["\']|(\S+))\s+in\s+it\b', rest, re.IGNORECASE)
+            m_with_in_field = re.search(
+                r'\b(?:that\s+|which\s+|where\s+)?(?:with|containing|contains|has|having)\s+(?:["\']([^"\']+)["\']|(\S+))\s+in\s+([a-zA-Z0-9_\.\-]+)\b',
+                rest,
+                re.IGNORECASE,
+            )
             m_end = re.search(r'\b(?:that\s+|which\s+|where\s+)?(?:ending with|ends with|with extension)\s+(?:["\']([^"\']+)["\']|(\S+))', rest, re.IGNORECASE)
             m_start = re.search(r'\b(?:that\s+|which\s+|where\s+)?(?:starting with|starts with|under)\s+(?:["\']([^"\']+)["\']|(\S+))', rest, re.IGNORECASE)
             m_in_path = re.search(r'\bin\s+(?:["\']([^"\']+)["\']|(\S+))', rest, re.IGNORECASE)
             m_match = re.search(r'\b(?:that\s+|which\s+|where\s+)?matching\s+(?:["\']([^"\']+)["\']|(\S+))', rest, re.IGNORECASE)
             m_contains = re.search(r'\b(?:that\s+|which\s+|where\s+)?(?:contains|containing|with|has|having)\s+(?:["\']([^"\']+)["\']|(\S+))', rest, re.IGNORECASE)
 
-            if m_with_in_it:
+            if m_with_in_field:
                 operator = "contains"
-                val = (m_with_in_it.group(1) or m_with_in_it.group(2)).strip()
+                val = (m_with_in_field.group(1) or m_with_in_field.group(2)).strip()
+                in_target = m_with_in_field.group(3).lower()
+                if in_target in ("it", "this"):
+                    param_name = default_param
+                elif in_target in ("any", "any_field", "all"):
+                    param_name = "*"
+                else:
+                    param_name = in_target
             elif m_end:
                 operator = "endswith"
                 val = (m_end.group(1) or m_end.group(2)).strip()
