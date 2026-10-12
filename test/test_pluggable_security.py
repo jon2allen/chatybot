@@ -358,3 +358,154 @@ def test_mcp_tool_matching_and_arbitrary_field_targeting():
 
 
 
+
+
+def _write_guard(tmpdir, name, body):
+    import os as _os
+    import tempfile as _tempfile
+
+    fd, path = _tempfile.mkstemp(suffix=".py", dir=tmpdir)
+    with os.fdopen(fd, "w") as f:
+        f.write("#!/usr/bin/env python3\n" + body)
+    _os.chmod(path, 0o755)
+    return path
+
+
+def test_stdio_binary_invalid_json_fails_safe():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        script = _write_guard(
+            tmpdir,
+            "guard",
+            "import sys\nprint('this is not json')\n",
+        )
+        engine = StdioBinaryPolicyEngine(binary_path=script)
+        decision = engine.evaluate(PolicyRequest(tool="read_file"))
+        assert decision.verdict == Verdict.DENY
+        assert "invalid JSON" in decision.reason
+
+
+def test_stdio_binary_unknown_status_fails_safe():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        script = _write_guard(
+            tmpdir,
+            "guard",
+            "import sys, json\nprint(json.dumps({'status': 'maybe'}))\n",
+        )
+        engine = StdioBinaryPolicyEngine(binary_path=script)
+        decision = engine.evaluate(PolicyRequest(tool="read_file"))
+        assert decision.verdict == Verdict.DENY
+        assert "unknown status" in decision.reason
+
+
+def test_stdio_binary_non_string_status_fails_safe():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        script = _write_guard(
+            tmpdir,
+            "guard",
+            "import sys, json\nprint(json.dumps({'status': 42}))\n",
+        )
+        engine = StdioBinaryPolicyEngine(binary_path=script)
+        decision = engine.evaluate(PolicyRequest(tool="read_file"))
+        assert decision.verdict == Verdict.DENY
+        assert "non-string status" in decision.reason
+
+
+def test_stdio_binary_non_object_response_fails_safe():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        script = _write_guard(
+            tmpdir,
+            "guard",
+            "import sys\nprint('[1, 2, 3]')\n",
+        )
+        engine = StdioBinaryPolicyEngine(binary_path=script)
+        decision = engine.evaluate(PolicyRequest(tool="read_file"))
+        assert decision.verdict == Verdict.DENY
+        assert "not a JSON object" in decision.reason
+
+
+def test_stdio_binary_nonzero_exit_fails_safe_with_stderr():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        script = _write_guard(
+            tmpdir,
+            "guard",
+            "import sys\nsys.stderr.write('boom' * 300)\nsys.exit(3)\n",
+        )
+        engine = StdioBinaryPolicyEngine(binary_path=script)
+        decision = engine.evaluate(PolicyRequest(tool="read_file"))
+        assert decision.verdict == Verdict.DENY
+        assert "exited with code 3" in decision.reason
+        assert len(decision.reason) <= 600
+
+
+def test_stdio_binary_timeout_fails_safe():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        script = _write_guard(
+            tmpdir,
+            "guard",
+            "import time\ntime.sleep(5)\n",
+        )
+        engine = StdioBinaryPolicyEngine(binary_path=script, timeout_seconds=0.5)
+        decision = engine.evaluate(PolicyRequest(tool="read_file"))
+        assert decision.verdict == Verdict.DENY
+        assert "timed out" in decision.reason
+
+
+def test_stdio_binary_missing_binary_fails_safe():
+    engine = StdioBinaryPolicyEngine(binary_path="/nonexistent/policy-binary")
+    decision = engine.evaluate(PolicyRequest(tool="read_file"))
+    assert decision.verdict == Verdict.DENY
+    assert "failed" in decision.reason
+
+
+def test_stdio_binary_ask_verdict_gets_default_prompt_details():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        script = _write_guard(
+            tmpdir,
+            "guard",
+            "import sys, json\nprint(json.dumps({'status': 'ask'}))\n",
+        )
+        engine = StdioBinaryPolicyEngine(binary_path=script)
+        decision = engine.evaluate(PolicyRequest(tool="read_file"))
+        assert decision.verdict == Verdict.ASK
+        assert decision.prompt_details is not None
+        assert decision.prompt_details.message == "Authorize action?"
+
+
+def test_stdio_binary_non_dict_modified_parameters_fails_safe():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        script = _write_guard(
+            tmpdir,
+            "guard",
+            "import sys, json\nprint(json.dumps({'status': 'allow', 'modified_parameters': ['a', 'b']}))\n",
+        )
+        engine = StdioBinaryPolicyEngine(binary_path=script)
+        decision = engine.evaluate(PolicyRequest(tool="read_file"))
+        assert decision.verdict == Verdict.DENY
+        assert "modified_parameters" in decision.reason
+
+
+def test_stdio_binary_valid_modified_parameters_passed_through():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        script = _write_guard(
+            tmpdir,
+            "guard",
+            "import sys, json\nprint(json.dumps({'status': 'allow', 'modified_parameters': {'path': '/safe.txt'}}))\n",
+        )
+        engine = StdioBinaryPolicyEngine(binary_path=script)
+        request = PolicyRequest(tool="write_file", parameters={"path": "/tmp/x", "content": "hi"})
+        decision = engine.evaluate(request)
+        assert decision.verdict == Verdict.ALLOW
+        assert decision.modified_parameters == {"path": "/safe.txt"}
+
+
+def test_stdio_binary_null_reason_is_coerced_to_string():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        script = _write_guard(
+            tmpdir,
+            "guard",
+            "import sys, json\nprint(json.dumps({'status': 'allow', 'reason': None}))\n",
+        )
+        engine = StdioBinaryPolicyEngine(binary_path=script)
+        decision = engine.evaluate(PolicyRequest(tool="read_file"))
+        assert decision.verdict == Verdict.ALLOW
+        assert isinstance(decision.reason, str)
