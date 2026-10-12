@@ -543,3 +543,41 @@ def test_stdio_binary_null_reason_is_coerced_to_string():
         decision = engine.evaluate(PolicyRequest(tool="read_file"))
         assert decision.verdict == Verdict.ALLOW
         assert isinstance(decision.reason, str)
+
+def test_config_resilience_and_case_insensitive_verdicts(tmp_path, caplog):
+    """Verify uppercase verdicts, baseline tool rule case normalization, and config error logging."""
+    import logging
+
+    # 1. Uppercase fail_safe and engine options in security.toml
+    cfg_file = tmp_path / "security_uppercase.toml"
+    cfg_file.write_text('fail_safe = "DENY"\nengine = "builtin"\n[builtin]\ndefault_verdict = "ASK"\n')
+
+    mgr = SecurityManager(config_path=str(cfg_file))
+    assert mgr.fail_safe == Verdict.DENY
+    assert isinstance(mgr.engine, BuiltinPolicyEngine)
+    assert mgr.engine.default_verdict == Verdict.ASK
+
+    # 2. Case-insensitive baseline tool rules in BuiltinPolicyEngine
+    engine = BuiltinPolicyEngine(
+        rules={"Read_File": "DENY", "CUSTOM_TOOL": "ALLOW"},
+        default_verdict="ASK",
+    )
+    dec_read = engine.evaluate(PolicyRequest(tool="read_file", parameters={"path": "safe.txt"}))
+    assert dec_read.verdict == Verdict.DENY
+    dec_custom = engine.evaluate(PolicyRequest(tool="custom_tool", parameters={}))
+    assert dec_custom.verdict == Verdict.ALLOW
+
+    # 3. Malformed security.toml triggers warning and falls back to default engine
+    bad_toml = tmp_path / "bad.toml"
+    bad_toml.write_text("this is completely invalid [[ TOML {")
+    with caplog.at_level(logging.WARNING):
+        mgr_bad = SecurityManager(config_path=str(bad_toml))
+    assert mgr_bad.engine is not None
+    assert any("[Security Config] Failed to parse security policy file" in record.message for record in caplog.records)
+
+    # 4. enabled=False does not construct unnecessary engine and returns ALLOW
+    mgr_disabled = SecurityManager(enabled=False)
+    assert mgr_disabled.engine is None
+    dec_disabled = mgr_disabled.evaluate(tool="run_command", parameters={"command": "rm -rf /"})
+    assert dec_disabled.verdict == Verdict.ALLOW
+
