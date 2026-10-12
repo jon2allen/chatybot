@@ -67,7 +67,9 @@ class BuiltinPolicyEngine(BasePolicyEngine):
         "dd if=/dev/zero",
         "> /dev/sda",
         "> /dev/disk",
+        "chatybot",
     ]
+
 
     def __init__(
         self,

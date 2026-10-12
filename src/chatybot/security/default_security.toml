@@ -46,6 +46,7 @@ dsl_rules = [
     "deny run command with mkfs in it",
     "deny run command with 'rm -rf' in it",
     "deny run command with ':(){ :|:& };:' in it",
+    "deny run command with chatybot in it because 'prevent recursive sub-agent execution and privilege escalation'",
     
     # --- Directory Deletion & Modification ---
     "deny delete file in /var",
@@ -80,7 +81,9 @@ denied_patterns = [
     "dd if=/dev/zero",
     "> /dev/sda",
     "> /dev/disk",
+    "chatybot",
 ]
+
 
 
 # ==============================================================================

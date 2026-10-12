@@ -50,12 +50,21 @@ def test_builtin_policy_protected_path_denial():
 
 
 def test_builtin_policy_dangerous_commands():
-    """Verify hard denial on catastrophic shell commands."""
+    """Verify hard denial on catastrophic shell commands including recursive chatybot."""
     engine = BuiltinPolicyEngine()
 
     dec = engine.evaluate(PolicyRequest(tool="run_command", parameters={"command": "rm -rf /"}))
     assert dec.verdict == Verdict.DENY
     assert "Dangerous command pattern" in dec.reason
+
+    dec_chatybot = engine.evaluate(PolicyRequest(tool="run_command", parameters={"command": "chatybot --script attack.chatdsl -y"}))
+    assert dec_chatybot.verdict == Verdict.DENY
+    assert "Dangerous command pattern 'chatybot'" in dec_chatybot.reason
+
+    dec_py_chatybot = engine.evaluate(PolicyRequest(tool="run_command", parameters={"command": "python3 -m chatybot --run 'echo safe'"}))
+    assert dec_py_chatybot.verdict == Verdict.DENY
+    assert "Dangerous command pattern 'chatybot'" in dec_py_chatybot.reason
+
 
 
 def test_security_manager_custom_config():
@@ -659,6 +668,12 @@ async def test_auto_approve_yes_flag(monkeypatch):
     res_deny = await app.dispatch_tool(json.dumps({"tool": "read_file", "arguments": {"path": "/etc/passwd"}}))
     assert "Error: Security Policy Blocked" in res_deny
     assert any("[Security Audit] BLOCKED tool 'read_file'" in m for m in logged_messages)
+
+    # 3. Spawning chatybot sub-process via run_command is strictly DENIED even with auto_approve=True!
+    logged_messages.clear()
+    res_cmd = await app.dispatch_tool(json.dumps({"tool": "run_command", "arguments": {"command": "chatybot --script escape.chatdsl -y"}}))
+    assert "Error: Security Policy Blocked" in res_cmd
+    assert any("[Security Audit] BLOCKED tool 'run_command'" in m for m in logged_messages)
 
 
 @pytest.mark.anyio
