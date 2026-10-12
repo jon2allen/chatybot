@@ -165,12 +165,14 @@ denied_paths = ["/etc", "/var/root", "/boot", "/System", "~/.ssh", "~/.gnupg", "
 
 ```toml
 [builtin.command_rules]
-denied_patterns = ["rm -rf /", "rm -rf /*", ":(){ :|:& };:", "mkfs", "dd if=/dev/zero", "> /dev/sda", "> /dev/disk"]
+denied_patterns = ["rm -rf /", "rm -rf /*", ":(){ :|:& };:", "mkfs", "dd if=/dev/zero", "> /dev/sda", "> /dev/disk", "chatybot"]
 ```
 
 Applies to `run_command`. Matching is a **case-insensitive substring** match — intentionally over-broad. `man mkfs` or `echo "rm -rf /"` will also be blocked. False positives here are considered safer than false negatives.
 
-The engine's built-in code defaults (`DEFAULT_DENIED_COMMAND_PATTERNS`) include the fork-bomb pattern `:(){ :|:& };:` even when the config file omits it. However, the seeded `security.toml` is what runs in practice — keep the fork-bomb entry in your config so protection does not depend on a parse failure falling back to code defaults.
+`"chatybot"` is strictly blocked to prevent an LLM from invoking sub-processes (e.g. `chatybot --script foo.chatdsl -y` or `python -m chatybot --run "..." -y`) to circumvent interactive confirmations or escalate privileges.
+
+The engine's built-in code defaults (`DEFAULT_DENIED_COMMAND_PATTERNS`) include both the fork-bomb pattern `:(){ :|:& };:` and `"chatybot"` even when the config file omits them.
 
 ### Tier 4 — Baseline tool verdicts
 
