@@ -46,6 +46,9 @@ class SecurityRuleAST:
         if self.tool and self.tool != "any" and request.tool != self.tool:
             return False
 
+        if self.operator == "always":
+            return True
+
         # 2. Extract parameter value
         params = request.parameters or {}
         candidate_val = params.get(self.param_name)
@@ -115,6 +118,8 @@ class SecurityDSLParser:
         "call skill": "call_skill",
         "call skills": "call_skill",
         "list directory": "list_directory",
+        "remove directory": "remove_directory",
+        "remove directories": "remove_directory",
         "any": None,
         "any tool": None,
         "any tools": None,
@@ -239,6 +244,10 @@ class SecurityDSLParser:
             elif m_contains:
                 operator = "contains"
                 val = m_contains.group(1).strip()
+            elif not rest:
+                # Unconditional rule on a specific tool (e.g. "ask before delete file", "ask before remove directory")
+                operator = "always"
+                val = ""
             else:
                 return None
 
