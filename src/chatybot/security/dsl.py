@@ -41,6 +41,13 @@ class SecurityRuleAST:
     value: str                 # Pattern or string value
     reason: str | None = None  # Optional explicit explanation
 
+    def format_definition(self) -> str:
+        """Format parsed AST details into a readable string representation."""
+        action_name = self.action.value.upper()
+        match_desc = f"{self.param_name} {self.operator} '{self.value}'" if self.operator != "always" else "always"
+        reason_desc = f", reason='{self.reason}'" if self.reason else ""
+        return f"action={action_name}, tool={self.tool or '*'}, match=({match_desc}){reason_desc}"
+
     def matches(self, request: PolicyRequest) -> bool:
         # 1. Match tool
         if self.tool and self.tool != "any" and request.tool != self.tool:
@@ -219,31 +226,31 @@ class SecurityDSLParser:
         else:
             # Pattern: ending with <val> / with extension <val>
             # Check "with <val> in it" or "containing <val>" or "with <val>"
-            m_with_in_it = re.search(r'\b(?:with|containing|has|having)\s+["\']?([^"\'\s]+)["\']?\s+in\s+it\b', rest, re.IGNORECASE)
-            m_end = re.search(r'\b(?:ending with|with extension)\s+["\']?([^"\'\s]+)["\']?', rest, re.IGNORECASE)
-            m_start = re.search(r'\b(?:starting with|under)\s+["\']?([^"\'\s]+)["\']?', rest, re.IGNORECASE)
-            m_in_path = re.search(r'\bin\s+["\']?([^"\'\s]+)["\']?', rest, re.IGNORECASE)
-            m_match = re.search(r'\bmatching\s+["\']?([^"\'\s]+)["\']?', rest, re.IGNORECASE)
-            m_contains = re.search(r'\b(?:with|containing|has|having)\s+["\']?([^"\'\s]+)["\']?', rest, re.IGNORECASE)
+            m_with_in_it = re.search(r'\b(?:with|containing|has|having)\s+(?:["\']([^"\']+)["\']|(\S+))\s+in\s+it\b', rest, re.IGNORECASE)
+            m_end = re.search(r'\b(?:ending with|with extension)\s+(?:["\']([^"\']+)["\']|(\S+))', rest, re.IGNORECASE)
+            m_start = re.search(r'\b(?:starting with|under)\s+(?:["\']([^"\']+)["\']|(\S+))', rest, re.IGNORECASE)
+            m_in_path = re.search(r'\bin\s+(?:["\']([^"\']+)["\']|(\S+))', rest, re.IGNORECASE)
+            m_match = re.search(r'\bmatching\s+(?:["\']([^"\']+)["\']|(\S+))', rest, re.IGNORECASE)
+            m_contains = re.search(r'\b(?:with|containing|has|having)\s+(?:["\']([^"\']+)["\']|(\S+))', rest, re.IGNORECASE)
 
             if m_with_in_it:
                 operator = "contains"
-                val = m_with_in_it.group(1).strip()
+                val = (m_with_in_it.group(1) or m_with_in_it.group(2)).strip()
             elif m_end:
                 operator = "endswith"
-                val = m_end.group(1).strip()
+                val = (m_end.group(1) or m_end.group(2)).strip()
             elif m_start:
                 operator = "startswith"
-                val = m_start.group(1).strip()
+                val = (m_start.group(1) or m_start.group(2)).strip()
             elif m_in_path:
                 operator = "startswith"
-                val = m_in_path.group(1).strip()
+                val = (m_in_path.group(1) or m_in_path.group(2)).strip()
             elif m_match:
                 operator = "matches"
-                val = m_match.group(1).strip()
+                val = (m_match.group(1) or m_match.group(2)).strip()
             elif m_contains:
                 operator = "contains"
-                val = m_contains.group(1).strip()
+                val = (m_contains.group(1) or m_contains.group(2)).strip()
             elif not rest:
                 # Unconditional rule on a specific tool (e.g. "ask before delete file", "ask before remove directory")
                 operator = "always"

@@ -23,13 +23,14 @@ class SecurityManager:
 
     DEFAULT_CONFIG_PATH = "~/.config/chatybot/security.toml"
 
-    def __init__(self, config_path: str | None = None, enabled: bool = True):
+    def __init__(self, config_path: str | None = None, enabled: bool = True, debug: bool = False):
         self.enabled = enabled
+        self.debug = debug
         self.config_path = os.path.abspath(
             os.path.expanduser(config_path or self.DEFAULT_CONFIG_PATH)
         )
         self.config: dict[str, Any] = {}
-        self.engine: BasePolicyEngine = BuiltinPolicyEngine()
+        self.engine: BasePolicyEngine = BuiltinPolicyEngine(debug=debug)
         self.fail_safe = Verdict.DENY
 
         if self.enabled:
@@ -62,6 +63,10 @@ class SecurityManager:
         self.fail_safe = Verdict(self.config.get("fail_safe", "deny"))
         engine_type = self.config.get("engine", "builtin").lower()
 
+        if self.debug:
+            print(f"[Security Debug] Loading security configuration from '{config_to_load}'...")
+            print(f"[Security Debug] Engine type: '{engine_type}', Fail-safe verdict: '{self.fail_safe.value.upper()}'.")
+
         if engine_type == "binary":
             bin_cfg = self.config.get("binary", {})
             raw_path = bin_cfg.get("path", "")
@@ -85,6 +90,7 @@ class SecurityManager:
             default_verdict=builtin_cfg.get("default_verdict", "ask"),
             denied_paths=builtin_cfg.get("path_restrictions", {}).get("denied_paths"),
             denied_command_patterns=builtin_cfg.get("command_rules", {}).get("denied_patterns"),
+            debug=self.debug,
         )
 
     def evaluate(
