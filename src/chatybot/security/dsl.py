@@ -113,7 +113,8 @@ class SecurityRuleAST:
         if not candidate_values:
             return False
 
-        pat_lower = self.value.lower()
+        pat = "\n" if self.value in ("\\n", "\n") else ("\r" if self.value in ("\\r", "\r") else self.value)
+        pat_lower = pat.lower()
 
         # 3. Match operator (all case-insensitive) across all candidate values
         for val_str in candidate_values:
@@ -121,6 +122,7 @@ class SecurityRuleAST:
             if self.operator == "contains":
                 if pat_lower in val_lower:
                     return True
+
             elif self.operator == "endswith":
                 if val_lower.endswith(pat_lower):
                     return True

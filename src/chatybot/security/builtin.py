@@ -6,6 +6,7 @@ path restrictions, and dangerous command patterns.
 
 import logging
 import os
+import re
 from typing import Any
 from chatybot.security.base import BasePolicyEngine
 from chatybot.security.models import (
@@ -24,6 +25,13 @@ class BuiltinPolicyEngine(BasePolicyEngine):
     Default in-process policy engine with Security DSL evaluation,
     baseline tri-state rules, path traversal guards, and command filtering.
     """
+
+    # Matches direct or chained execution of Chatybot or Python module invocation
+    CHATYBOT_EXEC_PATTERN = re.compile(
+        r"(?:^|[;&|`\n\r])\s*(?:[^\s;&|`\n\r]*/)?chatybot(?:\.py)?(?:\s+|$)|"
+        r"(?:^|[;&|`\n\r])\s*python[0-9.]*\s+-m\s+chatybot(?:\s+|$)",
+        re.IGNORECASE,
+    )
 
     DEFAULT_TOOL_RULES: dict[str, str] = {
         "read_file": "allow",
@@ -67,11 +75,10 @@ class BuiltinPolicyEngine(BasePolicyEngine):
         "dd if=/dev/zero",
         "> /dev/sda",
         "> /dev/disk",
-        "chatybot",
     ]
 
-
     def __init__(
+
         self,
         rules: dict[str, str] | None = None,
         dsl_rules: list[str] | None = None,
@@ -206,9 +213,29 @@ class BuiltinPolicyEngine(BasePolicyEngine):
                     if k.lower() in ("command", "cmd"):
                         cmd = str(v).strip()
                         break
+
+            # Tier 0: Direct check against Chatybot sub-process execution
+            if self.CHATYBOT_EXEC_PATTERN.search(cmd):
+                decision = PolicyDecision(
+                    verdict=Verdict.DENY,
+                    reason="Execution of Chatybot sub-process is strictly denied by policy to prevent recursive privilege escalation.",
+                )
+                if self.debug:
+                    print(f"[Security Debug] [SPECIAL DENY] Tier 0 Chatybot Execution: '{cmd}' -> {decision.reason}")
+                return decision
+
             cmd_lower = cmd.lower()
             for pattern in self.denied_command_patterns:
-                if pattern.lower() in cmd_lower:
+                if pattern.lower() == "chatybot":
+                    if self.CHATYBOT_EXEC_PATTERN.search(cmd):
+                        decision = PolicyDecision(
+                            verdict=Verdict.DENY,
+                            reason=f"Dangerous command pattern '{pattern}' is strictly denied by policy.",
+                        )
+                        if self.debug:
+                            print(f"[Security Debug] [SPECIAL DENY] Tier 0 Dangerous Command: '{pattern}' in '{cmd}' -> {decision.reason}")
+                        return decision
+                elif pattern.lower() in cmd_lower:
                     decision = PolicyDecision(
                         verdict=Verdict.DENY,
                         reason=f"Dangerous command pattern '{pattern}' is strictly denied by policy.",
@@ -247,7 +274,30 @@ class BuiltinPolicyEngine(BasePolicyEngine):
                     print(f"[Security Debug] [SPECIAL ASK] Tier 2 Rule: '{dsl_rule.raw_text}' -> {reason}")
                 return decision
 
+        # Tier 2.5: Multiline / newline command separation guard for run_command
+        if tool == "run_command":
+            cmd = str(params.get("command") or params.get("cmd") or "").strip()
+            if not cmd:
+                for k, v in params.items():
+                    if k.lower() in ("command", "cmd"):
+                        cmd = str(v).strip()
+                        break
+            if "\n" in cmd or "\r" in cmd:
+                decision = PolicyDecision(
+                    verdict=Verdict.ASK,
+                    reason="Multiline command containing newline separator requires user confirmation.",
+                    prompt_details=PolicyPromptDetails(
+                        title="Security Policy: Multiline Command",
+                        message=f"Command contains newline separator: '{cmd}'. Proceed with execution?",
+                        risk_level="high",
+                    ),
+                )
+                if self.debug:
+                    print(f"[Security Debug] [CHAINING ASK] Multiline command separator in '{cmd}' -> {decision.reason}")
+                return decision
+
         # Tier 3: Allow Rules (Check all ALLOW DSL rules)
+
         for dsl_rule in self.allow_dsl_rules:
             if dsl_rule.matches(request):
                 reason = dsl_rule.reason or f"Matched security DSL rule: '{dsl_rule.raw_text}'"
