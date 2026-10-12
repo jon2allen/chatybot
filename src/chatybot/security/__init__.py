@@ -11,6 +11,7 @@ from chatybot.security.models import (
 )
 from chatybot.security.base import BasePolicyEngine
 from chatybot.security.builtin import BuiltinPolicyEngine
+from chatybot.security.dsl import SecurityDSLParser, SecurityRuleAST
 from chatybot.security.manager import SecurityManager
 
 __all__ = [
@@ -19,6 +20,8 @@ __all__ = [
     "PolicyDecision",
     "PolicyPromptDetails",
     "PolicyRequest",
+    "SecurityDSLParser",
     "SecurityManager",
+    "SecurityRuleAST",
     "Verdict",
 ]

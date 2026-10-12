@@ -62,6 +62,7 @@ class SecurityManager:
         builtin_cfg = self.config.get("builtin", {})
         self.engine = BuiltinPolicyEngine(
             rules=builtin_cfg.get("rules"),
+            dsl_rules=builtin_cfg.get("dsl_rules") or builtin_cfg.get("rules_dsl"),
             default_verdict=builtin_cfg.get("default_verdict", "ask"),
             denied_paths=builtin_cfg.get("path_restrictions", {}).get("denied_paths"),
             denied_command_patterns=builtin_cfg.get("command_rules", {}).get("denied_patterns"),
