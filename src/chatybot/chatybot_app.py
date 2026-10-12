@@ -344,6 +344,14 @@ class ChatybotApp:
             except Exception as e:
                 print(f"Error seeding profile presets: {e}")
 
+        # Initialize Security Manager (pluggable security policy gateway)
+        try:
+            from .security.manager import SecurityManager
+            self.security_manager = SecurityManager()
+        except Exception as e:
+            print(f"[Security Warning] Failed to initialize SecurityManager: {e}")
+            self.security_manager = None
+
         self.enable_chat_history = getattr(self.config_manager, "enable_chat_history", True)
 
         # Set up input history
@@ -3721,6 +3729,42 @@ class ChatybotApp:
         
         if tool_call and isinstance(tool_call, dict):
             tool_name = tool_call.get("tool", "")
+            tool_args = tool_call.get("arguments", {})
+
+            # --- Security Policy Interception ---
+            sec_mgr = getattr(self, "security_manager", None)
+            if sec_mgr is not None and tool_name:
+                from .security.models import Verdict
+                sec_decision = sec_mgr.evaluate(
+                    tool=tool_name,
+                    parameters=tool_args if isinstance(tool_args, dict) else {},
+                    context={"session_id": getattr(self, "session_id", ""), "interactive": True},
+                )
+                if sec_decision.verdict == Verdict.DENY:
+                    deny_msg = f"Security Policy Blocked: {sec_decision.reason}"
+                    print(f"\n[Security Block] {deny_msg}")
+                    self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
+                    self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', deny_msg)
+                    self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
+                    return f"Error: {deny_msg}"
+                elif sec_decision.verdict == Verdict.ASK:
+                    risk = sec_decision.prompt_details.risk_level if sec_decision.prompt_details else "medium"
+                    msg = sec_decision.prompt_details.message if sec_decision.prompt_details else f"Authorize '{tool_name}'?"
+                    print(f"\n[Security Confirmation Required] ({risk.upper()} risk)")
+                    print(f"  Tool: {tool_name}")
+                    print(f"  Reason: {sec_decision.reason}")
+                    try:
+                        ans = input(f"Proceed with execution? [y/N]: ").strip().lower()
+                    except (EOFError, KeyboardInterrupt):
+                        ans = "n"
+                    if ans not in ("y", "yes"):
+                        cancel_msg = f"Security Authorization Denied: User declined execution of '{tool_name}'."
+                        print(f"[Security] {cancel_msg}")
+                        self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
+                        self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', cancel_msg)
+                        self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
+                        return f"Error: {cancel_msg}"
+
             if tool_name.startswith("mcp__"):
                 parts = tool_name.split("__", 2)
                 if len(parts) >= 3:
