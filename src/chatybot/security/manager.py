@@ -32,9 +32,15 @@ class SecurityManager:
             self._load_config_and_initialize()
 
     def _load_config_and_initialize(self) -> None:
-        if os.path.exists(self.config_path):
+        config_to_load = self.config_path
+        if not os.path.exists(config_to_load):
+            bundled_default = os.path.join(os.path.dirname(__file__), "default_security.toml")
+            if os.path.exists(bundled_default):
+                config_to_load = bundled_default
+
+        if os.path.exists(config_to_load):
             try:
-                with open(self.config_path, "rb") as f:
+                with open(config_to_load, "rb") as f:
                     self.config = tomllib.load(f)
             except Exception as e:
                 # Log warning and fall back to built-in default engine
