@@ -3746,6 +3746,8 @@ class ChatybotApp:
                     if self.security_debug:
                         print(f"[Security Debug] [SPECIAL DENY] Blocked tool '{tool_name}': {sec_decision.reason}")
                     print(f"\n[Security Block] {deny_msg}")
+                    if hasattr(self, "logging_manager") and getattr(self.logging_manager, "logging_active", False):
+                        self.logging_manager.log_message(f"[Security Audit] BLOCKED tool '{tool_name}'. Reason: {sec_decision.reason}")
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', deny_msg)
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
@@ -3757,13 +3759,16 @@ class ChatybotApp:
                     print(f"  Tool: {tool_name}")
                     print(f"  Reason: {sec_decision.reason}")
                     try:
-                        ans = input(f"Proceed with execution? [y/N]: ").strip().lower()
+                        ans = await asyncio.to_thread(input, "Proceed with execution? [y/N]: ")
+                        ans = ans.strip().lower()
                     except (EOFError, KeyboardInterrupt):
                         ans = "n"
                     if ans not in ("y", "yes"):
                         cancel_msg = f"Security Authorization Denied: User declined execution of '{tool_name}'."
                         if self.security_debug:
                             print(f"[Security Debug] [DENY] User rejected authorization for tool '{tool_name}'.")
+                        if hasattr(self, "logging_manager") and getattr(self.logging_manager, "logging_active", False):
+                            self.logging_manager.log_message(f"[Security Audit] USER DECLINED tool '{tool_name}'. Reason: {sec_decision.reason}")
                         print(f"[Security] {cancel_msg}")
                         self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
                         self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', cancel_msg)
@@ -3772,6 +3777,8 @@ class ChatybotApp:
                     else:
                         if self.security_debug:
                             print(f"[Security Debug] [ACCEPT] User approved execution of tool '{tool_name}'.")
+                        if hasattr(self, "logging_manager") and getattr(self.logging_manager, "logging_active", False):
+                            self.logging_manager.log_message(f"[Security Audit] USER APPROVED tool '{tool_name}'. Reason: {sec_decision.reason}")
                 elif sec_decision.verdict == Verdict.ALLOW:
                     if self.security_debug:
                         print(f"[Security Debug] [ACCEPT] Permitted execution of tool '{tool_name}'.")
