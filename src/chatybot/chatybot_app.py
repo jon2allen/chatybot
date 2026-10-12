@@ -69,9 +69,10 @@ app = None  # Global app instance for database functions to access
 class ChatybotApp:
     """Main application class for Chatybot."""
 
-    def __init__(self, config_path: str | None = None, lang: str = "en", no_tools: bool = False):
+    def __init__(self, config_path: str | None = None, lang: str = "en", no_tools: bool = False, security_debug: bool = False):
         """Initialize the Chatybot application."""
         self.no_tools: bool = no_tools
+        self.security_debug: bool = security_debug
         # Initialize managers
         from .localization import LocalizationManager
         self.i18n = LocalizationManager(locale=lang)
@@ -347,7 +348,7 @@ class ChatybotApp:
         # Initialize Security Manager (pluggable security policy gateway)
         try:
             from .security.manager import SecurityManager
-            self.security_manager = SecurityManager()
+            self.security_manager = SecurityManager(debug=self.security_debug)
         except Exception as e:
             print(f"[Security Warning] Failed to initialize SecurityManager: {e}")
             self.security_manager = None
@@ -3742,6 +3743,8 @@ class ChatybotApp:
                 )
                 if sec_decision.verdict == Verdict.DENY:
                     deny_msg = f"Security Policy Blocked: {sec_decision.reason}"
+                    if self.security_debug:
+                        print(f"[Security Debug] [SPECIAL DENY] Blocked tool '{tool_name}': {sec_decision.reason}")
                     print(f"\n[Security Block] {deny_msg}")
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', deny_msg)
@@ -3759,11 +3762,19 @@ class ChatybotApp:
                         ans = "n"
                     if ans not in ("y", "yes"):
                         cancel_msg = f"Security Authorization Denied: User declined execution of '{tool_name}'."
+                        if self.security_debug:
+                            print(f"[Security Debug] [DENY] User rejected authorization for tool '{tool_name}'.")
                         print(f"[Security] {cancel_msg}")
                         self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
                         self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', cancel_msg)
                         self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
                         return f"Error: {cancel_msg}"
+                    else:
+                        if self.security_debug:
+                            print(f"[Security Debug] [ACCEPT] User approved execution of tool '{tool_name}'.")
+                elif sec_decision.verdict == Verdict.ALLOW:
+                    if self.security_debug:
+                        print(f"[Security Debug] [ACCEPT] Permitted execution of tool '{tool_name}'.")
 
             if tool_name.startswith("mcp__"):
                 parts = tool_name.split("__", 2)
@@ -6716,6 +6727,11 @@ def run():
         help="Disable tools on startup and bypass all MCP server loading via stdio"
     )
     parser.add_argument(
+        "--security",
+        action="store_true",
+        help="Enable security debugging (print policy rules on load and verbose decision traces)"
+    )
+    parser.add_argument(
         "--setup-keys",
         action="store_true",
         help="Launch interactive wizard to configure and save API keys"
@@ -6732,7 +6748,7 @@ def run():
         sys.exit(tui_main(config_path=args.config))
 
     if args.profile_list:
-        tmp = ChatybotApp(config_path=args.config, lang=args.lang, no_tools=args.no_tools)
+        tmp = ChatybotApp(config_path=args.config, lang=args.lang, no_tools=args.no_tools, security_debug=args.security)
         tmp.initialize()
         from .profile_manager import ProfileManager
         pm = ProfileManager(getattr(tmp, 'profile_dir', '~/.config/chatybot/profiles'))
@@ -6752,7 +6768,7 @@ def run():
         sys.exit(0)
 
     if args.profile_edit is not None:
-        tmp = ChatybotApp(config_path=args.config, lang=args.lang, no_tools=args.no_tools)
+        tmp = ChatybotApp(config_path=args.config, lang=args.lang, no_tools=args.no_tools, security_debug=args.security)
         tmp.initialize()
         from .profile_tui import run_profile_tui
         sys.exit(run_profile_tui(
@@ -6762,7 +6778,7 @@ def run():
         ))
 
     global app
-    app = ChatybotApp(config_path=args.config, lang=args.lang, no_tools=args.no_tools)
+    app = ChatybotApp(config_path=args.config, lang=args.lang, no_tools=args.no_tools, security_debug=args.security)
     # Also set the module-level app variable
     current_module = sys.modules[__name__]
     current_module.app = app

@@ -196,4 +196,42 @@ def test_security_manager_seeds_default_config(capsys):
         assert "[Security Sync] Initialized local 'security.toml'" in captured.out
 
 
+def test_security_debug_mode_shows_parsed_definitions_and_actions(capsys):
+    """Verify debug mode prints each parsed definition and special deny/accept actions."""
+    rules = [
+        "do not read file with api_key in it",
+        "allow read file ending with .md because 'docs are safe'",
+    ]
+    engine = BuiltinPolicyEngine(dsl_rules=rules, debug=True)
+
+    # Verify loading and definition output
+    init_out = capsys.readouterr().out
+    assert "[Security Debug] Parsing and compiling 2 Security DSL rule definitions..." in init_out
+    assert "[Definition #1] [SPECIAL DENY] Raw: 'do not read file with api_key in it'" in init_out
+    assert "Parsed: action=DENY, tool=read_file, match=(path contains 'api_key')" in init_out
+    assert "[Definition #2] [SPECIAL ACCEPT] Raw: 'allow read file ending with .md because 'docs are safe''" in init_out
+    assert "reason='docs are safe'" in init_out
+    assert "[Definition: Path] [SPECIAL DENY]" in init_out
+    assert "[Definition: Command Pattern] [SPECIAL DENY]" in init_out
+    assert "[Definition: Baseline Tool] [ACCEPT] 'read_file'" in init_out
+
+    # 1. Trigger Special Deny
+    dec_deny = engine.evaluate(PolicyRequest(tool="read_file", parameters={"path": "/tmp/secret_api_key.txt"}))
+    assert dec_deny.verdict == Verdict.DENY
+    eval_deny_out = capsys.readouterr().out
+    assert "[Security Debug] [SPECIAL DENY] DSL Rule:" in eval_deny_out
+
+    # 2. Trigger Special Accept
+    dec_accept = engine.evaluate(PolicyRequest(tool="read_file", parameters={"path": "/docs/index.md"}))
+    assert dec_accept.verdict == Verdict.ALLOW
+    eval_accept_out = capsys.readouterr().out
+    assert "[Security Debug] [SPECIAL ACCEPT] DSL Rule:" in eval_accept_out
+
+    # 3. Trigger Special Deny via protected path
+    dec_path = engine.evaluate(PolicyRequest(tool="read_file", parameters={"path": "/etc/shadow"}))
+    assert dec_path.verdict == Verdict.DENY
+    eval_path_out = capsys.readouterr().out
+    assert "[Security Debug] [SPECIAL DENY] Protected Path:" in eval_path_out
+
+
 
