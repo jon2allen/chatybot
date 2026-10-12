@@ -745,3 +745,31 @@ async def test_no_security_cli_mode(monkeypatch):
     res_cmd = await app.dispatch_tool(json.dumps({"tool": "run_command", "arguments": {"command": "echo test_cmd"}}))
     assert "Error: Security Policy Blocked" not in res_cmd
 
+
+def test_git_command_safeguards_and_chaining_defense():
+    """Verify git read-only allowances, shell chaining guards, and destructive git command denials."""
+    from chatybot.security.manager import SecurityManager
+
+    # Load with default bundled config template
+    mgr = SecurityManager()
+
+    # 1. Read-only standalone inspection commands are ALLOWED
+    for cmd in ["git status", "git diff", "git log -n 5", "git show HEAD", "git branch -a", "git rev-parse HEAD", "git remote -v", "git ls-files"]:
+        dec = mgr.evaluate(tool="run_command", parameters={"command": cmd})
+        assert dec.verdict == Verdict.ALLOW, f"Expected ALLOW for '{cmd}', got {dec.verdict}"
+
+    # 2. Compound/chained commands trigger ASK via Tier 2 chaining guards even if starting with git status
+    for chained in ["git status && ls", "git status ; cat foo", "git status | grep bar", "git status $(echo hi)", "git status `whoami`"]:
+        dec = mgr.evaluate(tool="run_command", parameters={"command": chained})
+        assert dec.verdict == Verdict.ASK, f"Expected ASK for chained '{chained}', got {dec.verdict}"
+
+    # 3. Destructive git commands are strictly DENIED via Tier 1
+    for destructive in ["git reset --hard HEAD~1", "git clean -fdx", "git push --force origin main"]:
+        dec = mgr.evaluate(tool="run_command", parameters={"command": destructive})
+        assert dec.verdict == Verdict.DENY, f"Expected DENY for destructive '{destructive}', got {dec.verdict}"
+
+    # 4. Mutating commands without explicit allow fall to Tier 4 baseline ASK
+    dec_commit = mgr.evaluate(tool="run_command", parameters={"command": "git commit -m 'feat: update'"})
+    assert dec_commit.verdict == Verdict.ASK
+
+
