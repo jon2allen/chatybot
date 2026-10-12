@@ -6513,6 +6513,10 @@ class ChatybotApp:
         print(
             self.i18n.get_ui_string("active_model_info", "Active model: {model} (alias: {alias})", model=model_name, alias=model_alias)
         )
+        if getattr(self, "security_manager", None) and self.security_manager.enabled:
+            engine_name = type(self.security_manager.engine).__name__
+            rule_count = len(getattr(self.security_manager.engine, "dsl_rules", []))
+            print(f"Security: Active ({engine_name}, {rule_count} DSL rules loaded)")
 
         # Load and execute profile script if specified via command line or config
         profile_path = getattr(self, 'profile_to_load', None)
