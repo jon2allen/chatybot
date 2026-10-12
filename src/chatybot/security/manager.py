@@ -30,11 +30,13 @@ class SecurityManager:
             os.path.expanduser(config_path or self.DEFAULT_CONFIG_PATH)
         )
         self.config: dict[str, Any] = {}
-        self.engine: BasePolicyEngine = BuiltinPolicyEngine(debug=debug)
         self.fail_safe = Verdict.DENY
+        self.engine: BasePolicyEngine = None  # type: ignore
 
         if self.enabled:
             self._load_config_and_initialize()
+        else:
+            self.engine = BuiltinPolicyEngine(debug=debug)
 
     def _load_config_and_initialize(self) -> None:
         bundled_default = os.path.join(os.path.dirname(__file__), "default_security.toml")
