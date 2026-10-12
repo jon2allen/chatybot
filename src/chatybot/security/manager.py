@@ -44,6 +44,7 @@ class SecurityManager:
                 os.makedirs(os.path.dirname(self.config_path), exist_ok=True)
                 if os.path.exists(bundled_default):
                     shutil.copy2(bundled_default, self.config_path)
+                    print(f"[Security Sync] Initialized local 'security.toml' at '{self.config_path}'")
                     logger.info("[Security Sync] Initialized local security policy at '%s'", self.config_path)
             except Exception as e:
                 logger.warning("[Security Sync] Could not seed default security policy to '%s': %s", self.config_path, e)

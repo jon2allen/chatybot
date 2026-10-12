@@ -176,8 +176,8 @@ def test_malformed_rule_emits_warning(caplog):
     assert dec_deny.verdict == Verdict.DENY
 
 
-def test_security_manager_seeds_default_config():
-    """Verify that SecurityManager copies default_security.toml if user config is missing."""
+def test_security_manager_seeds_default_config(capsys):
+    """Verify that SecurityManager copies default_security.toml and notifies the user."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         target_cfg = os.path.join(tmp_dir, "nonexistent", "security.toml")
         assert not os.path.exists(target_cfg)
@@ -190,6 +190,10 @@ def test_security_manager_seeds_default_config():
             content = f.read()
             assert "dsl_rules" in content
             assert "do not read file with api_key in it" in content
+
+        # Verify user was notified via console print
+        captured = capsys.readouterr()
+        assert "[Security Sync] Initialized local 'security.toml'" in captured.out
 
 
 
