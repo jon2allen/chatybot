@@ -146,14 +146,36 @@ class BuiltinPolicyEngine(BasePolicyEngine):
 
         decision: PolicyDecision
         # Tier 0: System Protections (Protected Paths & Dangerous Command Patterns)
-        if tool in ("read_file", "write_file", "delete_file", "list_directory", "file_info"):
-            target_path = params.get("path") or params.get("target") or params.get("dir")
-            if not target_path:
-                for k, v in params.items():
-                    if k.lower() in ("path", "target", "dir", "file"):
-                        target_path = v
-                        break
-            if target_path and isinstance(target_path, str):
+        if tool in (
+            "read_file",
+            "write_file",
+            "delete_file",
+            "list_directory",
+            "file_info",
+            "make_directory",
+            "remove_directory",
+            "replace_file_content",
+            "patch_file",
+            "find_files",
+        ):
+            candidate_paths: list[str] = []
+            path_keys = {
+                "path", "file", "target", "dir", "directory",
+                "filename", "filepath", "targetpath", "targetfile",
+                "source", "destination", "dest", "sourcefile", "destfile",
+                "sourcepath", "destpath",
+            }
+            for k, v in params.items():
+                k_clean = k.lower().replace("_", "").replace("-", "")
+                if (
+                    k_clean in path_keys
+                    or k_clean.endswith("path")
+                    or k_clean.endswith("file")
+                    or k_clean.endswith("dir")
+                ) and isinstance(v, str):
+                    candidate_paths.append(v)
+
+            for target_path in candidate_paths:
                 abs_path = os.path.abspath(os.path.expanduser(target_path))
                 abs_path_lower = abs_path.lower()
                 for denied in self.denied_paths:
