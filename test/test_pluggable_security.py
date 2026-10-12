@@ -581,3 +581,32 @@ def test_config_resilience_and_case_insensitive_verdicts(tmp_path, caplog):
     dec_disabled = mgr_disabled.evaluate(tool="run_command", parameters={"command": "rm -rf /"})
     assert dec_disabled.verdict == Verdict.ALLOW
 
+
+@pytest.mark.anyio
+async def test_dispatch_tool_async_security_confirmation_and_audit(monkeypatch):
+    """Verify non-blocking async confirmation in dispatch_tool and persistent audit logging."""
+    import json
+    from chatybot.chatybot_app import ChatybotApp
+
+    app = ChatybotApp()
+    app.initialize()
+    app.logging_manager.logging_active = True
+    logged_messages = []
+    monkeypatch.setattr(app.logging_manager, "log_message", lambda msg: logged_messages.append(msg))
+
+    # 1. User denies ASK tool
+    async def mock_input(fn, *args, **kwargs):
+        return "n"
+
+    monkeypatch.setattr("asyncio.to_thread", mock_input)
+    res_deny = await app.dispatch_tool(json.dumps({"tool": "write_file", "arguments": {"path": "test.txt", "content": "hi"}}))
+    assert "Error: Security Authorization Denied" in res_deny
+    assert any("[Security Audit] USER DECLINED tool 'write_file'" in m for m in logged_messages)
+
+    # 2. Blocked Tier 0 tool creates BLOCKED audit log
+    logged_messages.clear()
+    res_tier0 = await app.dispatch_tool(json.dumps({"tool": "read_file", "arguments": {"path": "/etc/passwd"}}))
+    assert "Error: Security Policy Blocked" in res_tier0
+    assert any("[Security Audit] BLOCKED tool 'read_file'" in m for m in logged_messages)
+
+
