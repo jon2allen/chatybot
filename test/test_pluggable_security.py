@@ -197,7 +197,7 @@ def test_security_manager_seeds_default_config(capsys):
 
 
 def test_security_debug_mode_shows_parsed_definitions_and_actions(capsys):
-    """Verify debug mode prints each parsed definition and special deny/accept actions."""
+    """Verify debug mode prints each parsed definition with tier labels and special deny/accept actions."""
     rules = [
         "do not read file with api_key in it",
         "allow read file ending with .md because 'docs are safe'",
@@ -207,9 +207,9 @@ def test_security_debug_mode_shows_parsed_definitions_and_actions(capsys):
     # Verify loading and definition output
     init_out = capsys.readouterr().out
     assert "[Security Debug] Parsing and compiling 2 Security DSL rule definitions..." in init_out
-    assert "[Definition #1] [SPECIAL DENY] Raw: 'do not read file with api_key in it'" in init_out
+    assert "[Definition #1] [SPECIAL DENY (Tier 1)] Raw: 'do not read file with api_key in it'" in init_out
     assert "Parsed: action=DENY, tool=read_file, match=(path contains 'api_key')" in init_out
-    assert "[Definition #2] [SPECIAL ACCEPT] Raw: 'allow read file ending with .md because 'docs are safe''" in init_out
+    assert "[Definition #2] [SPECIAL ACCEPT (Tier 3)] Raw: 'allow read file ending with .md because 'docs are safe''" in init_out
     assert "reason='docs are safe'" in init_out
     assert "[Definition: Path] [SPECIAL DENY]" in init_out
     assert "[Definition: Command Pattern] [SPECIAL DENY]" in init_out
@@ -219,19 +219,40 @@ def test_security_debug_mode_shows_parsed_definitions_and_actions(capsys):
     dec_deny = engine.evaluate(PolicyRequest(tool="read_file", parameters={"path": "/tmp/secret_api_key.txt"}))
     assert dec_deny.verdict == Verdict.DENY
     eval_deny_out = capsys.readouterr().out
-    assert "[Security Debug] [SPECIAL DENY] DSL Rule:" in eval_deny_out
+    assert "[Security Debug] [SPECIAL DENY] Tier 1 Rule:" in eval_deny_out
 
     # 2. Trigger Special Accept
     dec_accept = engine.evaluate(PolicyRequest(tool="read_file", parameters={"path": "/docs/index.md"}))
     assert dec_accept.verdict == Verdict.ALLOW
     eval_accept_out = capsys.readouterr().out
-    assert "[Security Debug] [SPECIAL ACCEPT] DSL Rule:" in eval_accept_out
+    assert "[Security Debug] [SPECIAL ACCEPT] Tier 3 Rule:" in eval_accept_out
 
     # 3. Trigger Special Deny via protected path
     dec_path = engine.evaluate(PolicyRequest(tool="read_file", parameters={"path": "/etc/shadow"}))
     assert dec_path.verdict == Verdict.DENY
     eval_path_out = capsys.readouterr().out
-    assert "[Security Debug] [SPECIAL DENY] Protected Path:" in eval_path_out
+    assert "[Security Debug] [SPECIAL DENY] Tier 0 Protected Path:" in eval_path_out
+
+
+def test_deny_overrides_tiering_system():
+    """Verify that Tier 1 Deny rules override Tier 3 Allow rules regardless of definition order."""
+    rules = [
+        # Broad allow rule defined BEFORE specific deny rule
+        "allow read file ending with .md because 'documentation files are always safe'",
+        "deny read file with zaragoza in it",
+    ]
+    engine = BuiltinPolicyEngine(dsl_rules=rules)
+
+    # File matches both 'ending with .md' AND 'with zaragoza in it'
+    # Tier 1 Deny MUST override Tier 3 Allow
+    dec_zaragoza = engine.evaluate(PolicyRequest(tool="read_file", parameters={"path": "zaragoza.md"}))
+    assert dec_zaragoza.verdict == Verdict.DENY
+    assert "deny read file with zaragoza in it" in dec_zaragoza.reason
+
+    # Normal markdown file should still be allowed by Tier 3
+    dec_normal = engine.evaluate(PolicyRequest(tool="read_file", parameters={"path": "readme.md"}))
+    assert dec_normal.verdict == Verdict.ALLOW
+    assert dec_normal.reason == "documentation files are always safe"
 
 
 
