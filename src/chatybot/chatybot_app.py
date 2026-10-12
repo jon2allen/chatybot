@@ -357,6 +357,9 @@ class ChatybotApp:
                 print(f"Error seeding profile presets: {e}")
 
         # Initialize Security Manager (pluggable security policy gateway)
+        if self.no_security:
+            print("[Security Warning] Security policy evaluation is DISABLED (--no-security) — all tools execute without policy checks.")
+
         try:
             from .security.manager import SecurityManager
             self.security_manager = SecurityManager(
@@ -364,8 +367,24 @@ class ChatybotApp:
                 debug=self.security_debug,
             )
         except Exception as e:
-            print(f"[Security Warning] Failed to initialize SecurityManager: {e}")
-            self.security_manager = None
+            init_err = str(e)
+            print(f"[Security Error] Failed to initialize SecurityManager: {init_err}. Failing closed.")
+            from .security.models import PolicyDecision, Verdict
+
+            class _EmergencyFailClosedSecurityManager:
+                def __init__(self, err_msg: str):
+                    self.err_msg = err_msg
+                    self.enabled = True
+
+                def evaluate(self, *args, **kwargs):
+                    return PolicyDecision(
+                        verdict=Verdict.DENY,
+                        reason=f"Security subsystem failed to initialize safely ({self.err_msg}). All tool executions are blocked (fail-closed).",
+                    )
+
+            self.security_manager = _EmergencyFailClosedSecurityManager(init_err)
+
+
 
         self.enable_chat_history = getattr(self.config_manager, "enable_chat_history", True)
 
@@ -6815,7 +6834,7 @@ def run():
         sys.exit(tui_main(config_path=args.config))
 
     if args.profile_list:
-        tmp = ChatybotApp(config_path=args.config, lang=args.lang, no_tools=args.no_tools, security_debug=args.security, auto_approve=args.auto_approve, no_security=args.no_security)
+        tmp = ChatybotApp(config_path=args.config, lang=args.lang, no_tools=args.no_tools)
         tmp.initialize()
         from .profile_manager import ProfileManager
         pm = ProfileManager(getattr(tmp, 'profile_dir', '~/.config/chatybot/profiles'))
@@ -6835,8 +6854,9 @@ def run():
         sys.exit(0)
 
     if args.profile_edit is not None:
-        tmp = ChatybotApp(config_path=args.config, lang=args.lang, no_tools=args.no_tools, security_debug=args.security, auto_approve=args.auto_approve, no_security=args.no_security)
+        tmp = ChatybotApp(config_path=args.config, lang=args.lang, no_tools=args.no_tools)
         tmp.initialize()
+
         from .profile_tui import run_profile_tui
         sys.exit(run_profile_tui(
             profile_dir=getattr(tmp, 'profile_dir', '~/.config/chatybot/profiles'),

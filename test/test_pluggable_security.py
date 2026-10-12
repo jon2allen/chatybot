@@ -50,24 +50,31 @@ def test_builtin_policy_protected_path_denial():
 
 
 def test_builtin_policy_dangerous_commands():
-    """Verify hard denial on catastrophic shell commands including recursive chatybot."""
+    """Verify hard denial on catastrophic shell commands and Chatybot execution while avoiding filename false positives."""
     engine = BuiltinPolicyEngine()
 
     dec = engine.evaluate(PolicyRequest(tool="run_command", parameters={"command": "rm -rf /"}))
     assert dec.verdict == Verdict.DENY
     assert "Dangerous command pattern" in dec.reason
 
+    # 1. Chatybot executable invocations are strictly denied
     dec_chatybot = engine.evaluate(PolicyRequest(tool="run_command", parameters={"command": "chatybot --script attack.chatdsl -y"}))
     assert dec_chatybot.verdict == Verdict.DENY
-    assert "Dangerous command pattern 'chatybot'" in dec_chatybot.reason
+
+    dec_rel = engine.evaluate(PolicyRequest(tool="run_command", parameters={"command": "./chatybot --run 'safe'"}))
+    assert dec_rel.verdict == Verdict.DENY
 
     dec_py_chatybot = engine.evaluate(PolicyRequest(tool="run_command", parameters={"command": "python3 -m chatybot --run 'echo safe'"}))
     assert dec_py_chatybot.verdict == Verdict.DENY
-    assert "Dangerous command pattern 'chatybot'" in dec_py_chatybot.reason
 
+    # 2. Benign commands referencing chatybot in filenames/arguments are NOT blocked by execution guard
+    for benign_cmd in ["cat chatybot_notes.txt", "grep chatybot logfile.txt", "ls chatybot_dir/"]:
+        dec_benign = engine.evaluate(PolicyRequest(tool="run_command", parameters={"command": benign_cmd}))
+        assert dec_benign.verdict != Verdict.DENY, f"Expected non-DENY for '{benign_cmd}', got {dec_benign.verdict}"
 
 
 def test_security_manager_custom_config():
+
     """Verify SecurityManager loads dedicated TOML config outside tools_config."""
     toml_content = """
 version = "1.0"
@@ -737,8 +744,8 @@ async def test_no_security_cli_mode(monkeypatch):
         res = await app.dispatch_tool(json.dumps({"tool": "write_file", "arguments": {"path": target, "content": "hello"}}))
         assert "Successfully wrote" in res or os.path.exists(target)
 
-    # 2. Protected paths (/etc/passwd) are NOT blocked by security policy
-    res_path = await app.dispatch_tool(json.dumps({"tool": "read_file", "arguments": {"path": "/etc/passwd"}}))
+    # 2. Protected paths are NOT blocked by security policy
+    res_path = await app.dispatch_tool(json.dumps({"tool": "read_file", "arguments": {"path": "/etc/nonexistent_system_cfg.conf"}}))
     assert "Error: Security Policy Blocked" not in res_path
 
     # 3. Dangerous commands (chatybot / rm -rf) are NOT blocked by security policy
@@ -746,12 +753,16 @@ async def test_no_security_cli_mode(monkeypatch):
     assert "Error: Security Policy Blocked" not in res_cmd
 
 
-def test_git_command_safeguards_and_chaining_defense():
-    """Verify git read-only allowances, shell chaining guards, and destructive git command denials."""
+def test_git_command_safeguards_and_chaining_defense(tmp_path):
+    """Verify git read-only allowances, shell chaining guards, and destructive git command denials with config isolation."""
+    import shutil
     from chatybot.security.manager import SecurityManager
 
-    # Load with default bundled config template
-    mgr = SecurityManager()
+    # Isolate test from user's ~/.config by using a copy of the default template
+    bundled_default = os.path.join(os.path.dirname(__file__), "..", "src", "chatybot", "security", "default_security.toml")
+    cfg_file = tmp_path / "isolated_security.toml"
+    shutil.copy2(bundled_default, cfg_file)
+    mgr = SecurityManager(config_path=str(cfg_file))
 
     # 1. Read-only standalone inspection commands are ALLOWED
     for cmd in ["git status", "git diff", "git log -n 5", "git show HEAD", "git branch -a", "git rev-parse HEAD", "git remote -v", "git ls-files"]:
@@ -759,7 +770,15 @@ def test_git_command_safeguards_and_chaining_defense():
         assert dec.verdict == Verdict.ALLOW, f"Expected ALLOW for '{cmd}', got {dec.verdict}"
 
     # 2. Compound/chained commands trigger ASK via Tier 2 chaining guards even if starting with git status
-    for chained in ["git status && ls", "git status ; cat foo", "git status | grep bar", "git status $(echo hi)", "git status `whoami`"]:
+    for chained in [
+        "git status && ls",
+        "git status ; cat foo",
+        "git status | grep bar",
+        "git status $(echo hi)",
+        "git status `whoami`",
+        "git diff\nls -la /etc",
+        "git status\r\nwhoami",
+    ]:
         dec = mgr.evaluate(tool="run_command", parameters={"command": chained})
         assert dec.verdict == Verdict.ASK, f"Expected ASK for chained '{chained}', got {dec.verdict}"
 
@@ -771,5 +790,30 @@ def test_git_command_safeguards_and_chaining_defense():
     # 4. Mutating commands without explicit allow fall to Tier 4 baseline ASK
     dec_commit = mgr.evaluate(tool="run_command", parameters={"command": "git commit -m 'feat: update'"})
     assert dec_commit.verdict == Verdict.ASK
+
+
+@pytest.mark.anyio
+async def test_security_manager_init_failure_fails_closed(monkeypatch):
+    """Verify that if SecurityManager.__init__ fails, ChatybotApp fails closed and blocks tools."""
+    import json
+    from chatybot.chatybot_app import ChatybotApp
+
+    def fail_init(*args, **kwargs):
+        raise RuntimeError("Simulated corrupt configuration file or dependency failure")
+
+    monkeypatch.setattr("chatybot.security.manager.SecurityManager.__init__", fail_init)
+
+    app = ChatybotApp(no_security=False)
+    app.initialize()
+
+    # The emergency security manager must be active and fail closed
+    assert app.security_manager is not None
+    assert app.security_manager.enabled is True
+
+    # Any tool call must be strictly BLOCKED
+    res = await app.dispatch_tool(json.dumps({"tool": "read_file", "arguments": {"path": "test.txt"}}))
+    assert "Error: Security Policy Blocked" in res
+    assert "fail-closed" in res
+
 
 
