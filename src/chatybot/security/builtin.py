@@ -4,6 +4,7 @@ Default in-process policy engine evaluating baseline tool permissions,
 path restrictions, and dangerous command patterns.
 """
 
+import logging
 import os
 from typing import Any
 from chatybot.security.base import BasePolicyEngine
@@ -13,9 +14,9 @@ from chatybot.security.models import (
     PolicyRequest,
     Verdict,
 )
-
-
 from chatybot.security.dsl import SecurityDSLParser, SecurityRuleAST
+
+logger = logging.getLogger(__name__)
 
 
 class BuiltinPolicyEngine(BasePolicyEngine):
@@ -74,10 +75,19 @@ class BuiltinPolicyEngine(BasePolicyEngine):
 
         self.dsl_rules: list[SecurityRuleAST] = []
         if dsl_rules:
-            for r_str in dsl_rules:
-                parsed = SecurityDSLParser.parse_rule(r_str)
+            for idx, r_str in enumerate(dsl_rules, start=1):
+                raw_trimmed = r_str.strip()
+                if not raw_trimmed or raw_trimmed.startswith("#") or raw_trimmed.startswith("//"):
+                    continue
+                parsed = SecurityDSLParser.parse_rule(raw_trimmed)
                 if parsed:
                     self.dsl_rules.append(parsed)
+                else:
+                    logger.warning(
+                        "[Security Warning] Failed to parse rule #%d in security policy: '%s'. Rule will be skipped.",
+                        idx,
+                        raw_trimmed,
+                    )
 
         self.default_verdict = Verdict(default_verdict)
         self.denied_paths = [

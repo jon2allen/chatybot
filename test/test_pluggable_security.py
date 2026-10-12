@@ -155,3 +155,24 @@ def test_security_dsl_rules():
     assert dec_md.verdict == Verdict.ALLOW
     assert dec_md.reason == "documentation is safe"
 
+
+def test_malformed_rule_emits_warning(caplog):
+    """Verify malformed rules emit a runtime warning and valid rules continue functioning."""
+    import logging
+
+    dsl_rules = [
+        "this is not a valid security rule whatsoever",
+        "do not read file with secret in it",
+    ]
+
+    with caplog.at_level(logging.WARNING):
+        engine = BuiltinPolicyEngine(dsl_rules=dsl_rules)
+
+    # Check warning was emitted for the invalid rule
+    assert any("Failed to parse rule #1 in security policy" in record.message for record in caplog.records)
+
+    # Check valid rule still loaded and works
+    dec_deny = engine.evaluate(PolicyRequest(tool="read_file", parameters={"path": "/tmp/my_secret.txt"}))
+    assert dec_deny.verdict == Verdict.DENY
+
+
