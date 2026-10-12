@@ -14,6 +14,10 @@ engine = "builtin"
 # Fail-safe behavior if an external engine crashes or times out: "deny" | "ask"
 fail_safe = "deny"
 
+# Resolution for ASK verdicts when running non-interactively (scripts / headless) without -y:
+# Options: "deny" (safe default, fail-fast) | "allow"
+non_interactive_ask = "deny"
+
 
 # ------------------------------------------------------------------------------
 # Built-in Engine Configuration
@@ -23,7 +27,7 @@ fail_safe = "deny"
 default_verdict = "ask"
 
 # ------------------------------------------------------------------------------
-# Security DSL Rules (Evaluated in top-to-bottom order)
+# Security DSL Rules (Evaluated deny-overrides by tier: deny > ask > allow > baseline. Within a tier, first match wins.)
 # Syntax: <Action> <ToolTarget> <Condition> [because "<Reason>"]
 # ------------------------------------------------------------------------------
 dsl_rules = [
@@ -71,6 +75,7 @@ denied_paths = [
 denied_patterns = [
     "rm -rf /",
     "rm -rf /*",
+    ":(){ :|:& };:",
     "mkfs",
     "dd if=/dev/zero",
     "> /dev/sda",
