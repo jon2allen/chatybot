@@ -5,7 +5,7 @@ Chatybot checks **every tool call** made by a model (built-in tools and MCP tool
 | Verdict | Effect |
 |---|---|
 | `ALLOW` | Tool runs immediately. |
-| `ASK`   | User is prompted `Proceed with execution? [y/N]`. Anything other than `y`/`yes` cancels. |
+| `ASK`   | User is prompted `Proceed with execution? [y/N]` (localized to active locale e.g. `[s/N]`, `[o/N]`). Negative or unconfirmed replies cancel. |
 | `DENY`  | Tool is blocked; the model receives `Error: Security Policy Blocked: <reason>`. |
 
 > **Non-interactive and script execution.** The `ASK` prompt normally reads from stdin via `input()`. When running non-interactively (ChatDSL scripts `--script`, single run `--run`, or headless environments where stdin is not a TTY):
@@ -13,7 +13,7 @@ Chatybot checks **every tool call** made by a model (built-in tools and MCP tool
 > - Otherwise, the dispatcher consults `non_interactive_ask` in `security.toml` (`"deny"` by default, or `"allow"`). When set to `"deny"`, the tool is immediately blocked with an explanatory error without hanging or calling `input()`.
 > - **Critical invariant:** neither `-y` nor `non_interactive_ask` can override Tier 0 protections or Tier 1 `DENY` rules — hard denials are always enforced.
 
-The policy engine is **pluggable**: the default is an in-process Python engine (`builtin`), but it can be swapped for an external program.
+The policy engine is **pluggable**: the default is an in-process Python engine (`builtin`), but it can be swapped for an external program (`binary`).
 
 ---
 
@@ -55,7 +55,7 @@ model tool call ──► ChatybotApp.dispatch_tool
 
 ```toml
 version             = "1.0"
-engine              = "builtin"   # "builtin" | "binary"   ("wasm"/"socket" are reserved, not yet implemented)
+engine              = "builtin"   # "builtin" | "binary"
 fail_safe           = "deny"      # verdict used if the engine crashes, times out, or returns garbage
 non_interactive_ask = "deny"      # "deny" (default) | "allow" - how to resolve ASK when non-interactive
 ```
@@ -448,9 +448,9 @@ engine    = "binary"
 fail_safe = "deny"
 
 [binary]
-path            = "~/.config/chatybot/security/policy_guard"
+path            = "~/.config/chatybot/racf-guard"
 timeout_seconds = 2.0
-args            = ["--strict"]
+args            = ["--policy", "~/.config/chatybot/security.racf"]
 ```
 
 If the binary path does not exist, Chatybot falls back to the builtin engine.
@@ -491,6 +491,7 @@ Modeled after mainframe access control concepts from **IBM z/OS RACF (Resource A
   - `FACILITY`: Tool and API capabilities (`git.status`, `run_command`, `write_file`).
   - `DIR`: Filesystem paths and hierarchy boundaries (`/etc/**`, `~/.ssh/**`, `/tmp/**`).
   - `COMMAND`: Shell command patterns executed in subshells (`git *`, `rm *`, `sudo *`).
+  - `CONTENT`: Payload inspection and data loss prevention (`*BEGIN*PRIVATE*KEY*`, `*api_key*`).
 - **Declarative DSL (`.racf`)**: Configured using standard RACF statements (`ADDGROUP`, `CONNECT`, `RDEFINE`, `PERMIT`, `UACC`).
 - **Resolution Precedence**: Exact discrete profiles beat generic wildcards; direct user permits beat group permits; group permits beat profile `UACC`; compound checks fail-closed.
 - **Packaging Isolation (Option 1)**: Resides in `tools/racf-guard/` as a standalone reference crate with zero Rust toolchain dependencies for standard `pip install chatybot` users.
@@ -505,6 +506,4 @@ Modeled after mainframe access control concepts from **IBM z/OS RACF (Resource A
 - `run_command` is not covered by Tier 0 path restrictions — a shell command can read or modify protected paths unless a DSL rule or command pattern catches it.
 - **Fail-closed on initialization error:** If `SecurityManager()` raises during startup (e.g. corrupt config, syntax error), Chatybot falls back to an emergency fail-closed manager that blocks all tool executions unless explicitly run with `--no-security`.
 - **Non-interactive sessions require explicit auto-approval or policy configuration.** By default (`non_interactive_ask = "deny"`), non-interactive sessions fail fast on `ASK` verdicts without blocking on input. Operators must explicitly pass `-y` / `--yes` or set `non_interactive_ask = "allow"` for automated script execution.
-
-- `wasm` and `socket` engine sections in the template are reserved for future adapters and are not yet active.
 - `modified_parameters` from external engines is carried in the decision but not yet applied by the dispatcher.
