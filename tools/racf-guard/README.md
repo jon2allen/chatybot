@@ -128,6 +128,103 @@ RDEFINE CONTENT *secret_token*      UACC(DENY)
 
 ---
 
+## 2.1 Deep-Dive: Process & System Inspection Safeguards (`ps`, `kill`, `lsof`)
+
+Autonomous LLM agents frequently run commands to inspect running workloads, check open network ports, or terminate processes. RACF provides two layers of defense:
+1. **`FACILITY` Class**: Authorizes the capability or tool itself (governing whether the agent has the authority to execute process management).
+2. **`COMMAND` Class**: Filters the exact shell command string and flag arguments when executed via `run_command`.
+
+### 1. Controlling `ps` (Process Inspection)
+
+#### A. Creating a `FACILITY` Class Profile for `ps`
+When `ps` is exposed as an agent tool or capability, govern it under the `FACILITY` class:
+
+```racf
+# Universal Access: Require interactive confirmation before inspecting processes
+RDEFINE FACILITY ps UACC(ASK)
+
+# Grant silent listing access to Developers and Auditors
+PERMIT ps CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT ps CLASS(FACILITY) ID(AUDITOR)   ACCESS(ALLOW)
+```
+
+For granular control, you can define hierarchical sub-facilities:
+```racf
+# Base process listing: ALLOW for developers
+RDEFINE FACILITY ps.*           UACC(ASK)
+RDEFINE FACILITY ps.list        UACC(DENY)
+PERMIT ps.list CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
+
+# Deep process inspection / tracing (analogous to IBM z/OS BPX.PTRACE): Restricted
+RDEFINE FACILITY ps.inspect     UACC(DENY)
+PERMIT ps.inspect CLASS(FACILITY) ID(SYSADM) ACCESS(ALLOW)
+```
+
+#### B. Fine-Grained `COMMAND` Flag Control via `run_command`
+When an agent calls `run_command(command="ps ...")`, RACF inspects the command string and arguments:
+* **Allow user process listings** (`ps -ef*`, `ps`)
+* **Strictly block all-user / system-wide snooping** (`ps -aef*`, `ps aux*`, `ps -A*`)
+
+```racf
+# Allow standard user-scoped process listings
+RDEFINE COMMAND ps -ef*   UACC(ALLOW)
+RDEFINE COMMAND ps        UACC(ALLOW)
+
+# Strictly block system-wide enumeration flags
+RDEFINE COMMAND ps -aef*  UACC(DENY)
+RDEFINE COMMAND ps aux*   UACC(DENY)
+RDEFINE COMMAND ps -A*    UACC(DENY)
+```
+
+Because `COMMAND:ps -aef*` has higher specificity than `COMMAND:ps*` or `COMMAND:ps -ef*`, any attempt to inspect all system processes with `-aef` or `aux` is blocked immediately, while `ps -ef` executes cleanly.
+
+---
+
+### 2. Controlling Process Termination (`kill` & `pkill`)
+
+Once an agent inspects processes, it often attempts to terminate them. Unconstrained `kill` commands pose a severe availability risk (an agent might terminate database daemons, Docker runtime, or host processes).
+
+#### A. Creating a `FACILITY` Class Profile for `kill`
+```racf
+# Default: Deny process termination by default
+RDEFINE FACILITY kill UACC(DENY)
+
+# Only administrators may terminate processes, requiring confirmation
+PERMIT kill CLASS(FACILITY) ID(SYSADM) ACCESS(ASK)
+```
+
+#### B. Fine-Grained `COMMAND` Guardrails via `run_command`
+When executing through `run_command`, RACF blocks mass-kill patterns while allowing targeted, confirmed actions:
+
+```racf
+# Require confirmation before terminating any specific process PID
+RDEFINE COMMAND kill*       UACC(ASK)
+RDEFINE COMMAND pkill*      UACC(ASK)
+
+# Outright block catastrophic mass-kill patterns
+RDEFINE COMMAND killall*    UACC(DENY)
+RDEFINE COMMAND pkill -9*   UACC(DENY)
+RDEFINE COMMAND kill -9 -1* UACC(DENY)
+```
+
+---
+
+### 3. Controlling Network Socket Inspection (`lsof` & `netstat`)
+
+Similarly, agents often attempt network reconnaissance to find open ports and listening sockets:
+
+```racf
+# Allow checking a specific local development port (e.g. `lsof -i :8080`)
+RDEFINE COMMAND lsof -i :* UACC(ALLOW)
+
+# Require confirmation for full socket and port enumeration
+RDEFINE COMMAND lsof*      UACC(ASK)
+RDEFINE COMMAND netstat*   UACC(ASK)
+RDEFINE COMMAND ss*        UACC(ASK)
+```
+
+---
+
 ## 3. Evaluation Precedence
 
 When Chatybot evaluates an action, `racf-guard` evaluates all relevant resource classes (`FACILITY`, plus `DIR` for file paths, plus `COMMAND` for shell executions):
@@ -533,6 +630,8 @@ PERMIT run_command CLASS(FACILITY) ID(SYSADM)    ACCESS(ALLOW)
 | **Block Specific File Pattern** | `racf-guard rdefine DIR "**/*zaragoza*" --uacc DENY` |
 | **Block Secret Leaks in Payloads** | `racf-guard rdefine CONTENT "*api_key*" --uacc DENY` |
 | **Block Shell Command** | `racf-guard rdefine COMMAND "curl*" --uacc ASK` |
+| **Filter Process Listings** | `racf-guard rdefine COMMAND "ps -ef*" --uacc ALLOW && racf-guard rdefine COMMAND "ps -aef*" --uacc DENY` |
+| **Block Mass Process Kills** | `racf-guard rdefine COMMAND "killall*" --uacc DENY && racf-guard rdefine COMMAND "pkill -9*" --uacc DENY` |
 | **Execute Raw Statement** | `racf-guard exec "PERMIT git.diff CLASS(FACILITY) ID(DEV) ACCESS(ALLOW)"` |
 
 > [!NOTE]
