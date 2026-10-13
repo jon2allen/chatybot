@@ -1,0 +1,17 @@
+# Recipe 16.3 - Handling Security Blocks and Tool Dispatch Errors
+# Goal: Detect denied tool dispatches using ${TOOL_DISPATCH_EXIT_CODE} and ${TOOL_DISPATCH_ERROR}
+# Run: /script doc/cookbook/16_3_handling_security_blocks.chatdsl
+
+/tool on
+/tool enable run_command
+
+# 1. Inject an unauthorized command invocation that triggers a policy DENY
+/tool inject <invoke="run_command"><parameter name="command">sudo cat /etc/shadow</parameter></invoke>
+
+# 2. Attempt execution; security policy intercepts and blocks dispatch
+/tool retry run
+
+# 3. Check dispatch outcome and handle fallback in script logic
+if "${TOOL_DISPATCH_EXIT_CODE}" != "0" then /echo [SECURITY GUARDRAIL ENGAGED] ExitCode=${TOOL_DISPATCH_EXIT_CODE}
+if "${TOOL_DISPATCH_EXIT_CODE}" != "0" then /echo Block Detail: ${TOOL_DISPATCH_ERROR}
+if "${TOOL_DISPATCH_EXIT_CODE}" == "0" then /echo Execution Succeeded
