@@ -128,16 +128,18 @@ enum Commands {
     },
 }
 
-fn find_policy_path(explicit: Option<&PathBuf>) -> Option<PathBuf> {
+fn find_policy_path(explicit: Option<&PathBuf>) -> Result<Option<PathBuf>, String> {
     if let Some(p) = explicit {
         if p.exists() {
-            return Some(p.clone());
+            return Ok(Some(p.clone()));
+        } else {
+            return Err(format!("Explicit policy file not found: '{}'", p.display()));
         }
     }
     if let Ok(env_path) = std::env::var("RACF_POLICY_PATH") {
         let p = PathBuf::from(env_path);
         if p.exists() {
-            return Some(p);
+            return Ok(Some(p));
         }
     }
     let candidates = [
@@ -147,17 +149,17 @@ fn find_policy_path(explicit: Option<&PathBuf>) -> Option<PathBuf> {
     ];
     for c in candidates {
         if c.exists() {
-            return Some(c.to_path_buf());
+            return Ok(Some(c.to_path_buf()));
         }
     }
-    None
+    Ok(None)
 }
 
 fn resolve_target_policy_path(explicit: Option<&PathBuf>) -> PathBuf {
     if let Some(p) = explicit {
         return p.clone();
     }
-    if let Some(discovered) = find_policy_path(None) {
+    if let Ok(Some(discovered)) = find_policy_path(None) {
         return discovered;
     }
     PathBuf::from("security.racf")
@@ -176,7 +178,7 @@ fn load_engine(policy_path: Option<&PathBuf>) -> Result<RacfEngine, String> {
     Ok(engine)
 }
 
-/// Persists a validated RACF statement to disk, creating a backup first.
+/// Persists a validated RACF statement to disk, creating both a standard and timestamped backup first.
 fn persist_statement(policy_path: &Path, stmt_str: &str) -> Result<(), String> {
     // 1. Validate statement syntax first before doing anything
     let test_script = format!("{}\n", stmt_str);
@@ -185,10 +187,20 @@ fn persist_statement(policy_path: &Path, stmt_str: &str) -> Result<(), String> {
 
     // 2. Create backup if policy file already exists
     if policy_path.exists() {
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        let timestamped_backup = PathBuf::from(format!("{}.bak.{}", policy_path.display(), timestamp));
         let backup_path = PathBuf::from(format!("{}.bak", policy_path.display()));
+        let _ = fs::copy(policy_path, &timestamped_backup);
         fs::copy(policy_path, &backup_path)
             .map_err(|e| format!("Failed to create backup at {:?}: {}", backup_path, e))?;
-        println!("[RACF Admin] Created backup copy: '{}'", backup_path.display());
+        println!(
+            "[RACF Admin] Created backup copies: '{}' and '{}'",
+            backup_path.display(),
+            timestamped_backup.display()
+        );
     } else {
         if let Some(parent) = policy_path.parent() {
             if !parent.as_os_str().is_empty() {
@@ -301,7 +313,15 @@ fn main() {
         return;
     }
 
-    let policy_path = find_policy_path(args.policy.as_ref());
+    let policy_path = match find_policy_path(args.policy.as_ref()) {
+        Ok(p) => p,
+        Err(err) => {
+            eprintln!("[RACF Error] {}", err);
+            let decision = PolicyDecision::deny(err);
+            println!("{}", serde_json::to_string(&decision).unwrap());
+            std::process::exit(1);
+        }
+    };
 
     let engine = match load_engine(policy_path.as_ref()) {
         Ok(e) => e,

@@ -39,7 +39,6 @@ impl fmt::Display for ResourceClass {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AccessLevel {
-    None,
     Deny,
     Ask,
     Allow,
@@ -57,7 +56,7 @@ impl AccessLevel {
 
     pub fn as_str(&self) -> &'static str {
         match self {
-            AccessLevel::None | AccessLevel::Deny => "DENY",
+            AccessLevel::Deny => "DENY",
             AccessLevel::Ask => "ASK",
             AccessLevel::Allow => "ALLOW",
         }

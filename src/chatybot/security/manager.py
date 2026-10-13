@@ -95,7 +95,13 @@ class SecurityManager:
                     debug=self.debug,
                 )
                 return
-            # If binary not found, fallback to builtin engine with a warning
+            # If binary not found, fallback to builtin engine with a prominent security warning
+            warn_msg = (
+                f"[Security Warning] Configured binary path not found: '{raw_path}' "
+                f"(resolved: '{bin_path}'). Falling back to builtin Python policy engine."
+            )
+            logger.warning(warn_msg)
+            print(warn_msg)
             engine_type = "builtin"
 
         # Default to builtin

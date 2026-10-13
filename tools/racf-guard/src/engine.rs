@@ -3,6 +3,60 @@ use crate::models::{PolicyDecision, PolicyRequest};
 use glob_match::glob_match;
 use std::collections::{HashMap, HashSet};
 
+use std::path::Path;
+
+fn dirs_home() -> Option<String> {
+    std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .ok()
+}
+
+pub fn expand_tilde(path: &str) -> String {
+    if path == "~" {
+        dirs_home().unwrap_or_else(|| "~".to_string())
+    } else if let Some(stripped) = path.strip_prefix("~/") {
+        if let Some(home) = dirs_home() {
+            format!("{}/{}", home.trim_end_matches('/'), stripped)
+        } else {
+            path.to_string()
+        }
+    } else {
+        path.to_string()
+    }
+}
+
+pub fn normalize_path(path: &str) -> String {
+    let expanded = expand_tilde(path);
+    let p = Path::new(&expanded);
+    let mut components = Vec::new();
+    let is_absolute = p.is_absolute();
+    for component in p.components() {
+        match component {
+            std::path::Component::Prefix(prefix) => {
+                components.push(prefix.as_os_str().to_string_lossy().to_string());
+            }
+            std::path::Component::RootDir => {}
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                components.pop();
+            }
+            std::path::Component::Normal(c) => {
+                components.push(c.to_string_lossy().to_string());
+            }
+        }
+    }
+    let mut res = String::new();
+    if is_absolute {
+        res.push('/');
+    }
+    res.push_str(&components.join("/"));
+    if res.is_empty() {
+        ".".to_string()
+    } else {
+        res
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Profile {
     pub class: ResourceClass,
@@ -27,20 +81,27 @@ impl Profile {
     /// Higher score indicates higher specificity.
     /// Discrete (exact) matches always beat generic wildcard matches.
     pub fn specificity_score(&self) -> usize {
+        let char_count = self.pattern.chars().count();
         if !self.is_generic {
-            100_000 + self.pattern.len()
+            100_000 + char_count
         } else {
             // Count non-wildcard characters as higher specificity
             let literal_chars = self.pattern.chars().filter(|c| *c != '*' && *c != '?').count();
-            literal_chars * 10 + self.pattern.len()
+            literal_chars * 10 + char_count
         }
     }
 
     pub fn matches(&self, resource: &str) -> bool {
-        if !self.is_generic {
+        if self.class == ResourceClass::Dir {
+            let norm_pattern = normalize_path(&self.pattern);
+            let norm_resource = normalize_path(resource);
+            if !self.is_generic {
+                norm_pattern == norm_resource
+            } else {
+                glob_match(&norm_pattern, &norm_resource)
+            }
+        } else if !self.is_generic {
             self.pattern == resource
-        } else if self.class == ResourceClass::Dir {
-            glob_match(&self.pattern, resource)
         } else {
             // For commands and facility names, * should match all characters including slashes
             let normalized_pattern = if self.pattern.contains('*') && !self.pattern.contains("**") {
@@ -187,7 +248,7 @@ impl RacfEngine {
                 class
             ));
             if let Some(profs) = self.profiles.get(class) {
-                let mut sorted_profs = profs.clone();
+                let mut sorted_profs: Vec<&Profile> = profs.iter().collect();
                 sorted_profs.sort_by(|a, b| a.pattern.cmp(&b.pattern));
 
                 if sorted_profs.is_empty() {
@@ -237,6 +298,11 @@ impl RacfEngine {
             }
         }
         if let Ok(u) = std::env::var("LOGNAME") {
+            if !u.is_empty() {
+                return u;
+            }
+        }
+        if let Ok(u) = std::env::var("USERNAME") {
             if !u.is_empty() {
                 return u;
             }
@@ -350,15 +416,21 @@ impl RacfEngine {
 
         // 2. Group Permit
         if let Some(groups) = self.user_groups.get(user) {
+            let mut sorted_groups: Vec<&String> = groups.iter().collect();
+            sorted_groups.sort();
             if let Some(t) = trace.as_deref_mut() {
-                let grp_list = groups.iter().cloned().collect::<Vec<_>>().join(", ");
+                let grp_list = sorted_groups
+                    .iter()
+                    .map(|s| s.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ");
                 t.push(format!(
                     "[RACF Debug] \u{251c}\u{2500} Checking group permits for user's groups: [{}]",
                     grp_list
                 ));
             }
             let mut best_group_access: Option<(AccessLevel, &str)> = None;
-            for group in groups {
+            for group in sorted_groups {
                 if let Some(&group_access) = winning_profile.acl.get(group) {
                     if let Some(t) = trace.as_deref_mut() {
                         t.push(format!(
@@ -447,7 +519,13 @@ impl RacfEngine {
                 request.tool, user
             ));
             if let Some(groups) = self.user_groups.get(&user) {
-                let grp_str = groups.iter().cloned().collect::<Vec<_>>().join(", ");
+                let mut sorted_grps: Vec<&String> = groups.iter().collect();
+                sorted_grps.sort();
+                let grp_str = sorted_grps
+                    .iter()
+                    .map(|s| s.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ");
                 trace.push(format!(
                     "[RACF Debug] User '{}' connected groups: [{}]",
                     user, grp_str
@@ -485,25 +563,46 @@ impl RacfEngine {
             "dir",
             "filename",
             "destination",
+            "source",
+            "sourcefile",
+            "destfile",
+            "sourcepath",
+            "destpath",
+            "file",
         ];
-        for key in &path_keys {
-            if let Some(val_str) = request.parameters.get(*key).and_then(|v| v.as_str()) {
-                let (dir_acc, dir_reason) =
-                    self.evaluate_resource_trace(&user, &ResourceClass::Dir, val_str, &mut t_opt);
-                evaluations.push((
-                    ResourceClass::Dir,
-                    val_str.to_string(),
-                    dir_acc,
-                    dir_reason,
-                ));
+        let mut sorted_param_keys: Vec<&String> = request.parameters.keys().collect();
+        sorted_param_keys.sort();
+        for key in sorted_param_keys {
+            let key_lower = key.to_lowercase();
+            let is_path_key = path_keys.contains(&key_lower.as_str())
+                || key_lower.ends_with("path")
+                || key_lower.ends_with("file")
+                || key_lower.ends_with("dir")
+                || key_lower.ends_with("target");
+            if is_path_key {
+                if let Some(val_str) = request.parameters.get(key).and_then(|v| v.as_str()) {
+                    let (dir_acc, dir_reason) =
+                        self.evaluate_resource_trace(&user, &ResourceClass::Dir, val_str, &mut t_opt);
+                    evaluations.push((
+                        ResourceClass::Dir,
+                        val_str.to_string(),
+                        dir_acc,
+                        dir_reason,
+                    ));
+                }
             }
         }
 
         // 3. Evaluate COMMAND class if tool is a command executor
-        let is_cmd_tool = matches!(
-            tool_name.to_lowercase().as_str(),
-            "run_command" | "run_cmd" | "shell" | "exec" | "bash" | "terminal"
-        );
+        let tool_lower = tool_name.to_lowercase();
+        let is_cmd_tool = tool_lower.contains("command")
+            || tool_lower.contains("cmd")
+            || tool_lower.contains("shell")
+            || tool_lower.contains("exec")
+            || tool_lower.contains("bash")
+            || tool_lower.contains("terminal")
+            || tool_lower.contains("subprocess")
+            || tool_lower.contains("system");
         if is_cmd_tool {
             let cmd_keys = ["command", "cmd", "commandline", "CommandLine"];
             for key in &cmd_keys {
@@ -655,5 +754,63 @@ mod tests {
         );
         let decision = engine.evaluate_request(&req);
         assert_eq!(decision.status, "deny");
+    }
+
+    #[test]
+    fn test_racf_path_traversal_normalization() {
+        let script = r#"
+            RDEFINE FACILITY read_file UACC(ALLOW)
+            RDEFINE DIR /etc/** UACC(DENY)
+            RDEFINE DIR /var/log/** UACC(ALLOW)
+        "#;
+        let stmts = parse_racf_script(script).unwrap();
+        let mut engine = RacfEngine::new();
+        engine.load_statements(stmts);
+
+        // Path traversal bypass attempt: /var/log/../../etc/passwd resolves to /etc/passwd
+        let (acc, _) = engine.evaluate_resource("user", &ResourceClass::Dir, "/var/log/../../etc/passwd");
+        assert_eq!(acc, AccessLevel::Deny);
+
+        let (acc2, _) = engine.evaluate_resource("user", &ResourceClass::Dir, "/etc/../etc/shadow");
+        assert_eq!(acc2, AccessLevel::Deny);
+    }
+
+    #[test]
+    fn test_racf_tilde_expansion() {
+        let script = r#"
+            RDEFINE DIR ~/.ssh/** UACC(DENY)
+            RDEFINE DIR ~/projects/** UACC(ALLOW)
+        "#;
+        let stmts = parse_racf_script(script).unwrap();
+        let mut engine = RacfEngine::new();
+        engine.load_statements(stmts);
+
+        // Test with literal tilde path
+        let (acc, _) = engine.evaluate_resource("user", &ResourceClass::Dir, "~/.ssh/id_rsa");
+        assert_eq!(acc, AccessLevel::Deny);
+
+        // Test with expanded home path if HOME/USERPROFILE is set
+        if let Some(home) = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")) {
+            let home_ssh = format!("{}/.ssh/id_rsa", home.to_string_lossy());
+            let (acc_home, _) = engine.evaluate_resource("user", &ResourceClass::Dir, &home_ssh);
+            assert_eq!(acc_home, AccessLevel::Deny);
+        }
+    }
+
+    #[test]
+    fn test_racf_keyword_class_syntax() {
+        let script = r#"
+            RDEFINE CLASS(FACILITY) git.* UACC(ASK)
+            RDEFINE CLASS(DIR) /secret/** UACC(DENY)
+        "#;
+        let stmts = parse_racf_script(script).unwrap();
+        let mut engine = RacfEngine::new();
+        engine.load_statements(stmts);
+
+        let (acc, _) = engine.evaluate_resource("user", &ResourceClass::Facility, "git.push");
+        assert_eq!(acc, AccessLevel::Ask);
+
+        let (acc_dir, _) = engine.evaluate_resource("user", &ResourceClass::Dir, "/secret/keys");
+        assert_eq!(acc_dir, AccessLevel::Deny);
     }
 }

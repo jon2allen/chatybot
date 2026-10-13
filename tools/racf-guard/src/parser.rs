@@ -1,17 +1,5 @@
 use crate::ast::{AccessLevel, ResourceClass, Statement};
 
-#[derive(Debug, thiserror::Error, PartialEq, Eq)]
-pub enum ParseError {
-    #[error("Empty line")]
-    EmptyLine,
-    #[error("Unknown command '{0}' on line {1}")]
-    UnknownCommand(String, usize),
-    #[error("Missing argument '{0}' on line {1}")]
-    MissingArgument(String, usize),
-    #[error("Invalid syntax on line {1}: {0}")]
-    InvalidSyntax(String, usize),
-}
-
 /// Parse a string of RACF statements line-by-line.
 pub fn parse_racf_script(input: &str) -> Result<Vec<Statement>, String> {
     let mut statements = Vec::new();
@@ -146,22 +134,48 @@ fn parse_connect(args: &[String], line_num: usize) -> Result<Statement, String> 
 }
 
 // RDEFINE <CLASS> <PROFILE> [UACC(<ACCESS>)]
+// Also supports: RDEFINE <PROFILE> CLASS(<CLASS>) [UACC(<ACCESS>)]
+// and RDEFINE CLASS(<CLASS>) <PROFILE> [UACC(<ACCESS>)]
 fn parse_rdefine(args: &[String], line_num: usize) -> Result<Statement, String> {
-    if args.len() < 2 {
-        return Err(format!(
-            "RDEFINE requires class and profile pattern on line {}",
-            line_num
-        ));
+    if args.is_empty() {
+        return Err(format!("RDEFINE requires arguments on line {}", line_num));
     }
-    let class = ResourceClass::from_str(&args[0]);
-    let profile = args[1].trim().to_string();
+    let mut class: Option<ResourceClass> = None;
+    let mut profile: Option<String> = None;
     let mut uacc = AccessLevel::Deny;
-    for arg in &args[2..] {
-        if let Some(val) = extract_kw_arg(arg, "UACC") {
+
+    for arg in args {
+        if let Some(val) = extract_kw_arg(arg, "CLASS") {
+            class = Some(ResourceClass::from_str(&val));
+        } else if let Some(val) = extract_kw_arg(arg, "UACC") {
             uacc = AccessLevel::from_str(&val)
                 .ok_or_else(|| format!("Unknown UACC value '{}' on line {}", val, line_num))?;
+        } else {
+            // Positional argument
+            if class.is_none() && profile.is_none() {
+                let candidate = ResourceClass::from_str(arg);
+                if matches!(
+                    candidate,
+                    ResourceClass::Facility
+                        | ResourceClass::Dir
+                        | ResourceClass::Command
+                        | ResourceClass::Ps
+                ) {
+                    class = Some(candidate);
+                } else {
+                    profile = Some(arg.trim().to_string());
+                }
+            } else if profile.is_none() {
+                profile = Some(arg.trim().to_string());
+            } else if class.is_none() {
+                class = Some(ResourceClass::from_str(arg));
+            }
         }
     }
+
+    let class = class.ok_or_else(|| format!("RDEFINE missing CLASS on line {}", line_num))?;
+    let profile = profile.ok_or_else(|| format!("RDEFINE missing profile on line {}", line_num))?;
+
     Ok(Statement::RDefine {
         class,
         profile,

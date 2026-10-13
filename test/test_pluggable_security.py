@@ -930,7 +930,7 @@ def test_racf_guard_cli_persistence_with_backup():
             text=True,
             check=True,
         )
-        assert "[RACF Admin] Created backup copy" in proc.stdout
+        assert "[RACF Admin] Created backup" in proc.stdout
         assert "CONNECT tester GROUP(DEVELOPER)" in proc.stdout
         assert os.path.isfile(backup_file), "Backup file was not created"
 
@@ -945,7 +945,7 @@ def test_racf_guard_cli_persistence_with_backup():
             text=True,
             check=True,
         )
-        assert "[RACF Admin] Created backup copy" in proc_permit.stdout
+        assert "[RACF Admin] Created backup" in proc_permit.stdout
         assert "PERMIT git.push CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)" in proc_permit.stdout
 
         # 3. Verify evaluate on next invocation loads and respects persisted updates
@@ -961,4 +961,70 @@ def test_racf_guard_cli_persistence_with_backup():
         assert "tester" in dec.reason
 
 
+def test_chatybot_execution_hardening_against_wrappers():
+    """Verify CHATYBOT_EXEC_PATTERN blocks execution wrappers (env, nohup, sh -c, python -c/module)."""
+    engine = BuiltinPolicyEngine()
 
+    evasion_commands = [
+        "env chatybot --run",
+        "nohup ./chatybot &",
+        "sudo /usr/local/bin/chatybot -y",
+        'sh -c "chatybot status"',
+        "bash -c 'chatybot --script foo.dsl'",
+        "xargs chatybot",
+        'python -c "import chatybot; chatybot.run()"',
+        "python3.11 /opt/chatybot/chatybot.py --help",
+        "python3 -m chatybot",
+    ]
+
+    for cmd in evasion_commands:
+        dec = engine.evaluate(PolicyRequest(tool="run_command", parameters={"command": cmd}))
+        assert dec.verdict == Verdict.DENY, f"Expected DENY for wrapper command '{cmd}', got {dec.verdict}"
+        assert "Chatybot" in dec.reason
+
+
+def test_racf_guard_path_traversal_and_explicit_policy_flag():
+    """Verify racf-guard rejects path traversal bypasses and errors on nonexistent explicit policy file."""
+    import subprocess
+
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    racf_bin = os.path.join(repo_root, "tools", "racf-guard", "target", "release", "racf-guard")
+    if not os.path.isfile(racf_bin):
+        pytest.skip("racf-guard release binary not built")
+
+    policy_file = os.path.join(repo_root, "tools", "racf-guard", "examples", "security.racf")
+
+    # 1. Path traversal attempt in view_file: /etc/../etc/passwd should match /etc/** and be DENIED
+    engine = StdioBinaryPolicyEngine(
+        binary_path=racf_bin,
+        args=["--policy", policy_file],
+    )
+    dec_traversal = engine.evaluate(PolicyRequest(
+        tool="view_file",
+        parameters={"path": "/etc/../etc/passwd"},
+    ))
+    assert dec_traversal.verdict == Verdict.DENY
+    assert "RACF security violation" in dec_traversal.reason
+
+    # 2. Nonexistent explicit --policy file must cause nonzero exit code and explicit error
+    proc = subprocess.run(
+        [racf_bin, "--policy", "nonexistent_policy_file.racf", "--check", "--tool", "git.status"],
+        capture_output=True,
+        text=True,
+    )
+    assert proc.returncode != 0
+    assert "Explicit policy file not found" in (proc.stderr + proc.stdout)
+
+
+def test_security_manager_missing_binary_warning(tmp_path, capsys):
+    """Verify SecurityManager logs and prints a prominent warning if configured binary does not exist."""
+    cfg = tmp_path / "missing_bin_sec.toml"
+    cfg.write_text("""
+engine = "binary"
+[binary]
+path = "/nonexistent/path/to/guard_binary"
+""")
+    mgr = SecurityManager(config_path=str(cfg))
+    out = capsys.readouterr().out
+    assert "[Security Warning] Configured binary path not found" in out
+    assert isinstance(mgr.engine, BuiltinPolicyEngine)
