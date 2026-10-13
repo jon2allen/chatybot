@@ -34,6 +34,8 @@ existing examples, parser, and docs.
 - [Chapter 12 — Localization & Multilingual Authoring](#chapter-12--localization--multilingual-authoring)
 - [Chapter 13 — Diagnostics, Debugging & Performance](#chapter-13--diagnostics-debugging--performance)
 - [Chapter 14 — Novel Use Cases](#chapter-14--novel-use-cases)
+- [Chapter 15 — Dynamic Skill Loading & Delegation](#chapter-15--dynamic-skill-loading--delegation)
+- [Chapter 16 — Pluggable Security & Policy Guardrails](#chapter-16--pluggable-security--policy-guardrails)
 - [Appendix A — Recipe index](#appendix-a--recipe-index)
 - [Appendix B — Cross-reference map](#appendix-b--cross-reference-map)
 - [Appendix C — Common pitfalls checklist](#appendix-c--common-pitfalls-checklist)
@@ -2121,6 +2123,134 @@ chat --> Load the "loop-a" skill and follow its instructions.
 
 ---
 
+## Chapter 16 — Pluggable Security & Policy Guardrails
+
+Chatybot features an extensible Pluggable Security Architecture that intercepts and evaluates tool execution requests against enterprise and workspace security policies before dispatch. Backed by security policy engines such as `racf-guard`, tool calls are categorized into standardized resource classes (`EXEC`, `FS_READ`, `FS_WRITE`, `NET`, `PROCESS`, `CONTENT`) and evaluated for an `ALLOW`, `ASK`, or `DENY` verdict.
+
+### 16.1 Security inspection and policy evaluation tracing
+- **Goal:** Observe policy engine evaluation decisions and reason logging during tool execution.
+- **Commands:** `/tool on`, `/tool enable run_command,write_file`, `/tool auto on`, `/tool loop`, CLI option `--security`.
+- **Script:** `cookbook/16_1_security_inspection.chatdsl`
+- **Run:** `chatybot --security --script doc/cookbook/16_1_security_inspection.chatdsl`
+
+```dsl
+/tool on
+/tool enable run_command,write_file
+/tool auto on
+/tool max_turns 5
+
+# Safe command evaluated against active security engine (ALLOW)
+chat --> Run 'ls -la' using run_command to inspect the working directory.
+
+/tool loop 5 force
+```
+
+**Walkthrough**
+1. The script activates tool execution for `run_command` and `write_file`.
+2. Running with `chatybot --security` instructs the host app to print policy evaluation metadata to `stderr`:
+   ```text
+   [SECURITY] Evaluating tool='run_command' resource='EXEC' target='ls -la'
+   [SECURITY] Verdict: ALLOW (matched rule: allow EXEC ls*)
+   ```
+3. Read-only commands that match allowed profiles proceed immediately without interactive prompts.
+
+**Key Options:**
+- `--security`: Enables verbose evaluation diagnostics showing rule matches and policy engine response times.
+- `--no-security`: Disables security interception entirely (used for testing and benchmarks).
+
+---
+
+### 16.2 Non-interactive script execution with auto-approval
+- **Goal:** Run unattended batch scripts that execute actions triggering `ASK` verdicts without blocking on terminal prompts.
+- **Commands:** CLI option `-y` (`--yes`, `--auto-approve`), `/tool auto on`, `/tool loop`.
+- **Script:** `cookbook/16_2_script_with_auto_approve.chatdsl`
+- **Run:** `chatybot -y --script doc/cookbook/16_2_script_with_auto_approve.chatdsl`
+
+```dsl
+/tool on
+/tool enable run_command,write_file
+/tool auto on
+/tool max_turns 5
+
+# Commands that trigger an ASK verdict (such as git commit or rm) auto-approve under -y
+chat --> Write a status summary note to scratch/build_status.txt and run git status using tools.
+
+/tool loop 5 force
+```
+
+**Walkthrough**
+1. In standard interactive sessions, commands classified with an `ASK` verdict prompt the user:
+   ```text
+   [SECURITY AUDIT] Tool 'run_command' requested target 'git status'. Proceed? (y/n)
+   ```
+2. In headless environments (CI runners, cron jobs, background workers), manual prompting hangs or skips execution.
+3. Passing `-y`, `--yes`, or `--auto-approve` automatically converts all `ASK` decisions to affirmative approvals while logging the approval audit trail.
+
+---
+
+### 16.3 Handling security blocks and tool dispatch errors
+- **Goal:** Detect and gracefully recover when a tool call is denied by security policies using ChatDSL dispatch variables.
+- **Commands:** `/tool inject`, `/tool retry`, `if`, `${TOOL_DISPATCH_EXIT_CODE}`, `${TOOL_DISPATCH_ERROR}`.
+- **Script:** `cookbook/16_3_handling_security_blocks.chatdsl`
+- **Run:** `/script doc/cookbook/16_3_handling_security_blocks.chatdsl`
+
+```dsl
+/tool on
+/tool enable run_command
+
+# 1. Inject an unauthorized command invocation that triggers a policy DENY
+/tool inject <invoke="run_command"><parameter name="command">sudo cat /etc/shadow</parameter></invoke>
+
+# 2. Attempt execution; security policy intercepts and blocks dispatch
+/tool retry run
+
+# 3. Check dispatch outcome and handle fallback in script logic
+if "${TOOL_DISPATCH_EXIT_CODE}" != "0" then /echo [SECURITY GUARDRAIL ENGAGED] ExitCode=${TOOL_DISPATCH_EXIT_CODE}
+if "${TOOL_DISPATCH_EXIT_CODE}" != "0" then /echo Block Detail: ${TOOL_DISPATCH_ERROR}
+if "${TOOL_DISPATCH_EXIT_CODE}" == "0" then /echo Execution Succeeded
+```
+
+**Walkthrough**
+1. When a security engine issues a `DENY` verdict or the user declines an `ASK` prompt, tool dispatch is cancelled before process execution.
+2. The runtime populates the standardized dispatch script variables:
+   - `${TOOL_DISPATCH_EXIT_CODE}`: Set to `'1'` (or `'-1'` on engine communication failure).
+   - `${TOOL_DISPATCH_ERROR}`: Contains the denial explanation (e.g., `Security Policy Blocked: Disallowed resource /etc/shadow`).
+   - `${TOOL_DISPATCH_RESULT}`: Set to empty string `""`.
+3. ChatDSL `if` statements inspect `${TOOL_DISPATCH_EXIT_CODE}` to execute alternative branches or alert the operator.
+
+---
+
+### 16.4 Least-privilege workspace boundaries
+- **Goal:** Confine file read and write operations to permitted project directories and catch prohibited path access.
+- **Commands:** `/tool enable`, `/tool inject`, `/tool retry`, `${TOOL_DISPATCH_EXIT_CODE}`, `${TOOL_DISPATCH_ERROR}`.
+- **Script:** `cookbook/16_4_least_privilege_workflow.chatdsl`
+- **Run:** `/script doc/cookbook/16_4_least_privilege_workflow.chatdsl`
+
+```dsl
+/tool on
+/tool enable read_file,write_file
+
+# 1. Attempt writing outside project workspace (e.g. ~/.ssh or /tmp/sensitive)
+/tool inject <invoke="write_file"><parameter name="path">/etc/passwd</parameter><parameter name="content">malicious_entry</parameter></invoke>
+/tool retry run
+
+# 2. Inspect dispatch error status
+if "${TOOL_DISPATCH_EXIT_CODE}" != "0" then /echo Blocked prohibited system path write: ${TOOL_DISPATCH_ERROR}
+
+# 3. Legitimate write within allowed scratch directory
+/tool inject <invoke="write_file"><parameter name="path">scratch/safe_report.txt</parameter><parameter name="content">Authorized workspace output</parameter></invoke>
+/tool retry run
+
+if "${TOOL_DISPATCH_EXIT_CODE}" == "0" then /echo Permitted workspace write confirmed.
+```
+
+**Walkthrough**
+1. Enterprise policies (such as `restrictive_dir.racf`) enforce path containment, forbidding operations outside working trees or designated scratch areas.
+2. Any attempts by an agent or script to write to system directories (`/etc`, `~/.ssh`) immediately yield `DENY` without modifying filesystem state.
+3. Operations targeted at permissible relative locations (`scratch/`, project source directories) evaluate to `ALLOW`.
+
+---
+
 ## Appendix A — Recipe index
 
 | # | Recipe | Commands exercised | Generalizes / source |
@@ -2192,6 +2322,10 @@ chat --> Load the "loop-a" skill and follow its instructions.
 | 15.3 | Skill delegation chains | `call_skill` x2 `/tool loop` | new |
 | 15.4 | Skills with tool config | `call_skill` `tool_state` `/skill restore` | new |
 | 15.5 | Recursion limits & cycle detection | `call_skill` (error paths) | new |
+| 16.1 | Security inspection & tracing | `--security` `/tool loop` | new |
+| 16.2 | Script execution with auto-approve | `-y` `--yes` `/tool loop` | new |
+| 16.3 | Handling security blocks | `${TOOL_DISPATCH_EXIT_CODE}` `${TOOL_DISPATCH_ERROR}` | new |
+| 16.4 | Least-privilege workspace boundaries | `/tool inject` `/tool retry` `if` | new |
 
 ---
 
@@ -2214,6 +2348,7 @@ chat --> Load the "loop-a" skill and follow its instructions.
 | 13 Diagnostics | Diagnostics & Monitoring; Diagnostics Commands |
 | 14 Novel Use Cases | (no existing counterpart) |
 | 15 Dynamic Skill Loading | (new — see Dynamic Skill Loading section in `chatdsl_guide_v1.md`) |
+| 16 Pluggable Security | (new — see `pluggable_security.md` and `tools/racf-guard/README.md`) |
 
 ---
 
@@ -2231,6 +2366,7 @@ chat --> Load the "loop-a" skill and follow its instructions.
 - **Comments inside `/multiline` bodies are text**, not comments — `#` only comments outside a block.
 - **`/echo` is local:** it prints with variable expansion and makes no LLM call.
 - **`/ask` in batch / background runs:** interactive prompts require a foreground terminal TTY. In headless batch mode (pipes, CI runners, or background jobs `&`), `/ask` bypasses without prompting to avoid freezing or SIGTTIN suspension. Always initialize default fallback variables in scripts that may run in batch.
+- **Security blocks in automated scripts:** When a policy denies or cancels a tool call, `${TOOL_DISPATCH_EXIT_CODE}` is set to non-zero (`1` or `-1`) and `${TOOL_DISPATCH_ERROR}` contains the denial reason. For unattended runs expecting `ASK` verdicts, pass `-y` / `--auto-approve`.
 
 ---
 
@@ -2238,6 +2374,7 @@ chat --> Load the "loop-a" skill and follow its instructions.
 
 - [`chatdsl_guide_v1.md`](chatdsl_guide_v1.md) — the comprehensive reference (keyword tables, error messages, best practices).
 - [`CHATDSL_TECHNICAL_GUIDE.md`](CHATDSL_TECHNICAL_GUIDE.md) — core concepts, buffer system, the comparison pattern.
+- [`pluggable_security.md`](pluggable_security.md) — pluggable security architecture, IPC protocol, and configuration guide.
 - [`chatdsl_skill.md`](chatdsl_skill.md) — skill-oriented reference.
 - [`RERANK_FEATURE_SPEC.md`](RERANK_FEATURE_SPEC.md) — full rerank options and sources.
 - [`BATCH_N_WALKTHROUGH.md`](BATCH_N_WALKTHROUGH.md) — batched directory rerank scaling.
