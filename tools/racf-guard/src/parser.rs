@@ -52,24 +52,29 @@ fn tokenize_line(line: &str) -> Vec<String> {
     let mut current = String::new();
     let mut in_paren = 0;
     let mut in_single_quote = false;
+    let mut in_double_quote = false;
 
     for ch in line.chars() {
         match ch {
-            '\'' => {
+            '\'' if !in_double_quote => {
                 in_single_quote = !in_single_quote;
                 current.push(ch);
             }
-            '(' if !in_single_quote => {
+            '"' if !in_single_quote => {
+                in_double_quote = !in_double_quote;
+                current.push(ch);
+            }
+            '(' if !in_single_quote && !in_double_quote => {
                 in_paren += 1;
                 current.push(ch);
             }
-            ')' if !in_single_quote => {
+            ')' if !in_single_quote && !in_double_quote => {
                 if in_paren > 0 {
                     in_paren -= 1;
                 }
                 current.push(ch);
             }
-            c if c.is_whitespace() && in_paren == 0 && !in_single_quote => {
+            c if c.is_whitespace() && in_paren == 0 && !in_single_quote && !in_double_quote => {
                 if !current.is_empty() {
                     tokens.push(current);
                     current = String::new();
@@ -82,6 +87,10 @@ fn tokenize_line(line: &str) -> Vec<String> {
         tokens.push(current);
     }
     tokens
+}
+
+fn clean_token(token: &str) -> String {
+    token.trim().trim_matches('\'').trim_matches('"').to_string()
 }
 
 /// Extracts value from `KEYWORD(value)`
@@ -152,8 +161,9 @@ fn parse_rdefine(args: &[String], line_num: usize) -> Result<Statement, String> 
                 .ok_or_else(|| format!("Unknown UACC value '{}' on line {}", val, line_num))?;
         } else {
             // Positional argument
+            let cleaned = clean_token(arg);
             if class.is_none() && profile.is_none() {
-                let candidate = ResourceClass::from_str(arg);
+                let candidate = ResourceClass::from_str(&cleaned);
                 if matches!(
                     candidate,
                     ResourceClass::Facility
@@ -164,12 +174,16 @@ fn parse_rdefine(args: &[String], line_num: usize) -> Result<Statement, String> 
                 ) {
                     class = Some(candidate);
                 } else {
-                    profile = Some(arg.trim().to_string());
+                    profile = Some(cleaned);
                 }
             } else if profile.is_none() {
-                profile = Some(arg.trim().to_string());
+                profile = Some(cleaned);
             } else if class.is_none() {
-                class = Some(ResourceClass::from_str(arg));
+                class = Some(ResourceClass::from_str(&cleaned));
+            } else if let Some(existing) = profile.as_mut() {
+                // Multi-word positional profile name (e.g. `ps -ef*`)
+                existing.push(' ');
+                existing.push_str(&cleaned);
             }
         }
     }
@@ -189,12 +203,12 @@ fn parse_permit(args: &[String], line_num: usize) -> Result<Statement, String> {
     if args.is_empty() {
         return Err(format!("PERMIT requires profile on line {}", line_num));
     }
-    let profile = args[0].trim().to_string();
+    let mut profile_parts = Vec::new();
     let mut class = None;
     let mut id = None;
     let mut access = AccessLevel::Allow;
 
-    for arg in &args[1..] {
+    for arg in args {
         if let Some(val) = extract_kw_arg(arg, "CLASS") {
             class = Some(ResourceClass::from_str(&val));
         } else if let Some(val) = extract_kw_arg(arg, "ID") {
@@ -202,8 +216,15 @@ fn parse_permit(args: &[String], line_num: usize) -> Result<Statement, String> {
         } else if let Some(val) = extract_kw_arg(arg, "ACCESS") {
             access = AccessLevel::from_str(&val)
                 .ok_or_else(|| format!("Unknown ACCESS value '{}' on line {}", val, line_num))?;
+        } else {
+            profile_parts.push(clean_token(arg));
         }
     }
+
+    if profile_parts.is_empty() {
+        return Err(format!("PERMIT missing profile on line {}", line_num));
+    }
+    let profile = profile_parts.join(" ");
 
     let class = class.ok_or_else(|| format!("PERMIT missing CLASS(...) on line {}", line_num))?;
     let id = id.ok_or_else(|| format!("PERMIT missing ID(...) on line {}", line_num))?;

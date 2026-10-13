@@ -58,9 +58,11 @@ RDEFINE FACILITY grep_search      UACC(ALLOW)
 RDEFINE FACILITY read_url         UACC(ALLOW)
 RDEFINE FACILITY read_url_content UACC(ALLOW)
 
-# Modification tools (Require confirmation)
+# Modification tools (Require confirmation by default, permitted to DEVELOPER role)
 RDEFINE FACILITY write_file                 UACC(ASK)
+PERMIT write_file CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
 RDEFINE FACILITY replace_file_content       UACC(ASK)
+PERMIT replace_file_content CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
 RDEFINE FACILITY patch_file                 UACC(ASK)
 RDEFINE FACILITY delete_file                UACC(ASK)
 RDEFINE FACILITY make_directory             UACC(ASK)
@@ -77,17 +79,12 @@ RDEFINE FACILITY run_command UACC(ASK)
 PERMIT run_command CLASS(FACILITY) ID(SYSADM) ACCESS(ALLOW)
 
 # -----------------------------------------------------------------------------
-# 3. Resource Class: DIR (Filesystem Access Controls)
+# 3. Resource Class: DIR (Filesystem Access Controls - Least Privilege)
 # -----------------------------------------------------------------------------
-# Current workspace directory and relative paths
-RDEFINE DIR .         UACC(ASK)
-RDEFINE DIR ./**      UACC(ASK)
-PERMIT .    CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
-PERMIT ./** CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
-PERMIT .    CLASS(DIR) ID(AUDITOR)   ACCESS(ALLOW)
-PERMIT ./** CLASS(DIR) ID(AUDITOR)   ACCESS(ALLOW)
+# Universal default: No access anywhere on the filesystem
+RDEFINE DIR /**             UACC(DENY)
 
-# System and sensitive paths
+# System and sensitive paths (Explicit blocks)
 RDEFINE DIR /etc/**         UACC(DENY)
 RDEFINE DIR /sys/**         UACC(DENY)
 RDEFINE DIR /proc/**        UACC(DENY)
@@ -95,13 +92,37 @@ RDEFINE DIR /root/**        UACC(DENY)
 RDEFINE DIR ~/.ssh/**       UACC(DENY)
 RDEFINE DIR ~/.gnupg/**     UACC(DENY)
 RDEFINE DIR ~/.aws/**       UACC(DENY)
-
-# Safe workspace paths
-RDEFINE DIR /Users/**       UACC(ALLOW)
-RDEFINE DIR /home/**        UACC(ALLOW)
-RDEFINE DIR /tmp/**         UACC(ALLOW)
 RDEFINE DIR **/*zaragoza*   UACC(DENY)
 
+# Base Home Directory ONLY (single * matches files directly in ~, not subdirectories)
+RDEFINE DIR ~/*             UACC(DENY)
+PERMIT ~/*             CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT ~/*             CLASS(DIR) ID(AUDITOR)   ACCESS(ALLOW)
+
+# Approved Subdirectories ONLY (Specific approved workspaces)
+RDEFINE DIR ~/github/**     UACC(DENY)
+PERMIT ~/github/**     CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT ~/github/**     CLASS(DIR) ID(AUDITOR)   ACCESS(ALLOW)
+
+RDEFINE DIR ~/projects/**   UACC(DENY)
+PERMIT ~/projects/**   CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT ~/projects/**   CLASS(DIR) ID(AUDITOR)   ACCESS(ALLOW)
+
+RDEFINE DIR ~/Downloads/**  UACC(DENY)
+#PERMIT ~/Downloads/**  CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
+#PERMIT ~/Downloads/**  CLASS(DIR) ID(AUDITOR)   ACCESS(ALLOW)
+
+RDEFINE DIR **/scratch/**   UACC(DENY)
+PERMIT **/scratch/**   CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT **/scratch/**   CLASS(DIR) ID(AUDITOR)   ACCESS(ALLOW)
+
+# Current workspace directory and relative paths
+RDEFINE DIR .               UACC(DENY)
+RDEFINE DIR ./**            UACC(DENY)
+PERMIT .               CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT ./**            CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT .               CLASS(DIR) ID(AUDITOR)   ACCESS(ALLOW)
+PERMIT ./**            CLASS(DIR) ID(AUDITOR)   ACCESS(ALLOW)
 
 # User specific directory override
 PERMIT /etc/hosts CLASS(DIR) ID(SYSADM) ACCESS(ASK)

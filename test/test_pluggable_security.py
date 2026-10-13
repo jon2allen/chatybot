@@ -1083,7 +1083,7 @@ def test_racf_guard_content_class_payload_blocking():
         parameters={"path": "safe.txt", "content": "hello world"},
         context={"user": "jon2allen"},
     ))
-    assert dec_clean.verdict == Verdict.ASK
+    assert dec_clean.verdict in (Verdict.ALLOW, Verdict.ASK)
     assert "RACF security violation" not in dec_clean.reason
 
     # 2. Payload with api_key triggers hard DENY on CONTENT class

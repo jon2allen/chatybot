@@ -68,24 +68,45 @@ RDEFINE FACILITY run_command CLASS(FACILITY) UACC(ASK)
 PERMIT run_command CLASS(FACILITY) ID(SYSADM) ACCESS(ALLOW)
 
 # -----------------------------------------------------------------------------
-# DIR Class: Filesystem Boundaries
+# DIR Class: Filesystem Boundaries (Least Privilege Default-Deny)
 # -----------------------------------------------------------------------------
-# Current workspace directory and relative paths
-RDEFINE DIR .         UACC(ASK)
-RDEFINE DIR ./**      UACC(ASK)
-PERMIT .    CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
-PERMIT ./** CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
+# Universal fallback: Deny all filesystem access by default
+RDEFINE DIR /**             UACC(DENY)
 
 # Target prohibited file patterns (beats broad workspace allowances via specificity)
-RDEFINE DIR **/*zaragoza* UACC(DENY)
+RDEFINE DIR **/*zaragoza*   UACC(DENY)
 
-# System protections & user roots
-RDEFINE DIR /etc/**   UACC(DENY)
-RDEFINE DIR /sys/**   UACC(DENY)
-RDEFINE DIR /proc/**  UACC(DENY)
-RDEFINE DIR ~/.ssh/** UACC(DENY)
-RDEFINE DIR /tmp/**   UACC(ALLOW)
-RDEFINE DIR /Users/** UACC(ALLOW)
+# Sensitive system protections & credential stores
+RDEFINE DIR /etc/**         UACC(DENY)
+RDEFINE DIR /sys/**         UACC(DENY)
+RDEFINE DIR /proc/**        UACC(DENY)
+RDEFINE DIR ~/.ssh/**       UACC(DENY)
+RDEFINE DIR ~/.gnupg/**     UACC(DENY)
+RDEFINE DIR ~/.aws/**       UACC(DENY)
+
+# Approved workspace zones (UACC DENY, explicit permit to DEVELOPER role)
+# Base Home Directory ONLY (single * matches files directly in ~, not subdirectories)
+RDEFINE DIR ~/*             UACC(DENY)
+PERMIT ~/*             CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
+
+# Approved Subdirectories ONLY (Specific approved workspaces)
+RDEFINE DIR ~/github/**     UACC(DENY)
+PERMIT ~/github/**     CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
+
+RDEFINE DIR ~/projects/**   UACC(DENY)
+PERMIT ~/projects/**   CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
+
+RDEFINE DIR ~/Downloads/**  UACC(DENY)
+PERMIT ~/Downloads/**  CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
+
+RDEFINE DIR **/scratch/**   UACC(DENY)
+PERMIT **/scratch/**   CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
+
+# Current workspace directory and relative paths
+RDEFINE DIR .               UACC(DENY)
+RDEFINE DIR ./**            UACC(DENY)
+PERMIT .               CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT ./**            CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
 
 # -----------------------------------------------------------------------------
 # COMMAND Class: Shell Execution Controls
