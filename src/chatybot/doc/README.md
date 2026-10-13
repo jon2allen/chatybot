@@ -26,6 +26,7 @@
 - [Architecture](#architecture)
 - [Technical Details](#technical-details)
 - [Configuration](#configuration)
+- [Pluggable Security Architecture](#pluggable-security-architecture)
 - [Examples](#examples)
 - [Change Log](#change-log)
 - [Roadmap](#roadmap)
@@ -84,7 +85,7 @@ chatybot is an interactive command-line tool that enables seamless communication
 - **Hugging Face Preset & `/env` Inspection** - Vendor preset for Hugging Face inference endpoints and dedicated `/env` environment inspection command
 - **Enhanced Session Filtering & Sorting** - `/session list` sorting by latest activity, model filtering (`model=...`), age filtering (`since=Nd/h/m`), and range pagination (`limit=...`, `range=start:end`)
 - **Non-Destructive Session Query & Turn Extraction** - Search past session turns, conversation history, notes, and scratchpads with boolean AND/OR matching, date constraints (`since=`, `until=`, `range=`), fast discovery (`ids`), and entire session byte size tracking (`/session query`, `session_search`). Extract turn prompts, responses, or reasoning traces read-only without switching sessions or polluting context (`/session get`, `session_get`).
-
+- **Pluggable Security Architecture & Policy Guardrails** - Pre-execution security interception for all agentic tool calls and shell operations via built-in Python Security DSL or high-performance external engines (e.g. `racf-guard`). Standardized resource classification (`EXEC`, `FS_READ`, `FS_WRITE`, `NET`, `PROCESS`, `CONTENT`), tri-state verdicts (`ALLOW`, `ASK`, `DENY`), unattended script auto-approval (`-y` / `--auto-approve`), verbose debug tracing (`--security`), and full multilingual localization.
 
 ---
 
@@ -274,6 +275,24 @@ chat --> /listmodels      # View all available models and their endpoints
 chat --> /model mistral_1 # Switch active model (or e.g. /model gemini_flash)
 chat --> /help            # View all available escape commands
 chat --> Hello!           # Start chatting!
+```
+
+#### **CLI Launch Options & Security Flags**
+```bash
+# Standard interactive startup with active security policy
+chatybot
+
+# Enable verbose security evaluation debug output (rule matching, timings, verdicts)
+chatybot --security
+
+# Run non-interactive batch script with automatic approval for ASK verdicts
+chatybot -y --script doc/cookbook/16_2_script_with_auto_approve.chatdsl
+
+# Temporarily disable all security checks (unconstrained execution for testing/benchmarks)
+chatybot --no-security
+
+# Launch without loading MCP tools or external stdio servers
+chatybot --no-tools
 ```
 
 > [!TIP]
@@ -1169,6 +1188,62 @@ Edit `~/.config/chatybot/chat_config.toml` directly or use the `-c` flag to spec
 ```bash
 chatybot -c ~/my_custom_config.toml
 ```
+
+---
+
+## **Pluggable Security Architecture**
+
+Chatybot features a policy-driven security gateway that evaluates all agentic tool calls and shell operations before execution. Tool invocations are mapped to standard resource classes (`EXEC`, `FS_READ`, `FS_WRITE`, `NET`, `PROCESS`, `CONTENT`) and evaluated for an **`ALLOW`**, **`ASK`**, or **`DENY`** verdict.
+
+Detailed architecture, configuration schemas, IPC specifications, and policy examples are documented in [`doc/pluggable_security.md`](doc/pluggable_security.md).
+
+### **Policy Engines**
+
+| Engine | Description | Configuration |
+|---|---|---|
+| **Builtin** (Default) | In-process Python engine evaluating English-like Security DSL rules, path traversal boundaries, and dangerous command patterns. | `[builtin]` in `~/.config/chatybot/security.toml` |
+| **Binary (`racf-guard`)** | External high-performance Rust engine evaluating enterprise IBM RACF-style security definitions (`.racf`). Runs via standard stdio JSON protocol. | `[binary]` in `~/.config/chatybot/security.toml` |
+
+### **Configuration (`~/.config/chatybot/security.toml`)**
+```toml
+version = "1.0"
+engine = "builtin"          # "builtin" or "binary"
+fail_safe = "deny"          # "deny" or "ask"
+non_interactive_ask = "deny" # Resolution for ASK in scripts without -y
+
+[builtin]
+default_verdict = "ask"
+
+# English-like Security DSL (Deny-overrides by tier: DENY > ASK > ALLOW)
+dsl_rules = [
+    # Safe file allow-lists
+    "allow read file ending with .md because 'docs are safe'",
+    "allow read file ending with .txt",
+
+    # Sensitive path & secret protection
+    "block write file ending with .env",
+    "never read file with api_key in it",
+
+    # Dangerous command guards
+    "ask before run command with sudo",
+    "deny run command with 'rm -rf' in it",
+    "deny run command with 'git push --force' in it",
+    "allow run command starting with 'git status'",
+    "allow run command starting with 'git diff'",
+]
+
+[builtin.path_restrictions]
+denied_paths = ["/etc", "/var/root", "/boot", "/System", "~/.ssh", "~/.aws", "~/.gnupg"]
+
+[builtin.command_rules]
+denied_patterns = ["rm -rf /", "rm -rf /*", ":(){ :|:& };:", "mkfs", "dd if=/dev/zero"]
+```
+
+### **Security CLI Options & Script Integration**
+- **Debug & Rule Inspection**: `chatybot --security` outputs loaded rule definitions, active engine banners, and verbose per-turn evaluation decisions.
+- **Auditing RACF Policies**: `racf-guard -p examples/security.racf -l` outputs formatted ACL audit tables across all resource classes.
+- **Unattended Execution**: Pass `-y` / `--yes` / `--auto-approve` to automatically approve `ASK` verdicts in automated scripts or CI pipelines.
+- **Handling Policy Denials**: In ChatDSL scripts, denials populate `${TOOL_DISPATCH_EXIT_CODE}` (`1` or `-1`) and `${TOOL_DISPATCH_ERROR}` (explanation message) without crashing the session (see [Cookbook Chapter 16](doc/chatdsl_cookbook.md#chapter-16--pluggable-security--policy-guardrails)).
 
 ---
 
