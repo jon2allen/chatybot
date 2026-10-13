@@ -34,18 +34,42 @@ PERMIT git.fetch  CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
 PERMIT git.commit CLASS(FACILITY) ID(DEVELOPER) ACCESS(ASK)
 PERMIT git.push   CLASS(FACILITY) ID(DEVELOPER) ACCESS(ASK)
 
-# Read-only and exploration tools
+# Read-only and exploration tools (Chatybot standard tool names)
+RDEFINE FACILITY read_file        UACC(ASK)
+PERMIT read_file CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT read_file CLASS(FACILITY) ID(AUDITOR)   ACCESS(ALLOW)
+
+RDEFINE FACILITY list_directory   UACC(ASK)
+PERMIT list_directory CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT list_directory CLASS(FACILITY) ID(AUDITOR)   ACCESS(ALLOW)
+
+RDEFINE FACILITY find_files       UACC(ASK)
+PERMIT find_files CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT find_files CLASS(FACILITY) ID(AUDITOR)   ACCESS(ALLOW)
+
+RDEFINE FACILITY file_info        UACC(ASK)
+PERMIT file_info CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT file_info CLASS(FACILITY) ID(AUDITOR)   ACCESS(ALLOW)
+
+# Tool aliases & external queries
 RDEFINE FACILITY view_file        UACC(ALLOW)
 RDEFINE FACILITY list_dir         UACC(ALLOW)
 RDEFINE FACILITY grep_search      UACC(ALLOW)
+RDEFINE FACILITY read_url         UACC(ALLOW)
 RDEFINE FACILITY read_url_content UACC(ALLOW)
 
-# Modification tools
-RDEFINE FACILITY write_to_file            UACC(ASK)
-RDEFINE FACILITY replace_file_content     UACC(ASK)
+# Modification tools (Require confirmation)
+RDEFINE FACILITY write_file                 UACC(ASK)
+RDEFINE FACILITY replace_file_content       UACC(ASK)
+RDEFINE FACILITY patch_file                 UACC(ASK)
+RDEFINE FACILITY delete_file                UACC(ASK)
+RDEFINE FACILITY make_directory             UACC(ASK)
+RDEFINE FACILITY remove_directory           UACC(ASK)
+
+# Legacy aliases
+RDEFINE FACILITY write_to_file              UACC(ASK)
+PERMIT write_to_file CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
 RDEFINE FACILITY multi_replace_file_content UACC(ASK)
-PERMIT write_to_file            CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
-PERMIT replace_file_content     CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
 PERMIT multi_replace_file_content CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
 
 # Subshell and Command execution
@@ -55,6 +79,14 @@ PERMIT run_command CLASS(FACILITY) ID(SYSADM) ACCESS(ALLOW)
 # -----------------------------------------------------------------------------
 # 3. Resource Class: DIR (Filesystem Access Controls)
 # -----------------------------------------------------------------------------
+# Current workspace directory and relative paths
+RDEFINE DIR .         UACC(ASK)
+RDEFINE DIR ./**      UACC(ASK)
+PERMIT .    CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT ./** CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT .    CLASS(DIR) ID(AUDITOR)   ACCESS(ALLOW)
+PERMIT ./** CLASS(DIR) ID(AUDITOR)   ACCESS(ALLOW)
+
 # System and sensitive paths
 RDEFINE DIR /etc/**         UACC(DENY)
 RDEFINE DIR /sys/**         UACC(DENY)
