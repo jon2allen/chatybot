@@ -51,6 +51,10 @@ RDEFINE COMMAND sudo* UACC(DENY)
 RDEFINE COMMAND git* UACC(ALLOW)
 RDEFINE COMMAND cargo* UACC(ALLOW)
 RDEFINE COMMAND pytest* UACC(ALLOW)
+
+# Content & Payload Inspection (LLM Security Innovation)
+RDEFINE CONTENT *BEGIN*PRIVATE*KEY* UACC(DENY)
+RDEFINE CONTENT *api_key* UACC(DENY)
 "#;
 
 #[derive(Parser, Debug)]

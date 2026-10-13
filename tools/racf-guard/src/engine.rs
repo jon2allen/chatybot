@@ -100,6 +100,27 @@ impl Profile {
             } else {
                 glob_match(&norm_pattern, &norm_resource)
             }
+        } else if self.class == ResourceClass::Content {
+            let pat_lower = self.pattern.to_lowercase();
+            let res_lower = resource.to_lowercase();
+            if !self.is_generic {
+                res_lower == pat_lower || res_lower.contains(&pat_lower)
+            } else {
+                let normalized_pattern = if pat_lower.contains('*') && !pat_lower.contains("**") {
+                    pat_lower.replace('*', "**")
+                } else {
+                    pat_lower.clone()
+                };
+                if glob_match(&normalized_pattern, &res_lower) {
+                    return true;
+                }
+                for line in res_lower.lines() {
+                    if glob_match(&pat_lower, line) {
+                        return true;
+                    }
+                }
+                false
+            }
         } else if !self.is_generic {
             self.pattern == resource
         } else {
@@ -131,6 +152,7 @@ impl RacfEngine {
         class_default.insert(ResourceClass::Dir, AccessLevel::Deny);
         class_default.insert(ResourceClass::Command, AccessLevel::Deny);
         class_default.insert(ResourceClass::Ps, AccessLevel::Deny);
+        class_default.insert(ResourceClass::Content, AccessLevel::Allow);
 
         Self {
             groups: HashSet::new(),
@@ -239,6 +261,7 @@ impl RacfEngine {
             ResourceClass::Facility,
             ResourceClass::Dir,
             ResourceClass::Command,
+            ResourceClass::Content,
             ResourceClass::Ps,
         ];
 
@@ -619,6 +642,77 @@ impl RacfEngine {
             }
         }
 
+        // 4. Evaluate CONTENT class (LLM Security Innovation: Payload & Content Inspection)
+        if self.profiles.contains_key(&ResourceClass::Content) {
+            let content_keys = [
+                "content",
+                "contents",
+                "text",
+                "codecontent",
+                "code_content",
+                "replacementcontent",
+                "replacement_content",
+                "targetcontent",
+                "target_content",
+                "data",
+                "body",
+                "payload",
+                "patch",
+                "diff",
+            ];
+            let mut candidate_contents: Vec<String> = Vec::new();
+            for (key, val) in &request.parameters {
+                let key_clean = key.to_lowercase().replace('_', "").replace('-', "");
+                let is_content_key = content_keys
+                    .iter()
+                    .any(|ck| ck.replace('_', "") == key_clean)
+                    || key_clean.ends_with("content")
+                    || key_clean.ends_with("text")
+                    || key_clean.ends_with("payload");
+
+                if is_content_key {
+                    if let Some(s) = val.as_str() {
+                        candidate_contents.push(s.to_string());
+                    }
+                } else if key_clean == "replacementchunks" {
+                    if let Some(arr) = val.as_array() {
+                        for item in arr {
+                            if let Some(obj) = item.as_object() {
+                                for (chunk_k, chunk_v) in obj {
+                                    let chunk_k_clean = chunk_k.to_lowercase().replace('_', "");
+                                    if chunk_k_clean.contains("content") {
+                                        if let Some(s) = chunk_v.as_str() {
+                                            candidate_contents.push(s.to_string());
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            for content_snippet in candidate_contents {
+                let (content_acc, content_reason) = self.evaluate_resource_trace(
+                    &user,
+                    &ResourceClass::Content,
+                    &content_snippet,
+                    &mut t_opt,
+                );
+                let display_snippet = if content_snippet.len() > 60 {
+                    format!("{}...", &content_snippet[..60])
+                } else {
+                    content_snippet.clone()
+                };
+                evaluations.push((
+                    ResourceClass::Content,
+                    display_snippet,
+                    content_acc,
+                    content_reason,
+                ));
+            }
+        }
+
         // Resolve overall verdict across all checks:
         // Any DENY -> DENY
         // Else any ASK -> ASK
@@ -813,4 +907,64 @@ mod tests {
         let (acc_dir, _) = engine.evaluate_resource("user", &ResourceClass::Dir, "/secret/keys");
         assert_eq!(acc_dir, AccessLevel::Deny);
     }
+
+    #[test]
+    fn test_racf_content_payload_inspection() {
+        let script = r#"
+            RDEFINE FACILITY write_file UACC(ALLOW)
+            RDEFINE DIR ./** UACC(ALLOW)
+
+            # Block writing private keys or api tokens
+            RDEFINE CONTENT *BEGIN*PRIVATE*KEY* UACC(DENY)
+            RDEFINE CONTENT *api_key* UACC(DENY)
+        "#;
+        let stmts = parse_racf_script(script).unwrap();
+        let mut engine = RacfEngine::new();
+        engine.load_statements(stmts);
+
+        // 1. Safe write passes
+        let mut req_safe = PolicyRequest {
+            tool: "write_file".to_string(),
+            parameters: HashMap::new(),
+            context: HashMap::new(),
+            version: None,
+            request_id: None,
+            timestamp: None,
+        };
+        req_safe.parameters.insert("path".to_string(), serde_json::Value::String("hello.txt".to_string()));
+        req_safe.parameters.insert("content".to_string(), serde_json::Value::String("Hello world from unit test".to_string()));
+        let dec_safe = engine.evaluate_request(&req_safe);
+        assert_eq!(dec_safe.status, "allow");
+
+        // 2. Writing content with api_key is blocked
+        let mut req_leak = PolicyRequest {
+            tool: "write_file".to_string(),
+            parameters: HashMap::new(),
+            context: HashMap::new(),
+            version: None,
+            request_id: None,
+            timestamp: None,
+        };
+        req_leak.parameters.insert("path".to_string(), serde_json::Value::String("app.env".to_string()));
+        req_leak.parameters.insert("content".to_string(), serde_json::Value::String("export my_api_key=sk-123456789".to_string()));
+        let dec_leak = engine.evaluate_request(&req_leak);
+        assert_eq!(dec_leak.status, "deny");
+        assert!(dec_leak.reason.contains("CONTENT"));
+
+        // 3. Multi-line content with private key header is blocked
+        let mut req_key = PolicyRequest {
+            tool: "write_file".to_string(),
+            parameters: HashMap::new(),
+            context: HashMap::new(),
+            version: None,
+            request_id: None,
+            timestamp: None,
+        };
+        req_key.parameters.insert("path".to_string(), serde_json::Value::String("id_rsa".to_string()));
+        req_key.parameters.insert("content".to_string(), serde_json::Value::String("-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQ...\n-----END RSA PRIVATE KEY-----".to_string()));
+        let dec_key = engine.evaluate_request(&req_key);
+        assert_eq!(dec_key.status, "deny");
+        assert!(dec_key.reason.contains("CONTENT"));
+    }
 }
+

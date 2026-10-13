@@ -6,6 +6,7 @@ pub enum ResourceClass {
     Dir,
     Command,
     Ps,
+    Content,
     Custom(String),
 }
 
@@ -16,6 +17,7 @@ impl ResourceClass {
             "DIR" | "DIRECTORY" => ResourceClass::Dir,
             "COMMAND" | "CMD" => ResourceClass::Command,
             "PS" | "PROCESS" => ResourceClass::Ps,
+            "CONTENT" | "PAYLOAD" | "DATA" => ResourceClass::Content,
             other => ResourceClass::Custom(other.to_string()),
         }
     }
@@ -26,6 +28,7 @@ impl ResourceClass {
             ResourceClass::Dir => "DIR",
             ResourceClass::Command => "COMMAND",
             ResourceClass::Ps => "PS",
+            ResourceClass::Content => "CONTENT",
             ResourceClass::Custom(s) => s.as_str(),
         }
     }
