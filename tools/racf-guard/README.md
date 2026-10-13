@@ -75,6 +75,9 @@ RDEFINE DIR ./**      UACC(ASK)
 PERMIT .    CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
 PERMIT ./** CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
 
+# Target prohibited file patterns (beats broad workspace allowances via specificity)
+RDEFINE DIR **/*zaragoza* UACC(DENY)
+
 # System protections & user roots
 RDEFINE DIR /etc/**   UACC(DENY)
 RDEFINE DIR /sys/**   UACC(DENY)
@@ -409,6 +412,13 @@ To determine which profile wins when multiple patterns match:
   2. `git.*` (Generic, score: 45)
   3. `*` (Generic, score: 1)
 
+- **Targeted File Protection Example (`zaragoza.md`)**:
+  When a policy broadly allows relative workspace files (`RDEFINE DIR ./** UACC(ALLOW)`), but you want to prohibit any file containing `zaragoza` in its name, define:
+  ```racf
+  RDEFINE DIR **/*zaragoza* UACC(DENY)
+  ```
+  When accessing `zaragoza.md`, both `./**` (score: 4) and `**/*zaragoza*` (score: 93) match. Because `**/*zaragoza*` has 8 literal characters (`zaragoza`), its specificity score is higher, so it **wins** the evaluation and enforces `DENY`.
+
 ### Multi-Resource Compound Evaluation
 When a tool invocation touches multiple resource classes (e.g. `run_command` touches `FACILITY:run_command`, `DIR:/workspace`, and `COMMAND:git status`):
 1. If **any** class evaluates to `DENY`, the composite decision is **`DENY`**.
@@ -479,6 +489,7 @@ PERMIT run_command CLASS(FACILITY) ID(SYSADM)    ACCESS(ALLOW)
 | **Connect User to Group** | `racf-guard connect <user> --group <group>` |
 | **Permit Tool to Role** | `racf-guard permit <profile> --class FACILITY --id <role> --access ALLOW` |
 | **Lock Directory** | `racf-guard rdefine DIR "/sensitive/**" --uacc DENY` |
+| **Block Specific File Pattern** | `racf-guard rdefine DIR "**/*zaragoza*" --uacc DENY` |
 | **Block Shell Command** | `racf-guard rdefine COMMAND "curl*" --uacc ASK` |
 | **Execute Raw Statement** | `racf-guard exec "PERMIT git.diff CLASS(FACILITY) ID(DEV) ACCESS(ALLOW)"` |
 
