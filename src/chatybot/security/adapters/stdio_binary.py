@@ -24,18 +24,25 @@ class StdioBinaryPolicyEngine(BasePolicyEngine):
         timeout_seconds: float = 2.0,
         fail_safe: str = "deny",
         args: list[str] | None = None,
+        debug: bool = False,
     ):
         self.binary_path = binary_path
         self.timeout_seconds = timeout_seconds
         self.fail_safe = Verdict(fail_safe)
-        self.args = args or []
+        self.args = list(args or [])
+        self.debug = debug
 
     def _fail_safe_decision(self, reason: str) -> PolicyDecision:
         return PolicyDecision(verdict=self.fail_safe, reason=reason)
 
     def evaluate(self, request: PolicyRequest) -> PolicyDecision:
+        if self.debug and "debug" not in request.context:
+            request.context["debug"] = True
+
         payload = request.to_dict()
         cmd = [self.binary_path] + self.args
+        if self.debug and "--debug" not in cmd and "-d" not in cmd:
+            cmd.append("--debug")
 
         try:
             proc = subprocess.run(
@@ -48,6 +55,10 @@ class StdioBinaryPolicyEngine(BasePolicyEngine):
                 timeout=self.timeout_seconds,
                 check=False,
             )
+            if self.debug and proc.stderr:
+                for line in proc.stderr.strip().splitlines():
+                    print(f"[Security Debug] [External Binary] {line}")
+
             if proc.returncode != 0:
                 stderr_snippet = (proc.stderr or "").strip()[:500]
                 return self._fail_safe_decision(

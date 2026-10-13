@@ -92,6 +92,7 @@ class SecurityManager:
                     timeout_seconds=float(bin_cfg.get("timeout_seconds", 2.0)),
                     fail_safe=self.fail_safe.value,
                     args=bin_cfg.get("args", []),
+                    debug=self.debug,
                 )
                 return
             # If binary not found, fallback to builtin engine with a warning
@@ -118,10 +119,14 @@ class SecurityManager:
         if not self.enabled:
             return PolicyDecision(verdict=Verdict.ALLOW, reason="Security evaluation disabled.")
 
+        ctx = dict(context or {})
+        if self.debug and "debug" not in ctx:
+            ctx["debug"] = True
+
         req = PolicyRequest(
             tool=tool,
             parameters=parameters or {},
-            context=context or {},
+            context=ctx,
         )
         try:
             return self.engine.evaluate(req)
