@@ -26,10 +26,11 @@ class BuiltinPolicyEngine(BasePolicyEngine):
     baseline tri-state rules, path traversal guards, and command filtering.
     """
 
-    # Matches direct or chained execution of Chatybot or Python module invocation
+    # Matches direct or wrapper execution of Chatybot or Python module/script invocation
     CHATYBOT_EXEC_PATTERN = re.compile(
-        r"(?:^|[;&|`\n\r])\s*(?:[^\s;&|`\n\r]*/)?chatybot(?:\.py)?(?:\s+|$)|"
-        r"(?:^|[;&|`\n\r])\s*python[0-9.]*\s+-m\s+chatybot(?:\s+|$)",
+        r"(?:^|[;&|`\n\r]|\b(?:exec|env|nohup|sudo|xargs|(?:ba|z)?sh\s+-c)\s+['\"]?)\s*"
+        r"(?:[^\s;&|`\n\r\'\"]*/)?chatybot(?:\.py)?(?:\s+|['\"`;&|]|$)|"
+        r"(?:^|[;&|`\n\r])\s*python[0-9.]*\s+(?:-m\s+chatybot(?:\s+|$)|[^\s;&|`\n\r]*/chatybot\.py(?:\s+|$)|-c\s+['\"][^'\"]*\bchatybot\b)",
         re.IGNORECASE,
     )
 
@@ -78,7 +79,6 @@ class BuiltinPolicyEngine(BasePolicyEngine):
     ]
 
     def __init__(
-
         self,
         rules: dict[str, str] | None = None,
         dsl_rules: list[str] | None = None,
@@ -162,6 +162,14 @@ class BuiltinPolicyEngine(BasePolicyEngine):
         params = request.parameters or {}
 
         decision: PolicyDecision
+        cmd = ""
+        if tool == "run_command":
+            cmd = str(params.get("command") or params.get("cmd") or "").strip()
+            if not cmd:
+                for k, v in params.items():
+                    if k.lower() in ("command", "cmd"):
+                        cmd = str(v).strip()
+                        break
         # Tier 0: System Protections (Protected Paths & Dangerous Command Patterns)
         if tool in (
             "read_file",
@@ -207,13 +215,6 @@ class BuiltinPolicyEngine(BasePolicyEngine):
                         return decision
 
         if tool == "run_command":
-            cmd = str(params.get("command") or params.get("cmd") or "").strip()
-            if not cmd:
-                for k, v in params.items():
-                    if k.lower() in ("command", "cmd"):
-                        cmd = str(v).strip()
-                        break
-
             # Tier 0: Direct check against Chatybot sub-process execution
             if self.CHATYBOT_EXEC_PATTERN.search(cmd):
                 decision = PolicyDecision(
@@ -226,16 +227,7 @@ class BuiltinPolicyEngine(BasePolicyEngine):
 
             cmd_lower = cmd.lower()
             for pattern in self.denied_command_patterns:
-                if pattern.lower() == "chatybot":
-                    if self.CHATYBOT_EXEC_PATTERN.search(cmd):
-                        decision = PolicyDecision(
-                            verdict=Verdict.DENY,
-                            reason=f"Dangerous command pattern '{pattern}' is strictly denied by policy.",
-                        )
-                        if self.debug:
-                            print(f"[Security Debug] [SPECIAL DENY] Tier 0 Dangerous Command: '{pattern}' in '{cmd}' -> {decision.reason}")
-                        return decision
-                elif pattern.lower() in cmd_lower:
+                if pattern.lower() in cmd_lower:
                     decision = PolicyDecision(
                         verdict=Verdict.DENY,
                         reason=f"Dangerous command pattern '{pattern}' is strictly denied by policy.",
@@ -275,26 +267,19 @@ class BuiltinPolicyEngine(BasePolicyEngine):
                 return decision
 
         # Tier 2.5: Multiline / newline command separation guard for run_command
-        if tool == "run_command":
-            cmd = str(params.get("command") or params.get("cmd") or "").strip()
-            if not cmd:
-                for k, v in params.items():
-                    if k.lower() in ("command", "cmd"):
-                        cmd = str(v).strip()
-                        break
-            if "\n" in cmd or "\r" in cmd:
-                decision = PolicyDecision(
-                    verdict=Verdict.ASK,
-                    reason="Multiline command containing newline separator requires user confirmation.",
-                    prompt_details=PolicyPromptDetails(
-                        title="Security Policy: Multiline Command",
-                        message=f"Command contains newline separator: '{cmd}'. Proceed with execution?",
-                        risk_level="high",
-                    ),
-                )
-                if self.debug:
-                    print(f"[Security Debug] [CHAINING ASK] Multiline command separator in '{cmd}' -> {decision.reason}")
-                return decision
+        if tool == "run_command" and ("\n" in cmd or "\r" in cmd):
+            decision = PolicyDecision(
+                verdict=Verdict.ASK,
+                reason="Multiline command containing newline separator requires user confirmation.",
+                prompt_details=PolicyPromptDetails(
+                    title="Security Policy: Multiline Command",
+                    message=f"Command contains newline separator: '{cmd}'. Proceed with execution?",
+                    risk_level="high",
+                ),
+            )
+            if self.debug:
+                print(f"[Security Debug] [CHAINING ASK] Multiline command separator in '{cmd}' -> {decision.reason}")
+            return decision
 
         # Tier 3: Allow Rules (Check all ALLOW DSL rules)
 
