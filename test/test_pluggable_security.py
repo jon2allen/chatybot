@@ -599,12 +599,15 @@ def test_config_resilience_and_case_insensitive_verdicts(tmp_path, caplog):
 
 
 @pytest.mark.anyio
-async def test_dispatch_tool_async_security_confirmation_and_audit(monkeypatch):
+async def test_dispatch_tool_async_security_confirmation_and_audit(monkeypatch, tmp_path):
     """Verify non-blocking async confirmation in dispatch_tool and persistent audit logging."""
     import json
     from chatybot.chatybot_app import ChatybotApp
 
-    app = ChatybotApp()
+    # Isolate from user's security config by using a builtin-engine test config
+    sec_cfg = tmp_path / "test_security.toml"
+    sec_cfg.write_text('engine = "builtin"\nfail_safe = "deny"\n[builtin]\ndefault_verdict = "ask"\n')
+    app = ChatybotApp(security_config_path=str(sec_cfg))
     app.initialize()
     app.logging_manager.logging_active = True
     logged_messages = []
@@ -648,12 +651,15 @@ def test_regex_validation_default_tools_and_cleanups(caplog):
 
 
 @pytest.mark.anyio
-async def test_auto_approve_yes_flag(monkeypatch):
+async def test_auto_approve_yes_flag(monkeypatch, tmp_path):
     """Verify that auto_approve=True (-y / --yes) approves ASK tools without prompting, but DENY still blocks."""
     import json
     from chatybot.chatybot_app import ChatybotApp
 
-    app = ChatybotApp(auto_approve=True)
+    # Isolate from user's security config by using a builtin-engine test config
+    sec_cfg = tmp_path / "test_security.toml"
+    sec_cfg.write_text('engine = "builtin"\nfail_safe = "deny"\n[builtin]\ndefault_verdict = "ask"\n')
+    app = ChatybotApp(auto_approve=True, security_config_path=str(sec_cfg))
     app.initialize()
     app.logging_manager.logging_active = True
     logged_messages = []
@@ -690,7 +696,9 @@ async def test_non_interactive_ask_resolution(monkeypatch, tmp_path):
     from chatybot.chatybot_app import ChatybotApp
 
     # 1. non_interactive_ask = "deny" (default)
-    app_deny = ChatybotApp(auto_approve=False)
+    sec_cfg_deny = tmp_path / "deny_sec.toml"
+    sec_cfg_deny.write_text('engine = "builtin"\nfail_safe = "deny"\nnon_interactive_ask = "deny"\n[builtin]\ndefault_verdict = "ask"\n')
+    app_deny = ChatybotApp(auto_approve=False, security_config_path=str(sec_cfg_deny))
     app_deny.initialize()
     app_deny.script_context = True  # Marks non-interactive
     app_deny.logging_manager.logging_active = True
@@ -707,8 +715,8 @@ async def test_non_interactive_ask_resolution(monkeypatch, tmp_path):
 
     # 2. non_interactive_ask = "allow"
     cfg = tmp_path / "allow_sec.toml"
-    cfg.write_text('non_interactive_ask = "allow"\n')
-    app_allow = ChatybotApp(auto_approve=False)
+    cfg.write_text('engine = "builtin"\nfail_safe = "deny"\nnon_interactive_ask = "allow"\n[builtin]\ndefault_verdict = "ask"\n')
+    app_allow = ChatybotApp(auto_approve=False, security_config_path=str(cfg))
     app_allow.initialize()
     app_allow.security_manager.non_interactive_ask = "allow"
     app_allow.script_context = True

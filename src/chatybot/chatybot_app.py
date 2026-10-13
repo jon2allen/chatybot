@@ -77,12 +77,14 @@ class ChatybotApp:
         security_debug: bool = False,
         auto_approve: bool = False,
         no_security: bool = False,
+        security_config_path: str | None = None,
     ):
         """Initialize the Chatybot application."""
         self.no_tools: bool = no_tools
         self.security_debug: bool = security_debug
         self.auto_approve: bool = auto_approve
         self.no_security: bool = no_security
+        self.security_config_path: str | None = security_config_path
         self.single_run_mode: bool = False
         # Initialize managers
         from .localization import LocalizationManager
@@ -363,6 +365,7 @@ class ChatybotApp:
         try:
             from .security.manager import SecurityManager
             self.security_manager = SecurityManager(
+                config_path=self.security_config_path,
                 enabled=not self.no_security,
                 debug=self.security_debug,
             )
