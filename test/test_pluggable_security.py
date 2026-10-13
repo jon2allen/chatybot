@@ -816,4 +816,149 @@ async def test_security_manager_init_failure_fails_closed(monkeypatch):
     assert "fail-closed" in res
 
 
+def test_racf_guard_binary_integration():
+    """Verify end-to-end integration with racf-guard reference Rust binary if built."""
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    racf_bin = os.path.join(repo_root, "tools", "racf-guard", "target", "release", "racf-guard")
+    if not os.path.isfile(racf_bin):
+        pytest.skip("racf-guard release binary not built")
+
+    policy_file = os.path.join(repo_root, "tools", "racf-guard", "examples", "security.racf")
+    engine = StdioBinaryPolicyEngine(
+        binary_path=racf_bin,
+        args=["--policy", policy_file],
+        timeout_seconds=2.0,
+    )
+
+    # 1. Developer member allowed on git.status
+    dec = engine.evaluate(PolicyRequest(
+        tool="git.status",
+        context={"user": "jon2allen"},
+    ))
+    assert dec.verdict == Verdict.ALLOW
+    assert "DEVELOPER" in dec.reason
+
+    # 2. Dangerous rm command denied
+    dec_rm = engine.evaluate(PolicyRequest(
+        tool="run_command",
+        parameters={"command": "rm -rf /"},
+        context={"user": "jon2allen"},
+    ))
+    assert dec_rm.verdict == Verdict.DENY
+
+    # 3. Sensitive /etc directory denied
+    dec_dir = engine.evaluate(PolicyRequest(
+        tool="view_file",
+        parameters={"path": "/etc/shadow"},
+        context={"user": "jon2allen"},
+    ))
+    assert dec_dir.verdict == Verdict.DENY
+
+    # 4. Git commit prompts ASK
+    dec_ask = engine.evaluate(PolicyRequest(
+        tool="git.commit",
+        context={"user": "jon2allen"},
+    ))
+    assert dec_ask.verdict == Verdict.ASK
+    assert dec_ask.prompt_details is not None
+
+
+def test_racf_guard_list_rules_and_debug_trace(capsys):
+    """Verify racf-guard --list-rules audit output and debug trace forwarding."""
+    import subprocess
+
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    racf_bin = os.path.join(repo_root, "tools", "racf-guard", "target", "release", "racf-guard")
+    if not os.path.isfile(racf_bin):
+        pytest.skip("racf-guard release binary not built")
+
+    policy_file = os.path.join(repo_root, "tools", "racf-guard", "examples", "security.racf")
+
+    # 1. Test CLI --list-rules
+    proc = subprocess.run(
+        [racf_bin, "--policy", policy_file, "--list-rules"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert "RACF SECURITY DATABASE AUDIT REPORT" in proc.stdout
+    assert "RESOURCE CLASS: FACILITY" in proc.stdout
+    assert "RESOURCE CLASS: DIR" in proc.stdout
+    assert "RESOURCE CLASS: COMMAND" in proc.stdout
+    assert "DEVELOPER" in proc.stdout
+
+    # 2. Test debug trace forwarding via StdioBinaryPolicyEngine
+    engine_debug = StdioBinaryPolicyEngine(
+        binary_path=racf_bin,
+        args=["--policy", policy_file],
+        debug=True,
+    )
+    dec = engine_debug.evaluate(PolicyRequest(
+        tool="git.status",
+        context={"user": "jon2allen"},
+    ))
+    assert dec.verdict == Verdict.ALLOW
+
+    # Verify stderr was captured and printed with debug tag
+    captured = capsys.readouterr()
+    assert "[Security Debug] [External Binary] [RACF Debug]" in captured.out
+    assert "Matched" in captured.out
+    assert "Effective group access" in captured.out
+
+
+def test_racf_guard_cli_persistence_with_backup():
+    """Verify that CLI administrative updates create a backup copy and persist rules."""
+    import shutil
+    import subprocess
+
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    racf_bin = os.path.join(repo_root, "tools", "racf-guard", "target", "release", "racf-guard")
+    if not os.path.isfile(racf_bin):
+        pytest.skip("racf-guard release binary not built")
+
+    seed_file = os.path.join(repo_root, "tools", "racf-guard", "examples", "security.racf")
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        test_policy = os.path.join(tmpdir, "policy.racf")
+        backup_file = os.path.join(tmpdir, "policy.racf.bak")
+        shutil.copy(seed_file, test_policy)
+
+        # 1. Run CLI command to connect user 'tester' to DEVELOPER
+        proc = subprocess.run(
+            [racf_bin, "--policy", test_policy, "connect", "tester", "--group", "DEVELOPER"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        assert "[RACF Admin] Created backup copy" in proc.stdout
+        assert "CONNECT tester GROUP(DEVELOPER)" in proc.stdout
+        assert os.path.isfile(backup_file), "Backup file was not created"
+
+        # Verify backup does NOT contain 'tester'
+        with open(backup_file, "r", encoding="utf-8") as bf:
+            assert "tester" not in bf.read()
+
+        # 2. Run CLI command to permit git.push for DEVELOPER
+        proc_permit = subprocess.run(
+            [racf_bin, "--policy", test_policy, "permit", "git.push", "--class", "FACILITY", "--id", "DEVELOPER", "--access", "ALLOW"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        assert "[RACF Admin] Created backup copy" in proc_permit.stdout
+        assert "PERMIT git.push CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)" in proc_permit.stdout
+
+        # 3. Verify evaluate on next invocation loads and respects persisted updates
+        engine = StdioBinaryPolicyEngine(
+            binary_path=racf_bin,
+            args=["--policy", test_policy],
+        )
+        dec = engine.evaluate(PolicyRequest(
+            tool="git.push",
+            context={"user": "tester"},
+        ))
+        assert dec.verdict == Verdict.ALLOW
+        assert "tester" in dec.reason
+
+
 
