@@ -338,3 +338,8 @@ class BuiltinPolicyEngine(BasePolicyEngine):
             tag = "ACCEPT" if decision.verdict == Verdict.ALLOW else decision.verdict.value.upper()
             print(f"[Security Debug] [{tag}] Tier 4 Baseline Tool: {tool_raw} -> {decision.reason}")
         return decision
+
+    def get_banner(self) -> str:
+        rule_count = len(self.dsl_rules)
+        return f"Builtin Python Engine ({rule_count} DSL rules, {len(self.rules)} tool defaults)"
+

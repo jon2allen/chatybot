@@ -1028,3 +1028,38 @@ path = "/nonexistent/path/to/guard_binary"
     out = capsys.readouterr().out
     assert "[Security Warning] Configured binary path not found" in out
     assert isinstance(mgr.engine, BuiltinPolicyEngine)
+
+
+def test_security_engine_banner_reporting(tmp_path):
+    """Verify get_banner() on Builtin, StdioBinary, and SecurityManager."""
+    import subprocess
+
+    # 1. Builtin engine banner
+    builtin = BuiltinPolicyEngine(dsl_rules=["deny read file with secret in it"])
+    b_banner = builtin.get_banner()
+    assert "Builtin Python Engine" in b_banner
+    assert "1 DSL rules" in b_banner
+
+    # 2. Disabled manager banner
+    mgr_dis = SecurityManager(enabled=False)
+    assert mgr_dis.get_banner() == "Disabled"
+
+    # 3. racf-guard binary banner
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    racf_bin = os.path.join(repo_root, "tools", "racf-guard", "target", "release", "racf-guard")
+    if os.path.isfile(racf_bin):
+        policy_file = os.path.join(repo_root, "tools", "racf-guard", "examples", "security.racf")
+        bin_engine = StdioBinaryPolicyEngine(
+            binary_path=racf_bin,
+            args=["--policy", policy_file],
+        )
+        banner = bin_engine.get_banner()
+        assert "RACF-Guard" in banner
+        assert "groups" in banner
+        assert "profiles loaded" in banner
+
+        # Verify CLI --banner directly
+        proc = subprocess.run([racf_bin, "--policy", policy_file, "--banner"], capture_output=True, text=True)
+        assert proc.returncode == 0
+        assert "RACF-Guard" in proc.stdout
+

@@ -15,3 +15,8 @@ class BasePolicyEngine(ABC):
     def evaluate(self, request: PolicyRequest) -> PolicyDecision:
         """Evaluate a tool request and return a tri-state PolicyDecision."""
         raise NotImplementedError
+
+    def get_banner(self) -> str:
+        """Return a concise identification banner describing this engine."""
+        return type(self).__name__
+
