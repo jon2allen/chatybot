@@ -121,3 +121,24 @@ class StdioBinaryPolicyEngine(BasePolicyEngine):
             return self._fail_safe_decision(
                 f"External policy evaluation failed ({type(exc).__name__}: {exc}). Failing safe to {self.fail_safe.value}."
             )
+
+    def get_banner(self) -> str:
+        """Query the external binary with --banner to retrieve its identification banner."""
+        cmd = [self.binary_path] + self.args + ["--banner"]
+        try:
+            proc = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=1.5,
+                check=False,
+            )
+            if proc.returncode == 0 and proc.stdout.strip():
+                return proc.stdout.strip()
+        except Exception:
+            pass
+        import os
+        return f"Binary: {os.path.basename(self.binary_path)}"
+

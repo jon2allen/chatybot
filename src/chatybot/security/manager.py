@@ -141,3 +141,12 @@ class SecurityManager:
                 verdict=self.fail_safe,
                 reason=f"Security manager evaluation failed ({exc}). Failing safe to {self.fail_safe.value}.",
             )
+
+    def get_banner(self) -> str:
+        """Return a human-readable banner string describing the active security engine."""
+        if not self.enabled:
+            return "Disabled"
+        if self.engine is not None:
+            return self.engine.get_banner()
+        return "None"
+

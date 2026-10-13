@@ -68,6 +68,10 @@ struct Args {
     #[arg(short = 'l', long = "list-rules", alias = "list")]
     list_rules: bool,
 
+    /// Print a concise one-line engine identification banner and exit
+    #[arg(short = 'b', long = "banner")]
+    banner: bool,
+
     /// Enable verbose security evaluation trace logs to stderr
     #[arg(short = 'd', long)]
     debug: bool,
@@ -341,6 +345,24 @@ fn main() {
             std::process::exit(0);
         }
     };
+
+    // If --banner mode is requested: print concise engine banner and exit
+    if args.banner {
+        let total_profiles: usize = engine.profiles.values().map(|v| v.len()).sum();
+        let source_desc = policy_path
+            .as_ref()
+            .and_then(|p| p.file_name())
+            .map(|f| f.to_string_lossy().to_string())
+            .unwrap_or_else(|| "embedded policy".to_string());
+        println!(
+            "RACF-Guard v{} ({} groups, {} profiles loaded from {})",
+            env!("CARGO_PKG_VERSION"),
+            engine.groups.len(),
+            total_profiles,
+            source_desc
+        );
+        return;
+    }
 
     // If --list-rules mode is requested: print full audit report and exit
     if args.list_rules {
