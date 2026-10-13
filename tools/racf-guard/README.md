@@ -284,7 +284,18 @@ When invoked, `racf-guard` searches for its policy definition in the following o
    - `tools/racf-guard/examples/security.racf`
 4. **Embedded Seed Fallback**: Internal default rules compiled directly into the binary.
 
-### Quick Setup Steps
+### Quick Setup (Automated)
+
+Run the one-shot setup script, which builds the binary, copies the seed policy, connects your OS user to the DEVELOPER group, and patches `security.toml`:
+
+```bash
+cd tools/racf-guard
+./setup.sh
+```
+
+This handles all four steps below automatically. Use the manual steps only if you need custom control.
+
+### Quick Setup (Manual)
 
 #### Step 1: Compile the binary
 ```bash
@@ -306,6 +317,24 @@ cp tools/racf-guard/examples/security.racf ~/.config/chatybot/security.racf
 ```bash
 ./target/release/racf-guard --policy ~/.config/chatybot/security.racf --list-rules
 ```
+
+### Username Resolution
+
+`racf-guard` must know which user is making each tool request to evaluate group memberships and permits. The user identity is resolved in this order:
+
+1. **Request context**: `context.user` in the JSON payload sent by Chatybot (highest priority)
+2. **`$USER`** environment variable
+3. **`$LOGNAME`** environment variable
+4. **`$USERNAME`** environment variable
+5. **`"DEFAULT"`** fallback (lowest priority -- has no group memberships)
+
+If the resolved user is not connected to any RACF group via `CONNECT <user> GROUP(...)`, all `UACC(DENY)` profiles will block access. This is the most common setup failure: the seed policy ships with `CONNECT jon2allen GROUP(DEVELOPER)` hardcoded -- you must replace or supplement this with your own OS username.
+
+To check which user racf-guard sees:
+```bash
+echo '{"tool":"git.status"}' | ./target/release/racf-guard --policy ~/.config/chatybot/security.racf --debug 2>&1 | head -2
+```
+The debug trace's first line shows `User: '<resolved-name>'`. If it says `DEFAULT`, add a `CONNECT` line for your username to the policy file.
 
 ---
 
