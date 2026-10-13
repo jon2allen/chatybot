@@ -1,0 +1,94 @@
+# =============================================================================
+# RACF (Resource Access Control Facility) Policy Definitions for Chatybot
+# Reference Security Configuration
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 1. User & Group Administration
+# -----------------------------------------------------------------------------
+# Define logical role groups (independent of OS groups)
+ADDGROUP DEVELOPER DATA('Application and Software Developers')
+ADDGROUP DEVOPS    DATA('Infrastructure and Operations Engineers')
+ADDGROUP SYSADM    DATA('System Administrators with Elevated Privileges')
+ADDGROUP AUDITOR   DATA('Compliance and Read-Only Security Auditors')
+
+# Map local system user IDs to RACF groups
+CONNECT jon2allen GROUP(DEVELOPER)
+CONNECT jon2allen GROUP(SYSADM)
+CONNECT dev_user  GROUP(DEVELOPER)
+CONNECT ci_bot    GROUP(DEVOPS)
+
+# -----------------------------------------------------------------------------
+# 2. Resource Class: FACILITY (Tool Capabilities)
+# -----------------------------------------------------------------------------
+# Universal Access (UACC) defines the fallback when no specific permit matches.
+# Default for all undefined facilities is ASK
+RDEFINE FACILITY * UACC(ASK)
+
+# Git facilities
+RDEFINE FACILITY git.* UACC(ASK)
+PERMIT git.status CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT git.diff   CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT git.log    CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT git.fetch  CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT git.commit CLASS(FACILITY) ID(DEVELOPER) ACCESS(ASK)
+PERMIT git.push   CLASS(FACILITY) ID(DEVELOPER) ACCESS(ASK)
+
+# Read-only and exploration tools
+RDEFINE FACILITY view_file        UACC(ALLOW)
+RDEFINE FACILITY list_dir         UACC(ALLOW)
+RDEFINE FACILITY grep_search      UACC(ALLOW)
+RDEFINE FACILITY read_url_content UACC(ALLOW)
+
+# Modification tools
+RDEFINE FACILITY write_to_file            UACC(ASK)
+RDEFINE FACILITY replace_file_content     UACC(ASK)
+RDEFINE FACILITY multi_replace_file_content UACC(ASK)
+PERMIT write_to_file            CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT replace_file_content     CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT multi_replace_file_content CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
+
+# Subshell and Command execution
+RDEFINE FACILITY run_command UACC(ASK)
+PERMIT run_command CLASS(FACILITY) ID(SYSADM) ACCESS(ALLOW)
+
+# -----------------------------------------------------------------------------
+# 3. Resource Class: DIR (Filesystem Access Controls)
+# -----------------------------------------------------------------------------
+# System and sensitive paths
+RDEFINE DIR /etc/**         UACC(DENY)
+RDEFINE DIR /sys/**         UACC(DENY)
+RDEFINE DIR /proc/**        UACC(DENY)
+RDEFINE DIR /root/**        UACC(DENY)
+RDEFINE DIR ~/.ssh/**       UACC(DENY)
+RDEFINE DIR ~/.gnupg/**     UACC(DENY)
+RDEFINE DIR ~/.aws/**       UACC(DENY)
+
+# Safe workspace paths
+RDEFINE DIR /Users/**       UACC(ALLOW)
+RDEFINE DIR /home/**        UACC(ALLOW)
+RDEFINE DIR /tmp/**         UACC(ALLOW)
+
+# User specific directory override
+PERMIT /etc/hosts CLASS(DIR) ID(SYSADM) ACCESS(ASK)
+
+# -----------------------------------------------------------------------------
+# 4. Resource Class: COMMAND (Shell Command Whitelists / Denylists)
+# -----------------------------------------------------------------------------
+# Destructive or privilege escalation commands
+RDEFINE COMMAND rm*       UACC(DENY)
+RDEFINE COMMAND sudo*     UACC(DENY)
+RDEFINE COMMAND su*       UACC(DENY)
+RDEFINE COMMAND mkfs*     UACC(DENY)
+RDEFINE COMMAND dd*       UACC(DENY)
+RDEFINE COMMAND chmod*    UACC(ASK)
+RDEFINE COMMAND chown*    UACC(ASK)
+
+# Safe development commands
+RDEFINE COMMAND git*      UACC(ALLOW)
+RDEFINE COMMAND cargo*    UACC(ALLOW)
+RDEFINE COMMAND python*   UACC(ALLOW)
+RDEFINE COMMAND pytest*   UACC(ALLOW)
+RDEFINE COMMAND npm*      UACC(ALLOW)
+RDEFINE COMMAND ls*       UACC(ALLOW)
+RDEFINE COMMAND pwd*      UACC(ALLOW)

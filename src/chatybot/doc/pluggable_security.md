@@ -481,6 +481,20 @@ If the binary path does not exist, Chatybot falls back to the builtin engine.
 
 Any of the following produces the `fail_safe` verdict: timeout, non-zero exit code, empty output, invalid JSON, a non-object response, an unknown `status`, or a `modified_parameters` value that is present but not a JSON object.
 
+### Reference Implementation: `racf-guard` (Rust)
+
+A production-quality reference implementation of the binary policy adapter is available in [`tools/racf-guard/`](file:///Users/jon2allen/github/chatybot/tools/racf-guard/README.md).
+
+Modeled after mainframe access control concepts from **IBM z/OS RACF (Resource Access Control Facility)**, `racf-guard` provides:
+- **Entity Model**: Users are mapped from OS user IDs (`USER`/`LOGNAME`) or `context.user`. Groups (e.g. `DEVELOPER`, `SYSADM`, `DEVOPS`) are logical and completely decoupled from OS groups.
+- **Resource Classes**:
+  - `FACILITY`: Tool and API capabilities (`git.status`, `run_command`, `write_file`).
+  - `DIR`: Filesystem paths and hierarchy boundaries (`/etc/**`, `~/.ssh/**`, `/tmp/**`).
+  - `COMMAND`: Shell command patterns executed in subshells (`git *`, `rm *`, `sudo *`).
+- **Declarative DSL (`.racf`)**: Configured using standard RACF statements (`ADDGROUP`, `CONNECT`, `RDEFINE`, `PERMIT`, `UACC`).
+- **Resolution Precedence**: Exact discrete profiles beat generic wildcards; direct user permits beat group permits; group permits beat profile `UACC`; compound checks fail-closed.
+- **Packaging Isolation (Option 1)**: Resides in `tools/racf-guard/` as a standalone reference crate with zero Rust toolchain dependencies for standard `pip install chatybot` users.
+
 ---
 
 ## 6. Limitations
