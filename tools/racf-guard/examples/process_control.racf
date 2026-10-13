@@ -105,6 +105,8 @@ RDEFINE COMMAND dd*                 UACC(DENY)
 # 4. Workspace Isolation (DIR Class)
 # -----------------------------------------------------------------------------
 RDEFINE DIR /**                     UACC(DENY)
+RDEFINE DIR **/*security.toml*      UACC(DENY)
+RDEFINE DIR **/*racf*               UACC(DENY)
 RDEFINE DIR ./**                    UACC(DENY)
 PERMIT ./**               CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
 PERMIT ./**               CLASS(DIR) ID(SYSADM)    ACCESS(ALLOW)

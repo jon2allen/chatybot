@@ -203,6 +203,24 @@ class BuiltinPolicyEngine(BasePolicyEngine):
             for target_path in candidate_paths:
                 abs_path = os.path.abspath(os.path.expanduser(target_path))
                 abs_path_lower = abs_path.lower()
+                target_lower = target_path.lower()
+
+                # Mandatory Security Policy File Protection: block read/write/delete to security.toml or anything with 'racf'
+                base_name = os.path.basename(abs_path_lower)
+                if (
+                    base_name == "security.toml"
+                    or "racf" in base_name
+                    or "racf" in target_lower
+                    or abs_path_lower.endswith(".racf")
+                ):
+                    decision = PolicyDecision(
+                        verdict=Verdict.DENY,
+                        reason=f"Access to security policy configuration '{target_path}' is strictly denied.",
+                    )
+                    if self.debug:
+                        print(f"[Security Debug] [SPECIAL DENY] Tier 0 Security Policy Protection: '{target_path}' -> {decision.reason}")
+                    return decision
+
                 for denied in self.denied_paths:
                     denied_lower = denied.lower()
                     if abs_path_lower == denied_lower or abs_path_lower.startswith(denied_lower + os.sep):
