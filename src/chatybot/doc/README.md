@@ -1201,14 +1201,96 @@ Detailed architecture, configuration schemas, IPC specifications, and policy exa
 
 | Engine | Description | Configuration |
 |---|---|---|
-| **Builtin** (Default) | In-process Python engine evaluating English-like Security DSL rules, path traversal boundaries, and dangerous command patterns. | `[builtin]` in `~/.config/chatybot/security.toml` |
-| **Binary (`racf-guard`)** | External high-performance Rust engine evaluating enterprise IBM RACF-style security definitions (`.racf`). Runs via standard stdio JSON protocol. | `[binary]` in `~/.config/chatybot/security.toml` |
+| **Builtin** (Default) | In-process Python engine evaluating English-like Security DSL rules, path traversal boundaries, and dangerous command patterns. | `engine = "builtin"` in `~/.config/chatybot/security.toml` |
+| **Binary (`racf-guard`)** | External high-performance Rust engine evaluating enterprise IBM RACF-style security definitions (`.racf`). Runs via standard stdio JSON protocol. | `engine = "binary"` in `~/.config/chatybot/security.toml` |
+
+---
+
+### **Enabling RACF-Guard (`engine = "binary"`)**
+
+`racf-guard` is located in the repository under [`tools/racf-guard/`](tools/racf-guard/). It brings mainframe-grade Access Control Lists (ACLs), user/group role assignments, and discrete/generic resource matching to agent operations.
+
+#### **1. Location and Build**
+From the repository root:
+```bash
+cd tools/racf-guard
+cargo build --release
+```
+The compiled binary will be located at:
+```bash
+tools/racf-guard/target/release/racf-guard
+```
+
+#### **2. Automated Setup**
+Run the bundled setup script:
+```bash
+cd tools/racf-guard
+./setup.sh
+```
+This builds the release binary, copies the reference seed policy to `~/.config/chatybot/security.racf`, connects your active OS user to the `DEVELOPER` group, and configures `~/.config/chatybot/security.toml`.
+
+#### **3. Manual Configuration in `~/.config/chatybot/security.toml`**
+To switch Chatybot to `racf-guard`:
+```toml
+engine = "binary"
+fail_safe = "deny"
+
+[binary]
+# Absolute path or ~/ path to the compiled racf-guard binary
+path = "~/.config/chatybot/racf-guard"   # or path to tools/racf-guard/target/release/racf-guard
+args = ["--policy", "~/.config/chatybot/security.racf"]
+timeout_seconds = 2.0
+```
+Copy `tools/racf-guard/examples/security.racf` to `~/.config/chatybot/security.racf` and ensure your username is connected:
+```racf
+CONNECT <your-username> GROUP(DEVELOPER)
+```
+
+---
+
+### **Backing Out of RACF (Reverting to Builtin)**
+
+To switch back to the built-in Python security engine:
+1. Open `~/.config/chatybot/security.toml`.
+2. Change the top-level `engine` field back to `"builtin"`:
+   ```toml
+   engine = "builtin"
+   ```
+3. Chatybot immediately returns to evaluating the `[builtin]` DSL rules, path restrictions, and command filters.
+
+*(Note: If `engine = "binary"` is configured but the binary cannot be found at the specified path, Chatybot automatically logs a warning and gracefully falls back to the builtin engine.)*
+
+---
+
+### **Disabling Security Policy Evaluation**
+
+Security enforcement can be disabled temporarily or per-invocation:
+
+#### **Method 1: CLI Flag (`--no-security`) — Recommended**
+Bypass policy evaluation for a single session, script, or benchmark run:
+```bash
+chatybot --no-security
+```
+When active, Chatybot prints:
+```text
+[Security Warning] Security policy evaluation is DISABLED (--no-security) — all tools execute without policy checks.
+```
+
+#### **Method 2: Unattended Automation (`-y` / `--auto-approve`)**
+If you do not want to disable security entirely, but need non-interactive scripts to execute without stopping at interactive confirmation prompts (`ASK` verdicts):
+```bash
+chatybot -y --script doc/cookbook/16_2_script_with_auto_approve.chatdsl
+# or
+chatybot --auto-approve
+```
+
+---
 
 ### **Configuration (`~/.config/chatybot/security.toml`)**
 ```toml
 version = "1.0"
 engine = "builtin"          # "builtin" or "binary"
-fail_safe = "deny"          # "deny" or "ask"
+fail_safe = "deny"          # "deny" or "ask" (fallback if external binary crashes)
 non_interactive_ask = "deny" # Resolution for ASK in scripts without -y
 
 [builtin]
@@ -1237,12 +1319,18 @@ denied_paths = ["/etc", "/var/root", "/boot", "/System", "~/.ssh", "~/.aws", "~/
 
 [builtin.command_rules]
 denied_patterns = ["rm -rf /", "rm -rf /*", ":(){ :|:& };:", "mkfs", "dd if=/dev/zero"]
+
+[binary]
+path = "~/.config/chatybot/racf-guard"
+args = ["--policy", "~/.config/chatybot/security.racf"]
+timeout_seconds = 2.0
 ```
 
 ### **Security CLI Options & Script Integration**
 - **Debug & Rule Inspection**: `chatybot --security` outputs loaded rule definitions, active engine banners, and verbose per-turn evaluation decisions.
 - **Auditing RACF Policies**: `racf-guard -p examples/security.racf -l` outputs formatted ACL audit tables across all resource classes.
 - **Unattended Execution**: Pass `-y` / `--yes` / `--auto-approve` to automatically approve `ASK` verdicts in automated scripts or CI pipelines.
+- **Disable Security**: Pass `--no-security` to disable policy checks entirely.
 - **Handling Policy Denials**: In ChatDSL scripts, denials populate `${TOOL_DISPATCH_EXIT_CODE}` (`1` or `-1`) and `${TOOL_DISPATCH_ERROR}` (explanation message) without crashing the session (see [Cookbook Chapter 16](doc/chatdsl_cookbook.md#chapter-16--pluggable-security--policy-guardrails)).
 
 ---
