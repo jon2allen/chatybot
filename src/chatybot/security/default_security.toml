@@ -8,7 +8,7 @@
 version = "1.0"
 
 # Active policy evaluation engine:
-# Options: "builtin" (in-process Python) | "binary" (external CLI/Rust) | "wasm" | "socket"
+# Options: "builtin" (in-process Python) | "binary" (external CLI/Rust)
 engine = "builtin"
 
 # Fail-safe behavior if an external engine crashes or times out: "deny" | "ask"
@@ -107,23 +107,11 @@ denied_patterns = [
 ]
 
 # ==============================================================================
-# External Engine Configurations (Used when engine != "builtin")
+# External Engine Configuration (Used when engine = "binary")
 # ==============================================================================
 
-
-# Option 1: External Binary / CLI Adapter (stdin/stdout JSON)
+# External Binary / CLI Adapter (stdin/stdout JSON)
 [binary]
 path = "~/.config/chatybot/racf-guard"
 timeout_seconds = 2.0
 args = ["--policy", "~/.config/chatybot/security.racf"]
-
-# Option 2: In-Process WebAssembly Sandbox (WASI)
-[wasm]
-path = "~/.config/chatybot/security/policy.wasm"
-entrypoint = "evaluate_policy"
-timeout_ms = 500
-
-# Option 3: Local Daemon (Unix Domain Socket / gRPC)
-[socket]
-socket_path = "/tmp/chatybot_security.sock"
-timeout_seconds = 1.5
