@@ -31,6 +31,7 @@ class StdioBinaryPolicyEngine(BasePolicyEngine):
         self.fail_safe = Verdict(fail_safe)
         self.args = list(args or [])
         self.debug = debug
+        self._banner_cache: str | None = None
 
     def _fail_safe_decision(self, reason: str) -> PolicyDecision:
         return PolicyDecision(verdict=self.fail_safe, reason=reason)
@@ -123,7 +124,13 @@ class StdioBinaryPolicyEngine(BasePolicyEngine):
             )
 
     def get_banner(self) -> str:
-        """Query the external binary with --banner to retrieve its identification banner."""
+        """Query the external binary with --banner to retrieve its identification banner.
+
+        The result is cached after the first call to avoid spawning a subprocess
+        on every banner query (e.g. once at startup and once per --security debug session).
+        """
+        if self._banner_cache is not None:
+            return self._banner_cache
         cmd = [self.binary_path] + self.args + ["--banner"]
         try:
             proc = subprocess.run(
@@ -136,9 +143,11 @@ class StdioBinaryPolicyEngine(BasePolicyEngine):
                 check=False,
             )
             if proc.returncode == 0 and proc.stdout.strip():
-                return proc.stdout.strip()
+                self._banner_cache = proc.stdout.strip()
+                return self._banner_cache
         except Exception:
             pass
         import os
-        return f"Binary: {os.path.basename(self.binary_path)}"
+        self._banner_cache = f"Binary: {os.path.basename(self.binary_path)}"
+        return self._banner_cache
 
