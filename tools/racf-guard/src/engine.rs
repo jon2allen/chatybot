@@ -26,11 +26,24 @@ pub fn expand_tilde(path: &str) -> String {
 }
 
 pub fn normalize_path(path: &str) -> String {
+    if path.starts_with('*') {
+        return path.to_string();
+    }
     let expanded = expand_tilde(path);
     let p = Path::new(&expanded);
+    let abs_path = if !p.is_absolute() {
+        if let Ok(cwd) = std::env::current_dir() {
+            cwd.join(p)
+        } else {
+            p.to_path_buf()
+        }
+    } else {
+        p.to_path_buf()
+    };
+
     let mut components = Vec::new();
-    let is_absolute = p.is_absolute();
-    for component in p.components() {
+    let is_absolute = abs_path.is_absolute();
+    for component in abs_path.components() {
         match component {
             std::path::Component::Prefix(prefix) => {
                 components.push(prefix.as_os_str().to_string_lossy().to_string());
@@ -87,7 +100,13 @@ impl Profile {
         } else {
             // Count non-wildcard characters as higher specificity
             let literal_chars = self.pattern.chars().filter(|c| *c != '*' && *c != '?').count();
-            literal_chars * 10 + char_count
+            let mut score = literal_chars * 10 + char_count;
+            // Patterns with specific filename/leaf constraints (not ending with directory wildcards)
+            // have higher specificity than general directory container patterns.
+            if !self.pattern.ends_with("/**") && !self.pattern.ends_with("/*") {
+                score += 1_000;
+            }
+            score
         }
     }
 
@@ -814,6 +833,8 @@ mod tests {
             RDEFINE FACILITY run_command UACC(ALLOW)
             RDEFINE COMMAND git* UACC(ALLOW)
             RDEFINE COMMAND rm* UACC(DENY)
+            RDEFINE COMMAND ps -ef* UACC(ALLOW)
+            RDEFINE COMMAND ps -aef* UACC(DENY)
             RDEFINE DIR /etc/** UACC(DENY)
             RDEFINE DIR /workspace/** UACC(ALLOW)
         "#;
@@ -840,6 +861,20 @@ mod tests {
 
         let decision = engine.evaluate_request(&req);
         assert_eq!(decision.status, "allow");
+
+        // Attempt allowed ps -ef command
+        req.parameters.insert(
+            "command".to_string(),
+            serde_json::Value::String("ps -ef | grep python".to_string()),
+        );
+        assert_eq!(engine.evaluate_request(&req).status, "allow");
+
+        // Attempt blocked ps -aef command
+        req.parameters.insert(
+            "command".to_string(),
+            serde_json::Value::String("ps -aef".to_string()),
+        );
+        assert_eq!(engine.evaluate_request(&req).status, "deny");
 
         // Attempt dangerous command
         req.parameters.insert(
@@ -965,6 +1000,100 @@ mod tests {
         let dec_key = engine.evaluate_request(&req_key);
         assert_eq!(dec_key.status, "deny");
         assert!(dec_key.reason.contains("CONTENT"));
+    }
+
+    #[test]
+    fn test_racf_default_deny_least_privilege() {
+        let script = r#"
+            ADDGROUP DEVELOPER DATA('Developers')
+            CONNECT alice GROUP(DEVELOPER)
+
+            RDEFINE FACILITY write_file UACC(ASK)
+            PERMIT write_file CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
+
+            # Global default deny
+            RDEFINE DIR /** UACC(DENY)
+
+            # Target blocks
+            RDEFINE DIR ~/.ssh/** UACC(DENY)
+            RDEFINE DIR **/*zaragoza* UACC(DENY)
+
+            # Approved zones
+            RDEFINE DIR ~/* UACC(DENY)
+            PERMIT ~/* CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
+
+            RDEFINE DIR ~/github/** UACC(DENY)
+            PERMIT ~/github/** CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
+
+            RDEFINE DIR ~/projects/** UACC(DENY)
+            PERMIT ~/projects/** CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
+
+            RDEFINE DIR ~/Downloads/** UACC(DENY)
+            PERMIT ~/Downloads/** CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
+
+            RDEFINE DIR **/scratch/** UACC(DENY)
+            PERMIT **/scratch/** CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
+        "#;
+        let stmts = parse_racf_script(script).unwrap();
+        let mut engine = RacfEngine::new();
+        engine.load_statements(stmts);
+
+        let mut req = PolicyRequest {
+            tool: "write_file".to_string(),
+            parameters: HashMap::new(),
+            context: HashMap::new(),
+            version: None,
+            request_id: None,
+            timestamp: None,
+        };
+        req.context.insert("user".to_string(), serde_json::Value::String("alice".to_string()));
+
+        // 1. Outside approved areas -> DENY
+        req.parameters.insert("path".to_string(), serde_json::Value::String("/var/log/test.log".to_string()));
+        assert_eq!(engine.evaluate_request(&req).status, "deny");
+
+        req.parameters.insert("path".to_string(), serde_json::Value::String("/tmp/test.txt".to_string()));
+        assert_eq!(engine.evaluate_request(&req).status, "deny");
+
+        // 2. Sensitive path inside home -> DENY
+        let home = dirs_home().unwrap_or_else(|| "/Users/alice".to_string());
+        req.parameters.insert("path".to_string(), serde_json::Value::String(format!("{}/.ssh/id_rsa", home)));
+        assert_eq!(engine.evaluate_request(&req).status, "deny");
+
+        // 3. Zaragoza pattern inside github and downloads -> DENY (leaf constraint beats directory wildcard)
+        req.parameters.insert("path".to_string(), serde_json::Value::String(format!("{}/github/zaragoza.md", home)));
+        assert_eq!(engine.evaluate_request(&req).status, "deny");
+
+        req.parameters.insert("path".to_string(), serde_json::Value::String(format!("{}/Downloads/zaragoza.zip", home)));
+        assert_eq!(engine.evaluate_request(&req).status, "deny");
+
+        // 4. Approved areas for alice -> ALLOW
+        req.parameters.insert("path".to_string(), serde_json::Value::String(format!("{}/notes.txt", home)));
+        assert_eq!(engine.evaluate_request(&req).status, "allow");
+
+        req.parameters.insert("path".to_string(), serde_json::Value::String(format!("{}/Downloads/manual.pdf", home)));
+        assert_eq!(engine.evaluate_request(&req).status, "allow");
+
+        req.parameters.insert("path".to_string(), serde_json::Value::String(format!("{}/github/my_repo/main.rs", home)));
+        assert_eq!(engine.evaluate_request(&req).status, "allow");
+
+        req.parameters.insert("path".to_string(), serde_json::Value::String(format!("{}/projects/app/Cargo.toml", home)));
+        assert_eq!(engine.evaluate_request(&req).status, "allow");
+
+        req.parameters.insert("path".to_string(), serde_json::Value::String("/anywhere/scratch/temp.c".to_string()));
+        assert_eq!(engine.evaluate_request(&req).status, "allow");
+
+        // 5. Unallowed subdirectories under home (Desktop, Documents) -> DENY
+        req.parameters.insert("path".to_string(), serde_json::Value::String(format!("{}/Desktop/secret.txt", home)));
+        assert_eq!(engine.evaluate_request(&req).status, "deny");
+
+        req.parameters.insert("path".to_string(), serde_json::Value::String(format!("{}/Documents/taxes.pdf", home)));
+        assert_eq!(engine.evaluate_request(&req).status, "deny");
+
+        // 6. Unconnected user bob -> DENY on github
+        req.context.insert("user".to_string(), serde_json::Value::String("bob".to_string()));
+        req.parameters.insert("path".to_string(), serde_json::Value::String(format!("{}/github/my_repo/main.rs", home)));
+        assert_eq!(engine.evaluate_request(&req).status, "deny");
     }
 }
 
