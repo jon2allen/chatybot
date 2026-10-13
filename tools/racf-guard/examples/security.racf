@@ -126,3 +126,17 @@ RDEFINE COMMAND pytest*   UACC(ALLOW)
 RDEFINE COMMAND npm*      UACC(ALLOW)
 RDEFINE COMMAND ls*       UACC(ALLOW)
 RDEFINE COMMAND pwd*      UACC(ALLOW)
+RDEFINE COMMAND gcc*      UACC(ALLOW)
+RDEFINE COMMAND cc*       UACC(ALLOW)
+RDEFINE COMMAND c++*      UACC(ALLOW)
+RDEFINE COMMAND make*     UACC(ALLOW)
+
+# -----------------------------------------------------------------------------
+# 5. Resource Class: CONTENT (Payload & Data Loss Prevention - LLM Security Innovation)
+# -----------------------------------------------------------------------------
+# Inspects text and code payloads during write_file, replace_file_content, etc.
+# Unmatched content defaults to ALLOW; matching profiles enforce restrictions.
+RDEFINE CONTENT *BEGIN*PRIVATE*KEY* UACC(DENY)
+RDEFINE CONTENT *api_key*           UACC(DENY)
+RDEFINE CONTENT *secret_token*      UACC(DENY)
+

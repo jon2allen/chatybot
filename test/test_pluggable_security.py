@@ -1063,3 +1063,45 @@ def test_security_engine_banner_reporting(tmp_path):
         assert proc.returncode == 0
         assert "RACF-Guard" in proc.stdout
 
+
+def test_racf_guard_content_class_payload_blocking():
+    """Verify racf-guard CONTENT resource class blocks write_file when payload contains sensitive tokens."""
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    racf_bin = os.path.join(repo_root, "tools", "racf-guard", "target", "release", "racf-guard")
+    if not os.path.isfile(racf_bin):
+        pytest.skip("racf-guard release binary not built")
+
+    policy_file = os.path.join(repo_root, "tools", "racf-guard", "examples", "security.racf")
+    engine = StdioBinaryPolicyEngine(
+        binary_path=racf_bin,
+        args=["--policy", policy_file],
+    )
+
+    # 1. Clean payload write passes to FACILITY verdict (ASK)
+    dec_clean = engine.evaluate(PolicyRequest(
+        tool="write_file",
+        parameters={"path": "safe.txt", "content": "hello world"},
+        context={"user": "jon2allen"},
+    ))
+    assert dec_clean.verdict == Verdict.ASK
+    assert "RACF security violation" not in dec_clean.reason
+
+    # 2. Payload with api_key triggers hard DENY on CONTENT class
+    dec_leak = engine.evaluate(PolicyRequest(
+        tool="write_file",
+        parameters={"path": "app.env", "content": "my_api_key = 'sk-123456'"},
+        context={"user": "jon2allen"},
+    ))
+    assert dec_leak.verdict == Verdict.DENY
+    assert "RACF security violation on CONTENT" in dec_leak.reason
+
+    # 3. Payload with private key triggers hard DENY on CONTENT class
+    dec_key = engine.evaluate(PolicyRequest(
+        tool="write_file",
+        parameters={"path": "cert.pem", "content": "-----BEGIN RSA PRIVATE KEY-----\nMIIE..."},
+        context={"user": "jon2allen"},
+    ))
+    assert dec_key.verdict == Verdict.DENY
+    assert "RACF security violation on CONTENT" in dec_key.reason
+
+
