@@ -1,0 +1,13 @@
+# Recipe 16.1 - Security Policy Inspection and Debug Tracing
+# Goal: Run tool dispatch with verbose policy evaluation logging (--security)
+# Run: chatybot --security --script doc/cookbook/16_1_security_inspection.chatdsl
+
+/tool on
+/tool enable run_command,write_file
+/tool auto on
+/tool max_turns 5
+
+# Safe command evaluated against active security engine (ALLOW)
+chat --> Run 'ls -la' using run_command to inspect the working directory.
+
+/tool loop 5 force
