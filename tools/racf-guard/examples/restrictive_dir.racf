@@ -79,6 +79,8 @@ RDEFINE DIR ~/.ssh/**       UACC(DENY)
 RDEFINE DIR ~/.gnupg/**     UACC(DENY)
 RDEFINE DIR ~/.aws/**       UACC(DENY)
 RDEFINE DIR **/.env*        UACC(DENY)
+RDEFINE DIR **/*security.toml* UACC(DENY)
+RDEFINE DIR **/*racf*       UACC(DENY)
 
 # Targeted file pattern constraint (Tested in test_racf_default_deny_least_privilege)
 # Wins over directory wildcards due to leaf specificity
