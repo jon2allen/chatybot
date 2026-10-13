@@ -25,6 +25,7 @@ Grammar Specification:
   ReasonClause  ::= "BECAUSE" STRING
 """
 
+import fnmatch
 import logging
 import re
 from dataclasses import dataclass
@@ -52,8 +53,6 @@ class SecurityRuleAST:
         return f"action={action_name}, tool={self.tool or '*'}, match=({match_desc}){reason_desc}"
 
     def matches(self, request: PolicyRequest) -> bool:
-        import fnmatch
-
         req_tool = (request.tool or "").strip().lower()
         rule_tool = (self.tool or "").strip().lower()
 
@@ -72,40 +71,73 @@ class SecurityRuleAST:
         # 2. Extract parameter candidate values recursively across payload
         params = request.parameters or {}
 
-        def extract_values(data: Any, target_field: str) -> list[str]:
+        path_synonyms = {
+            "path", "file", "target", "dir", "directory",
+            "filename", "filepath", "targetpath", "targetfile",
+            "source", "destination", "dest", "sourcefile", "destfile",
+            "sourcepath", "destpath", "cwd",
+        }
+        content_synonyms = {
+            "content", "contents", "body", "text", "data", "code",
+            "codecontent", "replacementcontent", "targetcontent", "patch", "diff",
+            "payload",
+        }
+        command_synonyms = {
+            "command", "cmd", "commandline", "script",
+        }
+
+        def extract_values(data: Any, target_field: str, depth: int = 0) -> list[str]:
+            if depth > 15:
+                return []
             results: list[str] = []
+            target_clean = target_field.lower().replace("_", "").replace("-", "")
+
             if isinstance(data, dict):
                 for k, v in data.items():
-                    k_lower = k.lower()
+                    k_clean = k.lower().replace("_", "").replace("-", "")
                     is_match = False
-                    if target_field in ("*", "any"):
+                    if target_clean in ("*", "any"):
                         is_match = True
-                    elif k_lower == target_field.lower():
+                    elif k_clean == target_clean:
                         is_match = True
-                    elif target_field.lower() in ("content", "contents", "body", "text") and k_lower in (
-                        "content", "contents", "body", "text", "data", "code", "replacementcontent"
-                    ):
-                        is_match = True
-                    elif target_field.lower() in ("path", "file") and k_lower in (
-                        "path", "file", "target", "dir", "filename", "filepath"
-                    ):
-                        is_match = True
-                    elif target_field.lower() in ("command", "cmd") and k_lower in ("command", "cmd"):
-                        is_match = True
+                    elif target_clean in ("content", "contents", "body", "text", "payload"):
+                        if (
+                            k_clean in content_synonyms
+                            or k_clean.endswith("content")
+                            or k_clean.endswith("text")
+                            or k_clean.endswith("payload")
+                        ):
+                            is_match = True
+                    elif target_clean in ("path", "file", "dir", "directory"):
+                        if (
+                            k_clean in path_synonyms
+                            or k_clean.endswith("path")
+                            or k_clean.endswith("file")
+                            or k_clean.endswith("dir")
+                            or k_clean.endswith("target")
+                        ):
+                            is_match = True
+                    elif target_clean in ("command", "cmd"):
+                        if (
+                            k_clean in command_synonyms
+                            or k_clean.endswith("command")
+                            or k_clean.endswith("cmd")
+                        ):
+                            is_match = True
 
                     if is_match:
                         if isinstance(v, (str, int, float, bool)):
                             results.append(str(v))
                         elif isinstance(v, (dict, list)):
-                            results.extend(extract_values(v, "*"))
+                            results.extend(extract_values(v, "*", depth + 1))
 
                     # Also search inside nested dictionaries/lists when looking for a specific target_field
-                    if isinstance(v, (dict, list)) and target_field not in ("*", "any") and not is_match:
-                        results.extend(extract_values(v, target_field))
+                    if isinstance(v, (dict, list)) and target_clean not in ("*", "any") and not is_match:
+                        results.extend(extract_values(v, target_field, depth + 1))
             elif isinstance(data, list):
                 for item in data:
-                    results.extend(extract_values(item, target_field))
-            elif isinstance(data, (str, int, float, bool)) and target_field in ("*", "any"):
+                    results.extend(extract_values(item, target_field, depth + 1))
+            elif isinstance(data, (str, int, float, bool)) and target_clean in ("*", "any"):
                 results.append(str(data))
             return results
 
@@ -115,22 +147,32 @@ class SecurityRuleAST:
 
         pat = "\n" if self.value in ("\\n", "\n") else ("\r" if self.value in ("\\r", "\r") else self.value)
         pat_lower = pat.lower()
+        pat_collapsed = re.sub(r"\s+", " ", pat_lower).strip()
 
         # 3. Match operator (all case-insensitive) across all candidate values
         for val_str in candidate_values:
             val_lower = val_str.lower()
+            val_collapsed = re.sub(r"\s+", " ", val_lower).strip()
+
             if self.operator == "contains":
-                if pat_lower in val_lower:
+                if pat_lower in val_lower or (pat_collapsed and pat_collapsed in val_collapsed):
                     return True
+                # Special check for destructive rm flag permutations (rm -rf, rm -r -f, rm -fr)
+                if pat_collapsed == "rm -rf":
+                    if re.search(
+                        r"\brm\s+(?:-[a-zA-Z]*r[a-zA-Z]*f\b|-[a-zA-Z]*f[a-zA-Z]*r\b|-[a-zA-Z]*r\s+-[a-zA-Z]*f\b|-[a-zA-Z]*f\s+-[a-zA-Z]*r\b)",
+                        val_collapsed,
+                    ):
+                        return True
 
             elif self.operator == "endswith":
-                if val_lower.endswith(pat_lower):
+                if val_lower.endswith(pat_lower) or (pat_collapsed and val_collapsed.endswith(pat_collapsed)):
                     return True
             elif self.operator == "startswith":
-                if val_lower.startswith(pat_lower):
+                if val_lower.startswith(pat_lower) or (pat_collapsed and val_collapsed.startswith(pat_collapsed)):
                     return True
             elif self.operator == "equals":
-                if val_lower == pat_lower:
+                if val_lower == pat_lower or val_collapsed == pat_collapsed:
                     return True
             elif self.operator == "matches":
                 try:
