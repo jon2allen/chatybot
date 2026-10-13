@@ -113,9 +113,9 @@ denied_patterns = [
 
 # Option 1: External Binary / CLI Adapter (stdin/stdout JSON)
 [binary]
-path = "~/.config/chatybot/security/policy_guard"
+path = "~/.config/chatybot/racf-guard"
 timeout_seconds = 2.0
-args = ["--strict"]
+args = ["--policy", "~/.config/chatybot/security.racf"]
 
 # Option 2: In-Process WebAssembly Sandbox (WASI)
 [wasm]
