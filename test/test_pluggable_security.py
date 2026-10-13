@@ -1159,4 +1159,139 @@ def test_security_policy_self_protection_default_posture():
             assert dec.verdict == Verdict.DENY, f"RACF failed to DENY {tool} on {sensitive_file}: {dec}"
 
 
+def test_p0_git_rules_mutation_and_disclosure_prevention(tmp_path):
+    """Verify that hardened git rules block mutations and secret leaks while allowing safe reads."""
+    bundled_default = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src", "chatybot", "security", "default_security.toml")
+    mgr = SecurityManager(config_path=bundled_default)
+
+    # 1. Mutating branch commands must be DENIED (Tier 1) or ASKED
+    dec_del = mgr.evaluate(tool="run_command", parameters={"command": "git branch -D feature"})
+    assert dec_del.verdict == Verdict.DENY
+    dec_del_lower = mgr.evaluate(tool="run_command", parameters={"command": "git branch -d old_branch"})
+    assert dec_del_lower.verdict == Verdict.DENY
+    dec_mv = mgr.evaluate(tool="run_command", parameters={"command": "git branch -m old_name new_name"})
+    assert dec_mv.verdict == Verdict.ASK
+
+    # 2. Mutating remote commands must be ASKED (Tier 2)
+    dec_remote_url = mgr.evaluate(tool="run_command", parameters={"command": "git remote set-url origin https://evil.com/repo.git"})
+    assert dec_remote_url.verdict == Verdict.ASK
+    dec_remote_add = mgr.evaluate(tool="run_command", parameters={"command": "git remote add evil https://evil.com/repo.git"})
+    assert dec_remote_add.verdict == Verdict.ASK
+    dec_remote_rm = mgr.evaluate(tool="run_command", parameters={"command": "git remote rm origin"})
+    assert dec_remote_rm.verdict == Verdict.ASK
+
+    # 3. Arbitrary path diffing via --no-index must be DENIED (Tier 1)
+    dec_diff_noindex = mgr.evaluate(tool="run_command", parameters={"command": "git diff --no-index /etc/passwd /dev/stdout"})
+    assert dec_diff_noindex.verdict == Verdict.DENY
+
+    # 4. Secret disclosure via git show/diff must be DENIED (Tier 1)
+    dec_show_env = mgr.evaluate(tool="run_command", parameters={"command": "git show HEAD:.env"})
+    assert dec_show_env.verdict == Verdict.DENY
+    dec_diff_secret = mgr.evaluate(tool="run_command", parameters={"command": "git diff HEAD:id_rsa"})
+    assert dec_diff_secret.verdict == Verdict.DENY
+
+    # 5. Safe read-only commands must still be ALLOWED (Tier 3)
+    assert mgr.evaluate(tool="run_command", parameters={"command": "git branch"}).verdict == Verdict.ALLOW
+    assert mgr.evaluate(tool="run_command", parameters={"command": "git branch -a"}).verdict == Verdict.ALLOW
+    assert mgr.evaluate(tool="run_command", parameters={"command": "git branch --show-current"}).verdict == Verdict.ALLOW
+    assert mgr.evaluate(tool="run_command", parameters={"command": "git remote"}).verdict == Verdict.ALLOW
+    assert mgr.evaluate(tool="run_command", parameters={"command": "git remote -v"}).verdict == Verdict.ALLOW
+    assert mgr.evaluate(tool="run_command", parameters={"command": "git remote show origin"}).verdict == Verdict.ALLOW
+    assert mgr.evaluate(tool="run_command", parameters={"command": "git diff"}).verdict == Verdict.ALLOW
+    assert mgr.evaluate(tool="run_command", parameters={"command": "git show HEAD"}).verdict == Verdict.ALLOW
+
+
+def test_p0_command_whitespace_and_flag_evasion():
+    """Verify that commands with extra spaces or separated flags cannot bypass dangerous checks."""
+    engine = BuiltinPolicyEngine(
+        dsl_rules=[
+            "deny run command with 'rm -rf' in it",
+        ],
+        denied_command_patterns=["rm -rf /", "mkfs"],
+    )
+
+    # Whitespace variations in Tier 0 and Tier 1
+    variations = [
+        "rm -rf /",
+        "rm  -rf /",
+        "rm   -rf    /",
+        "rm\t-rf /",
+        "rm -r -f /",
+        "rm -fr /",
+        "rm  -rf  some_folder",
+        "rm -r -f some_folder",
+    ]
+    for cmd in variations:
+        dec = engine.evaluate(PolicyRequest(tool="run_command", parameters={"command": cmd}))
+        assert dec.verdict == Verdict.DENY, f"Failed to DENY command '{cmd}': {dec}"
+
+
+def test_p0_dsl_parameter_key_normalization():
+    """Verify that DSL rules correctly match snake_case, camelCase, and synonym parameter keys."""
+    engine = BuiltinPolicyEngine(
+        dsl_rules=[
+            "deny read file where path contains secret",
+            "deny write file where content contains malicious_payload",
+            "deny run command where command contains forbidden_exec",
+        ]
+    )
+
+    # 1. Path synonyms with snake_case and camelCase
+    for key in ["target_file", "targetFile", "file_path", "filePath", "target_path", "filename", "dest"]:
+        dec = engine.evaluate(PolicyRequest(tool="read_file", parameters={key: "/tmp/secret_keys.txt"}))
+        assert dec.verdict == Verdict.DENY, f"Failed to match path key '{key}': {dec}"
+
+    # 2. Content synonyms with snake_case and camelCase
+    for key in ["replacement_content", "replacementContent", "code_content", "codeContent", "body", "data"]:
+        dec = engine.evaluate(PolicyRequest(tool="write_file", parameters={key: "contains malicious_payload here"}))
+        assert dec.verdict == Verdict.DENY, f"Failed to match content key '{key}': {dec}"
+
+    # 3. Command synonyms
+    for key in ["command_line", "commandLine", "cmd"]:
+        dec = engine.evaluate(PolicyRequest(tool="run_command", parameters={key: "forbidden_exec --now"}))
+        assert dec.verdict == Verdict.DENY, f"Failed to match command key '{key}': {dec}"
+
+
+def test_p0_racf_directory_and_non_policy_file_false_positive():
+    """Verify that files within racf directory trees or non-policy files are not falsely blocked."""
+    engine = BuiltinPolicyEngine()
+
+    # Legitimate non-policy files containing 'racf' in path or non-rule filename should NOT be Tier 0 blocked
+    legit_files = [
+        "tools/racf-guard/src/main.rs",
+        "tools/racf-guard/src/engine.rs",
+        "tools/racf-guard/README.md",
+        "tools/racf-guard/Cargo.toml",
+        "/tmp/racf_notes.txt",
+        "/home/user/racf-research/paper.md",
+    ]
+    for path in legit_files:
+        dec = engine.evaluate(PolicyRequest(tool="read_file", parameters={"path": path}))
+        assert dec.verdict != Verdict.DENY, f"Legitimate file '{path}' was falsely DENIED: {dec}"
+
+    # Real policy files MUST still be DENIED
+    policy_files = [
+        "security.toml",
+        "/path/to/security.toml",
+        "my_rules.racf",
+        "tools/racf-guard/examples/security.racf",
+        "/path/to/my_racf_rules.txt",
+    ]
+    for path in policy_files:
+        dec = engine.evaluate(PolicyRequest(tool="read_file", parameters={"path": path}))
+        assert dec.verdict == Verdict.DENY, f"Policy file '{path}' was NOT denied: {dec}"
+
+
+def test_p0_command_none_parameter_handling():
+    """Verify that command=None does not get converted into string 'None'."""
+    engine = BuiltinPolicyEngine(
+        dsl_rules=["deny run command where command equals 'None'"]
+    )
+    req = PolicyRequest(tool="run_command", parameters={"command": None})
+    dec = engine.evaluate(req)
+    # If command=None was converted to "None", it would match the rule and be DENIED
+    assert dec.verdict != Verdict.DENY
+
+
+
 
