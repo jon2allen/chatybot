@@ -400,19 +400,22 @@ Output to `stderr`:
 
 ## 7. Integrating with Chatybot
 
-To configure Chatybot to use `racf-guard`, update your `security.toml`:
+To configure Chatybot to use `racf-guard`, update your `~/.config/chatybot/security.toml`.
+Keys are read from the **top level** of the TOML file (not under a `[security]` section):
 
 ```toml
-[security]
-enabled = true
 engine = "binary"
 fail_safe = "deny"
 
 [binary]
-path = "tools/racf-guard/target/release/racf-guard"
-args = ["--policy", "tools/racf-guard/examples/security.racf"]
+# Use an absolute path to the compiled binary
+path = "/home/youruser/github/chatybot/tools/racf-guard/target/release/racf-guard"
+args = ["--policy", "/home/youruser/.config/chatybot/security.racf"]
 timeout_seconds = 2.0
 ```
+
+> **Note:** The `enabled` flag is controlled via the `--no-security` CLI argument, not via the TOML file.
+> Use an absolute path for both `path` and the `--policy` argument to avoid CWD-dependent resolution issues.
 
 ---
 
