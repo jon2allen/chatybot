@@ -51,7 +51,13 @@ PERMIT git.status CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
 PERMIT git.diff   CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
 PERMIT git.push   CLASS(FACILITY) ID(DEVELOPER) ACCESS(ASK)
 
-# Read-only exploration tools
+# Read-only exploration tools (Connected to role groups)
+RDEFINE FACILITY read_file      UACC(ASK)
+PERMIT read_file CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
+RDEFINE FACILITY list_directory UACC(ASK)
+PERMIT list_directory CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
+
+# Tool aliases & search
 RDEFINE FACILITY view_file   UACC(ALLOW)
 RDEFINE FACILITY list_dir    UACC(ALLOW)
 RDEFINE FACILITY grep_search UACC(ALLOW)
@@ -63,6 +69,13 @@ PERMIT run_command CLASS(FACILITY) ID(SYSADM) ACCESS(ALLOW)
 # -----------------------------------------------------------------------------
 # DIR Class: Filesystem Boundaries
 # -----------------------------------------------------------------------------
+# Current workspace directory and relative paths
+RDEFINE DIR .         UACC(ASK)
+RDEFINE DIR ./**      UACC(ASK)
+PERMIT .    CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT ./** CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
+
+# System protections & user roots
 RDEFINE DIR /etc/**   UACC(DENY)
 RDEFINE DIR /sys/**   UACC(DENY)
 RDEFINE DIR /proc/**  UACC(DENY)
