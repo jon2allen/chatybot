@@ -13,10 +13,11 @@ Chatybot supports pluggable security adapters via `StdioBinaryPolicyEngine`, whe
 - **Users (`USER`)**: System user IDs (e.g. `jon2allen`, `ci_bot`) mapped from `context.user` or the operating system login (`USER` / `LOGNAME`).
 - **Groups (`GROUP`)**: Logical security roles that are **completely decoupled from OS groups** (e.g. `DEVELOPER`, `DEVOPS`, `SYSADM`, `AUDITOR`).
 - **Resource Classes (`CLASS`)**:
-  - `FACILITY`: Tools, MCP servers, and agent capabilities (e.g. `git.status`, `run_command`, `view_file`).
+  - `FACILITY`: Tools, MCP servers, and agent capabilities (e.g. `git.status`, `run_command`, `read_file`).
   - `DIR`: Filesystem directories and sensitive path hierarchies (e.g. `/etc/**`, `~/.ssh/**`, `/workspace/**`).
   - `COMMAND`: Shell command patterns executed by subshells (e.g. `git *`, `rm *`, `sudo *`).
-- **Profiles & Generic Patterns**: Supports exact discrete profiles (`git.status`) as well as generic wildcard patterns (`git.*`, `/etc/**`).
+  - `CONTENT`: File contents and payload data inspection (e.g. `*api_key*`, `*PRIVATE*KEY*`) &mdash; **an architectural innovation extending classical RACF for LLM payload & data loss prevention**.
+- **Profiles & Generic Patterns**: Supports exact discrete profiles (`git.status`) as well as generic wildcard patterns (`git.*`, `/etc/**`, `*api_key*`).
 - **Tri-State Verdicts**: RACF permissions map naturally to Chatybot's tri-state policy:
   - `ALLOW` / `READ` / `UPDATE` / `ALTER` &rarr; `allow`
   - `ASK` / `AUDIT` &rarr; `ask` (prompts human-in-the-loop)
@@ -93,6 +94,15 @@ RDEFINE COMMAND rm*    UACC(DENY)
 RDEFINE COMMAND sudo*  UACC(DENY)
 RDEFINE COMMAND git*   UACC(ALLOW)
 RDEFINE COMMAND cargo* UACC(ALLOW)
+
+# -----------------------------------------------------------------------------
+# CONTENT Class: Payload & Data Loss Prevention (LLM Security Innovation)
+# -----------------------------------------------------------------------------
+# Inspects text and code payloads during write_file, replace_file_content, etc.
+# Unmatched content defaults to ALLOW; matching profiles enforce restrictions.
+RDEFINE CONTENT *BEGIN*PRIVATE*KEY* UACC(DENY)
+RDEFINE CONTENT *api_key*           UACC(DENY)
+RDEFINE CONTENT *secret_token*      UACC(DENY)
 ```
 
 ---
@@ -419,11 +429,21 @@ To determine which profile wins when multiple patterns match:
   ```
   When accessing `zaragoza.md`, both `./**` (score: 4) and `**/*zaragoza*` (score: 93) match. Because `**/*zaragoza*` has 8 literal characters (`zaragoza`), its specificity score is higher, so it **wins** the evaluation and enforces `DENY`.
 
-### Multi-Resource Compound Evaluation
-When a tool invocation touches multiple resource classes (e.g. `run_command` touches `FACILITY:run_command`, `DIR:/workspace`, and `COMMAND:git status`):
-1. If **any** class evaluates to `DENY`, the composite decision is **`DENY`**.
-2. Else if **any** class evaluates to `ASK`, the composite decision is **`ASK`**.
-3. If all evaluated classes return `ALLOW`, the composite decision is **`ALLOW`**.
+### Innovation: The `CONTENT` Resource Class for LLM Security Adaptation
+
+> [!NOTE]
+> **LLM Security Innovation**: In traditional mainframe RACF, resources represent discrete external entities (datasets, tape volumes, transactions, terminal facilities). However, autonomous AI agents generate unstructured, arbitrary **content payloads** (code, configuration files, environment variables, markdown) that can inadvertently exfiltrate credentials, write private keys, or inject dangerous code.
+
+To adapt RACF for generative AI operations, `racf-guard` introduces the **`CONTENT`** resource class as a first-class citizen:
+
+1. **Automatic Payload Extraction**:
+   When an agent invokes file-modifying tools (`write_file`, `replace_file_content`, `multi_replace_file_content`, `patch_file`), `racf-guard` automatically extracts string payloads from parameters such as `content`, `text`, `code_content`, and `ReplacementChunks`.
+
+2. **Dual Multi-Line and Single-Line Inspection**:
+   Wildcard patterns (e.g. `*BEGIN*PRIVATE*KEY*`, `*api_key*`) are evaluated both across the full multi-line payload and line-by-line, matching leaked tokens regardless of indentation, surrounding code, or formatting.
+
+3. **Safe Default with Targeted Blacklists**:
+   Unlike file paths where unmatched directories default to `DENY`, the `CONTENT` class defaults unmatched content to `ALLOW`. Safe, benign code and documentation pass through without friction, while matching credential signatures or prohibited content patterns enforce hard `DENY` or `ASK`.
 
 ---
 
@@ -490,6 +510,7 @@ PERMIT run_command CLASS(FACILITY) ID(SYSADM)    ACCESS(ALLOW)
 | **Permit Tool to Role** | `racf-guard permit <profile> --class FACILITY --id <role> --access ALLOW` |
 | **Lock Directory** | `racf-guard rdefine DIR "/sensitive/**" --uacc DENY` |
 | **Block Specific File Pattern** | `racf-guard rdefine DIR "**/*zaragoza*" --uacc DENY` |
+| **Block Secret Leaks in Payloads** | `racf-guard rdefine CONTENT "*api_key*" --uacc DENY` |
 | **Block Shell Command** | `racf-guard rdefine COMMAND "curl*" --uacc ASK` |
 | **Execute Raw Statement** | `racf-guard exec "PERMIT git.diff CLASS(FACILITY) ID(DEV) ACCESS(ALLOW)"` |
 

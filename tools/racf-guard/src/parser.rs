@@ -160,6 +160,7 @@ fn parse_rdefine(args: &[String], line_num: usize) -> Result<Statement, String> 
                         | ResourceClass::Dir
                         | ResourceClass::Command
                         | ResourceClass::Ps
+                        | ResourceClass::Content
                 ) {
                     class = Some(candidate);
                 } else {
