@@ -116,8 +116,23 @@ impl Profile {
             let norm_resource = normalize_path(resource);
             if !self.is_generic {
                 norm_pattern == norm_resource
+            } else if glob_match(&norm_pattern, &norm_resource) {
+                true
+            } else if norm_pattern.starts_with("**") {
+                // If pattern is '**/*' and norm_resource is '/Users/...', match with leading '/'
+                let rooted_pattern = format!("/{}", norm_pattern);
+                if glob_match(&rooted_pattern, &norm_resource) {
+                    true
+                } else {
+                    // Also test against filename or raw resource
+                    if let Some(filename) = Path::new(&norm_resource).file_name().and_then(|f| f.to_str()) {
+                        glob_match(&norm_pattern, filename)
+                    } else {
+                        false
+                    }
+                }
             } else {
-                glob_match(&norm_pattern, &norm_resource)
+                false
             }
         } else if self.class == ResourceClass::Content {
             let pat_lower = self.pattern.to_lowercase();
@@ -1093,6 +1108,79 @@ mod tests {
         // 6. Unconnected user bob -> DENY on github
         req.context.insert("user".to_string(), serde_json::Value::String("bob".to_string()));
         req.parameters.insert("path".to_string(), serde_json::Value::String(format!("{}/github/my_repo/main.rs", home)));
+        assert_eq!(engine.evaluate_request(&req).status, "deny");
+    }
+
+    #[test]
+    fn test_racf_security_policy_self_protection() {
+        let script = r#"
+            ADDGROUP DEVELOPER DATA('Developers')
+            CONNECT alice GROUP(DEVELOPER)
+
+            RDEFINE FACILITY read_file UACC(ASK)
+            PERMIT read_file CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
+            RDEFINE FACILITY write_file UACC(ASK)
+            PERMIT write_file CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
+
+            # Global default deny
+            RDEFINE DIR /** UACC(DENY)
+
+            # Security policy files MUST be protected (DENY beats general approved workspaces)
+            RDEFINE DIR **/*security.toml* UACC(DENY)
+            RDEFINE DIR **/*racf* UACC(DENY)
+
+            # Approved zones
+            RDEFINE DIR ~/github/** UACC(DENY)
+            PERMIT ~/github/** CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
+            RDEFINE DIR ./** UACC(DENY)
+            PERMIT ./** CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
+        "#;
+        let stmts = parse_racf_script(script).unwrap();
+        let mut engine = RacfEngine::new();
+        engine.load_statements(stmts);
+
+        let mut req = PolicyRequest {
+            tool: "write_file".to_string(),
+            parameters: HashMap::new(),
+            context: HashMap::new(),
+            version: None,
+            request_id: None,
+            timestamp: None,
+        };
+        req.context.insert("user".to_string(), serde_json::Value::String("alice".to_string()));
+
+        let home = dirs_home().unwrap_or_else(|| "/Users/alice".to_string());
+
+        // 1. Regular file in github workspace is allowed
+        req.parameters.insert("path".to_string(), serde_json::Value::String(format!("{}/github/app/main.rs", home)));
+        assert_eq!(engine.evaluate_request(&req).status, "allow");
+
+        // 2. Modifying security.toml in workspace is strictly DENIED
+        req.parameters.insert("path".to_string(), serde_json::Value::String(format!("{}/github/app/security.toml", home)));
+        let (dec, trace) = engine.evaluate_request_debug(&req, true);
+        println!("TRACE:\n{}", trace.join("\n"));
+        assert_eq!(dec.status, "deny");
+
+        // 3. Modifying relative security.toml is strictly DENIED
+        req.parameters.insert("path".to_string(), serde_json::Value::String("./security.toml".to_string()));
+        assert_eq!(engine.evaluate_request(&req).status, "deny");
+
+        // 4. Modifying any file with racf in name/path is strictly DENIED
+        req.parameters.insert("path".to_string(), serde_json::Value::String(format!("{}/github/app/security.racf", home)));
+        assert_eq!(engine.evaluate_request(&req).status, "deny");
+
+        req.parameters.insert("path".to_string(), serde_json::Value::String("tools/racf-guard/examples/security.racf".to_string()));
+        assert_eq!(engine.evaluate_request(&req).status, "deny");
+
+        req.parameters.insert("path".to_string(), serde_json::Value::String("rules.racf".to_string()));
+        assert_eq!(engine.evaluate_request(&req).status, "deny");
+
+        // 5. Reading security policy files is also strictly DENIED
+        req.tool = "read_file".to_string();
+        req.parameters.insert("path".to_string(), serde_json::Value::String("security.toml".to_string()));
+        assert_eq!(engine.evaluate_request(&req).status, "deny");
+
+        req.parameters.insert("path".to_string(), serde_json::Value::String("security.racf".to_string()));
         assert_eq!(engine.evaluate_request(&req).status, "deny");
     }
 }

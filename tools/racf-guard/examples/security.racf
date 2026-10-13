@@ -92,6 +92,8 @@ RDEFINE DIR /root/**        UACC(DENY)
 RDEFINE DIR ~/.ssh/**       UACC(DENY)
 RDEFINE DIR ~/.gnupg/**     UACC(DENY)
 RDEFINE DIR ~/.aws/**       UACC(DENY)
+RDEFINE DIR **/*security.toml* UACC(DENY)
+RDEFINE DIR **/*racf*       UACC(DENY)
 RDEFINE DIR **/*zaragoza*   UACC(DENY)
 
 # Base Home Directory ONLY (single * matches files directly in ~, not subdirectories)

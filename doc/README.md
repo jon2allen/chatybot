@@ -1298,6 +1298,12 @@ default_verdict = "ask"
 
 # English-like Security DSL (Deny-overrides by tier: DENY > ASK > ALLOW)
 dsl_rules = [
+    # Default Posture: Policy Self-Protection (strictly prevent agent from tampering with or reading security configs)
+    "deny read file ending with security.toml",
+    "deny write file ending with security.toml",
+    "deny read file with racf in it",
+    "deny write file with racf in it",
+
     # Safe file allow-lists
     "allow read file ending with .md because 'docs are safe'",
     "allow read file ending with .txt",

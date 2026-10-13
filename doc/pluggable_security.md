@@ -166,13 +166,14 @@ dsl_rules = [
 
 `zaragoza.md` → **DENY** (Tier 1 wins over Tier 3). `notes.md` → **ALLOW**.
 
-### Tier 0 — Protected paths
+### Tier 0 — Protected paths & Policy Self-Protection
 
 ```toml
 [builtin.path_restrictions]
 denied_paths = ["/etc", "/var/root", "/boot", "/System", "~/.ssh", "~/.gnupg", "~/.aws"]
 ```
 
+- **Policy Self-Protection Posture (Hard Default)**: Access to `security.toml` or any file containing `racf` (such as `*.racf`, `security.racf`, `security.toml`) is strictly denied for read, write, and delete operations across all policy engines (both Builtin and `racf-guard`). Agents cannot view or modify their own policy definitions to compromise security.
 - Applies to filesystem tools: `read_file`, `write_file`, `delete_file`, `list_directory`, `file_info`, `make_directory`, `remove_directory`, `replace_file_content`, `patch_file`, `find_files`.
 - Every path-like argument is checked: `path`, `file`, `target`, `dir`, `directory`, `filename`, `filepath`, `source`, `destination`, `dest`, and any key ending in `path`, `file`, or `dir` (e.g. `target_file`).
 - Paths are expanded (`~`) and made absolute; matching is a case-insensitive prefix match on whole path components (`/etc` blocks `/etc/passwd`, not `/etcetera`).

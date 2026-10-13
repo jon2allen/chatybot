@@ -31,6 +31,14 @@ default_verdict = "ask"
 # Syntax: <Action> <ToolTarget> <Condition> [because "<Reason>"]
 # ------------------------------------------------------------------------------
 dsl_rules = [
+    # --- Security Policy Self-Protection (Tier 1 DENY) ---
+    "deny read file with 'security.toml' in it because 'security configuration is protected'",
+    "deny write file with 'security.toml' in it because 'security configuration is protected'",
+    "deny read file with 'racf' in it because 'security policy rules are protected'",
+    "deny write file with 'racf' in it because 'security policy rules are protected'",
+    "deny delete file with 'security.toml' in it",
+    "deny delete file with 'racf' in it",
+
     # --- Sensitive File & Secret Guards ---
     "do not read file with api_key in it",
     "never read file with id_rsa in it",

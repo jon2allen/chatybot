@@ -1113,3 +1113,50 @@ def test_racf_guard_content_class_payload_blocking():
     assert "RACF security violation on CONTENT" in dec_key.reason
 
 
+def test_security_policy_self_protection_default_posture():
+    """Verify that both Builtin and RACF engines strictly deny read/write to security.toml and any racf files by default."""
+    # 1. Builtin Engine check
+    builtin_engine = BuiltinPolicyEngine()
+    for sensitive_file in [
+        "security.toml",
+        "/etc/chatybot/security.toml",
+        "./security.toml",
+        "rules.racf",
+        "tools/racf-guard/examples/security.racf",
+        "/path/to/my_racf_rules.txt",
+    ]:
+        for tool in ["read_file", "write_file", "delete_file"]:
+            req = PolicyRequest(tool=tool, parameters={"path": sensitive_file})
+            dec = builtin_engine.evaluate(req)
+            assert dec.verdict == Verdict.DENY, f"Builtin failed to DENY {tool} on {sensitive_file}: {dec}"
+            assert "Access to security policy configuration" in dec.reason
+
+    # 2. RACF Engine check (using release binary if available)
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    racf_bin = os.path.join(repo_root, "tools", "racf-guard", "target", "release", "racf-guard")
+    if not os.path.exists(racf_bin):
+        return
+
+    racf_engine = StdioBinaryPolicyEngine(
+        binary_path=racf_bin,
+        args=["--policy", os.path.join(repo_root, "tools", "racf-guard", "examples", "security.racf")],
+    )
+    for sensitive_file in [
+        "security.toml",
+        "./security.toml",
+        os.path.join(repo_root, "security.toml"),
+        "security.racf",
+        os.path.join(repo_root, "tools", "racf-guard", "examples", "security.racf"),
+        "my_rules.racf",
+    ]:
+        for tool in ["read_file", "write_file"]:
+            req = PolicyRequest(
+                tool=tool,
+                parameters={"path": sensitive_file},
+                context={"user": "jon2allen"},
+            )
+            dec = racf_engine.evaluate(req)
+            assert dec.verdict == Verdict.DENY, f"RACF failed to DENY {tool} on {sensitive_file}: {dec}"
+
+
+
