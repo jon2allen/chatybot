@@ -262,13 +262,26 @@ The compiled binary is placed at `tools/racf-guard/target/release/racf-guard`.
 
 ### Is the Database Empty or Seeded?
 
-`racf-guard` supports both **seeded** and **clean-slate (empty)** setups:
+`racf-guard` includes multiple pre-configured policy templates under `examples/` derived directly from integration tests:
 
-1. **Seeded Reference Database (`examples/security.racf`)**:
-   - The repository includes a pre-seeded policy template containing standard roles (`DEVELOPER`, `DEVOPS`, `SYSADM`, `AUDITOR`), git tool permissions, read-only allowances, destructive command blocks (`rm*`, `sudo*`), and directory locks (`/etc/**`, `~/.ssh/**`).
+1. **Full Reference Database (`examples/security.racf`)**:
+   - Comprehensive policy template containing standard roles (`DEVELOPER`, `DEVOPS`, `SYSADM`, `AUDITOR`), Git tool permissions, read-only allowances, process safeguards (`ps`, `kill`, `lsof`), destructive command blocks (`rm*`, `sudo*`), and directory locks (`/etc/**`, `~/.ssh/**`).
    - **Embedded Compiled Fallback**: If `racf-guard` is run with no policy file specified and none discovered on disk, the binary automatically falls back to an embedded baseline policy so it remains functional out of the box.
 
-2. **Clean-Slate / Custom Policy**:
+2. **Restrictive Directory Isolation (`examples/restrictive_dir.racf`)**:
+   - Derived from `test_racf_default_deny_least_privilege`.
+   - Implements strict **least privilege**: global default deny across `DIR:/** UACC(DENY)`.
+   - Explicit sensitive blocks for `~/.ssh/**`, `~/.aws/**`, `**/.env*`, and leaf patterns like `**/*zaragoza*`.
+   - Whitelists only approved developer zones: `~/*` (home top-level files), `~/github/**`, `~/projects/**`, and `**/scratch/**`.
+
+3. **Process & Command Controls (`examples/process_control.racf`)**:
+   - Derived from `test_racf_directory_and_command_checks`.
+   - Demonstrates dual-layer defense with `FACILITY` (authorizing process management tools) and `COMMAND` (fine-grained argument inspection).
+   - Allows user-scoped queries (`COMMAND:ps -ef*`, `COMMAND:ps`), while strictly denying system-wide process enumeration (`COMMAND:ps -aef*`, `COMMAND:ps aux*`, `COMMAND:ps -A*`).
+   - Restricts process termination: prompts for targeted PIDs (`kill*` -> `ASK`) and outright denies destructive mass kills (`killall*`, `pkill -9*`, `kill -9 -1*`).
+   - Permits developer port checks (`COMMAND:lsof -i :*` -> `ALLOW`) while requiring confirmation for broad network scanning.
+
+4. **Clean-Slate / Custom Policy**:
    - You can create your own `.racf` file from scratch.
    - If an empty or minimal `.racf` file is provided, `racf-guard` begins in a **strict fail-closed state**: any resource class (`FACILITY`, `DIR`, `COMMAND`) that has no matching profile defaults to **`DENY`**.
 

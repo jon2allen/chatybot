@@ -1,0 +1,121 @@
+# =============================================================================
+# RACF Policy: Restrictive Directory Isolation (Least Privilege)
+#
+# Derived from racf-guard test: test_racf_default_deny_least_privilege
+#
+# Principle:
+# 1. Global Default Deny: Block all filesystem access across /**.
+# 2. Explicit Sensitive Blacklists: Block ~/.ssh/**, ~/.aws/**, **/.env*, and
+#    targeted leaf patterns like **/*zaragoza*.
+# 3. Whitelisted Developer Zones: Grant access strictly to approved workspaces
+#    (e.g., ./**, ~/*, ~/github/**, ~/projects/**, **/scratch/**).
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 1. Roles & Group Membership
+# -----------------------------------------------------------------------------
+ADDGROUP DEVELOPER DATA('Software Engineers with Workspace Access')
+ADDGROUP AUDITOR   DATA('Compliance and Read-Only Auditors')
+ADDGROUP SYSADM    DATA('System Administrators')
+
+CONNECT jon2allen GROUP(DEVELOPER)
+CONNECT alice     GROUP(DEVELOPER)
+CONNECT dev_user  GROUP(DEVELOPER)
+
+# -----------------------------------------------------------------------------
+# 2. Tool Capability Access (FACILITY Class)
+# -----------------------------------------------------------------------------
+RDEFINE FACILITY *                  UACC(ASK)
+
+# Read & Inspection tools
+RDEFINE FACILITY read_file          UACC(ASK)
+PERMIT read_file          CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT read_file          CLASS(FACILITY) ID(AUDITOR)   ACCESS(ALLOW)
+
+RDEFINE FACILITY list_directory     UACC(ASK)
+PERMIT list_directory     CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT list_directory     CLASS(FACILITY) ID(AUDITOR)   ACCESS(ALLOW)
+
+RDEFINE FACILITY find_files         UACC(ASK)
+PERMIT find_files         CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
+
+# Aliases
+RDEFINE FACILITY view_file          UACC(ALLOW)
+RDEFINE FACILITY list_dir           UACC(ALLOW)
+RDEFINE FACILITY grep_search        UACC(ALLOW)
+
+# Modification tools
+RDEFINE FACILITY write_file         UACC(ASK)
+PERMIT write_file         CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
+
+RDEFINE FACILITY replace_file_content UACC(ASK)
+PERMIT replace_file_content CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
+
+RDEFINE FACILITY patch_file         UACC(ASK)
+PERMIT patch_file         CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
+
+RDEFINE FACILITY make_directory     UACC(ASK)
+PERMIT make_directory     CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
+
+# Shell execution
+RDEFINE FACILITY run_command        UACC(ASK)
+PERMIT run_command        CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
+
+# -----------------------------------------------------------------------------
+# 3. Restrictive Filesystem Boundaries (DIR Class)
+# -----------------------------------------------------------------------------
+
+# Rule 1: Global default deny -- everything is closed by default
+RDEFINE DIR /**             UACC(DENY)
+
+# Rule 2: Explicit blocks for sensitive host paths & credentials
+RDEFINE DIR /etc/**         UACC(DENY)
+RDEFINE DIR /var/**         UACC(DENY)
+RDEFINE DIR /tmp/**         UACC(DENY)
+RDEFINE DIR /root/**        UACC(DENY)
+RDEFINE DIR /proc/**        UACC(DENY)
+RDEFINE DIR /sys/**         UACC(DENY)
+RDEFINE DIR ~/.ssh/**       UACC(DENY)
+RDEFINE DIR ~/.gnupg/**     UACC(DENY)
+RDEFINE DIR ~/.aws/**       UACC(DENY)
+RDEFINE DIR **/.env*        UACC(DENY)
+
+# Targeted file pattern constraint (Tested in test_racf_default_deny_least_privilege)
+# Wins over directory wildcards due to leaf specificity
+RDEFINE DIR **/*zaragoza*   UACC(DENY)
+
+# Rule 3: Approved Developer Zones (Whitelisted Workspaces)
+# Top-level home directory files (notes, config) -- single * does not match subdirectories
+RDEFINE DIR ~/*             UACC(DENY)
+PERMIT ~/*             CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT ~/*             CLASS(DIR) ID(AUDITOR)   ACCESS(ALLOW)
+
+# Approved code repositories
+RDEFINE DIR ~/github/**     UACC(DENY)
+PERMIT ~/github/**     CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT ~/github/**     CLASS(DIR) ID(AUDITOR)   ACCESS(ALLOW)
+
+RDEFINE DIR ~/projects/**   UACC(DENY)
+PERMIT ~/projects/**   CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT ~/projects/**   CLASS(DIR) ID(AUDITOR)   ACCESS(ALLOW)
+
+# Downloads folder (optional, can be toggled per role)
+RDEFINE DIR ~/Downloads/**  UACC(DENY)
+PERMIT ~/Downloads/**  CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
+
+# Scratch execution area
+RDEFINE DIR **/scratch/**   UACC(DENY)
+PERMIT **/scratch/**   CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
+
+# Relative workspace directories
+RDEFINE DIR .               UACC(DENY)
+RDEFINE DIR ./**            UACC(DENY)
+PERMIT .               CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT ./**            CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
+
+# -----------------------------------------------------------------------------
+# 4. Content Protection (CONTENT Class)
+# -----------------------------------------------------------------------------
+RDEFINE CONTENT *BEGIN*PRIVATE*KEY* UACC(DENY)
+RDEFINE CONTENT *api_key*           UACC(DENY)
+RDEFINE CONTENT *secret_token*      UACC(DENY)

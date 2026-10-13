@@ -1,0 +1,110 @@
+# =============================================================================
+# RACF Policy: Process & Command Execution Controls (ps, kill, lsof)
+#
+# Derived from racf-guard tests:
+# - test_racf_directory_and_command_checks
+# - test_racf_keyword_class_syntax
+#
+# Highlights:
+# 1. FACILITY Class: Authorizes the high-level tool capability (run_command, ps).
+# 2. COMMAND Class: Fine-grained argument pattern matching:
+#    - Allows benign, user-scoped process queries (ps, ps -ef*).
+#    - Blocks system-wide snooping and enumeration (ps -aef*, ps aux*, ps -A*).
+#    - Blocks destructive mass-process kills (killall*, pkill -9*, kill -9 -1*).
+#    - Requires interactive approval for targeted kills (kill*, pkill*).
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 1. Roles & Group Membership
+# -----------------------------------------------------------------------------
+ADDGROUP DEVELOPER DATA('Software Engineers with Task Execution Rights')
+ADDGROUP SYSADM    DATA('System Administrators with Process Termination Rights')
+ADDGROUP AUDITOR   DATA('Compliance Officers with Read-Only Rights')
+
+CONNECT jon2allen GROUP(DEVELOPER)
+CONNECT jon2allen GROUP(SYSADM)
+CONNECT dev_user  GROUP(DEVELOPER)
+CONNECT auditor   GROUP(AUDITOR)
+
+# -----------------------------------------------------------------------------
+# 2. Tool Capability Access (FACILITY Class)
+# -----------------------------------------------------------------------------
+# General tool default: Require confirmation
+RDEFINE FACILITY *                  UACC(ASK)
+
+# Command runner authorization
+RDEFINE FACILITY run_command        UACC(ASK)
+PERMIT run_command        CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT run_command        CLASS(FACILITY) ID(SYSADM)    ACCESS(ALLOW)
+
+# Direct tool capabilities for process & system inspection
+RDEFINE FACILITY ps                 UACC(ASK)
+PERMIT ps                 CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT ps                 CLASS(FACILITY) ID(AUDITOR)   ACCESS(ALLOW)
+
+RDEFINE FACILITY kill               UACC(DENY)
+PERMIT kill               CLASS(FACILITY) ID(SYSADM)    ACCESS(ASK)
+
+# Standard file exploration facilities
+RDEFINE FACILITY read_file          UACC(ASK)
+PERMIT read_file          CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
+RDEFINE FACILITY view_file          UACC(ALLOW)
+RDEFINE FACILITY list_dir           UACC(ALLOW)
+
+# -----------------------------------------------------------------------------
+# 3. Fine-Grained Command Filtering (COMMAND Class)
+# -----------------------------------------------------------------------------
+
+# --- Process Listing Safeguards (ps) ---
+# Allow standard user-scoped process listings
+RDEFINE COMMAND ps -ef*             UACC(ALLOW)
+RDEFINE COMMAND ps                  UACC(ALLOW)
+
+# Strictly block system-wide enumeration flags (higher specificity wins over ps*)
+RDEFINE COMMAND ps -aef*            UACC(DENY)
+RDEFINE COMMAND ps aux*             UACC(DENY)
+RDEFINE COMMAND ps -A*              UACC(DENY)
+
+# --- Process Termination Safeguards (kill, pkill, killall) ---
+# Interactive confirmation required for targeted process signals
+RDEFINE COMMAND kill*               UACC(ASK)
+RDEFINE COMMAND pkill*              UACC(ASK)
+
+# Hard blocks on dangerous or unconstrained mass termination
+RDEFINE COMMAND killall*            UACC(DENY)
+RDEFINE COMMAND pkill -9*           UACC(DENY)
+RDEFINE COMMAND kill -9 -1*         UACC(DENY)
+
+# --- Network & Open Socket Inspection (lsof, netstat, ss) ---
+# Allow checking local service ports (e.g., lsof -i :8080, lsof -i :3000)
+RDEFINE COMMAND lsof -i :*          UACC(ALLOW)
+
+# Require confirmation for broader network recon
+RDEFINE COMMAND lsof*               UACC(ASK)
+RDEFINE COMMAND netstat*            UACC(ASK)
+RDEFINE COMMAND ss*                 UACC(ASK)
+
+# --- General System Commands ---
+# Allowed build and development tools
+RDEFINE COMMAND git*                UACC(ALLOW)
+RDEFINE COMMAND cargo*              UACC(ALLOW)
+RDEFINE COMMAND python*             UACC(ALLOW)
+RDEFINE COMMAND pytest*             UACC(ALLOW)
+RDEFINE COMMAND npm*                UACC(ALLOW)
+RDEFINE COMMAND ls*                 UACC(ALLOW)
+RDEFINE COMMAND pwd*                UACC(ALLOW)
+
+# Destructive system commands strictly blocked
+RDEFINE COMMAND rm*                 UACC(DENY)
+RDEFINE COMMAND sudo*               UACC(DENY)
+RDEFINE COMMAND su*                 UACC(DENY)
+RDEFINE COMMAND mkfs*               UACC(DENY)
+RDEFINE COMMAND dd*                 UACC(DENY)
+
+# -----------------------------------------------------------------------------
+# 4. Workspace Isolation (DIR Class)
+# -----------------------------------------------------------------------------
+RDEFINE DIR /**                     UACC(DENY)
+RDEFINE DIR ./**                    UACC(DENY)
+PERMIT ./**               CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT ./**               CLASS(DIR) ID(SYSADM)    ACCESS(ALLOW)
