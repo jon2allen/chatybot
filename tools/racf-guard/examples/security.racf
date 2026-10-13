@@ -152,6 +152,26 @@ RDEFINE COMMAND cc*       UACC(ALLOW)
 RDEFINE COMMAND c++*      UACC(ALLOW)
 RDEFINE COMMAND make*     UACC(ALLOW)
 
+# Process inspection safeguards (ps)
+RDEFINE COMMAND ps -ef*   UACC(ALLOW)
+RDEFINE COMMAND ps        UACC(ALLOW)
+RDEFINE COMMAND ps -aef*  UACC(DENY)
+RDEFINE COMMAND ps aux*   UACC(DENY)
+RDEFINE COMMAND ps -A*    UACC(DENY)
+
+# Process termination safeguards (kill, pkill, killall)
+RDEFINE COMMAND kill*       UACC(ASK)
+RDEFINE COMMAND pkill*      UACC(ASK)
+RDEFINE COMMAND killall*    UACC(DENY)
+RDEFINE COMMAND pkill -9*   UACC(DENY)
+RDEFINE COMMAND kill -9 -1* UACC(DENY)
+
+# Network inspection safeguards (lsof, netstat, ss)
+RDEFINE COMMAND lsof -i :*  UACC(ALLOW)
+RDEFINE COMMAND lsof*       UACC(ASK)
+RDEFINE COMMAND netstat*    UACC(ASK)
+RDEFINE COMMAND ss*         UACC(ASK)
+
 # -----------------------------------------------------------------------------
 # 5. Resource Class: CONTENT (Payload & Data Loss Prevention - LLM Security Innovation)
 # -----------------------------------------------------------------------------
