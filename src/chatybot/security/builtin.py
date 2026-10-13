@@ -164,10 +164,12 @@ class BuiltinPolicyEngine(BasePolicyEngine):
         decision: PolicyDecision
         cmd = ""
         if tool == "run_command":
-            cmd = str(params.get("command") or params.get("cmd") or "").strip()
-            if not cmd:
+            cmd_raw = params.get("command") if params.get("command") is not None else params.get("cmd")
+            if cmd_raw is not None:
+                cmd = str(cmd_raw).strip()
+            else:
                 for k, v in params.items():
-                    if k.lower() in ("command", "cmd"):
+                    if k.lower() in ("command", "cmd") and v is not None:
                         cmd = str(v).strip()
                         break
         # Tier 0: System Protections (Protected Paths & Dangerous Command Patterns)
@@ -205,14 +207,18 @@ class BuiltinPolicyEngine(BasePolicyEngine):
                 abs_path_lower = abs_path.lower()
                 target_lower = target_path.lower()
 
-                # Mandatory Security Policy File Protection: block read/write/delete to security.toml or anything with 'racf'
+                # Mandatory Security Policy File Protection: block read/write/delete to security.toml or RACF policy files
                 base_name = os.path.basename(abs_path_lower)
-                if (
+                is_policy_file = (
                     base_name == "security.toml"
-                    or "racf" in base_name
-                    or "racf" in target_lower
                     or abs_path_lower.endswith(".racf")
-                ):
+                    or (
+                        "racf" in base_name
+                        and any(k in base_name for k in ("rule", "policy", "config", "guard", "security"))
+                        and not base_name.endswith((".rs", ".py", ".c", ".h", ".lock", ".md"))
+                    )
+                )
+                if is_policy_file:
                     decision = PolicyDecision(
                         verdict=Verdict.DENY,
                         reason=f"Access to security policy configuration '{target_path}' is strictly denied.",
@@ -244,8 +250,12 @@ class BuiltinPolicyEngine(BasePolicyEngine):
                 return decision
 
             cmd_lower = cmd.lower()
+            cmd_collapsed = re.sub(r"\s+", " ", cmd_lower).strip()
+
             for pattern in self.denied_command_patterns:
-                if pattern.lower() in cmd_lower:
+                pat_lower = pattern.lower()
+                pat_collapsed = re.sub(r"\s+", " ", pat_lower).strip()
+                if (pat_lower in cmd_lower) or (pat_collapsed and pat_collapsed in cmd_collapsed):
                     decision = PolicyDecision(
                         verdict=Verdict.DENY,
                         reason=f"Dangerous command pattern '{pattern}' is strictly denied by policy.",

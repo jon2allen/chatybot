@@ -60,6 +60,9 @@ dsl_rules = [
     "deny run command with 'git reset --hard' in it because 'destructive git reset can discard uncommitted changes'",
     "deny run command with 'git clean -f' in it because 'destructive git clean removes untracked files'",
     "deny run command with 'git push --force' in it because 'destructive force push can overwrite remote history'",
+    "deny run command with 'git diff --no-index' in it because 'arbitrary path diffing bypasses filesystem protections'",
+    "deny run command matching '\\bgit\\s+branch\\s+.*-[dD]' because 'destructive git branch deletion discards branch history'",
+    "deny run command matching '\\bgit\\s+(?:show|diff)\\s+[^\\s]*:(?:.*\\.env|.*id_rsa|.*token|.*api_key|.*secret|.*security\\.toml|.*\\.racf)' because 'prevent secret or security policy disclosure from git history'",
 
     # --- Shell Chaining & Compound Command Guards (Tier 2 ASK overrides Tier 3 ALLOW) ---
     "ask before run command with '&&' in it",
@@ -69,14 +72,18 @@ dsl_rules = [
     "ask before run command with '`' in it",
     "ask before run command with '\\n' in it",
 
+    # --- Git Mutation Safeguards (Tier 2 ASK overrides Tier 3 ALLOW) ---
+    "ask before run command matching '\\bgit\\s+remote\\s+(?:add|set-url|rename|rm|remove)\\b' because 'modifying git remotes requires user confirmation'",
+    "ask before run command matching '\\bgit\\s+branch\\s+.*-[mM]' because 'renaming git branches requires user confirmation'",
+
     # --- Safe Read-Only Git Allow-List (Tier 3 ALLOW) ---
     "allow run command starting with 'git status'",
     "allow run command starting with 'git diff'",
     "allow run command starting with 'git log'",
     "allow run command starting with 'git show'",
-    "allow run command starting with 'git branch'",
+    "allow run command matching '^git\\s+branch(?:\\s+(?:-[arvV]+|--(?:list|all|remotes|show-current|verbose)))*\\s*$' because 'read-only git branch listing is safe'",
     "allow run command starting with 'git rev-parse'",
-    "allow run command starting with 'git remote'",
+    "allow run command matching '^git\\s+remote(?:\\s+(?:-v|--verbose|show(?:\\s+\\S+)?|get-url\\s+\\S+))?\\s*$' because 'read-only git remote inspection is safe'",
     "allow run command starting with 'git ls-files'",
 
     # --- Directory Deletion & Modification ---
