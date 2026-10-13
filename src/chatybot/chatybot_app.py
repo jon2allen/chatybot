@@ -3786,10 +3786,11 @@ class ChatybotApp:
                     },
                 )
                 if sec_decision.verdict == Verdict.DENY:
-                    deny_msg = f"Security Policy Blocked: {sec_decision.reason}"
+                    deny_header = self.i18n.get_ui_string("security_blocked_header", "[Security Block]")
+                    deny_msg = self.i18n.get_ui_string("security_blocked_msg", f"Security Policy Blocked: {sec_decision.reason}", reason=sec_decision.reason)
                     if self.security_debug:
                         print(f"[Security Debug] [SPECIAL DENY] Blocked tool '{tool_name}': {sec_decision.reason}")
-                    print(f"\n[Security Block] {deny_msg}")
+                    print(f"\n{deny_header} {deny_msg}")
                     if hasattr(self, "logging_manager") and getattr(self.logging_manager, "logging_active", False):
                         self.logging_manager.log_message(f"[Security Audit] BLOCKED tool '{tool_name}'. Reason: {sec_decision.reason}")
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
@@ -3810,10 +3811,16 @@ class ChatybotApp:
                             if hasattr(self, "logging_manager") and getattr(self.logging_manager, "logging_active", False):
                                 self.logging_manager.log_message(f"[Security Audit] AUTO-APPROVED tool '{tool_name}' via non_interactive_ask policy. Reason: {sec_decision.reason}")
                         else:
-                            cancel_msg = f"Security Policy Blocked: Non-interactive execution of '{tool_name}' rejected by non_interactive_ask policy (Reason: {sec_decision.reason})."
+                            deny_header = self.i18n.get_ui_string("security_blocked_header", "[Security Block]")
+                            cancel_msg = self.i18n.get_ui_string(
+                                "security_blocked_non_interactive",
+                                f"Security Policy Blocked: Non-interactive execution of '{tool_name}' rejected by non_interactive_ask policy (Reason: {sec_decision.reason}).",
+                                tool=tool_name,
+                                reason=sec_decision.reason,
+                            )
                             if self.security_debug:
                                 print(f"[Security Debug] [DENY] Non-interactive execution of '{tool_name}' blocked by policy.")
-                            print(f"\n[Security Block] {cancel_msg}")
+                            print(f"\n{deny_header} {cancel_msg}")
                             if hasattr(self, "logging_manager") and getattr(self.logging_manager, "logging_active", False):
                                 self.logging_manager.log_message(f"[Security Audit] BLOCKED non-interactive tool '{tool_name}'. Reason: {sec_decision.reason}")
                             self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
@@ -3823,16 +3830,25 @@ class ChatybotApp:
                     else:
                         risk = sec_decision.prompt_details.risk_level if sec_decision.prompt_details else "medium"
                         msg = sec_decision.prompt_details.message if sec_decision.prompt_details else f"Authorize '{tool_name}'?"
-                        print(f"\n[Security Confirmation Required] ({risk.upper()} risk)")
-                        print(f"  Tool: {tool_name}")
-                        print(f"  Reason: {sec_decision.reason}")
+                        title_str = self.i18n.get_ui_string("security_confirm_title", f"[Security Confirmation Required] ({risk.upper()} risk)", risk=risk.upper())
+                        tool_lbl = self.i18n.get_ui_string("security_tool_label", "Tool")
+                        reason_lbl = self.i18n.get_ui_string("security_reason_label", "Reason")
+                        yes_char, no_char = self.i18n.get_prompt_choice_letters()
+                        prompt_str = self.i18n.get_ui_string("security_proceed_prompt", f"Proceed with execution? [{yes_char}/{no_char}]: ", yes_char=yes_char, no_char=no_char)
+                        print(f"\n{title_str}")
+                        print(f"  {tool_lbl}: {tool_name}")
+                        print(f"  {reason_lbl}: {sec_decision.reason}")
                         try:
-                            ans = await asyncio.to_thread(input, "Proceed with execution? [y/N]: ")
+                            ans = await asyncio.to_thread(input, prompt_str)
                             ans = ans.strip().lower()
                         except (EOFError, KeyboardInterrupt):
                             ans = "n"
-                        if ans not in ("y", "yes"):
-                            cancel_msg = f"Security Authorization Denied: User declined execution of '{tool_name}'."
+                        if not self.i18n.is_affirmative(ans):
+                            cancel_msg = self.i18n.get_ui_string(
+                                "security_declined_msg",
+                                f"Security Authorization Denied: User declined execution of '{tool_name}'.",
+                                tool=tool_name,
+                            )
                             if self.security_debug:
                                 print(f"[Security Debug] [DENY] User rejected authorization for tool '{tool_name}'.")
                             if hasattr(self, "logging_manager") and getattr(self.logging_manager, "logging_active", False):

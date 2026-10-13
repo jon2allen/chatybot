@@ -726,3 +726,116 @@ def test_v087_decide_command_localization():
         assert cmd_info is not None, f"/decide help entry missing in {loc}"
 
 
+def test_localization_security_affirmatives():
+    """Verify localized affirmative confirmation matching across all 6 supported locales."""
+    # 1. English
+    mgr_en = LocalizationManager("en")
+    assert mgr_en.is_affirmative("y")
+    assert mgr_en.is_affirmative("yes")
+    assert mgr_en.is_affirmative("YES")
+    assert mgr_en.is_affirmative("1")
+    assert not mgr_en.is_affirmative("n")
+    assert not mgr_en.is_affirmative("no")
+    assert not mgr_en.is_affirmative("")
+
+    # 2. Spanish
+    mgr_es = LocalizationManager("es")
+    assert mgr_es.is_affirmative("s")
+    assert mgr_es.is_affirmative("si")
+    assert mgr_es.is_affirmative("sí")
+    assert mgr_es.is_affirmative("SÍ")
+    assert mgr_es.is_affirmative("y")  # universal fallback
+    assert not mgr_es.is_affirmative("n")
+    assert not mgr_es.is_affirmative("no")
+
+    # 3. French
+    mgr_fr = LocalizationManager("fr")
+    assert mgr_fr.is_affirmative("o")
+    assert mgr_fr.is_affirmative("oui")
+    assert mgr_fr.is_affirmative("OUI")
+    assert mgr_fr.is_affirmative("yes")
+    assert not mgr_fr.is_affirmative("non")
+
+    # 4. Italian
+    mgr_it = LocalizationManager("it")
+    assert mgr_it.is_affirmative("s")
+    assert mgr_it.is_affirmative("si")
+    assert mgr_it.is_affirmative("sì")
+    assert mgr_it.is_affirmative("Sì")
+    assert not mgr_it.is_affirmative("no")
+
+    # 5. Chinese
+    mgr_zh = LocalizationManager("zh")
+    assert mgr_zh.is_affirmative("是")
+    assert mgr_zh.is_affirmative("好")
+    assert mgr_zh.is_affirmative("确定")
+    assert mgr_zh.is_affirmative("确认")
+    assert mgr_zh.is_affirmative("对")
+    assert mgr_zh.is_affirmative("y")
+    assert not mgr_zh.is_affirmative("不")
+
+    # 6. Arabic
+    mgr_ar = LocalizationManager("ar")
+    assert mgr_ar.is_affirmative("ن")
+    assert mgr_ar.is_affirmative("نعم")
+    assert mgr_ar.is_affirmative("أجل")
+    assert mgr_ar.is_affirmative("y")
+    assert not mgr_ar.is_affirmative("لا")
+
+    # Choice letters
+    assert mgr_en.get_prompt_choice_letters() == ("y", "N")
+    assert mgr_es.get_prompt_choice_letters() == ("s", "N")
+    assert mgr_fr.get_prompt_choice_letters() == ("o", "N")
+    assert mgr_it.get_prompt_choice_letters() == ("s", "N")
+    assert mgr_zh.get_prompt_choice_letters() == ("y", "N")
+    assert mgr_ar.get_prompt_choice_letters() == ("y", "N")
+
+
+def test_localization_security_ui_strings():
+    """Verify security UI keys format correctly across all 6 locales."""
+    for loc in ["en", "es", "fr", "zh", "it", "ar"]:
+        mgr = LocalizationManager(loc)
+        title = mgr.get_ui_string("security_confirm_title", risk="HIGH")
+        assert "HIGH" in title
+
+        tool_lbl = mgr.get_ui_string("security_tool_label")
+        assert bool(tool_lbl) and tool_lbl != "security_tool_label"
+
+        reason_lbl = mgr.get_ui_string("security_reason_label")
+        assert bool(reason_lbl) and reason_lbl != "security_reason_label"
+
+        yes_c, no_c = mgr.get_prompt_choice_letters()
+        prompt = mgr.get_ui_string("security_proceed_prompt", yes_char=yes_c, no_char=no_c)
+        assert f"[{yes_c}/{no_c}]" in prompt
+
+        blocked = mgr.get_ui_string("security_blocked_msg", reason="Test rule violated")
+        assert "Test rule violated" in blocked
+
+        declined = mgr.get_ui_string("security_declined_msg", tool="run_command")
+        assert "run_command" in declined
+
+
+@pytest.mark.anyio
+async def test_security_dispatch_localized_confirmation(monkeypatch, tmp_path):
+    """Verify ChatybotApp with Spanish locale accepts 's' / 'sí' in security confirmation prompts."""
+    import json
+    from unittest.mock import AsyncMock
+
+    # Isolated security config with default_verdict = "ask"
+    sec_cfg = tmp_path / "sec_ask.toml"
+    sec_cfg.write_text('engine = "builtin"\nfail_safe = "deny"\n[builtin]\ndefault_verdict = "ask"\n')
+
+    app_es = ChatybotApp(lang="es", security_config_path=str(sec_cfg))
+    app_es.initialize()
+    app_es.script_context = False  # Mark interactive
+
+    # Simulate user answering "sí" (Spanish affirmative)
+    monkeypatch.setattr("asyncio.to_thread", AsyncMock(return_value="sí"))
+
+    call_json = json.dumps({"tool": "file_info", "arguments": {"path": "test.txt"}})
+    res = await app_es.dispatch_tool(call_json)
+    # Since "sí" was approved, dispatch proceeded and did not return a security denial
+    assert "Security Authorization Denied" not in res
+    assert "Autorización de Seguridad Denegada" not in res
+
+
