@@ -70,6 +70,52 @@ pub fn normalize_path(path: &str) -> String {
     }
 }
 
+pub fn canonicalize_path_if_exists(path: &str) -> Vec<String> {
+    let mut results = Vec::new();
+    if path.contains('*') || path.contains('?') {
+        return results;
+    }
+    let expanded = expand_tilde(path);
+    let p = Path::new(&expanded);
+    let abs_path = if !p.is_absolute() {
+        if let Ok(cwd) = std::env::current_dir() {
+            cwd.join(p)
+        } else {
+            p.to_path_buf()
+        }
+    } else {
+        p.to_path_buf()
+    };
+
+    let resolved = if let Ok(canon) = std::fs::canonicalize(&abs_path) {
+        Some(canon.to_string_lossy().to_string())
+    } else if let Some(parent) = abs_path.parent() {
+        if let Ok(canon_parent) = std::fs::canonicalize(parent) {
+            if let Some(file_name) = abs_path.file_name() {
+                Some(canon_parent.join(file_name).to_string_lossy().to_string())
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    if let Some(r) = resolved {
+        if r.starts_with("/private/") {
+            results.push(r["/private".len()..].to_string());
+        }
+        if r.starts_with("/System/Volumes/Data/") {
+            results.push(r["/System/Volumes/Data".len()..].to_string());
+        } else {
+            results.push(r);
+        }
+    }
+    results
+}
+
 #[derive(Debug, Clone)]
 pub struct Profile {
     pub class: ResourceClass,
@@ -638,14 +684,22 @@ impl RacfEngine {
                 || key_lower.ends_with("target");
             if is_path_key {
                 if let Some(val_str) = request.parameters.get(key).and_then(|v| v.as_str()) {
-                    let (dir_acc, dir_reason) =
-                        self.evaluate_resource_trace(&user, &ResourceClass::Dir, val_str, &mut t_opt);
-                    evaluations.push((
-                        ResourceClass::Dir,
-                        val_str.to_string(),
-                        dir_acc,
-                        dir_reason,
-                    ));
+                    let mut candidate_paths = vec![val_str.to_string()];
+                    for canon in canonicalize_path_if_exists(val_str) {
+                        if !candidate_paths.contains(&canon) {
+                            candidate_paths.push(canon);
+                        }
+                    }
+                    for path_to_eval in candidate_paths {
+                        let (dir_acc, dir_reason) =
+                            self.evaluate_resource_trace(&user, &ResourceClass::Dir, &path_to_eval, &mut t_opt);
+                        evaluations.push((
+                            ResourceClass::Dir,
+                            path_to_eval,
+                            dir_acc,
+                            dir_reason,
+                        ));
+                    }
                 }
             }
         }
@@ -744,6 +798,79 @@ impl RacfEngine {
                     content_acc,
                     content_reason,
                 ));
+            }
+        }
+
+        // 5. Evaluate PS class (Process & Task Control)
+        if self.profiles.contains_key(&ResourceClass::Ps) {
+            let is_ps_tool = tool_lower.contains("ps")
+                || tool_lower.contains("kill")
+                || tool_lower.contains("process")
+                || tool_lower.contains("task")
+                || tool_lower.contains("job");
+
+            let ps_keys = [
+                "process",
+                "processname",
+                "process_name",
+                "proc",
+                "pid",
+                "targetpid",
+                "target_pid",
+                "taskid",
+                "task_id",
+                "jobid",
+                "job_id",
+            ];
+
+            let mut candidate_ps: Vec<String> = Vec::new();
+            for (key, val) in &request.parameters {
+                let key_clean = key.to_lowercase().replace('_', "").replace('-', "");
+                let is_ps_param = ps_keys.iter().any(|pk| pk.replace('_', "") == key_clean)
+                    || key_clean.ends_with("pid")
+                    || key_clean.ends_with("process")
+                    || key_clean.ends_with("taskid");
+
+                if is_ps_param {
+                    if let Some(s) = val.as_str() {
+                        candidate_ps.push(s.to_string());
+                    } else if let Some(n) = val.as_i64() {
+                        candidate_ps.push(n.to_string());
+                    } else if let Some(n) = val.as_u64() {
+                        candidate_ps.push(n.to_string());
+                    }
+                }
+            }
+
+            // Also inspect command arguments when running kill/pkill/killall
+            if is_cmd_tool && candidate_ps.is_empty() {
+                let cmd_keys = ["command", "cmd", "commandline", "CommandLine"];
+                for key in &cmd_keys {
+                    if let Some(cmd_str) = request.parameters.get(*key).and_then(|v| v.as_str()) {
+                        let trimmed = cmd_str.trim();
+                        let parts: Vec<&str> = trimmed.split_whitespace().collect();
+                        if !parts.is_empty() {
+                            let prog = parts[0];
+                            if prog == "kill" || prog == "pkill" || prog == "killall" {
+                                for arg in &parts[1..] {
+                                    if !arg.starts_with('-') {
+                                        candidate_ps.push(arg.to_string());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if is_ps_tool && candidate_ps.is_empty() {
+                candidate_ps.push(tool_name.clone());
+            }
+
+            for ps_res in candidate_ps {
+                let (ps_acc, ps_reason) =
+                    self.evaluate_resource_trace(&user, &ResourceClass::Ps, &ps_res, &mut t_opt);
+                evaluations.push((ResourceClass::Ps, ps_res, ps_acc, ps_reason));
             }
         }
 
@@ -1182,6 +1309,58 @@ mod tests {
 
         req.parameters.insert("path".to_string(), serde_json::Value::String("security.racf".to_string()));
         assert_eq!(engine.evaluate_request(&req).status, "deny");
+    }
+
+    #[test]
+    fn test_racf_ps_resource_class_evaluation() {
+        let mut engine = RacfEngine::new();
+        let policy = r#"
+            ADDGROUP DEVELOPER DATA('Developers')
+            CONNECT alice GROUP(DEVELOPER)
+            RDEFINE FACILITY * UACC(ALLOW)
+            RDEFINE COMMAND * UACC(ALLOW)
+            RDEFINE PS * UACC(DENY)
+            RDEFINE PS 1 UACC(DENY)
+            RDEFINE PS sys_* UACC(DENY)
+            PERMIT worker_* CLASS(PS) ID(DEVELOPER) ACCESS(ALLOW)
+            PERMIT 12345 CLASS(PS) ID(DEVELOPER) ACCESS(ALLOW)
+        "#;
+        let stmts = parse_racf_script(policy).unwrap();
+        engine.load_statements(stmts);
+
+        // 1. Worker task allowed
+        let mut req = PolicyRequest {
+            tool: "manage_task".to_string(),
+            parameters: HashMap::new(),
+            context: HashMap::new(),
+            version: None,
+            request_id: None,
+            timestamp: None,
+        };
+        req.context.insert("user".to_string(), serde_json::Value::String("alice".to_string()));
+        req.parameters.insert("task_id".to_string(), serde_json::Value::String("worker_job1".to_string()));
+        assert_eq!(engine.evaluate_request(&req).status, "allow");
+
+        // 2. Sys task denied
+        req.parameters.insert("task_id".to_string(), serde_json::Value::String("sys_daemon".to_string()));
+        assert_eq!(engine.evaluate_request(&req).status, "deny");
+
+        // 3. Process PID 1 via command kill -9 1 denied
+        let mut req_cmd = PolicyRequest {
+            tool: "run_command".to_string(),
+            parameters: HashMap::new(),
+            context: HashMap::new(),
+            version: None,
+            request_id: None,
+            timestamp: None,
+        };
+        req_cmd.context.insert("user".to_string(), serde_json::Value::String("alice".to_string()));
+        req_cmd.parameters.insert("command".to_string(), serde_json::Value::String("kill -9 1".to_string()));
+        assert_eq!(engine.evaluate_request(&req_cmd).status, "deny");
+
+        // 4. Allowed PID 12345
+        req_cmd.parameters.insert("command".to_string(), serde_json::Value::String("kill -15 12345".to_string()));
+        assert_eq!(engine.evaluate_request(&req_cmd).status, "allow");
     }
 }
 
