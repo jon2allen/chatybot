@@ -444,6 +444,9 @@ Then explicitly allow what you need via `[builtin.rules]` or `allow` DSL rules.
 
 Set `engine = "binary"` to delegate decisions to any program (Rust, Go, a script):
 
+> [!TIP]
+> **Developer API Specification:** For complete IPC protocol details, JSON schemas, approval contracts (`ASK`), `--banner`, `--debug` trace forwarding, and sample engine implementations, see the [Pluggable Security API Specification](file:///Users/jon2allen/github/chatybot/src/chatybot/doc/pluggable_security_api.md).
+
 ```toml
 engine    = "binary"
 fail_safe = "deny"
