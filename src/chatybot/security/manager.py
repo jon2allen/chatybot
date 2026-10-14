@@ -74,6 +74,14 @@ class SecurityManager:
             self.fail_safe = Verdict.DENY
 
         raw_non_interactive = str(self.config.get("non_interactive_ask", "deny")).strip().lower()
+        if raw_non_interactive not in ("allow", "deny"):
+            warn_msg = (
+                f"[Security Warning] Unsupported non_interactive_ask setting '{raw_non_interactive}' "
+                "(expected 'allow' or 'deny'). Defaulting to 'deny'."
+            )
+            logger.warning(warn_msg)
+            if self.debug:
+                print(warn_msg)
         self.non_interactive_ask = "allow" if raw_non_interactive == "allow" else "deny"
 
         engine_type = self.config.get("engine", "builtin").lower()
@@ -99,6 +107,14 @@ class SecurityManager:
             warn_msg = (
                 f"[Security Warning] Configured binary path not found: '{raw_path}' "
                 f"(resolved: '{bin_path}'). Falling back to builtin Python policy engine."
+            )
+            logger.warning(warn_msg)
+            print(warn_msg)
+            engine_type = "builtin"
+        elif engine_type != "builtin":
+            warn_msg = (
+                f"[Security Warning] Unsupported or unknown engine type '{engine_type}'. "
+                "Falling back to builtin Python policy engine."
             )
             logger.warning(warn_msg)
             print(warn_msg)
