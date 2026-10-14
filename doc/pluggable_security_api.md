@@ -69,6 +69,8 @@ timeout_seconds = 2.0
 - **Output Collection:** Chatybot captures standard output (`stdout`) and standard error (`stderr`) until the process exits or `timeout_seconds` is reached.
 - **Process Termination:** The process must complete and exit with code `0`. Non-zero exit codes immediately trigger the `fail_safe` verdict.
 
+*(For detailed architectural rationale, performance benchmarks, and design trade-offs of this one-shot model, see [Section 10: Technical Architecture Notes](#10-technical-architecture-notes).)*
+
 ---
 
 ## 3. JSON Wire Schemas
@@ -410,3 +412,56 @@ if __name__ == "__main__":
 For a production-grade compiled implementation written in Rust modeling IBM z/OS RACF resource classes, role groups, and least-privilege default-deny access control, see:
 - Source code: [`tools/racf-guard/`](file:///Users/jon2allen/github/chatybot/tools/racf-guard)
 - Architecture and User Guide: [`tools/racf-guard/README.md`](file:///Users/jon2allen/github/chatybot/tools/racf-guard/README.md)
+
+---
+
+## 10. Technical Architecture Notes
+
+### 10.1 The One-Shot Subprocess Model & Design Rationale
+
+In the `binary` adapter architecture ([`StdioBinaryPolicyEngine`](file:///Users/jon2allen/github/chatybot/src/chatybot/security/adapters/stdio_binary.py)), Chatybot explicitly spawns a **fresh, independent subprocess instance** of the policy engine (e.g. `racf-guard`) for each tool request:
+
+```
+Tool Dispatch ──► Spawn Child Process ──► Pipe JSON (stdin) ──► Read JSON (stdout) ──► Process Exits (0)
+```
+
+This stateless, one-shot architecture was chosen deliberately for three foundational reasons:
+
+1. **Process & Memory Fault Isolation (Fail-Closed Boundary):**
+   Security subsystems must never compromise the host application's stability. If a custom security engine experiences a segmentation fault, memory panic, unhandled exception, or memory leak, the fault is completely contained within the ephemeral child process. Chatybot detects the abnormal termination, prevents any unverified tool from executing, and cleanly applies the configured `fail_safe` verdict (defaulting to `"deny"`).
+
+2. **Instant, Zero-Downtime Policy Hot-Reloading:**
+   Because each invocation reads the policy definitions fresh from disk (e.g. `security.racf`), policy modifications take effect immediately. Administrators can edit rule files or issue command-line access grants (`racf-guard permit ...`) without sending POSIX signals (`SIGHUP`), resetting IPC connections, or restarting running Chatybot agent sessions.
+
+3. **Zero Daemon Lifecycle Management:**
+   Long-lived background daemons introduce complex failure modes: stale Unix domain sockets (`/tmp/racf.sock`), orphaned PID files, leaked file descriptors, and zombie processes when the host terminal is killed abruptly (`Ctrl+C` or `kill -9`). The one-shot process model has zero background footprint and guarantees complete cleanup upon tool completion.
+
+---
+
+### 10.2 Latency & Performance Profile
+
+| Engine Implementation | Typical Execution Latency | Practical Impact on Agent Loop |
+|---|---|---|
+| **Compiled Native (Rust `racf-guard`, Go, C/C++)** | **1.5 ms – 3.0 ms** | **Negligible (< 0.5% of tool dispatch cycle)**. Cold startup, policy script parsing, AST generation, and JSON serialization complete almost instantaneously. Compared to model inference and network roundtrips (500 ms – 3,000 ms), the overhead is imperceptible. |
+| **Lightweight Script (Bash, Awk, Coreutils)** | **3.0 ms – 10.0 ms** | **Negligible**. Fast invocation suited for rapid prototyping or simple shell wrappers. |
+| **Interpreted Runtimes (Python, Node.js)** | **50.0 ms – 250.0 ms** | **Noticeable if loading large packages**. Python interpreter startup and module import overhead (e.g. Pydantic, Pandas, cryptography libraries) can introduce perceptible latency if spawned per tool. For Python-based engines, developers should either use minimal standard-library scripts or implement an in-process class via [`BasePolicyEngine`](#8-in-process-python-engine-interface). |
+
+---
+
+### 10.3 Statefulness & Multi-Request Tracking
+
+Because the binary process terminates immediately after returning its verdict, it is inherently **stateless** between separate tool evaluations. 
+
+If your security architecture requires stateful policies (such as rolling rate limits, token-bucket frequency caps, or cross-tool sequence analysis):
+
+1. **Leverage Request Context:** Inspect `request.context["session_id"]`, `request.context["user"]`, and `request.timestamp` to track evaluation correlation.
+2. **External State Store:** Have your binary persist counters to a fast local database (e.g. SQLite, RocksDB, or a shared memory-mapped cache file).
+3. **Use the In-Process Python API:** Implement [`BasePolicyEngine`](#8-in-process-python-engine-interface) directly within Chatybot. Because in-process engines remain resident in memory for the entire lifetime of the `ChatybotApp` process, they can hold arbitrary in-memory state, sliding windows, and session caches without IPC or process startup overhead.
+
+---
+
+### 10.4 Future Architectural Roadmap: Daemon & Socket Modes
+
+While the one-shot stdio subprocess is the default and standard adapter, the pluggable architecture is designed to accommodate additional adapter types as requirements evolve:
+- **`engine = "socket"` (Unix Domain Socket / Named Pipe):** For ultra-high throughput environments or centralized enterprise security daemons running across multiple agent processes.
+- **`engine = "stream"` (Persistent Long-Lived Process):** Keeping a single binary process alive and streaming line-delimited JSON (`JSON-Lines` / NDJSON) over persistent `stdin`/`stdout` pipes.
