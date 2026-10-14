@@ -27,10 +27,20 @@ class BuiltinPolicyEngine(BasePolicyEngine):
     """
 
     # Matches direct or wrapper execution of Chatybot or Python module/script invocation
+    _ENV_PREFIX = r"(?:[a-zA-Z_][a-zA-Z0-9_]*=[^\s;&|`\n\r]*\s+)*"
+    _WRAPPER_PREFIX = (
+        r"(?:(?:exec|env|nohup|sudo|xargs|nice|timeout|ionice|taskset|time|strace|ltrace|chroot|"
+        r"(?:ba|z|k|c)?sh\s+-c)\b(?:\s+-[^\s;&|`\n\r]+|\s+[0-9]+|\s+[^\s;&|`\n\r\'\"]+)*\s*['\"]?\s*)*"
+    )
+    _CHATYBOT_BIN = r"(?:[^\s;&|`\n\r\'\"]*/)?chatybot(?:\.py)?(?:\s+|['\"`;&|]|$)"
+    _PYTHON_MODULE = (
+        r"python[0-9.]*\s+(?:-m\s+chatybot(?:\s+|$)|[^\s;&|`\n\r]*/chatybot\.py(?:\s+|$)|"
+        r"-c\s+['\"][^'\"]*\bchatybot\b)"
+    )
+    _PREFIX = r"(?:^|[;&|`\n\r]|\$\()\s*" + _ENV_PREFIX + _WRAPPER_PREFIX
+
     CHATYBOT_EXEC_PATTERN = re.compile(
-        r"(?:^|[;&|`\n\r]|\b(?:exec|env|nohup|sudo|xargs|(?:ba|z)?sh\s+-c)\s+['\"]?)\s*"
-        r"(?:[^\s;&|`\n\r\'\"]*/)?chatybot(?:\.py)?(?:\s+|['\"`;&|]|$)|"
-        r"(?:^|[;&|`\n\r])\s*python[0-9.]*\s+(?:-m\s+chatybot(?:\s+|$)|[^\s;&|`\n\r]*/chatybot\.py(?:\s+|$)|-c\s+['\"][^'\"]*\bchatybot\b)",
+        f"{_PREFIX}(?:{_CHATYBOT_BIN}|{_PYTHON_MODULE})",
         re.IGNORECASE,
     )
 
@@ -204,39 +214,69 @@ class BuiltinPolicyEngine(BasePolicyEngine):
 
             for target_path in candidate_paths:
                 abs_path = os.path.abspath(os.path.expanduser(target_path))
-                abs_path_lower = abs_path.lower()
-                target_lower = target_path.lower()
+                try:
+                    real_path = os.path.realpath(abs_path)
+                except Exception:
+                    real_path = abs_path
 
-                # Mandatory Security Policy File Protection: block read/write/delete to security.toml or RACF policy files
-                base_name = os.path.basename(abs_path_lower)
-                is_policy_file = (
-                    base_name == "security.toml"
-                    or abs_path_lower.endswith(".racf")
-                    or (
-                        "racf" in base_name
-                        and any(k in base_name for k in ("rule", "policy", "config", "guard", "security"))
-                        and not base_name.endswith((".rs", ".py", ".c", ".h", ".lock", ".md"))
-                    )
-                )
-                if is_policy_file:
-                    decision = PolicyDecision(
-                        verdict=Verdict.DENY,
-                        reason=f"Access to security policy configuration '{target_path}' is strictly denied.",
-                    )
-                    if self.debug:
-                        print(f"[Security Debug] [SPECIAL DENY] Tier 0 Security Policy Protection: '{target_path}' -> {decision.reason}")
-                    return decision
+                paths_to_check = set()
+                for p in [abs_path, real_path]:
+                    p_lower = p.lower()
+                    if p_lower.startswith("/system/volumes/data/"):
+                        paths_to_check.add(p_lower[len("/system/volumes/data"):])
+                    else:
+                        paths_to_check.add(p_lower)
+                    if p_lower.startswith("/private/"):
+                        paths_to_check.add(p_lower[len("/private"):])
+                        paths_to_check.add(p_lower)
 
-                for denied in self.denied_paths:
-                    denied_lower = denied.lower()
-                    if abs_path_lower == denied_lower or abs_path_lower.startswith(denied_lower + os.sep):
+                for check_p_lower in paths_to_check:
+                    # Mandatory Security Policy File Protection: block read/write/delete to security.toml or RACF policy files
+                    base_name = os.path.basename(check_p_lower)
+                    is_policy_file = (
+                        base_name == "security.toml"
+                        or "security.toml" in base_name
+                        or check_p_lower.endswith(".racf")
+                        or (
+                            "racf" in base_name
+                            and any(k in base_name for k in ("rule", "policy", "config", "guard", "security"))
+                            and not base_name.endswith((".rs", ".py", ".c", ".h", ".lock", ".md"))
+                        )
+                    )
+                    if is_policy_file:
                         decision = PolicyDecision(
                             verdict=Verdict.DENY,
-                            reason=f"Access to protected path '{target_path}' is denied by policy.",
+                            reason=f"Access to security policy configuration '{target_path}' is strictly denied.",
                         )
                         if self.debug:
-                            print(f"[Security Debug] [SPECIAL DENY] Tier 0 Protected Path: '{target_path}' -> {decision.reason}")
+                            print(f"[Security Debug] [SPECIAL DENY] Tier 0 Security Policy Protection: '{target_path}' -> {decision.reason}")
                         return decision
+
+                    for denied in self.denied_paths:
+                        denied_targets = set()
+                        d_abs = os.path.abspath(os.path.expanduser(denied)).lower()
+                        denied_targets.add(d_abs)
+                        try:
+                            d_real = os.path.realpath(d_abs).lower()
+                            if d_real.startswith("/system/volumes/data/"):
+                                denied_targets.add(d_real[len("/system/volumes/data"):])
+                            else:
+                                denied_targets.add(d_real)
+                            if d_real.startswith("/private/"):
+                                denied_targets.add(d_real[len("/private"):])
+                                denied_targets.add(d_real)
+                        except Exception:
+                            pass
+
+                        for d_target in denied_targets:
+                            if check_p_lower == d_target or check_p_lower.startswith(d_target + os.sep):
+                                decision = PolicyDecision(
+                                    verdict=Verdict.DENY,
+                                    reason=f"Access to protected path '{target_path}' is denied by policy.",
+                                )
+                                if self.debug:
+                                    print(f"[Security Debug] [SPECIAL DENY] Tier 0 Protected Path: '{target_path}' -> {decision.reason}")
+                                return decision
 
         if tool == "run_command":
             # Tier 0: Direct check against Chatybot sub-process execution

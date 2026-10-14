@@ -1293,5 +1293,163 @@ def test_p0_command_none_parameter_handling():
     assert dec.verdict != Verdict.DENY
 
 
+def test_p1_chatybot_exec_wrapper_prefixes_and_env_vars():
+    """Verify that CHATYBOT_EXEC_PATTERN blocks recursive sub-agent execution even when prefixed with env vars or wrappers."""
+    engine = BuiltinPolicyEngine()
+
+    evasion_commands = [
+        "chatybot",
+        "chatybot --script attack.chatdsl -y",
+        "/usr/local/bin/chatybot",
+        "PATH=/tmp:$PATH chatybot --script attack.chatdsl -y",
+        "FOO=1 BAR=2 chatybot",
+        "nice chatybot",
+        "nice -n 10 chatybot --script attack.chatdsl",
+        "timeout 30 chatybot --script attack.chatdsl",
+        "sudo nice timeout 10 chatybot",
+        "python3 -m chatybot",
+        "python -m chatybot",
+        "VAR=1 python3.11 -m chatybot",
+        "VAR=1 nice python3 -m chatybot",
+        "sh -c 'chatybot'",
+        "bash -c 'chatybot'",
+    ]
+
+    for cmd in evasion_commands:
+        dec = engine.evaluate(PolicyRequest(tool="run_command", parameters={"command": cmd}))
+        assert dec.verdict == Verdict.DENY, f"Failed to DENY wrapped chatybot command '{cmd}': {dec}"
+        assert "Execution of Chatybot sub-process is strictly denied" in dec.reason
+
+    # Normal commands with word chatybot in echo/args should NOT be blocked by Tier 0
+    dec_echo = engine.evaluate(PolicyRequest(tool="run_command", parameters={"command": "echo 'chatybot is cool'"}))
+    assert dec_echo.verdict != Verdict.DENY
+
+
+def test_p1_symlink_path_traversal_prevention(tmp_path):
+    """Verify that symlinks pointing to denied directories (/etc) or security policy files are resolved and denied."""
+    # Create symlink pointing to /etc
+    symlink_dir = tmp_path / "link_to_etc"
+    try:
+        os.symlink("/etc", symlink_dir)
+    except OSError:
+        pytest.skip("Symlink creation not permitted in this environment")
+
+    symlink_file = symlink_dir / "passwd"
+
+    # 1. Builtin engine check
+    builtin_engine = BuiltinPolicyEngine(denied_paths=["/etc"])
+    dec = builtin_engine.evaluate(PolicyRequest(tool="read_file", parameters={"path": str(symlink_file)}))
+    assert dec.verdict == Verdict.DENY, f"Builtin failed to DENY symlink pointing into /etc: {dec}"
+    assert "Access to protected path" in dec.reason
+
+    # 2. Symlink to security policy file
+    real_policy = tmp_path / "real_security.toml"
+    real_policy.write_text("version = '1.0'")
+    symlink_policy = tmp_path / "innocent_config.txt"
+    try:
+        os.symlink(real_policy, symlink_policy)
+    except OSError:
+        pass
+    else:
+        dec_pol = builtin_engine.evaluate(PolicyRequest(tool="read_file", parameters={"path": str(symlink_policy)}))
+        assert dec_pol.verdict == Verdict.DENY, f"Builtin failed to DENY symlink to security.toml: {dec_pol}"
+
+    # 3. RACF engine check (if binary available)
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    racf_bin = os.path.join(repo_root, "tools", "racf-guard", "target", "release", "racf-guard")
+    if os.path.isfile(racf_bin):
+        policy_file = os.path.join(repo_root, "tools", "racf-guard", "examples", "security.racf")
+        racf_engine = StdioBinaryPolicyEngine(
+            binary_path=racf_bin,
+            args=["--policy", policy_file],
+        )
+        dec_racf = racf_engine.evaluate(PolicyRequest(
+            tool="read_file",
+            parameters={"path": str(symlink_file)},
+            context={"user": "jon2allen"},
+        ))
+        assert dec_racf.verdict == Verdict.DENY, f"RACF engine failed to DENY symlink pointing to /etc: {dec_racf}"
+
+
+def test_p1_racf_ps_resource_class_evaluation(tmp_path):
+    """Verify that racf-guard evaluates ResourceClass::Ps for process-related tools and commands."""
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    racf_bin = os.path.join(repo_root, "tools", "racf-guard", "target", "release", "racf-guard")
+    if not os.path.isfile(racf_bin):
+        pytest.skip("racf-guard binary not built")
+
+    test_policy = tmp_path / "ps_test.racf"
+    test_policy.write_text("""
+ADDGROUP DEVELOPER DATA('Developers')
+CONNECT tester GROUP(DEVELOPER)
+RDEFINE FACILITY * UACC(ALLOW)
+RDEFINE COMMAND * UACC(ALLOW)
+RDEFINE PS * UACC(DENY)
+RDEFINE PS 1 UACC(DENY)
+RDEFINE PS sys_* UACC(DENY)
+PERMIT worker_* CLASS(PS) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT 4242 CLASS(PS) ID(DEVELOPER) ACCESS(ALLOW)
+""")
+
+    racf_engine = StdioBinaryPolicyEngine(
+        binary_path=racf_bin,
+        args=["--policy", str(test_policy)],
+    )
+
+    # 1. Allowed task/process
+    dec_allow = racf_engine.evaluate(PolicyRequest(
+        tool="manage_task",
+        parameters={"task_id": "worker_build"},
+        context={"user": "tester"},
+    ))
+    assert dec_allow.verdict == Verdict.ALLOW, f"Expected ALLOW for worker_build: {dec_allow}"
+
+    # 2. Denied sys task
+    dec_deny = racf_engine.evaluate(PolicyRequest(
+        tool="manage_task",
+        parameters={"task_id": "sys_core"},
+        context={"user": "tester"},
+    ))
+    assert dec_deny.verdict == Verdict.DENY, f"Expected DENY for sys_core: {dec_deny}"
+    assert "RACF security violation on PS" in dec_deny.reason
+
+    # 3. Kill PID 1 command
+    dec_kill_init = racf_engine.evaluate(PolicyRequest(
+        tool="run_command",
+        parameters={"command": "kill -9 1"},
+        context={"user": "tester"},
+    ))
+    assert dec_kill_init.verdict == Verdict.DENY, f"Expected DENY for kill -9 1: {dec_kill_init}"
+    assert "RACF security violation on PS" in dec_kill_init.reason
+
+    # 4. Allowed kill PID 4242
+    dec_kill_ok = racf_engine.evaluate(PolicyRequest(
+        tool="run_command",
+        parameters={"command": "kill 4242"},
+        context={"user": "tester"},
+    ))
+    assert dec_kill_ok.verdict == Verdict.ALLOW, f"Expected ALLOW for kill 4242: {dec_kill_ok}"
+
+
+def test_p1_unknown_engine_and_invalid_non_interactive_warnings(tmp_path, caplog):
+    """Verify that SecurityManager warns when an unknown engine type or invalid non_interactive_ask is supplied."""
+    bad_cfg = tmp_path / "bad_security.toml"
+    bad_cfg.write_text("""
+version = "1.0"
+engine = "wasm_sandboxed"
+non_interactive_ask = "prompt_user"
+""")
+
+    with caplog.at_level("WARNING"):
+        mgr = SecurityManager(config_path=str(bad_cfg))
+        assert isinstance(mgr.engine, BuiltinPolicyEngine)
+        assert mgr.non_interactive_ask == "deny"
+
+    warning_text = " ".join([rec.message for rec in caplog.records])
+    assert "Unsupported or unknown engine type 'wasm_sandboxed'" in warning_text
+    assert "Unsupported non_interactive_ask setting 'prompt_user'" in warning_text
+
+
+
 
 
