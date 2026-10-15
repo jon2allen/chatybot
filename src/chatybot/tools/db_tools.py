@@ -4,10 +4,10 @@ Allows the LLM to search databases and list available databases.
 Enabled via /tool enable db_search, db_list or tools_config.toml.
 """
 
-from collections.abc import Iterator
-from contextlib import contextmanager, suppress
 import json
 import os
+from collections.abc import Iterator
+from contextlib import contextmanager, suppress
 from typing import Any
 
 from .. import chatydb
