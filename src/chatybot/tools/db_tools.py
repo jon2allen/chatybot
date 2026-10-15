@@ -4,11 +4,49 @@ Allows the LLM to search databases and list available databases.
 Enabled via /tool enable db_search, db_list or tools_config.toml.
 """
 
+from collections.abc import Iterator
+from contextlib import contextmanager, suppress
 import json
 import os
 from typing import Any
 
 from .. import chatydb
+from ..tinydb1.corpus_manager import CorpusManager
+
+
+@contextmanager
+def _scoped_corpus_manager(db_name: str | None = None) -> Iterator[tuple[CorpusManager | None, str]]:
+    """
+    Context manager that yields a (CorpusManager, resolved_db_name) tuple.
+
+    If db_name is provided, opens a dedicated CorpusManager for that database
+    without mutating the global session active database (chatydb._manager / CHATYBOT_ACTIVE_DB).
+    If db_name is None, uses the active session database.
+    """
+    if db_name:
+        name = db_name.strip()
+        if not name or not chatydb._DB_NAME_RE.match(name):
+            yield None, db_name
+            return
+
+        # If it's already active in the current process, reuse it safely without closing
+        if chatydb._active_db_name == name and chatydb._manager is not None:
+            yield chatydb._manager, name
+            return
+
+        db_path = chatydb._ensure_db_path(name)
+        scoped_mgr = CorpusManager(db_path)
+        try:
+            yield scoped_mgr, name
+        finally:
+            with suppress(Exception):
+                scoped_mgr.close()
+    else:
+        # Fall back to active database or CHATYBOT_ACTIVE_DB env var
+        if chatydb._manager is None and os.environ.get("CHATYBOT_ACTIVE_DB"):
+            chatydb.set_db(os.environ["CHATYBOT_ACTIVE_DB"], quiet=True)
+
+        yield chatydb._manager, chatydb._active_db_name or "active"
 
 
 def db_search(
@@ -32,73 +70,73 @@ def db_search(
     Returns:
         Dictionary with matching items or error message.
     """
-    if db_name:
-        chatydb.set_db(db_name, quiet=True)
-    elif chatydb._manager is None and os.environ.get("CHATYBOT_ACTIVE_DB"):
-        chatydb.set_db(os.environ["CHATYBOT_ACTIVE_DB"], quiet=True)
+    with _scoped_corpus_manager(db_name) as (manager, resolved_db):
+        if manager is None:
+            if db_name and not chatydb._DB_NAME_RE.match(db_name.strip()):
+                return {
+                    "error": f"Invalid database name '{db_name}'. Use letters, digits, '.', '_', or '-'."
+                }
+            return {
+                "error": "No database selected. Use the db_name parameter or /setdb first."
+            }
 
-    if chatydb._manager is None:
-        return {
-            "error": "No database selected. Use the db_name parameter or /setdb first."
-        }
+        all_items = manager.get_all_items()
 
-    all_items = chatydb._manager.get_all_items()
-
-    effective_query = (query or "").strip()
-    if not effective_query or effective_query in ("*", "all"):
-        results = list(all_items)
-    else:
-        q = query.lower()
-        results = []
-        for item in all_items:
-            name = str(item.get("name") or "")
-            content = str(item.get("content") or "")
-            metadata = item.get("metadata", {})
-
-            in_metadata = False
-            if isinstance(metadata, dict):
-                for k, val in metadata.items():
-                    if q in str(k).lower() or q in str(val).lower():
-                        in_metadata = True
-                        break
-            elif isinstance(metadata, list):
-                for val in metadata:
-                    if q in str(val).lower():
-                        in_metadata = True
-                        break
-            elif metadata and q in str(metadata).lower():
-                in_metadata = True
-
-            if q in name.lower() or q in content.lower() or in_metadata:
-                results.append(item)
-
-    total_matches = len(results)
-    results = results[:limit]
-
-    output = []
-    for item in results:
-        doc_id = getattr(item, "doc_id", None)
-        content = str(item.get("content") or "")
-        record = {
-            "id": doc_id,
-            "type": item.get("type"),
-            "name": item.get("name"),
-            "content_length": len(content),
-            "metadata": item.get("metadata", {}),
-        }
-        if full_content:
-            record["content"] = content
+        effective_query = (query or "").strip()
+        if not effective_query or effective_query in ("*", "all"):
+            results = list(all_items)
         else:
-            record["content_preview"] = content[:500]
-        output.append(record)
+            q = query.lower()
+            results = []
+            for item in all_items:
+                name = str(item.get("name") or "")
+                content = str(item.get("content") or "")
+                metadata = item.get("metadata", {})
 
-    return {
-        "query": query,
-        "database": db_name or "active",
-        "total_matches": total_matches,
-        "returned": len(results),
-        "results": output,
-    }
+                in_metadata = False
+                if isinstance(metadata, dict):
+                    for k, val in metadata.items():
+                        if q in str(k).lower() or q in str(val).lower():
+                            in_metadata = True
+                            break
+                elif isinstance(metadata, list):
+                    for val in metadata:
+                        if q in str(val).lower():
+                            in_metadata = True
+                            break
+                elif metadata and q in str(metadata).lower():
+                    in_metadata = True
+
+                if q in name.lower() or q in content.lower() or in_metadata:
+                    results.append(item)
+
+        total_matches = len(results)
+        results = results[:limit]
+
+        output = []
+        for item in results:
+            doc_id = getattr(item, "doc_id", None)
+            content = str(item.get("content") or "")
+            record = {
+                "id": doc_id,
+                "type": item.get("type"),
+                "name": item.get("name"),
+                "content_length": len(content),
+                "metadata": item.get("metadata", {}),
+            }
+            if full_content:
+                record["content"] = content
+            else:
+                record["content_preview"] = content[:500]
+            output.append(record)
+
+        return {
+            "query": query,
+            "database": resolved_db,
+            "total_matches": total_matches,
+            "returned": len(results),
+            "results": output,
+        }
 
 
 def db_get(
@@ -117,40 +155,40 @@ def db_get(
     Returns:
         Dictionary with the complete item details or an error message.
     """
-    if db_name:
-        chatydb.set_db(db_name, quiet=True)
-    elif chatydb._manager is None and os.environ.get("CHATYBOT_ACTIVE_DB"):
-        chatydb.set_db(os.environ["CHATYBOT_ACTIVE_DB"], quiet=True)
+    with _scoped_corpus_manager(db_name) as (manager, resolved_db):
+        if manager is None:
+            if db_name and not chatydb._DB_NAME_RE.match(db_name.strip()):
+                return {
+                    "error": f"Invalid database name '{db_name}'. Use letters, digits, '.', '_', or '-'."
+                }
+            return {
+                "error": "No database selected. Use the db_name parameter or /setdb first."
+            }
 
-    if chatydb._manager is None:
-        return {
-            "error": "No database selected. Use the db_name parameter or /setdb first."
+        try:
+            doc_id = int(item_id)
+        except (ValueError, TypeError):
+            return {
+                "error": f"Invalid item_id '{item_id}'. Must be an integer."
+            }
+
+        item = manager.get_item(doc_id)
+        if not item:
+            return {
+                "error": f"Item with ID {doc_id} not found in database '{resolved_db}'."
+            }
+
+        content = str(item.get("content") or "")
+        output = {
+            "id": getattr(item, "doc_id", doc_id),
+            "type": item.get("type"),
+            "name": item.get("name"),
+            "content": content,
+            "content_length": len(content),
+            "metadata": item.get("metadata", {}),
         }
 
-    try:
-        doc_id = int(item_id)
-    except (ValueError, TypeError):
-        return {
-            "error": f"Invalid item_id '{item_id}'. Must be an integer."
-        }
-
-    item = chatydb._manager.get_item(doc_id)
-    if not item:
-        return {
-            "error": f"Item with ID {doc_id} not found in database '{db_name or 'active'}'."
-        }
-
-    content = str(item.get("content") or "")
-    output = {
-        "id": getattr(item, "doc_id", doc_id),
-        "type": item.get("type"),
-        "name": item.get("name"),
-        "content": content,
-        "content_length": len(content),
-        "metadata": item.get("metadata", {}),
-    }
-
-    return output
+        return output
 
 
 def db_list(app: Any = None) -> dict[str, Any]:
@@ -224,94 +262,95 @@ def db_summary(
     Returns:
         Formatted ASCII summary table or dictionary.
     """
-    target_db = db_name or os.environ.get("CHATYBOT_ACTIVE_DB")
-    if target_db:
-        chatydb.set_db(target_db, quiet=True)
+    with _scoped_corpus_manager(db_name) as (manager, resolved_db):
+        if manager is None:
+            if db_name and not chatydb._DB_NAME_RE.match(db_name.strip()):
+                return {
+                    "error": f"Invalid database name '{db_name}'. Use letters, digits, '.', '_', or '-'."
+                }
+            return {
+                "error": "No database selected. Use the db_name parameter or /setdb first."
+            }
 
-    if chatydb._manager is None:
-        return {
-            "error": "No database selected. Use the db_name parameter or /setdb first."
-        }
+        all_items = manager.get_all_items()
+        if not all_items:
+            return {
+                "database": resolved_db,
+                "items": [],
+                "message": "Database is empty."
+            }
 
-    all_items = chatydb._manager.get_all_items()
-    if not all_items:
-        return {
-            "database": target_db or "active",
-            "items": [],
-            "message": "Database is empty."
-        }
+        # Apply range / ID filtering
+        items = all_items
+        range_label = "ALL"
+        if item_range:
+            raw_range = str(item_range).strip()
+            if "-" in raw_range:
+                try:
+                    s_str, e_str = raw_range.split("-", 1)
+                    s_id = int(s_str.strip())
+                    e_id = int(e_str.strip())
+                    items = [it for it in all_items if s_id <= getattr(it, "doc_id", 0) <= e_id]
+                    range_label = f"{s_id}-{e_id}"
+                except ValueError:
+                    return {"error": f"Invalid range '{item_range}'. Use e.g. '1-10'."}
+            else:
+                try:
+                    t_id = int(raw_range)
+                    items = [it for it in all_items if getattr(it, "doc_id", 0) == t_id]
+                    range_label = f"ID {t_id}"
+                except ValueError:
+                    return {"error": f"Invalid item filter '{item_range}'. Use e.g. '5' or '1-10'."}
 
-    # Apply range / ID filtering
-    items = all_items
-    range_label = "ALL"
-    if item_range:
-        raw_range = str(item_range).strip()
-        if "-" in raw_range:
-            try:
-                s_str, e_str = raw_range.split("-", 1)
-                s_id = int(s_str.strip())
-                e_id = int(e_str.strip())
-                items = [it for it in all_items if s_id <= getattr(it, "doc_id", 0) <= e_id]
-                range_label = f"{s_id}-{e_id}"
-            except ValueError:
-                return {"error": f"Invalid range '{item_range}'. Use e.g. '1-10'."}
-        else:
-            try:
-                t_id = int(raw_range)
-                items = [it for it in all_items if getattr(it, "doc_id", 0) == t_id]
-                range_label = f"ID {t_id}"
-            except ValueError:
-                return {"error": f"Invalid item filter '{item_range}'. Use e.g. '5' or '1-10'."}
+        total_matched = len(items)
+        items = items[:limit]
 
-    total_matched = len(items)
-    items = items[:limit]
+        records = []
+        for it in items:
+            doc_id = getattr(it, "doc_id", "N/A")
+            meta = it.get("metadata") or {}
+            raw_ts = meta.get("timestamp") or ""
+            ts_str = raw_ts[:19].replace("T", " ") if len(raw_ts) >= 19 else raw_ts
 
-    records = []
-    for it in items:
-        doc_id = getattr(it, "doc_id", "N/A")
-        meta = it.get("metadata") or {}
-        raw_ts = meta.get("timestamp") or ""
-        ts_str = raw_ts[:19].replace("T", " ") if len(raw_ts) >= 19 else raw_ts
+            model_alias = str(meta.get("model_alias") or "unknown")
+            prompt = str(meta.get("prompt") or "")
+            clean_prompt = " ".join(prompt.split())
+            prompt_snippet = clean_prompt[:40] + ("..." if len(clean_prompt) > 40 else "")
 
-        model_alias = str(meta.get("model_alias") or "unknown")
-        prompt = str(meta.get("prompt") or "")
-        clean_prompt = " ".join(prompt.split())
-        prompt_snippet = clean_prompt[:40] + ("..." if len(clean_prompt) > 40 else "")
+            content_str = str(it.get("content") or "")
+            has_think_tag = any(tag in content_str for tag in ("<think>", "<thought>", "<thinking>"))
+            if meta.get("thinking_content"):
+                think_status = "metadata"
+            elif has_think_tag:
+                think_status = "in content"
+            else:
+                think_status = "stripped"
 
-        content_str = str(it.get("content") or "")
-        has_think_tag = any(tag in content_str for tag in ("<think>", "<thought>", "<thinking>"))
-        if meta.get("thinking_content"):
-            think_status = "metadata"
-        elif has_think_tag:
-            think_status = "in content"
-        else:
-            think_status = "stripped"
+            tokens = meta.get("thinking_tokens", 0) or 0
 
-        tokens = meta.get("thinking_tokens", 0) or 0
+            records.append({
+                "id": doc_id,
+                "timestamp": ts_str,
+                "model": model_alias,
+                "prompt": prompt_snippet,
+                "thinking": think_status,
+                "thinking_tokens": tokens,
+                "type": it.get("type", "chat"),
+                "name": it.get("name", "last_chat"),
+            })
 
-        records.append({
-            "id": doc_id,
-            "timestamp": ts_str,
-            "model": model_alias,
-            "prompt": prompt_snippet,
-            "thinking": think_status,
-            "thinking_tokens": tokens,
-            "type": it.get("type", "chat"),
-            "name": it.get("name", "last_chat"),
-        })
+        if format.lower() == "json":
+            return {
+                "database": resolved_db,
+                "range": range_label,
+                "total_matched": total_matched,
+                "returned": len(records),
+                "items": records,
+            }
 
-    if format.lower() == "json":
-        return {
-            "database": target_db or "active",
-            "range": range_label,
-            "total_matched": total_matched,
-            "returned": len(records),
-            "items": records,
-        }
-
-    # Table format
-    db_label = target_db or "active"
-    hdr_title = f"DATABASE SUMMARY TABLE: {db_label} ({total_matched} items, range: {range_label})"
+        # Table format
+        db_label = resolved_db
+        hdr_title = f"DATABASE SUMMARY TABLE: {db_label} ({total_matched} items, range: {range_label})"
     line_width = 110
     lines = [
         "=" * line_width,
