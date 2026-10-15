@@ -1,0 +1,19 @@
+# Recipe 16.4 - Least-Privilege Workspace Boundaries
+# Goal: Guard sensitive paths and restrict operations to authorized project roots
+# Run: /script doc/cookbook/16_4_least_privilege_workflow.chatdsl
+
+/tool on
+/tool enable read_file,write_file
+
+# 1. Attempt writing outside project workspace (e.g. ~/.ssh or /tmp/sensitive)
+/tool inject <invoke="write_file"><parameter name="path">/etc/passwd</parameter><parameter name="content">malicious_entry</parameter></invoke>
+/tool retry run
+
+# 2. Inspect dispatch error status
+if "${TOOL_DISPATCH_EXIT_CODE}" != "0" then /echo Blocked prohibited system path write: ${TOOL_DISPATCH_ERROR}
+
+# 3. Legitimate write within allowed scratch directory
+/tool inject <invoke="write_file"><parameter name="path">scratch/safe_report.txt</parameter><parameter name="content">Authorized workspace output</parameter></invoke>
+/tool retry run
+
+if "${TOOL_DISPATCH_EXIT_CODE}" == "0" then /echo Permitted workspace write confirmed.
