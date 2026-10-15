@@ -165,7 +165,6 @@ def validate_and_route(invocation: dict[str, Any], config: dict[str, Any]) -> tu
     return func, [], args
 
 
-
 def main():
     parser = argparse.ArgumentParser(description="ChatyBot Core Local Tool Dispatcher Runtime Gateway.")
     parser.add_argument("invocation_file", help="Path to the JSON payload generated via ChatDSL.")

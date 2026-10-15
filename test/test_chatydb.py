@@ -267,7 +267,7 @@ class TestChatyDB:
         chatydb.search_db("searchable")
         chatydb.dbprint()
 
-        from src.chatybot.tools.db_tools import db_search, db_get
+        from src.chatybot.tools.db_tools import db_get, db_search
         db_search(query="searchable", db_name="readonly")
         db_get(item_id=1, db_name="readonly")
 

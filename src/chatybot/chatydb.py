@@ -102,7 +102,6 @@ def _backup_db(db_path: str, db_name: str, max_backups: int = MAX_DB_BACKUPS) ->
 
 def _backup_before_write() -> None:
     """Create a rolling snapshot of the active database before the first write in this session."""
-    global _session_backed_up_dbs
     if not _active_db_name or not _db_path:
         return
     if _active_db_name not in _session_backed_up_dbs:
