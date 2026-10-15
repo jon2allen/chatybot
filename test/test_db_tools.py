@@ -439,3 +439,36 @@ class TestDbSummary:
         finally:
             os.unlink(tmp_path)
 
+    def test_db_tools_suppress_stdout_noise(self, tmp_path, monkeypatch, capsys):
+        """Test that set_db(quiet=True) and model tools do not print 'Database set to' to stdout."""
+        def mock_ensure_db_path(name):
+            return str(tmp_path / f"{name}.json")
+
+        monkeypatch.setattr(chatydb, "_ensure_db_path", mock_ensure_db_path)
+
+        db_file = tmp_path / "quietdb.json"
+        self._create_test_db(str(db_file))
+
+        # 1. Direct set_db with quiet=True
+        chatydb.set_db("quietdb", quiet=True)
+        out1 = capsys.readouterr().out
+        assert "Database set to" not in out1
+
+        # 2. db_search with db_name
+        chatydb._manager = None
+        db_search(query="*", db_name="quietdb")
+        out2 = capsys.readouterr().out
+        assert "Database set to" not in out2
+
+        # 3. db_get with db_name
+        chatydb._manager = None
+        db_get(item_id=1, db_name="quietdb")
+        out3 = capsys.readouterr().out
+        assert "Database set to" not in out3
+
+        # 4. db_summary with db_name
+        chatydb._manager = None
+        db_summary(db_name="quietdb", format="json")
+        out4 = capsys.readouterr().out
+        assert "Database set to" not in out4
+
