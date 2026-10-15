@@ -1,0 +1,779 @@
+# RACF-Guard: Reference Binary Security Engine for Chatybot
+
+A clean-slate reference implementation in Rust for Chatybot's external binary security adapter (`StdioBinaryPolicyEngine`), modeled after the IBM z/OS **RACF** (Resource Access Control Facility) architecture.
+
+---
+
+## 1. Overview & Concept
+
+Chatybot supports pluggable security adapters via `StdioBinaryPolicyEngine`, where decisions can be delegated to an external process communicating over `stdin` and `stdout` using JSON.
+
+`racf-guard` brings mainframe-grade access control concepts to AI agent operations:
+
+- **Users (`USER`)**: System user IDs (e.g. `jon2allen`, `ci_bot`) mapped from `context.user` or the operating system login (`USER` / `LOGNAME`).
+- **Groups (`GROUP`)**: Logical security roles that are **completely decoupled from OS groups** (e.g. `DEVELOPER`, `DEVOPS`, `SYSADM`, `AUDITOR`).
+- **Resource Classes (`CLASS`)**:
+  - `FACILITY`: Tools, MCP servers, and agent capabilities (e.g. `git.status`, `run_command`, `read_file`).
+  - `DIR`: Filesystem directories and sensitive path hierarchies (e.g. `/etc/**`, `~/.ssh/**`, `/workspace/**`).
+  - `COMMAND`: Shell command patterns executed by subshells (e.g. `git *`, `rm *`, `sudo *`).
+  - `CONTENT`: File contents and payload data inspection (e.g. `*api_key*`, `*PRIVATE*KEY*`) &mdash; **an architectural innovation extending classical RACF for LLM payload & data loss prevention**.
+- **Profiles & Generic Patterns**: Supports exact discrete profiles (`git.status`) as well as generic wildcard patterns (`git.*`, `/etc/**`, `*api_key*`).
+- **Tri-State Verdicts**: RACF permissions map naturally to Chatybot's tri-state policy:
+  - `ALLOW` / `READ` / `UPDATE` / `ALTER` &rarr; `allow`
+  - `ASK` / `AUDIT` &rarr; `ask` (prompts human-in-the-loop)
+  - `DENY` / `NONE` &rarr; `deny` (blocks execution immediately)
+
+---
+
+## 2. RACF Policy Syntax (.racf)
+
+Policy rules are defined using standard RACF command syntax:
+
+```racf
+# -----------------------------------------------------------------------------
+# User & Group Role Assignments
+# -----------------------------------------------------------------------------
+ADDGROUP DEVELOPER DATA('Application Developers')
+ADDGROUP SYSADM    DATA('System Administrators')
+
+CONNECT jon2allen GROUP(DEVELOPER)
+CONNECT jon2allen GROUP(SYSADM)
+CONNECT dev_user  GROUP(DEVELOPER)
+
+# -----------------------------------------------------------------------------
+# FACILITY Class: Tools and Capabilities
+# -----------------------------------------------------------------------------
+# Set universal access (UACC) fallback for unknown facilities to ASK
+RDEFINE FACILITY * UACC(ASK)
+
+# Git facilities
+RDEFINE FACILITY git.* UACC(ASK)
+PERMIT git.status CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT git.diff   CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT git.push   CLASS(FACILITY) ID(DEVELOPER) ACCESS(ASK)
+
+# Read-only exploration tools (Connected to role groups)
+RDEFINE FACILITY read_file      UACC(ASK)
+PERMIT read_file CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
+RDEFINE FACILITY list_directory UACC(ASK)
+PERMIT list_directory CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
+
+# Tool aliases & search
+RDEFINE FACILITY view_file   UACC(ALLOW)
+RDEFINE FACILITY list_dir    UACC(ALLOW)
+RDEFINE FACILITY grep_search UACC(ALLOW)
+
+# Subshell execution
+RDEFINE FACILITY run_command CLASS(FACILITY) UACC(ASK)
+PERMIT run_command CLASS(FACILITY) ID(SYSADM) ACCESS(ALLOW)
+
+# -----------------------------------------------------------------------------
+# DIR Class: Filesystem Boundaries (Least Privilege Default-Deny)
+# -----------------------------------------------------------------------------
+# Universal fallback: Deny all filesystem access by default
+RDEFINE DIR /**             UACC(DENY)
+
+# Target prohibited file patterns (beats broad workspace allowances via specificity)
+RDEFINE DIR **/*zaragoza*   UACC(DENY)
+
+# Sensitive system protections & credential stores
+RDEFINE DIR /etc/**         UACC(DENY)
+RDEFINE DIR /sys/**         UACC(DENY)
+RDEFINE DIR /proc/**        UACC(DENY)
+RDEFINE DIR ~/.ssh/**       UACC(DENY)
+RDEFINE DIR ~/.gnupg/**     UACC(DENY)
+RDEFINE DIR ~/.aws/**       UACC(DENY)
+
+# Approved workspace zones (UACC DENY, explicit permit to DEVELOPER role)
+# Base Home Directory ONLY (single * matches files directly in ~, not subdirectories)
+RDEFINE DIR ~/*             UACC(DENY)
+PERMIT ~/*             CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
+
+# Approved Subdirectories ONLY (Specific approved workspaces)
+RDEFINE DIR ~/github/**     UACC(DENY)
+PERMIT ~/github/**     CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
+
+RDEFINE DIR ~/projects/**   UACC(DENY)
+PERMIT ~/projects/**   CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
+
+RDEFINE DIR ~/Downloads/**  UACC(DENY)
+PERMIT ~/Downloads/**  CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
+
+RDEFINE DIR **/scratch/**   UACC(DENY)
+PERMIT **/scratch/**   CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
+
+# Current workspace directory and relative paths
+RDEFINE DIR .               UACC(DENY)
+RDEFINE DIR ./**            UACC(DENY)
+PERMIT .               CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT ./**            CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
+
+# -----------------------------------------------------------------------------
+# COMMAND Class: Shell Execution Controls
+# -----------------------------------------------------------------------------
+RDEFINE COMMAND rm*    UACC(DENY)
+RDEFINE COMMAND sudo*  UACC(DENY)
+RDEFINE COMMAND git*   UACC(ALLOW)
+RDEFINE COMMAND cargo* UACC(ALLOW)
+
+# -----------------------------------------------------------------------------
+# CONTENT Class: Payload & Data Loss Prevention (LLM Security Innovation)
+# -----------------------------------------------------------------------------
+# Inspects text and code payloads during write_file, replace_file_content, etc.
+# Unmatched content defaults to ALLOW; matching profiles enforce restrictions.
+RDEFINE CONTENT *BEGIN*PRIVATE*KEY* UACC(DENY)
+RDEFINE CONTENT *api_key*           UACC(DENY)
+RDEFINE CONTENT *secret_token*      UACC(DENY)
+```
+
+---
+
+## 2.1 Deep-Dive: Process & System Inspection Safeguards (`ps`, `kill`, `lsof`)
+
+Autonomous LLM agents frequently run commands to inspect running workloads, check open network ports, or terminate processes. RACF provides two layers of defense:
+1. **`FACILITY` Class**: Authorizes the capability or tool itself (governing whether the agent has the authority to execute process management).
+2. **`COMMAND` Class**: Filters the exact shell command string and flag arguments when executed via `run_command`.
+
+### 1. Controlling `ps` (Process Inspection)
+
+#### A. Creating a `FACILITY` Class Profile for `ps`
+When `ps` is exposed as an agent tool or capability, govern it under the `FACILITY` class:
+
+```racf
+# Universal Access: Require interactive confirmation before inspecting processes
+RDEFINE FACILITY ps UACC(ASK)
+
+# Grant silent listing access to Developers and Auditors
+PERMIT ps CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT ps CLASS(FACILITY) ID(AUDITOR)   ACCESS(ALLOW)
+```
+
+For granular control, you can define hierarchical sub-facilities:
+```racf
+# Base process listing: ALLOW for developers
+RDEFINE FACILITY ps.*           UACC(ASK)
+RDEFINE FACILITY ps.list        UACC(DENY)
+PERMIT ps.list CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
+
+# Deep process inspection / tracing (analogous to IBM z/OS BPX.PTRACE): Restricted
+RDEFINE FACILITY ps.inspect     UACC(DENY)
+PERMIT ps.inspect CLASS(FACILITY) ID(SYSADM) ACCESS(ALLOW)
+```
+
+#### B. Fine-Grained `COMMAND` Flag Control via `run_command`
+When an agent calls `run_command(command="ps ...")`, RACF inspects the command string and arguments:
+* **Allow user process listings** (`ps -ef*`, `ps`)
+* **Strictly block all-user / system-wide snooping** (`ps -aef*`, `ps aux*`, `ps -A*`)
+
+```racf
+# Allow standard user-scoped process listings
+RDEFINE COMMAND ps -ef*   UACC(ALLOW)
+RDEFINE COMMAND ps        UACC(ALLOW)
+
+# Strictly block system-wide enumeration flags
+RDEFINE COMMAND ps -aef*  UACC(DENY)
+RDEFINE COMMAND ps aux*   UACC(DENY)
+RDEFINE COMMAND ps -A*    UACC(DENY)
+```
+
+Because `COMMAND:ps -aef*` has higher specificity than `COMMAND:ps*` or `COMMAND:ps -ef*`, any attempt to inspect all system processes with `-aef` or `aux` is blocked immediately, while `ps -ef` executes cleanly.
+
+---
+
+### 2. Controlling Process Termination (`kill` & `pkill`)
+
+Once an agent inspects processes, it often attempts to terminate them. Unconstrained `kill` commands pose a severe availability risk (an agent might terminate database daemons, Docker runtime, or host processes).
+
+#### A. Creating a `FACILITY` Class Profile for `kill`
+```racf
+# Default: Deny process termination by default
+RDEFINE FACILITY kill UACC(DENY)
+
+# Only administrators may terminate processes, requiring confirmation
+PERMIT kill CLASS(FACILITY) ID(SYSADM) ACCESS(ASK)
+```
+
+#### B. Fine-Grained `COMMAND` Guardrails via `run_command`
+When executing through `run_command`, RACF blocks mass-kill patterns while allowing targeted, confirmed actions:
+
+```racf
+# Require confirmation before terminating any specific process PID
+RDEFINE COMMAND kill*       UACC(ASK)
+RDEFINE COMMAND pkill*      UACC(ASK)
+
+# Outright block catastrophic mass-kill patterns
+RDEFINE COMMAND killall*    UACC(DENY)
+RDEFINE COMMAND pkill -9*   UACC(DENY)
+RDEFINE COMMAND kill -9 -1* UACC(DENY)
+```
+
+---
+
+### 3. Controlling Network Socket Inspection (`lsof` & `netstat`)
+
+Similarly, agents often attempt network reconnaissance to find open ports and listening sockets:
+
+```racf
+# Allow checking a specific local development port (e.g. `lsof -i :8080`)
+RDEFINE COMMAND lsof -i :* UACC(ALLOW)
+
+# Require confirmation for full socket and port enumeration
+RDEFINE COMMAND lsof*      UACC(ASK)
+RDEFINE COMMAND netstat*   UACC(ASK)
+RDEFINE COMMAND ss*        UACC(ASK)
+```
+
+---
+
+## 3. Evaluation Precedence
+
+When Chatybot evaluates an action, `racf-guard` evaluates all relevant resource classes (`FACILITY`, plus `DIR` for file paths, plus `COMMAND` for shell executions):
+
+1. **Profile Resolution**:
+   - Discrete profiles (exact match) always take precedence over generic wildcard profiles.
+   - For generic matches, the most specific profile (longest matching pattern) wins.
+2. **Access Level Evaluation**:
+   1. **Individual User Permit**: If the user has an explicit `PERMIT ... ID(<user>)`, it is applied immediately.
+   2. **Group Permits**: If any group the user belongs to has an explicit `PERMIT ... ID(<group>)`, the user inherits group access (highest privilege wins: `ALLOW` > `ASK` > `DENY`).
+   3. **Profile UACC**: If no individual or group permit exists on the winning profile, the profile's Universal Access (`UACC`) is applied.
+   4. **Class Default**: If no profile matches, access is `DENY`.
+3. **Compound Decision**:
+   - If **any** evaluated resource is `DENY`, the overall decision is `DENY`.
+   - Else if **any** evaluated resource is `ASK`, the overall decision is `ASK`.
+   - If all resources are `ALLOW`, the overall decision is `ALLOW`.
+
+---
+
+## 4. Building the Binary
+
+### Requirements
+- Rust toolchain (`cargo` and `rustc` 1.75+)
+
+### Compilation
+```bash
+cd tools/racf-guard
+cargo build --release
+```
+The compiled binary is placed at `tools/racf-guard/target/release/racf-guard`.
+
+---
+
+## 5. Setup & Database Seeding
+
+### Is the Database Empty or Seeded?
+
+`racf-guard` includes multiple pre-configured policy templates under `examples/` derived directly from integration tests:
+
+1. **Full Reference Database (`examples/security.racf`)**:
+   - Comprehensive policy template containing standard roles (`DEVELOPER`, `DEVOPS`, `SYSADM`, `AUDITOR`), Git tool permissions, read-only allowances, process safeguards (`ps`, `kill`, `lsof`), destructive command blocks (`rm*`, `sudo*`), and directory locks (`/etc/**`, `~/.ssh/**`).
+   - **Embedded Compiled Fallback**: If `racf-guard` is run with no policy file specified and none discovered on disk, the binary automatically falls back to an embedded baseline policy so it remains functional out of the box.
+
+2. **Restrictive Directory Isolation (`examples/restrictive_dir.racf`)**:
+   - Derived from `test_racf_default_deny_least_privilege`.
+   - Implements strict **least privilege**: global default deny across `DIR:/** UACC(DENY)`.
+   - Explicit sensitive blocks for `~/.ssh/**`, `~/.aws/**`, `**/.env*`, and leaf patterns like `**/*zaragoza*`.
+   - Whitelists only approved developer zones: `~/*` (home top-level files), `~/github/**`, `~/projects/**`, and `**/scratch/**`.
+
+3. **Process & Command Controls (`examples/process_control.racf`)**:
+   - Derived from `test_racf_directory_and_command_checks`.
+   - Demonstrates dual-layer defense with `FACILITY` (authorizing process management tools) and `COMMAND` (fine-grained argument inspection).
+   - Allows user-scoped queries (`COMMAND:ps -ef*`, `COMMAND:ps`), while strictly denying system-wide process enumeration (`COMMAND:ps -aef*`, `COMMAND:ps aux*`, `COMMAND:ps -A*`).
+   - Restricts process termination: prompts for targeted PIDs (`kill*` -> `ASK`) and outright denies destructive mass kills (`killall*`, `pkill -9*`, `kill -9 -1*`).
+   - Permits developer port checks (`COMMAND:lsof -i :*` -> `ALLOW`) while requiring confirmation for broad network scanning.
+
+4. **Clean-Slate / Custom Policy**:
+   - You can create your own `.racf` file from scratch.
+   - If an empty or minimal `.racf` file is provided, `racf-guard` begins in a **strict fail-closed state**: any resource class (`FACILITY`, `DIR`, `COMMAND`) that has no matching profile defaults to **`DENY`**.
+
+### How Policies Are Discovered & Loaded
+
+When invoked, `racf-guard` searches for its policy definition in the following order of precedence:
+
+1. **CLI Argument**: `--policy /path/to/policy.racf` (or `-p <path>`)
+2. **Environment Variable**: `RACF_POLICY_PATH=/path/to/policy.racf`
+3. **Local File Auto-Discovery**: Checks candidate paths:
+   - `./security.racf`
+   - `./examples/security.racf`
+   - `tools/racf-guard/examples/security.racf`
+4. **Embedded Seed Fallback**: Internal default rules compiled directly into the binary.
+
+### Quick Setup (Automated)
+
+Run the one-shot setup script, which builds the binary, copies the seed policy, connects your OS user to the DEVELOPER group, and patches `security.toml`:
+
+```bash
+cd tools/racf-guard
+./setup.sh
+```
+
+This handles all four steps below automatically. Use the manual steps only if you need custom control.
+
+### Quick Setup (Manual)
+
+#### Step 1: Compile the binary
+```bash
+cd tools/racf-guard
+cargo build --release
+```
+
+#### Step 2: Customize or copy the seed policy
+```bash
+# Optional: Copy the reference seed policy to your user configuration
+mkdir -p ~/.config/chatybot
+cp tools/racf-guard/examples/security.racf ~/.config/chatybot/security.racf
+
+# Add your username to the DEVELOPER or SYSADM group in ~/.config/chatybot/security.racf:
+# CONNECT <your-username> GROUP(DEVELOPER)
+```
+
+#### Step 3: Verify the active rules
+```bash
+./target/release/racf-guard --policy ~/.config/chatybot/security.racf --list-rules
+```
+
+### Username Resolution
+
+`racf-guard` must know which user is making each tool request to evaluate group memberships and permits. The user identity is resolved in this order:
+
+1. **Request context**: `context.user` in the JSON payload sent by Chatybot (highest priority)
+2. **`$USER`** environment variable
+3. **`$LOGNAME`** environment variable
+4. **`$USERNAME`** environment variable
+5. **`"DEFAULT"`** fallback (lowest priority -- has no group memberships)
+
+If the resolved user is not connected to any RACF group via `CONNECT <user> GROUP(...)`, all `UACC(DENY)` profiles will block access. This is the most common setup failure: the seed policy ships with `CONNECT jon2allen GROUP(DEVELOPER)` hardcoded -- you must replace or supplement this with your own OS username.
+
+To check which user racf-guard sees:
+```bash
+echo '{"tool":"git.status"}' | ./target/release/racf-guard --policy ~/.config/chatybot/security.racf --debug 2>&1 | head -2
+```
+The debug trace's first line shows `User: '<resolved-name>'`. If it says `DEFAULT`, add a `CONNECT` line for your username to the policy file.
+
+---
+
+## 6. CLI Testing & Auditing
+
+### Listing & Auditing All Rules
+You can inspect the entire loaded security database, including all defined groups, user connects, resource classes, profiles (discrete vs generic), UACCs, and ACL permits:
+
+```bash
+./target/release/racf-guard --list-rules
+# or alias
+./target/release/racf-guard -l
+```
+
+### CLI Testing & Dry Run with Debug Tracing
+You can evaluate access rights directly from the terminal without launching Chatybot:
+
+```bash
+# Check git.status for user jon2allen
+./target/release/racf-guard --check --tool git.status --user jon2allen
+
+# Run with verbose filtering trace showing evaluation decisions step-by-step
+./target/release/racf-guard --check --tool git.status --user jon2allen --debug
+```
+
+### Stdio JSON Protocol & Debug Trace Forwarding
+`racf-guard` communicates with Chatybot via standard JSON stdin/stdout. When Chatybot runs with `--security`, it passes `--debug` (or `context.debug = true`) to the binary. The binary writes its detailed filtering trace to `stderr`, where Chatybot surfaces it as `[Security Debug] [External Binary] ...`:
+
+```bash
+echo '{"tool":"git.status","context":{"user":"jon2allen","debug":true}}' | ./target/release/racf-guard
+```
+
+Output to `stdout`:
+```json
+{"status":"allow","reason":"RACF access permitted: User 'jon2allen' granted ALLOW via group 'DEVELOPER' on FACILITY:git.status"}
+```
+
+---
+
+### Administrative Commands & Persistence (With Automated Backup)
+
+You can mutate the RACF security database directly from the CLI. Because policy updates occur infrequently, `racf-guard` uses **Option 1 persistence with automated safety backups**:
+
+1. **Safety Backup First**: Before appending or modifying the `.racf` file, a backup copy (`<filename>.bak`) is automatically created.
+2. **Integrity Validation & Rollback**: The new statement is validated before write. If parsing fails, the original file is automatically restored from `<filename>.bak`.
+
+#### 1. Connect a User to a Group
+```bash
+./target/release/racf-guard connect alice --group DEVELOPER
+```
+Output:
+```text
+[RACF Admin] Created backup copy: 'examples/security.racf.bak'
+[RACF Admin] Persisted statement to 'examples/security.racf':
+  CONNECT alice GROUP(DEVELOPER)
+[RACF Admin] Database reloaded successfully (4 groups, 41 profiles).
+```
+
+#### 2. Define a Resource Profile (RDEFINE)
+```bash
+./target/release/racf-guard rdefine COMMAND "curl*" --uacc ASK
+```
+
+#### 3. Permit Access (PERMIT)
+```bash
+./target/release/racf-guard permit git.push --class FACILITY --id DEVELOPER --access ALLOW
+```
+
+#### 4. Add a Role Group (ADDGROUP)
+```bash
+./target/release/racf-guard addgroup SRE --data "Site Reliability Engineers"
+```
+
+#### 5. Execute Raw RACF Statement
+```bash
+./target/release/racf-guard exec "PERMIT ~/.ssh/** CLASS(DIR) ID(SYSADM) ACCESS(ASK)"
+```
+Output to `stderr`:
+```text
+[RACF Debug] Begin request evaluation (Tool: 'git.status', User: 'jon2allen')
+[RACF Debug] User 'jon2allen' connected groups: [SYSADM, DEVELOPER]
+[RACF Debug] Evaluating Class 'FACILITY', Resource 'git.status' for User 'jon2allen'
+[RACF Debug] ├─ Matched 3 profile(s). Best match: 'git.status' (Discrete, score: 100010)
+[RACF Debug] ├─ No direct permit for user 'jon2allen' on profile 'git.status'
+[RACF Debug] ├─ Checking group permits for user's groups: [SYSADM, DEVELOPER]
+[RACF Debug] ├─ Found group permit: GROUP('DEVELOPER') -> ACCESS(ALLOW)
+[RACF Debug] └─ Effective group access: GROUP('DEVELOPER') -> ACCESS(ALLOW)
+[RACF Debug] Composite Verdict: ALLOW (All checks passed)
+```
+
+---
+
+## 7. Integrating with Chatybot
+
+To configure Chatybot to use `racf-guard`, update your `~/.config/chatybot/security.toml`.
+Keys are read from the **top level** of the TOML file (not under a `[security]` section):
+
+```toml
+engine = "binary"
+fail_safe = "deny"
+
+[binary]
+# Use an absolute path to the compiled binary
+path = "/home/youruser/github/chatybot/tools/racf-guard/target/release/racf-guard"
+args = ["--policy", "/home/youruser/.config/chatybot/security.racf"]
+timeout_seconds = 2.0
+```
+
+> **Note:** The `enabled` flag is controlled via the `--no-security` CLI argument, not via the TOML file.
+> Use an absolute path for both `path` and the `--policy` argument to avoid CWD-dependent resolution issues.
+
+---
+
+## 8. Repository & Packaging Isolation (Option 1)
+
+`racf-guard` lives in `tools/racf-guard/` as a standalone reference crate:
+- **Zero Impact on PyPI Packages**: Standard wheel builds for `chatybot` only package files under `src/chatybot/`. Users installing via `pip install chatybot` do not require Rust or any compiled binaries.
+- **Opt-in Reference**: Developers or security teams wanting a hardened compiled policy engine can build `racf-guard` locally or distribute it as a pre-built binary asset.
+
+---
+
+# Appendix A - Chatybot RACF
+
+This appendix provides a comprehensive technical guide to the RACF (Resource Access Control Facility) architecture implemented in `racf-guard`.
+
+---
+
+## A.1 Background & Design Philosophy
+
+For decades in mainframe computing (IBM OS/390 and z/OS), **RACF** has served as the gold standard for enterprise authorization and resource protection. Modern LLM-based autonomous agents face security challenges that closely mirror enterprise multi-user mainframes:
+
+1. **Unbounded Capabilities**: Agents execute arbitrary tools, inspect filesystem paths, and spawn shell subshells.
+2. **Identity Decoupling**: The operating system identity (`jon2allen`, `ci_bot`) must be separated from organizational roles and responsibilities.
+3. **Auditability & Determinism**: Security decisions must be reproducible, auditable, and mathematically deterministic without relying on non-deterministic LLM self-policing.
+
+Chatybot RACF adapts these principles into a high-performance, fail-closed Rust policy engine that integrates seamlessly with Chatybot's pluggable `StdioBinaryPolicyEngine`.
+
+---
+
+## A.2 The RACF Entity Model
+
+```mermaid
+graph TD
+    User["System User (jon2allen)"] -->|"CONNECT"| GroupDev["Group: DEVELOPER"]
+    User -->|"CONNECT"| GroupAdm["Group: SYSADM"]
+    
+    GroupDev -->|"PERMIT ALLOW"| ProfGit["FACILITY: git.*"]
+    GroupDev -->|"PERMIT ALLOW"| ProfEdit["FACILITY: write_to_file"]
+    GroupAdm -->|"PERMIT ALLOW"| ProfCmd["FACILITY: run_command"]
+    
+    ProfGit --> Eval["RACF Evaluation Engine"]
+    ProfEdit --> Eval
+    ProfCmd --> Eval
+    
+    Eval -->|"Compound Decision"| Verdict["Verdict (ALLOW / ASK / DENY)"]
+```
+
+### 1. Users (`USER`)
+- **Identification**: Mapped from the system username (e.g., `$USER`, `whoami`) or passed explicitly in Chatybot's execution context (`context.user`).
+- **Characteristics**: Users are entities that execute actions. A user can possess direct, individualized permissions, but typically inherits rights through group memberships.
+
+### 2. Groups (`GROUP`)
+- **Logical Roles**: RACF groups are **completely independent of Unix/OS groups**. You define arbitrary organizational roles such as `DEVELOPER`, `SYSADM`, `DEVOPS`, `SECURITY`, or `AUDITOR`.
+- **Command**: `ADDGROUP <GROUP_NAME> [DATA('<description>')]`
+
+### 3. Connects (`CONNECT`)
+- **Membership**: Associates a user with one or more groups.
+- **Multi-Group Inheritance**: A user connected to multiple groups inherits permissions from all of them. When multiple groups grant conflicting access levels on a profile, the highest granted privilege wins (`ALLOW` > `ASK` > `DENY`).
+- **Command**: `CONNECT <USER_ID> GROUP(<GROUP_NAME>)`
+
+### 4. Resource Classes (`CLASS`)
+Resources are partitioned into logical classes to prevent namespace collisions:
+
+| Class | Purpose | Examples | Evaluated Fields |
+|---|---|---|---|
+| `FACILITY` | Tool, API, and MCP capabilities | `git.status`, `run_command`, `write_file` | `request.tool` |
+| `DIR` | Filesystem directories & path hierarchies | `/etc/**`, `~/.ssh/**`, `/tmp/**` | `path`, `filepath`, `target`, `cwd`, `directory` |
+| `COMMAND` | Subshell command execution strings | `git *`, `rm *`, `sudo *`, `pytest *` | `command`, `cmd`, `CommandLine` |
+| `PS` | Process and task management | `task.*`, `process.kill` | `action`, `task_id` |
+
+### 5. Profiles: Discrete vs Generic
+- **Discrete Profiles**: An exact string match without wildcard characters (e.g., `git.status`, `/etc/hosts`, `run_command`). Discrete profiles always take precedence over generic profiles.
+- **Generic Profiles**: Contain wildcards (`*`, `**`, `?`) matching sets of resources:
+  - In `DIR` classes: `*` matches a single directory segment; `**` matches recursively across directories (e.g., `/etc/**`).
+  - In `FACILITY` and `COMMAND` classes: `*` matches any character sequence, including spaces and slashes (e.g., `rm*`, `git.*`).
+
+### 6. Universal Access (`UACC`)
+Every profile defines a Universal Access fallback (`UACC`):
+- Applied when a user or group does not have an explicit `PERMIT` entry on that profile.
+- Syntax: `RDEFINE <CLASS> <PROFILE> UACC(ALLOW | ASK | DENY)`
+
+### 7. Access Levels & Verdict Mapping
+Chatybot RACF maps mainframe access levels to Chatybot's tri-state verdicts:
+
+| RACF Statement Level | Mainframe Synonyms | Chatybot Verdict | Engine Behavior |
+|---|---|---|---|
+| `ALLOW` | `READ`, `UPDATE`, `CONTROL`, `ALTER` | `allow` | Tool executes silently without interruption |
+| `ASK` | `AUDIT`, `PROMPT` | `ask` | Halts execution and displays human confirmation prompt |
+| `DENY` | `NONE` | `deny` | Immediately blocks execution with audit reason |
+
+---
+
+## A.3 The 5-Step Evaluation Algorithm
+
+When Chatybot submits a tool invocation request, `racf-guard` evaluates each relevant resource class according to strict IBM RACF precedence:
+
+```mermaid
+flowchart TD
+    Start["Incoming Tool Evaluation"] --> FindProfs["1. Find Matching Profiles in Class"]
+    FindProfs --> HasMatch{"Any Profile Matched?"}
+    HasMatch -- No --> ClassDef["Return Class Default: DENY"]
+    HasMatch -- Yes --> BestProf["Sort by Specificity Score: Discrete > Generic (Longest Prefix)"]
+    
+    BestProf --> UserPermit{"2. Direct User Permit in Profile ACL?"}
+    UserPermit -- Yes --> ReturnUser["Return User Access Level"]
+    UserPermit -- No --> GroupPermit{"3. Any Connected Group in Profile ACL?"}
+    
+    GroupPermit -- Yes --> BestGroup["Pick Highest Group Privilege (ALLOW > ASK > DENY)"]
+    GroupPermit -- No --> CheckUacc["4. Fallback to Profile UACC"]
+    
+    ReturnUser --> CompCheck["Compound Decision Across All Classes"]
+    BestGroup --> CompCheck
+    CheckUacc --> CompCheck
+    ClassDef --> CompCheck
+    
+    CompCheck --> Final{"Any DENY? -> DENY\nElse Any ASK? -> ASK\nElse -> ALLOW"}
+```
+
+### Specificity Scoring
+To determine which profile wins when multiple patterns match:
+- **Discrete Exact Match**: Base score $100,000 + \text{length}$.
+- **Generic Wildcard Match**: $(\text{literal characters} \times 10) + \text{length}$.
+- Example: For resource `git.status`, matching profiles rank:
+  1. `git.status` (Discrete, score: 100,010) &larr; **Winner**
+  2. `git.*` (Generic, score: 45)
+  3. `*` (Generic, score: 1)
+
+- **Targeted File Protection Example (`zaragoza.md`)**:
+  When a policy broadly allows relative workspace files (`RDEFINE DIR ./** UACC(ALLOW)`), but you want to prohibit any file containing `zaragoza` in its name, define:
+  ```racf
+  RDEFINE DIR **/*zaragoza* UACC(DENY)
+  ```
+  When accessing `zaragoza.md`, both `./**` (score: 4) and `**/*zaragoza*` (score: 93) match. Because `**/*zaragoza*` has 8 literal characters (`zaragoza`), its specificity score is higher, so it **wins** the evaluation and enforces `DENY`.
+
+### Innovation: The `CONTENT` Resource Class for LLM Security Adaptation
+
+> [!NOTE]
+> **LLM Security Innovation**: In traditional mainframe RACF, resources represent discrete external entities (datasets, tape volumes, transactions, terminal facilities). However, autonomous AI agents generate unstructured, arbitrary **content payloads** (code, configuration files, environment variables, markdown) that can inadvertently exfiltrate credentials, write private keys, or inject dangerous code.
+
+To adapt RACF for generative AI operations, `racf-guard` introduces the **`CONTENT`** resource class as a first-class citizen:
+
+1. **Automatic Payload Extraction**:
+   When an agent invokes file-modifying tools (`write_file`, `replace_file_content`, `multi_replace_file_content`, `patch_file`), `racf-guard` automatically extracts string payloads from parameters such as `content`, `text`, `code_content`, and `ReplacementChunks`.
+
+2. **Dual Multi-Line and Single-Line Inspection**:
+   Wildcard patterns (e.g. `*BEGIN*PRIVATE*KEY*`, `*api_key*`) are evaluated both across the full multi-line payload and line-by-line, matching leaked tokens regardless of indentation, surrounding code, or formatting.
+
+3. **Safe Default with Targeted Blacklists**:
+   Unlike file paths where unmatched directories default to `DENY`, the `CONTENT` class defaults unmatched content to `ALLOW`. Safe, benign code and documentation pass through without friction, while matching credential signatures or prohibited content patterns enforce hard `DENY` or `ASK`.
+
+---
+
+## A.4 RACF Command Syntax Reference
+
+### 1. `ADDGROUP`
+Defines a new logical group role.
+```racf
+ADDGROUP <GROUP_NAME> [DATA('<DESCRIPTION>')]
+```
+*Example:*
+```racf
+ADDGROUP DEVELOPER DATA('Core Software Developers')
+ADDGROUP SYSADM    DATA('System Administrators')
+```
+
+### 2. `CONNECT`
+Associates a user with a group.
+```racf
+CONNECT <USER_ID> GROUP(<GROUP_NAME>)
+```
+*Example:*
+```racf
+CONNECT jon2allen GROUP(DEVELOPER)
+CONNECT jon2allen GROUP(SYSADM)
+```
+
+### 3. `RDEFINE`
+Defines a resource profile and sets its Universal Access fallback (`UACC`).
+```racf
+RDEFINE <CLASS> <PROFILE_PATTERN> [UACC(ALLOW | ASK | DENY)]
+```
+*Example:*
+```racf
+RDEFINE FACILITY git.*        UACC(ASK)
+RDEFINE DIR      /etc/**      UACC(DENY)
+RDEFINE COMMAND  rm*          UACC(DENY)
+RDEFINE FACILITY view_file    UACC(ALLOW)
+```
+
+### 4. `PERMIT`
+Grants or restricts access for a specific user or group on a profile.
+```racf
+PERMIT <PROFILE_PATTERN> CLASS(<CLASS>) ID(<USER_OR_GROUP>) ACCESS(ALLOW | ASK | DENY)
+```
+*Example:*
+```racf
+PERMIT git.*       CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT git.push    CLASS(FACILITY) ID(DEVELOPER) ACCESS(ASK)
+PERMIT /etc/hosts  CLASS(DIR)      ID(SYSADM)    ACCESS(ASK)
+PERMIT run_command CLASS(FACILITY) ID(SYSADM)    ACCESS(ALLOW)
+```
+
+---
+
+## A.5 Administrative CLI Cheatsheet
+
+| Task | Command |
+|---|---|
+| **Audit All Rules** | `racf-guard --list-rules` (or `-l`) |
+| **Simulate Evaluation** | `racf-guard --check --tool git.status --user alice` |
+| **Trace Evaluation Logic** | `racf-guard --check --tool git.status --user alice --debug` |
+| **Connect User to Group** | `racf-guard connect <user> --group <group>` |
+| **Permit Tool to Role** | `racf-guard permit <profile> --class FACILITY --id <role> --access ALLOW` |
+| **Lock Directory** | `racf-guard rdefine DIR "/sensitive/**" --uacc DENY` |
+| **Block Specific File Pattern** | `racf-guard rdefine DIR "**/*zaragoza*" --uacc DENY` |
+| **Block Secret Leaks in Payloads** | `racf-guard rdefine CONTENT "*api_key*" --uacc DENY` |
+| **Block Shell Command** | `racf-guard rdefine COMMAND "curl*" --uacc ASK` |
+| **Filter Process Listings** | `racf-guard rdefine COMMAND "ps -ef*" --uacc ALLOW && racf-guard rdefine COMMAND "ps -aef*" --uacc DENY` |
+| **Block Mass Process Kills** | `racf-guard rdefine COMMAND "killall*" --uacc DENY && racf-guard rdefine COMMAND "pkill -9*" --uacc DENY` |
+| **Execute Raw Statement** | `racf-guard exec "PERMIT git.diff CLASS(FACILITY) ID(DEV) ACCESS(ALLOW)"` |
+
+> [!NOTE]
+> All CLI mutation commands automatically generate a timestamped `<filename>.bak` backup before altering the policy on disk and roll back immediately if validation fails.
+
+---
+
+## A.6 Production Policy Blueprints
+
+### Blueprint 1: Standard Developer Workstation
+```racf
+# Groups
+ADDGROUP DEVELOPER DATA('Standard Dev Workspace')
+CONNECT jon2allen GROUP(DEVELOPER)
+
+# Tools
+RDEFINE FACILITY * UACC(ASK)
+RDEFINE FACILITY view_file UACC(ALLOW)
+RDEFINE FACILITY list_dir  UACC(ALLOW)
+RDEFINE FACILITY grep_search UACC(ALLOW)
+
+# Git Operations
+RDEFINE FACILITY git.* UACC(ASK)
+PERMIT git.status CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT git.diff   CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT git.log    CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT git.fetch  CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT git.commit CLASS(FACILITY) ID(DEVELOPER) ACCESS(ASK)
+PERMIT git.push   CLASS(FACILITY) ID(DEVELOPER) ACCESS(ASK)
+
+# Filesystem Boundaries
+RDEFINE DIR /etc/**         UACC(DENY)
+RDEFINE DIR /sys/**         UACC(DENY)
+RDEFINE DIR ~/.ssh/**       UACC(DENY)
+RDEFINE DIR ~/.aws/**       UACC(DENY)
+RDEFINE DIR /Users/**       UACC(ALLOW)
+RDEFINE DIR /tmp/**         UACC(ALLOW)
+
+# Shell Guardrails
+RDEFINE COMMAND rm*         UACC(DENY)
+RDEFINE COMMAND sudo*       UACC(DENY)
+RDEFINE COMMAND git*        UACC(ALLOW)
+RDEFINE COMMAND cargo*      UACC(ALLOW)
+RDEFINE COMMAND pytest*     UACC(ALLOW)
+```
+
+### Blueprint 2: Automated CI/CD Headless Runner
+```racf
+# Groups
+ADDGROUP CI_RUNNER DATA('Headless CI Agent')
+CONNECT ci_bot GROUP(CI_RUNNER)
+
+# Strictly limited tools
+RDEFINE FACILITY * UACC(DENY)
+RDEFINE FACILITY view_file   UACC(DENY)
+RDEFINE FACILITY list_dir    UACC(DENY)
+RDEFINE FACILITY run_command UACC(DENY)
+PERMIT view_file   CLASS(FACILITY) ID(CI_RUNNER) ACCESS(ALLOW)
+PERMIT list_dir    CLASS(FACILITY) ID(CI_RUNNER) ACCESS(ALLOW)
+PERMIT run_command CLASS(FACILITY) ID(CI_RUNNER) ACCESS(ALLOW)
+
+# Path and Command Whitelist
+RDEFINE DIR /build/**   UACC(DENY)
+PERMIT /build/** CLASS(DIR) ID(CI_RUNNER) ACCESS(ALLOW)
+
+RDEFINE COMMAND *       UACC(DENY)
+RDEFINE COMMAND pytest* UACC(ALLOW)
+RDEFINE COMMAND cargo*  UACC(ALLOW)
+```
+
+---
+
+## A.7 Troubleshooting & Debugging
+
+### Interpreting Debug Trace Output
+When running Chatybot with `--security` (or testing via `racf-guard --debug`), look for the step indicators in `stderr`:
+
+```text
+[RACF Debug] Begin request evaluation (Tool: 'git.status', User: 'jon2allen')
+[RACF Debug] User 'jon2allen' connected groups: [SYSADM, DEVELOPER]
+[RACF Debug] Evaluating Class 'FACILITY', Resource 'git.status' for User 'jon2allen'
+[RACF Debug] ├─ Matched 3 profile(s). Best match: 'git.status' (Discrete, score: 100010)
+[RACF Debug] ├─ No direct permit for user 'jon2allen' on profile 'git.status'
+[RACF Debug] ├─ Checking group permits for user's groups: [SYSADM, DEVELOPER]
+[RACF Debug] ├─ Found group permit: GROUP('DEVELOPER') -> ACCESS(ALLOW)
+[RACF Debug] └─ Effective group access: GROUP('DEVELOPER') -> ACCESS(ALLOW)
+[RACF Debug] Composite Verdict: ALLOW (All checks passed)
+```
+
+- `Matched N profile(s)`: Lists how many profiles matched and which one won based on specificity.
+- `No direct permit`: Confirms whether the individual user override was triggered.
+- `Found group permit`: Shows which role group granted or restricted the access level.
+- `Composite Verdict`: Summarizes the final outcome across all evaluated classes (`FACILITY`, `DIR`, `COMMAND`).
+
+### Restoring from Backup
+If a manual edit damages your policy file:
+```bash
+cp examples/security.racf.bak examples/security.racf
+./target/release/racf-guard --list-rules
+```

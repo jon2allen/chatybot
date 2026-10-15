@@ -1,0 +1,132 @@
+# ==============================================================================
+# ChatyBot Pluggable Security Policy Configuration Example
+# File: src/chatybot/security/default_security.toml
+# Copied/Created at: ~/.config/chatybot/security.toml
+# Independent of tools_config.toml and ChatDSL scripts
+# ==============================================================================
+
+version = "1.0"
+
+# Active policy evaluation engine:
+# Options: "builtin" (in-process Python) | "binary" (external CLI/Rust)
+engine = "builtin"
+
+# Fail-safe behavior if an external engine crashes or times out: "deny" | "ask"
+fail_safe = "deny"
+
+# Resolution for ASK verdicts when running non-interactively (scripts / headless) without -y:
+# Options: "deny" (safe default, fail-fast) | "allow"
+non_interactive_ask = "deny"
+
+
+# ------------------------------------------------------------------------------
+# Built-in Engine Configuration
+# ------------------------------------------------------------------------------
+[builtin]
+# Fallback verdict for unrecognized tools not governed by rules: "ask" | "deny" | "allow"
+default_verdict = "ask"
+
+# ------------------------------------------------------------------------------
+# Security DSL Rules (Evaluated deny-overrides by tier: deny > ask > allow > baseline. Within a tier, first match wins.)
+# Syntax: <Action> <ToolTarget> <Condition> [because "<Reason>"]
+# ------------------------------------------------------------------------------
+dsl_rules = [
+    # --- Security Policy Self-Protection (Tier 1 DENY) ---
+    "deny read file with 'security.toml' in it because 'security configuration is protected'",
+    "deny write file with 'security.toml' in it because 'security configuration is protected'",
+    "deny read file with 'racf' in it because 'security policy rules are protected'",
+    "deny write file with 'racf' in it because 'security policy rules are protected'",
+    "deny delete file with 'security.toml' in it",
+    "deny delete file with 'racf' in it",
+
+    # --- Sensitive File & Secret Guards ---
+    "do not read file with api_key in it",
+    "never read file with id_rsa in it",
+    "never write file ending with .env",
+    "block write file with token in it",
+    
+    # --- Safe File Allow-Lists ---
+    "allow read file ending with .md because 'documentation files are always safe'",
+    "allow read file ending with .txt",
+    
+    # --- Command Execution Safeguards ---
+    "ask before run command with sudo",
+    "deny run command with mkfs in it",
+    "deny run command with 'rm -rf' in it",
+    "deny run command with ':(){ :|:& };:' in it",
+    "deny run command matching '(?:^|[;&|`\\n\\r])\\s*(?:[^\\s;&|`\\n\\r]*/)?chatybot(?:\\.py)?(?:\\s+|$)|(?:^|[;&|`\\n\\r])\\s*python[0-9.]*\\s+-m\\s+chatybot(?:\\s+|$)' because 'prevent recursive sub-agent execution and privilege escalation'",
+
+    # --- Git Destructive Safeguards (Tier 1 DENY) ---
+    "deny run command with 'git reset --hard' in it because 'destructive git reset can discard uncommitted changes'",
+    "deny run command with 'git clean -f' in it because 'destructive git clean removes untracked files'",
+    "deny run command with 'git push --force' in it because 'destructive force push can overwrite remote history'",
+    "deny run command with 'git diff --no-index' in it because 'arbitrary path diffing bypasses filesystem protections'",
+    "deny run command matching '\\bgit\\s+branch\\s+.*-[dD]' because 'destructive git branch deletion discards branch history'",
+    "deny run command matching '\\bgit\\s+(?:show|diff)\\s+[^\\s]*:(?:.*\\.env|.*id_rsa|.*token|.*api_key|.*secret|.*security\\.toml|.*\\.racf)' because 'prevent secret or security policy disclosure from git history'",
+
+    # --- Shell Chaining & Compound Command Guards (Tier 2 ASK overrides Tier 3 ALLOW) ---
+    "ask before run command with '&&' in it",
+    "ask before run command with ';' in it",
+    "ask before run command with '|' in it",
+    "ask before run command with '$(' in it",
+    "ask before run command with '`' in it",
+    "ask before run command with '\\n' in it",
+
+    # --- Git Mutation Safeguards (Tier 2 ASK overrides Tier 3 ALLOW) ---
+    "ask before run command matching '\\bgit\\s+remote\\s+(?:add|set-url|rename|rm|remove)\\b' because 'modifying git remotes requires user confirmation'",
+    "ask before run command matching '\\bgit\\s+branch\\s+.*-[mM]' because 'renaming git branches requires user confirmation'",
+
+    # --- Safe Read-Only Git Allow-List (Tier 3 ALLOW) ---
+    "allow run command starting with 'git status'",
+    "allow run command starting with 'git diff'",
+    "allow run command starting with 'git log'",
+    "allow run command starting with 'git show'",
+    "allow run command matching '^git\\s+branch(?:\\s+(?:-[arvV]+|--(?:list|all|remotes|show-current|verbose)))*\\s*$' because 'read-only git branch listing is safe'",
+    "allow run command starting with 'git rev-parse'",
+    "allow run command matching '^git\\s+remote(?:\\s+(?:-v|--verbose|show(?:\\s+\\S+)?|get-url\\s+\\S+))?\\s*$' because 'read-only git remote inspection is safe'",
+    "allow run command starting with 'git ls-files'",
+
+    # --- Directory Deletion & Modification ---
+    "deny delete file in /var",
+    "deny delete file in /etc",
+    "ask before delete file",
+    "ask before remove directory",
+]
+
+# ------------------------------------------------------------------------------
+# Baseline File System Path Restrictions (Always Denied)
+# ------------------------------------------------------------------------------
+[builtin.path_restrictions]
+denied_paths = [
+    "/etc",
+    "/var/root",
+    "/boot",
+    "/System",
+    "~/.ssh",
+    "~/.gnupg",
+    "~/.aws",
+]
+
+# ------------------------------------------------------------------------------
+# Catastrophic Shell Patterns (Always Denied for run_command)
+# ------------------------------------------------------------------------------
+[builtin.command_rules]
+denied_patterns = [
+    "rm -rf /",
+    "rm -rf /*",
+    ":(){ :|:& };:",
+    "mkfs",
+    "dd if=/dev/zero",
+    "> /dev/sda",
+    "> /dev/disk",
+]
+
+# ==============================================================================
+# External Engine Configuration (Used when engine = "binary")
+# ==============================================================================
+
+# External Binary / CLI Adapter (stdin/stdout JSON)
+[binary]
+path = "~/.config/chatybot/racf-guard"
+timeout_seconds = 2.0
+args = ["--policy", "~/.config/chatybot/security.racf"]

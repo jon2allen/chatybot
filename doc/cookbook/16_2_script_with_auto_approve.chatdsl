@@ -1,0 +1,13 @@
+# Recipe 16.2 - Non-Interactive Script Automation with Auto-Approval
+# Goal: Run automated batch scripts that perform audited actions without prompting (-y)
+# Run: chatybot -y --script doc/cookbook/16_2_script_with_auto_approve.chatdsl
+
+/tool on
+/tool enable run_command,write_file
+/tool auto on
+/tool max_turns 5
+
+# Commands that trigger an ASK verdict (such as git commit or rm) auto-approve under -y
+chat --> Write a status summary note to scratch/build_status.txt and run git status using tools.
+
+/tool loop 5 force

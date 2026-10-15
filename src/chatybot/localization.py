@@ -15,9 +15,49 @@ class LocalizationManager:
         "ar": "ar", "arabic": "ar", "levantine": "ar", "apc": "ar", "ajp": "ar"
     }
 
+    AFFIRMATIVES: ClassVar[dict[str, set[str]]] = {
+        "en": {"y", "yes", "true", "1"},
+        "es": {"s", "si", "sí", "y", "yes", "true", "1"},
+        "fr": {"o", "oui", "y", "yes", "true", "1"},
+        "it": {"s", "si", "sì", "y", "yes", "true", "1"},
+        "zh": {"y", "yes", "是", "好", "确定", "确认", "对", "1"},
+        "ar": {"y", "yes", "ن", "نعم", "أجل", "اي", "أي", "1"},
+    }
+
+    CHOICE_LETTERS: ClassVar[dict[str, tuple[str, str]]] = {
+        "en": ("y", "N"),
+        "es": ("s", "N"),
+        "fr": ("o", "N"),
+        "it": ("s", "N"),
+        "zh": ("y", "N"),
+        "ar": ("y", "N"),
+    }
+
     def __init__(self, locale: str = "en"):
         self.locale = self.LANG_MAP.get(locale.lower(), "en")
         self.catalog = self._load_catalog()
+
+    def is_affirmative(self, response: str) -> bool:
+        """Check if a response string represents an affirmative confirmation in the active or any locale."""
+        if not response:
+            return False
+        cleaned = response.strip().lower()
+        # 1. Check active locale
+        loc_set = self.AFFIRMATIVES.get(self.locale, set())
+        if cleaned in loc_set:
+            return True
+        # 2. Check baseline English
+        if cleaned in self.AFFIRMATIVES.get("en", set()):
+            return True
+        # 3. Check all other locales as universal fallback
+        for aff_set in self.AFFIRMATIVES.values():
+            if cleaned in aff_set:
+                return True
+        return False
+
+    def get_prompt_choice_letters(self) -> tuple[str, str]:
+        """Return the localized (affirmative, negative) choice letters, e.g. ('y', 'N') or ('s', 'N')."""
+        return self.CHOICE_LETTERS.get(self.locale, ("y", "N"))
 
     def _load_catalog(self) -> dict[str, Any]:
         catalog_path = os.path.join(os.path.dirname(__file__), "translations.json")
