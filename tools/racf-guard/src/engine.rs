@@ -491,6 +491,21 @@ impl RacfEngine {
                 if winning_profile.is_generic { "Generic" } else { "Discrete" },
                 winning_profile.specificity_score()
             ));
+            if matches.len() > 1 {
+                for (idx, p) in matches.iter().enumerate() {
+                    let branch = if idx == matches.len() - 1 { "\u{2514}\u{2500}" } else { "\u{251c}\u{2500}" };
+                    let status = if idx == 0 { " (Winner)" } else { "" };
+                    t.push(format!(
+                        "[RACF Debug] │   {} Candidate #{}: '{}' ({}, score: {}){}",
+                        branch,
+                        idx + 1,
+                        p.pattern,
+                        if p.is_generic { "Generic" } else { "Discrete" },
+                        p.specificity_score(),
+                        status
+                    ));
+                }
+            }
         }
 
         // 1. Direct User Permit
