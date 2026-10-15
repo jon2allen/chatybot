@@ -1,0 +1,192 @@
+# =============================================================================
+# RACF (Resource Access Control Facility) Policy Definitions for Chatybot
+# Reference Security Configuration
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 1. User & Group Administration
+# -----------------------------------------------------------------------------
+# Define logical role groups (independent of OS groups)
+ADDGROUP DEVELOPER DATA('Application and Software Developers')
+ADDGROUP DEVOPS    DATA('Infrastructure and Operations Engineers')
+ADDGROUP SYSADM    DATA('System Administrators with Elevated Privileges')
+ADDGROUP AUDITOR   DATA('Compliance and Read-Only Security Auditors')
+
+# Map local system user IDs to RACF groups
+CONNECT jon2allen GROUP(DEVELOPER)
+CONNECT jon2allen GROUP(SYSADM)
+CONNECT dev_user  GROUP(DEVELOPER)
+CONNECT ci_bot    GROUP(DEVOPS)
+
+# -----------------------------------------------------------------------------
+# 2. Resource Class: FACILITY (Tool Capabilities)
+# -----------------------------------------------------------------------------
+# Universal Access (UACC) defines the fallback when no specific permit matches.
+# Default for all undefined facilities is ASK
+RDEFINE FACILITY * UACC(ASK)
+
+# Git facilities
+RDEFINE FACILITY git.* UACC(ASK)
+PERMIT git.status CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT git.diff   CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT git.log    CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT git.fetch  CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT git.commit CLASS(FACILITY) ID(DEVELOPER) ACCESS(ASK)
+PERMIT git.push   CLASS(FACILITY) ID(DEVELOPER) ACCESS(ASK)
+
+# Read-only and exploration tools (Chatybot standard tool names)
+RDEFINE FACILITY read_file        UACC(ASK)
+PERMIT read_file CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT read_file CLASS(FACILITY) ID(AUDITOR)   ACCESS(ALLOW)
+
+RDEFINE FACILITY list_directory   UACC(ASK)
+PERMIT list_directory CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT list_directory CLASS(FACILITY) ID(AUDITOR)   ACCESS(ALLOW)
+
+RDEFINE FACILITY find_files       UACC(ASK)
+PERMIT find_files CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT find_files CLASS(FACILITY) ID(AUDITOR)   ACCESS(ALLOW)
+
+RDEFINE FACILITY file_info        UACC(ASK)
+PERMIT file_info CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT file_info CLASS(FACILITY) ID(AUDITOR)   ACCESS(ALLOW)
+
+# Tool aliases & external queries
+RDEFINE FACILITY view_file           UACC(ALLOW)
+RDEFINE FACILITY list_dir            UACC(ALLOW)
+RDEFINE FACILITY grep_search         UACC(ALLOW)
+RDEFINE FACILITY read_url            UACC(ALLOW)
+RDEFINE FACILITY read_url_content    UACC(ALLOW)
+RDEFINE FACILITY get_context_metrics UACC(ALLOW)
+RDEFINE FACILITY decide_choice       UACC(ALLOW)
+RDEFINE FACILITY decide_score        UACC(ALLOW)
+RDEFINE FACILITY search_skills       UACC(ALLOW)
+RDEFINE FACILITY session_search      UACC(ALLOW)
+RDEFINE FACILITY session_get         UACC(ALLOW)
+RDEFINE FACILITY extract_code        UACC(ALLOW)
+
+# Modification tools (Require confirmation by default, permitted to DEVELOPER role)
+RDEFINE FACILITY write_file                 UACC(ASK)
+PERMIT write_file CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
+RDEFINE FACILITY replace_file_content       UACC(ASK)
+PERMIT replace_file_content CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
+RDEFINE FACILITY patch_file                 UACC(ASK)
+RDEFINE FACILITY delete_file                UACC(ASK)
+RDEFINE FACILITY make_directory             UACC(ASK)
+RDEFINE FACILITY remove_directory           UACC(ASK)
+
+# Legacy aliases
+RDEFINE FACILITY write_to_file              UACC(ASK)
+PERMIT write_to_file CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
+RDEFINE FACILITY multi_replace_file_content UACC(ASK)
+PERMIT multi_replace_file_content CLASS(FACILITY) ID(DEVELOPER) ACCESS(ALLOW)
+
+# Subshell and Command execution
+RDEFINE FACILITY run_command UACC(ASK)
+PERMIT run_command CLASS(FACILITY) ID(SYSADM) ACCESS(ALLOW)
+
+# -----------------------------------------------------------------------------
+# 3. Resource Class: DIR (Filesystem Access Controls - Least Privilege)
+# -----------------------------------------------------------------------------
+# Universal default: No access anywhere on the filesystem
+RDEFINE DIR /**             UACC(DENY)
+
+# System and sensitive paths (Explicit blocks)
+RDEFINE DIR /etc/**         UACC(DENY)
+RDEFINE DIR /sys/**         UACC(DENY)
+RDEFINE DIR /proc/**        UACC(DENY)
+RDEFINE DIR /root/**        UACC(DENY)
+RDEFINE DIR ~/.ssh/**       UACC(DENY)
+RDEFINE DIR ~/.gnupg/**     UACC(DENY)
+RDEFINE DIR ~/.aws/**       UACC(DENY)
+RDEFINE DIR **/*security.toml* UACC(DENY)
+RDEFINE DIR **/*racf*       UACC(DENY)
+RDEFINE DIR **/*zaragoza*   UACC(DENY)
+
+# Base Home Directory ONLY (single * matches files directly in ~, not subdirectories)
+RDEFINE DIR ~/*             UACC(DENY)
+PERMIT ~/*             CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT ~/*             CLASS(DIR) ID(AUDITOR)   ACCESS(ALLOW)
+
+# Approved Subdirectories ONLY (Specific approved workspaces)
+RDEFINE DIR ~/github/**     UACC(DENY)
+PERMIT ~/github/**     CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT ~/github/**     CLASS(DIR) ID(AUDITOR)   ACCESS(ALLOW)
+
+RDEFINE DIR ~/projects/**   UACC(DENY)
+PERMIT ~/projects/**   CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT ~/projects/**   CLASS(DIR) ID(AUDITOR)   ACCESS(ALLOW)
+
+RDEFINE DIR ~/Downloads/**  UACC(DENY)
+#PERMIT ~/Downloads/**  CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
+#PERMIT ~/Downloads/**  CLASS(DIR) ID(AUDITOR)   ACCESS(ALLOW)
+
+RDEFINE DIR **/scratch/**   UACC(DENY)
+PERMIT **/scratch/**   CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT **/scratch/**   CLASS(DIR) ID(AUDITOR)   ACCESS(ALLOW)
+
+# Current workspace directory and relative paths
+RDEFINE DIR .               UACC(DENY)
+RDEFINE DIR ./**            UACC(DENY)
+PERMIT .               CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT ./**            CLASS(DIR) ID(DEVELOPER) ACCESS(ALLOW)
+PERMIT .               CLASS(DIR) ID(AUDITOR)   ACCESS(ALLOW)
+PERMIT ./**            CLASS(DIR) ID(AUDITOR)   ACCESS(ALLOW)
+
+# User specific directory override
+PERMIT /etc/hosts CLASS(DIR) ID(SYSADM) ACCESS(ASK)
+
+# -----------------------------------------------------------------------------
+# 4. Resource Class: COMMAND (Shell Command Whitelists / Denylists)
+# -----------------------------------------------------------------------------
+# Destructive or privilege escalation commands
+RDEFINE COMMAND rm*       UACC(DENY)
+RDEFINE COMMAND sudo*     UACC(DENY)
+RDEFINE COMMAND su*       UACC(DENY)
+RDEFINE COMMAND mkfs*     UACC(DENY)
+RDEFINE COMMAND dd*       UACC(DENY)
+RDEFINE COMMAND chmod*    UACC(ASK)
+RDEFINE COMMAND chown*    UACC(ASK)
+
+# Safe development commands
+RDEFINE COMMAND git*      UACC(ALLOW)
+RDEFINE COMMAND cargo*    UACC(ALLOW)
+RDEFINE COMMAND python*   UACC(ALLOW)
+RDEFINE COMMAND pytest*   UACC(ALLOW)
+RDEFINE COMMAND npm*      UACC(ALLOW)
+RDEFINE COMMAND ls*       UACC(ALLOW)
+RDEFINE COMMAND pwd*      UACC(ALLOW)
+RDEFINE COMMAND gcc*      UACC(ALLOW)
+RDEFINE COMMAND cc*       UACC(ALLOW)
+RDEFINE COMMAND c++*      UACC(ALLOW)
+RDEFINE COMMAND make*     UACC(ALLOW)
+
+# Process inspection safeguards (ps)
+RDEFINE COMMAND ps -ef*   UACC(ALLOW)
+RDEFINE COMMAND ps        UACC(ALLOW)
+RDEFINE COMMAND ps -aef*  UACC(DENY)
+RDEFINE COMMAND ps aux*   UACC(DENY)
+RDEFINE COMMAND ps -A*    UACC(DENY)
+
+# Process termination safeguards (kill, pkill, killall)
+RDEFINE COMMAND kill*       UACC(ASK)
+RDEFINE COMMAND pkill*      UACC(ASK)
+RDEFINE COMMAND killall*    UACC(DENY)
+RDEFINE COMMAND pkill -9*   UACC(DENY)
+RDEFINE COMMAND kill -9 -1* UACC(DENY)
+
+# Network inspection safeguards (lsof, netstat, ss)
+RDEFINE COMMAND lsof -i :*  UACC(ALLOW)
+RDEFINE COMMAND lsof*       UACC(ASK)
+RDEFINE COMMAND netstat*    UACC(ASK)
+RDEFINE COMMAND ss*         UACC(ASK)
+
+# -----------------------------------------------------------------------------
+# 5. Resource Class: CONTENT (Payload & Data Loss Prevention - LLM Security Innovation)
+# -----------------------------------------------------------------------------
+# Inspects text and code payloads during write_file, replace_file_content, etc.
+# Unmatched content defaults to ALLOW; matching profiles enforce restrictions.
+RDEFINE CONTENT *BEGIN*PRIVATE*KEY* UACC(DENY)
+RDEFINE CONTENT *api_key*           UACC(DENY)
+RDEFINE CONTENT *secret_token*      UACC(DENY)
+

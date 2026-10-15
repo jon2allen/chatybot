@@ -138,7 +138,15 @@
       "chat_prompt": "chat --> ",
       "active_model_info": "Active model: {model} (alias: {alias})",
       "goodbye_message": "Goodbye! Thanks for chatting.",
-      "goodbye_short": "Goodbye!"
+      "goodbye_short": "Goodbye!",
+      "security_confirm_title": "[Security Confirmation Required] ({risk} risk)",
+      "security_tool_label": "Tool",
+      "security_reason_label": "Reason",
+      "security_proceed_prompt": "Proceed with execution? [{yes_char}/{no_char}]: ",
+      "security_blocked_header": "[Security Block]",
+      "security_blocked_msg": "Security Policy Blocked: {reason}",
+      "security_blocked_non_interactive": "Security Policy Blocked: Non-interactive execution of '{tool}' rejected by non_interactive_ask policy (Reason: {reason}).",
+      "security_declined_msg": "Security Authorization Denied: User declined execution of '{tool}'."
     },
     "help": {
       "headers": {
@@ -465,7 +473,15 @@
       "chat_prompt": "charla --> ",
       "active_model_info": "Modelo activo: {model} (alias: {alias})",
       "goodbye_message": "¡Adiós! Gracias por chatear.",
-      "goodbye_short": "¡Adiós!"
+      "goodbye_short": "¡Adiós!",
+      "security_confirm_title": "[Confirmación de Seguridad Requerida] (Riesgo {risk})",
+      "security_tool_label": "Herramienta",
+      "security_reason_label": "Motivo",
+      "security_proceed_prompt": "¿Proceder con la ejecución? [{yes_char}/{no_char}]: ",
+      "security_blocked_header": "[Bloqueo de Seguridad]",
+      "security_blocked_msg": "Política de Seguridad Bloqueada: {reason}",
+      "security_blocked_non_interactive": "Política de Seguridad Bloqueada: Ejecución no interactiva de '{tool}' rechazada por la política non_interactive_ask (Motivo: {reason}).",
+      "security_declined_msg": "Autorización de Seguridad Denegada: El usuario rechazó la ejecución de '{tool}'."
     },
     "help": {
       "headers": {
@@ -1019,7 +1035,15 @@
       "chat_prompt": "discussion --> ",
       "active_model_info": "Modèle actif : {model} (alias: {alias})",
       "goodbye_message": "Au revoir ! Merci d'avoir discuté.",
-      "goodbye_short": "Au revoir !"
+      "goodbye_short": "Au revoir !",
+      "security_confirm_title": "[Confirmation de Sécurité Requise] (Risque {risk})",
+      "security_tool_label": "Outil",
+      "security_reason_label": "Raison",
+      "security_proceed_prompt": "Poursuivre l'exécution ? [{yes_char}/{no_char}] : ",
+      "security_blocked_header": "[Blocage de Sécurité]",
+      "security_blocked_msg": "Politique de Sécurité Bloquée : {reason}",
+      "security_blocked_non_interactive": "Politique de Sécurité Bloquée : Exécution non interactive de '{tool}' rejetée par la politique non_interactive_ask (Raison : {reason}).",
+      "security_declined_msg": "Autorisation de Sécurité Refusée : L'utilisateur a refusé l'exécution de '{tool}'."
     },
     "help": {
       "headers": {
@@ -1568,7 +1592,15 @@
       "chat_prompt": "聊天 --> ",
       "active_model_info": "当前模型: {model} (别名: {alias})",
       "goodbye_message": "再见！感谢您的使用。",
-      "goodbye_short": "再见！"
+      "goodbye_short": "再见！",
+      "security_confirm_title": "[需要安全确认] ({risk} 风险)",
+      "security_tool_label": "工具",
+      "security_reason_label": "原因",
+      "security_proceed_prompt": "是否继续执行？[{yes_char}/{no_char}]: ",
+      "security_blocked_header": "[安全拦截]",
+      "security_blocked_msg": "安全策略拦截: {reason}",
+      "security_blocked_non_interactive": "安全策略拦截: '{tool}' 的非交互式执行已被 non_interactive_ask 策略拒绝 (原因: {reason})。",
+      "security_declined_msg": "安全授权拒绝: 用户拒绝执行 '{tool}'。"
     },
     "help": {
       "headers": {
@@ -2109,7 +2141,15 @@
       "chat_prompt": "conversazione --> ",
       "active_model_info": "Modello attivo: {model} (alias: {alias})",
       "goodbye_message": "Arrivederci! Grazie per aver chattato.",
-      "goodbye_short": "Arrivederci!"
+      "goodbye_short": "Arrivederci!",
+      "security_confirm_title": "[Conferma di Sicurezza Richiesta] (Rischio {risk})",
+      "security_tool_label": "Strumento",
+      "security_reason_label": "Motivo",
+      "security_proceed_prompt": "Procedere con l'esecuzione? [{yes_char}/{no_char}]: ",
+      "security_blocked_header": "[Blocco di Sicurezza]",
+      "security_blocked_msg": "Criterio di Sicurezza Bloccato: {reason}",
+      "security_blocked_non_interactive": "Criterio di Sicurezza Bloccato: Esecuzione non interattiva di '{tool}' respinta dal criterio non_interactive_ask (Motivo: {reason}).",
+      "security_declined_msg": "Autorizzazione di Sicurezza Negata: L'utente ha rifiutato l'esecuzione di '{tool}'."
     },
     "help": {
       "headers": {
@@ -2659,7 +2699,15 @@
       "chat_prompt": "دردش --> ",
       "active_model_info": "النموذج الشغال: {model} (الاسم المستعار: {alias})",
       "goodbye_message": "مع السلامة! وشكراً على الدردشة.",
-      "goodbye_short": "مع السلامة!"
+      "goodbye_short": "مع السلامة!",
+      "security_confirm_title": "[مطلوب تأكيد الأمان] (مستوى الخطورة: {risk})",
+      "security_tool_label": "الأداة",
+      "security_reason_label": "السبب",
+      "security_proceed_prompt": "هل تريد متابعة التنفيذ؟ [{yes_char}/{no_char}]: ",
+      "security_blocked_header": "[حظر أمني]",
+      "security_blocked_msg": "تم الحظر بموجب سياسة الأمان: {reason}",
+      "security_blocked_non_interactive": "تم الحظر بموجب سياسة الأمان: تم رفض التنفيذ غير التفاعلي للأداة '{tool}' بموجب سياسة non_interactive_ask (السبب: {reason}).",
+      "security_declined_msg": "تم رفض تفويض الأمان: رفض المستخدم تنفيذ '{tool}'."
     },
     "help": {
       "headers": {
