@@ -2,6 +2,57 @@
 
 All notable changes, release milestones, and version history for **Chatybot** are documented in this file.
 
+October 15th, 2026 (v0.9.0)
+---------------------------
+- **Pluggable Security Release v0.9.0**:
+  - Official release of Chatybot Pluggable Security Architecture and integration into master.
+  - Bumped version to 0.9.0 across `pyproject.toml`, `chatybot_app.py`, and package initialization.
+
+October 14th, 2026
+------------------
+- **RACF-Guard Engine Diagnostics & Traceability**:
+  - Added candidate profile specificity scoring logs in debug trace (`tools/racf-guard/src/engine.rs`), displaying evaluated candidate profiles alongside matching specificity scores for deep audit inspection.
+
+October 13th, 2026
+------------------
+- **Policy Engine Hardening & P0/P1 Edge Cases**:
+  - Enforced policy self-protection: strictly denied read/write access to `security.toml` and `*.racf` files across both Builtin and RACF policy engines.
+  - Hardened shell command parsing against command chaining (`&&`, `||`, `;`, `&`, `|`, `` ` ``, `$()`), subshell execution, and path traversal tricks.
+  - Resolved P1 multi-parameter inspection edge cases and added `ResourceClass::Ps` enforcement for `manage_task` and process inspection commands.
+  - Optimized `StdioBinaryPolicyEngine` startup with cached banner results.
+- **RACF-Guard Deployment Tools & Profiles**:
+  - Added automated `setup.sh` one-shot installer script for `racf-guard`.
+  - Added restrictive directory control (`restrictive_dir.racf`) and process control (`process_control.racf`) reference policy profiles.
+- **Multilingual Localization & Documentation Synchronization**:
+  - Localized all security approval prompts, action headers, and confirmation responses across English, Spanish, French, Italian, Arabic, and Chinese.
+  - Extracted changelog from README into standalone `CHANGELOG.md` and synchronized `doc/` tree for `/docs` discovery.
+  - Added Chapter 16 ("Pluggable Security & Policy Guardrails") to ChatDSL Cookbook (`doc/chatdsl_cookbook.md`) with 4 end-to-end recipes.
+  - Added Pluggable Security API Specification (`doc/pluggable_security_api.md`) and technical notes on subprocess one-shot evaluation architecture.
+
+October 12th, 2026
+------------------
+- **RACF-Guard Reference Policy Engine (Rust)**:
+  - Implemented `racf-guard` in Rust (`tools/racf-guard/`) providing enterprise-grade IBM RACF-style access control with users, groups, universal access (`UACC`), and explicit access lists.
+  - Added resource classes: `FACILITY` (tools), `COMMAND` (bash commands), `DIR` (path globbing), `CONTENT` (payload/file inspection), and `PS` (process IDs/names).
+  - Added CLI flag forwarding (`--banner`, `--audit`, `--policy`, `--debug`) and audit logging.
+- **CLI Security Controls & Non-Interactive Execution**:
+  - Added `-y`/`--yes` CLI flag and `non_interactive_ask` configuration for headless automation and non-interactive scripting.
+  - Added `--no-security` CLI flag for unconstrained environments with prominent startup warnings.
+  - Added sub-agent recursion defense preventing nested execution of `chatybot` to block privilege escalation attacks.
+  - Added read-only git whitelist guards and destructive git command denials (`push --force`, `reset --hard`, `clean -fdx`).
+
+October 11th, 2026
+------------------
+- **Pluggable Tri-State Security Core & Builtin DSL**:
+  - Introduced pluggable security architecture with `SecurityManager` enforcing tri-state evaluation (`allow`, `ask`, `deny`) before dispatching tool calls.
+  - Implemented human-readable Security DSL grammar, parser, and matcher in `src/chatybot/security/dsl.py`.
+  - Added automatic seeding of default policy to `~/.config/chatybot/security.toml` on first run with console notification.
+  - Integrated startup banner reporting of active security engine and loaded DSL rule count.
+  - Added `--security` CLI debug flag displaying parsed rules and execution trace.
+  - Added Tier 0 filesystem path protection against directory traversal and root privilege tampering.
+  - Converted interactive user prompt confirmations to non-blocking async operations (`asyncio.to_thread`).
+  - Added unit test suite in `test/test_pluggable_security.py`.
+
 September 30th, 2026 (v0.8.8)
 ----------------------------
 - **`/docs` Line-Based Navigation & Search-to-View Workflow**:
