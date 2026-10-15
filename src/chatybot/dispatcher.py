@@ -20,12 +20,6 @@ if src_dir not in sys.path:
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-# Attempt safe database hooks if integrated into the runtime
-try:
-    from chatybot import chatydb
-except ImportError:
-    chatydb = None
-
 try:
     import tomllib
 except ImportError:
@@ -171,14 +165,6 @@ def validate_and_route(invocation: dict[str, Any], config: dict[str, Any]) -> tu
     return func, [], args
 
 
-def log_to_database(tool_name: str, args: dict, status: str):
-    """Safely records execution metadata into TinyDB session histories if available."""
-    if chatydb and hasattr(chatydb, "log_tool_execution"):
-        try:
-            chatydb.log_tool_execution(tool_name, args, status)
-        except Exception as db_err:
-            sys.stderr.write(f"Database logging warning: {db_err}\n")
-
 
 def main():
     parser = argparse.ArgumentParser(description="ChatyBot Core Local Tool Dispatcher Runtime Gateway.")
@@ -210,7 +196,6 @@ def main():
         executable_target, target_args, target_kwargs = validate_and_route(invocation_data, config_data)
     except Exception as err:
         tool_attempt = invocation_data.get("tool", "unknown")
-        log_to_database(tool_attempt, invocation_data.get("arguments", {}), "rejected")
         write_json_response({
             "status": "error",
             "tool": tool_attempt,
@@ -221,14 +206,12 @@ def main():
     # 3. Execute Target Module Function Safely
     try:
         execution_result = executable_target(*target_args, **target_kwargs)
-        log_to_database(invocation_data["tool"], target_kwargs, "success")
         write_json_response({
             "status": "success",
             "tool": invocation_data["tool"],
             "result": execution_result
         }, status_code=0)
     except Exception as runtime_exc:
-        log_to_database(invocation_data["tool"], target_kwargs, "failed")
         write_json_response({
             "status": "error",
             "tool": invocation_data["tool"],
