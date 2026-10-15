@@ -192,9 +192,8 @@ class TestChatyDB:
         res = chatydb._backup_db(str(empty_file), "empty")
         assert res is None
 
-    def test_set_db_triggers_backup_on_existing(self, tmp_path, monkeypatch, capsys):
-        """Test that set_db automatically backs up an existing DB file."""
-        # Point _ensure_db_path to our temp directory
+    def test_set_db_does_not_trigger_backup(self, tmp_path, monkeypatch, capsys):
+        """Test that set_db simply activates the DB and does not create a backup on read/open."""
         def mock_ensure_db_path(name):
             return str(tmp_path / f"{name}.json")
 
@@ -206,16 +205,14 @@ class TestChatyDB:
         chatydb.set_db("mycorpus")
 
         out = capsys.readouterr().out
-        assert "[backup] Snapshot saved:" in out
-        assert ".backups/mycorpus/mycorpus." in out
+        assert "Database set to" in out
+        assert "[backup] Snapshot saved:" not in out
 
         backup_dir = tmp_path / ".backups" / "mycorpus"
-        assert backup_dir.exists()
-        backups = list(backup_dir.glob("mycorpus.*.bak.json"))
-        assert len(backups) == 1
+        assert not backup_dir.exists()
 
-    def test_set_db_skips_backup_if_already_active_or_backed_up(self, tmp_path, monkeypatch, capsys):
-        """Test that repeated set_db calls (e.g. from db_search / db_get) do not create multiple backups."""
+    def test_dblog_triggers_single_backup_per_session(self, tmp_path, monkeypatch, capsys):
+        """Test that writing via dblog triggers exactly one backup per session before modifying the DB."""
         def mock_ensure_db_path(name):
             return str(tmp_path / f"{name}.json")
 
@@ -224,20 +221,61 @@ class TestChatyDB:
         db_file = tmp_path / "repeated.json"
         db_file.write_text('{"items": {"1": {"name": "Doc1", "type": "doc", "content": "text", "metadata": {}}}}')
 
-        # First call: opens DB and creates snapshot
         chatydb.set_db("repeated")
-        out1 = capsys.readouterr().out
-        assert "[backup] Snapshot saved:" in out1
+        capsys.readouterr()  # Clear set_db output
 
-        # Second call: same DB name while already active -> early exit, no second backup
-        chatydb.set_db("repeated")
-        out2 = capsys.readouterr().out
-        assert "[backup] Snapshot saved:" not in out2
+        mock_app = MagicMock()
+        mock_app.chat_history = [("Hello", "Hi there!")]
+        mock_app._extract_thinking_tokens.return_value = (None, "Hi there!")
+        mock_app.last_reasoning_tokens = 0
+        mock_app.reasoning_effort = None
+        mock_app.config_manager.active_model_alias = "test_model"
+        mock_app.config_manager.get_model_config.return_value = {"name": "test-model"}
+
+        mock_mod = MagicMock()
+        mock_mod.app = mock_app
+
+        import sys
+        with patch.dict(sys.modules, {"chatybot.chatybot_app": mock_mod}):
+            # First dblog write: triggers snapshot
+            chatydb.dblog()
+            out1 = capsys.readouterr().out
+            assert "[backup] Snapshot saved:" in out1
+
+            # Second dblog write in same session: no duplicate snapshot
+            chatydb.dblog()
+            out2 = capsys.readouterr().out
+            assert "[backup] Snapshot saved:" not in out2
 
         # Verify only 1 backup file exists
         backup_dir = tmp_path / ".backups" / "repeated"
+        assert backup_dir.exists()
         backups = list(backup_dir.glob("repeated.*.bak.json"))
         assert len(backups) == 1
+
+    def test_read_and_search_never_creates_backup(self, tmp_path, monkeypatch, capsys):
+        """Test that read-only operations (search_db, dbprint, db_search tool) never trigger a backup."""
+        def mock_ensure_db_path(name):
+            return str(tmp_path / f"{name}.json")
+
+        monkeypatch.setattr(chatydb, "_ensure_db_path", mock_ensure_db_path)
+
+        db_file = tmp_path / "readonly.json"
+        db_file.write_text('{"items": {"1": {"name": "Item1", "type": "doc", "content": "searchable text", "metadata": {}}}}')
+
+        chatydb.set_db("readonly")
+        chatydb.search_db("searchable")
+        chatydb.dbprint()
+
+        from src.chatybot.tools.db_tools import db_search, db_get
+        db_search(query="searchable", db_name="readonly")
+        db_get(item_id=1, db_name="readonly")
+
+        out = capsys.readouterr().out
+        assert "[backup] Snapshot saved:" not in out
+
+        backup_dir = tmp_path / ".backups" / "readonly"
+        assert not backup_dir.exists()
 
     def test_dbprint_table_mode_and_range_filtering(self, tmp_path, capsys):
         """Test dbprint with table_mode=True and item_range filtering."""
