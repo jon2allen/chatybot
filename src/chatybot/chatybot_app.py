@@ -4189,7 +4189,7 @@ class ChatybotApp:
                     if call_db:
                         try:
                             from . import chatydb
-                            chatydb.set_db(call_db)
+                            chatydb.set_db(call_db, quiet=True)
                         except Exception:
                             pass
 

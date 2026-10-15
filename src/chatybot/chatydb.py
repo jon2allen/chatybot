@@ -113,11 +113,15 @@ def _backup_before_write() -> None:
             print(f"[backup] Snapshot saved: {rel_backup} ({count}/{max_count})")
 
 
-def set_db(db_name: str) -> None:
+def set_db(db_name: str, quiet: bool = False) -> None:
     """Create (if needed) and activate a TinyDB database with the given name.
 
     The database file is placed under the project's ``db`` directory.
     If db_name is 'Null' (case-insensitive), deactivate database support.
+
+    Args:
+        db_name: Name of the database to create or select.
+        quiet: If True, suppress stdout status messages.
     """
     global _manager, _db_path, _active_db_name
     if db_name.lower() == "null":
@@ -132,15 +136,17 @@ def set_db(db_name: str) -> None:
         _db_path = None
         _active_db_name = None
         os.environ.pop("CHATYBOT_ACTIVE_DB", None)
-        print("Database support deactivated.")
+        if not quiet:
+            print("Database support deactivated.")
         return
 
     name = db_name.strip()
     if not name or not _DB_NAME_RE.match(name):
-        print(
-            f"Invalid database name '{db_name}'. Use letters, digits, '.', '_', or '-' "
-            "(no slashes, spaces, or '..')."
-        )
+        if not quiet:
+            print(
+                f"Invalid database name '{db_name}'. Use letters, digits, '.', '_', or '-' "
+                "(no slashes, spaces, or '..')."
+            )
         return
 
     # If this database is already open and active in the current process, reuse it
@@ -161,7 +167,8 @@ def set_db(db_name: str) -> None:
     _db_path = db_path
     _active_db_name = name
     os.environ["CHATYBOT_ACTIVE_DB"] = name
-    print(f"Database set to '{db_path}'.")
+    if not quiet:
+        print(f"Database set to '{db_path}'.")
 
 
 def list_dbs() -> None:
