@@ -47,6 +47,8 @@ chatybot = [
     "*.toml",
     "*.chatdsl",
     "profiles/*.chatdsl",
+    "security/*.toml",
+    "tools/*.md",
     "translations.json",
     "doc/*",
     "doc/**/*",
