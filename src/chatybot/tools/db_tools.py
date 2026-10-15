@@ -17,7 +17,7 @@ def db_search(
     limit: int = 20,
     full_content: bool = False,
     app: Any = None,
-) -> str:
+) -> dict[str, Any]:
     """
     Search a TinyDB database for items matching a query string.
     Searches across name, content, and metadata fields (case-insensitive substring).
@@ -30,7 +30,7 @@ def db_search(
         app: ChatybotApp instance passed when called within application context.
 
     Returns:
-        JSON string with matching items.
+        Dictionary with matching items or error message.
     """
     if db_name:
         chatydb.set_db(db_name, quiet=True)
@@ -38,9 +38,9 @@ def db_search(
         chatydb.set_db(os.environ["CHATYBOT_ACTIVE_DB"], quiet=True)
 
     if chatydb._manager is None:
-        return json.dumps({
+        return {
             "error": "No database selected. Use the db_name parameter or /setdb first."
-        }, ensure_ascii=False)
+        }
 
     all_items = chatydb._manager.get_all_items()
 
@@ -92,20 +92,20 @@ def db_search(
             record["content_preview"] = content[:500]
         output.append(record)
 
-    return json.dumps({
+    return {
         "query": query,
         "database": db_name or "active",
         "total_matches": total_matches,
         "returned": len(results),
         "results": output,
-    }, ensure_ascii=False, indent=2)
+    }
 
 
 def db_get(
     item_id: int,
     db_name: str | None = None,
     app: Any = None,
-) -> str:
+) -> dict[str, Any]:
     """
     Retrieve a single complete item from a TinyDB database by its integer ID.
 
@@ -115,7 +115,7 @@ def db_get(
         app: ChatybotApp instance passed when called within application context.
 
     Returns:
-        JSON string with the complete item details or an error message.
+        Dictionary with the complete item details or an error message.
     """
     if db_name:
         chatydb.set_db(db_name, quiet=True)
@@ -123,22 +123,22 @@ def db_get(
         chatydb.set_db(os.environ["CHATYBOT_ACTIVE_DB"], quiet=True)
 
     if chatydb._manager is None:
-        return json.dumps({
+        return {
             "error": "No database selected. Use the db_name parameter or /setdb first."
-        }, ensure_ascii=False)
+        }
 
     try:
         doc_id = int(item_id)
     except (ValueError, TypeError):
-        return json.dumps({
+        return {
             "error": f"Invalid item_id '{item_id}'. Must be an integer."
-        }, ensure_ascii=False)
+        }
 
     item = chatydb._manager.get_item(doc_id)
     if not item:
-        return json.dumps({
+        return {
             "error": f"Item with ID {doc_id} not found in database '{db_name or 'active'}'."
-        }, ensure_ascii=False)
+        }
 
     content = str(item.get("content") or "")
     output = {
@@ -150,10 +150,10 @@ def db_get(
         "metadata": item.get("metadata", {}),
     }
 
-    return json.dumps(output, ensure_ascii=False, indent=2)
+    return output
 
 
-def db_list(app: Any = None) -> str:
+def db_list(app: Any = None) -> dict[str, Any]:
     """
     List all available TinyDB databases with entry counts and file sizes.
 
@@ -161,16 +161,16 @@ def db_list(app: Any = None) -> str:
         app: ChatybotApp instance passed when called within application context.
 
     Returns:
-        JSON string with database list.
+        Dictionary with database list.
     """
     base_dir = os.path.expanduser("~/.local/share/chatybot")
     db_dir = os.path.join(base_dir, "db")
 
     if not os.path.exists(db_dir):
-        return json.dumps({
+        return {
             "databases": [],
             "message": "No database directory found."
-        }, ensure_ascii=False)
+        }
 
     databases = []
     for filename in sorted(os.listdir(db_dir)):
@@ -197,9 +197,9 @@ def db_list(app: Any = None) -> str:
             "size_kb": size_kb,
         })
 
-    return json.dumps({
+    return {
         "databases": databases
-    }, ensure_ascii=False, indent=2)
+    }
 
 
 def db_summary(
@@ -208,7 +208,7 @@ def db_summary(
     limit: int = 50,
     format: str = "table",
     app: Any = None,
-) -> str:
+) -> dict[str, Any] | str:
     """
     Get a concise summary table or JSON list of items in a TinyDB database.
     Provides ID, timestamp, model, prompt snippet, thinking status, and token counts
@@ -222,24 +222,24 @@ def db_summary(
         app: ChatybotApp instance passed when called within application context.
 
     Returns:
-        Formatted ASCII summary table or JSON string.
+        Formatted ASCII summary table or dictionary.
     """
     target_db = db_name or os.environ.get("CHATYBOT_ACTIVE_DB")
     if target_db:
         chatydb.set_db(target_db, quiet=True)
 
     if chatydb._manager is None:
-        return json.dumps({
+        return {
             "error": "No database selected. Use the db_name parameter or /setdb first."
-        }, ensure_ascii=False)
+        }
 
     all_items = chatydb._manager.get_all_items()
     if not all_items:
-        return json.dumps({
+        return {
             "database": target_db or "active",
             "items": [],
             "message": "Database is empty."
-        }, ensure_ascii=False)
+        }
 
     # Apply range / ID filtering
     items = all_items
@@ -254,14 +254,14 @@ def db_summary(
                 items = [it for it in all_items if s_id <= getattr(it, "doc_id", 0) <= e_id]
                 range_label = f"{s_id}-{e_id}"
             except ValueError:
-                return json.dumps({"error": f"Invalid range '{item_range}'. Use e.g. '1-10'."})
+                return {"error": f"Invalid range '{item_range}'. Use e.g. '1-10'."}
         else:
             try:
                 t_id = int(raw_range)
                 items = [it for it in all_items if getattr(it, "doc_id", 0) == t_id]
                 range_label = f"ID {t_id}"
             except ValueError:
-                return json.dumps({"error": f"Invalid item filter '{item_range}'. Use e.g. '5' or '1-10'."})
+                return {"error": f"Invalid item filter '{item_range}'. Use e.g. '5' or '1-10'."}
 
     total_matched = len(items)
     items = items[:limit]
@@ -301,13 +301,13 @@ def db_summary(
         })
 
     if format.lower() == "json":
-        return json.dumps({
+        return {
             "database": target_db or "active",
             "range": range_label,
             "total_matched": total_matched,
             "returned": len(records),
             "items": records,
-        }, ensure_ascii=False, indent=2)
+        }
 
     # Table format
     db_label = target_db or "active"
