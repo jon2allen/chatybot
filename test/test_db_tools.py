@@ -521,4 +521,41 @@ optional = true
         assert "results" in envelope["result"]
         assert envelope["result"]["total_matches"] == 3
 
+    def test_db_tools_preserve_active_session_db(self, tmp_path, monkeypatch):
+        """Test that calling db_search, db_get, and db_summary with db_name does not alter active session DB."""
+        def mock_ensure_db_path(name):
+            return str(tmp_path / f"{name}.json")
+
+        monkeypatch.setattr(chatydb, "_ensure_db_path", mock_ensure_db_path)
+
+        # Create two databases: active_user_db and model_target_db
+        db_user = tmp_path / "userdb.json"
+        db_target = tmp_path / "targetdb.json"
+        self._create_test_db(str(db_user))
+        self._create_test_db(str(db_target))
+
+        # Set userdb as the active session database
+        chatydb.set_db("userdb", quiet=True)
+        assert chatydb._active_db_name == "userdb"
+        assert os.environ.get("CHATYBOT_ACTIVE_DB") == "userdb"
+
+        # 1. db_search targeting targetdb
+        res_search = db_search(query="*", db_name="targetdb")
+        assert res_search["total_matches"] == 3
+        assert chatydb._active_db_name == "userdb"
+        assert os.environ.get("CHATYBOT_ACTIVE_DB") == "userdb"
+
+        # 2. db_get targeting targetdb
+        res_get = db_get(item_id=1, db_name="targetdb")
+        assert res_get["id"] == 1
+        assert chatydb._active_db_name == "userdb"
+        assert os.environ.get("CHATYBOT_ACTIVE_DB") == "userdb"
+
+        # 3. db_summary targeting targetdb
+        res_summary = db_summary(db_name="targetdb", format="json")
+        assert res_summary["total_matched"] == 3
+        assert chatydb._active_db_name == "userdb"
+        assert os.environ.get("CHATYBOT_ACTIVE_DB") == "userdb"
+
+
 

@@ -4184,14 +4184,6 @@ class ChatybotApp:
                         except Exception as e:
                             print(f"Warning: Failed to update main process CWD to {path}: {e}")
 
-                if tool_call and tool_call.get('tool') in ('db_search', 'db_get'):
-                    call_db = tool_call.get('arguments', {}).get('db_name')
-                    if call_db:
-                        try:
-                            from . import chatydb
-                            chatydb.set_db(call_db, quiet=True)
-                        except Exception:
-                            pass
 
                 # Automatically populate script_vars if tool call requested target_variable and tool succeeded
                 try:
