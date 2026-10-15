@@ -557,5 +557,34 @@ optional = true
         assert chatydb._active_db_name == "userdb"
         assert os.environ.get("CHATYBOT_ACTIVE_DB") == "userdb"
 
+    def test_db_tools_nonexistent_db_returns_error_without_creating_file(self, tmp_path, monkeypatch):
+        """Test that passing a nonexistent db_name returns an error and does not create an empty file."""
+        def mock_ensure_db_path(name):
+            return str(tmp_path / f"{name}.json")
+
+        monkeypatch.setattr(chatydb, "_ensure_db_path", mock_ensure_db_path)
+
+        ghost_file = tmp_path / "recipies.json"
+        assert not ghost_file.exists()
+
+        # 1. db_search with nonexistent db_name
+        res_search = db_search(query="dumplings", db_name="recipies")
+        assert "error" in res_search
+        assert "Database 'recipies' not found" in res_search["error"]
+        assert not ghost_file.exists()
+
+        # 2. db_get with nonexistent db_name
+        res_get = db_get(item_id=1, db_name="recipies")
+        assert "error" in res_get
+        assert "Database 'recipies' not found" in res_get["error"]
+        assert not ghost_file.exists()
+
+        # 3. db_summary with nonexistent db_name
+        res_summary = db_summary(db_name="recipies", format="json")
+        assert "error" in res_summary
+        assert "Database 'recipies' not found" in res_summary["error"]
+        assert not ghost_file.exists()
+
+
 
 

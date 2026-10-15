@@ -35,6 +35,10 @@ def _scoped_corpus_manager(db_name: str | None = None) -> Iterator[tuple[CorpusM
             return
 
         db_path = chatydb._ensure_db_path(name)
+        if not os.path.exists(db_path):
+            yield None, name
+            return
+
         scoped_mgr = CorpusManager(db_path)
         try:
             yield scoped_mgr, name
@@ -72,9 +76,13 @@ def db_search(
     """
     with _scoped_corpus_manager(db_name) as (manager, resolved_db):
         if manager is None:
-            if db_name and not chatydb._DB_NAME_RE.match(db_name.strip()):
+            if db_name:
+                if not chatydb._DB_NAME_RE.match(db_name.strip()):
+                    return {
+                        "error": f"Invalid database name '{db_name}'. Use letters, digits, '.', '_', or '-'."
+                    }
                 return {
-                    "error": f"Invalid database name '{db_name}'. Use letters, digits, '.', '_', or '-'."
+                    "error": f"Database '{resolved_db}' not found."
                 }
             return {
                 "error": "No database selected. Use the db_name parameter or /setdb first."
@@ -157,9 +165,13 @@ def db_get(
     """
     with _scoped_corpus_manager(db_name) as (manager, resolved_db):
         if manager is None:
-            if db_name and not chatydb._DB_NAME_RE.match(db_name.strip()):
+            if db_name:
+                if not chatydb._DB_NAME_RE.match(db_name.strip()):
+                    return {
+                        "error": f"Invalid database name '{db_name}'. Use letters, digits, '.', '_', or '-'."
+                    }
                 return {
-                    "error": f"Invalid database name '{db_name}'. Use letters, digits, '.', '_', or '-'."
+                    "error": f"Database '{resolved_db}' not found."
                 }
             return {
                 "error": "No database selected. Use the db_name parameter or /setdb first."
@@ -264,9 +276,13 @@ def db_summary(
     """
     with _scoped_corpus_manager(db_name) as (manager, resolved_db):
         if manager is None:
-            if db_name and not chatydb._DB_NAME_RE.match(db_name.strip()):
+            if db_name:
+                if not chatydb._DB_NAME_RE.match(db_name.strip()):
+                    return {
+                        "error": f"Invalid database name '{db_name}'. Use letters, digits, '.', '_', or '-'."
+                    }
                 return {
-                    "error": f"Invalid database name '{db_name}'. Use letters, digits, '.', '_', or '-'."
+                    "error": f"Database '{resolved_db}' not found."
                 }
             return {
                 "error": "No database selected. Use the db_name parameter or /setdb first."
