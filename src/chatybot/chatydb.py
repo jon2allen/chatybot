@@ -100,6 +100,20 @@ def _backup_db(db_path: str, db_name: str, max_backups: int = MAX_DB_BACKUPS) ->
         return None
 
 
+def _backup_before_write() -> None:
+    """Create a rolling snapshot of the active database before the first write in this session."""
+    global _session_backed_up_dbs
+    if not _active_db_name or not _db_path:
+        return
+    if _active_db_name not in _session_backed_up_dbs:
+        backup_info = _backup_db(_db_path, _active_db_name)
+        _session_backed_up_dbs.add(_active_db_name)
+        if backup_info:
+            backup_path, count, max_count = backup_info
+            rel_backup = os.path.relpath(backup_path, os.path.dirname(_db_path))
+            print(f"[backup] Snapshot saved: {rel_backup} ({count}/{max_count})")
+
+
 def set_db(db_name: str) -> None:
     """Create (if needed) and activate a TinyDB database with the given name.
 
@@ -131,17 +145,11 @@ def set_db(db_name: str) -> None:
         return
 
     # If this database is already open and active in the current process, reuse it
-    # without re-running backups or reloading the manager.
+    # without reloading the manager.
     if _active_db_name == name and _manager is not None:
         return
 
     db_path = _ensure_db_path(name)
-
-    # Automatic snapshot backup on initial open in this session
-    backup_info = None
-    if name not in _session_backed_up_dbs:
-        backup_info = _backup_db(db_path, name)
-        _session_backed_up_dbs.add(name)
 
     # Close the previous manager before opening a new one so its file handle
     # is released rather than leaked across repeated /setdb calls.
@@ -155,10 +163,6 @@ def set_db(db_name: str) -> None:
     _active_db_name = name
     os.environ["CHATYBOT_ACTIVE_DB"] = name
     print(f"Database set to '{db_path}'.")
-    if backup_info:
-        backup_path, count, max_count = backup_info
-        rel_backup = os.path.relpath(backup_path, os.path.dirname(db_path))
-        print(f"[backup] Snapshot saved: {rel_backup} ({count}/{max_count})")
 
 
 def list_dbs() -> None:
@@ -394,6 +398,7 @@ def dblog(include_thinking: bool = False) -> None:
         metadata["thinking_tokens"] = 0
         metadata["reasoning_effort"] = getattr(app_instance, "reasoning_effort", None) if app_instance else None
 
+    _backup_before_write()
     _manager.add_item("chat", "last_chat", logged_content, metadata)
 
     if include_thinking and metadata["thinking_content"]:
