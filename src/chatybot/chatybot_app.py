@@ -4184,7 +4184,6 @@ class ChatybotApp:
                         except Exception as e:
                             print(f"Warning: Failed to update main process CWD to {path}: {e}")
 
-
                 # Automatically populate script_vars if tool call requested target_variable and tool succeeded
                 try:
                     res_json = json.loads(result.stdout)
