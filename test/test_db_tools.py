@@ -50,7 +50,7 @@ class TestDbSearch:
             self._create_test_db(tmp_path)
             chatydb._manager = CorpusManager(tmp_path)
 
-            result = json.loads(db_search("carbonara"))
+            result = db_search("carbonara")
             assert result["total_matches"] == 1
             assert result["results"][0]["name"] == "Pasta Recipe"
         finally:
@@ -64,7 +64,7 @@ class TestDbSearch:
             self._create_test_db(tmp_path)
             chatydb._manager = CorpusManager(tmp_path)
 
-            result = json.loads(db_search("beef"))
+            result = db_search("beef")
             assert result["total_matches"] == 1
             assert result["results"][0]["name"] == "Beef Recipe"
         finally:
@@ -78,7 +78,7 @@ class TestDbSearch:
             self._create_test_db(tmp_path)
             chatydb._manager = CorpusManager(tmp_path)
 
-            result = json.loads(db_search("italian"))
+            result = db_search("italian")
             assert result["total_matches"] == 1
             assert result["results"][0]["name"] == "Pasta Recipe"
         finally:
@@ -92,7 +92,7 @@ class TestDbSearch:
             self._create_test_db(tmp_path)
             chatydb._manager = CorpusManager(tmp_path)
 
-            result = json.loads(db_search("*"))
+            result = db_search("*")
             assert result["total_matches"] == 3
         finally:
             os.unlink(tmp_path)
@@ -105,7 +105,7 @@ class TestDbSearch:
             self._create_test_db(tmp_path)
             chatydb._manager = CorpusManager(tmp_path)
 
-            result = json.loads(db_search())
+            result = db_search()
             assert result["total_matches"] == 3
         finally:
             os.unlink(tmp_path)
@@ -121,7 +121,7 @@ class TestDbSearch:
                 patch.dict(os.environ, {"CHATYBOT_ACTIVE_DB": db_name}),
                 patch.object(chatydb, "_ensure_db_path", return_value=tmp_path),
             ):
-                result = json.loads(db_search())
+                result = db_search()
                 assert result["total_matches"] == 3
         finally:
             os.unlink(tmp_path)
@@ -134,7 +134,7 @@ class TestDbSearch:
             self._create_test_db(tmp_path)
             chatydb._manager = CorpusManager(tmp_path)
 
-            result = json.loads(db_search("sushi"))
+            result = db_search("sushi")
             assert result["total_matches"] == 0
             assert result["results"] == []
         finally:
@@ -142,7 +142,7 @@ class TestDbSearch:
 
     def test_search_no_database(self):
         """Search without an active database returns error"""
-        result = json.loads(db_search("anything"))
+        result = db_search("anything")
         assert "error" in result
 
     def test_search_limit(self):
@@ -153,7 +153,7 @@ class TestDbSearch:
             self._create_test_db(tmp_path)
             chatydb._manager = CorpusManager(tmp_path)
 
-            result = json.loads(db_search("*", limit=2))
+            result = db_search("*", limit=2)
             assert result["total_matches"] == 3
             assert result["returned"] == 2
             assert len(result["results"]) == 2
@@ -171,7 +171,7 @@ class TestDbSearch:
             manager.close()
             chatydb._manager = CorpusManager(tmp_path)
 
-            result = json.loads(db_search("long"))
+            result = db_search("long")
             assert result["results"][0]["content_length"] == 1000
             assert len(result["results"][0]["content_preview"]) == 500
         finally:
@@ -185,7 +185,7 @@ class TestDbSearch:
             self._create_test_db(tmp_path)
             chatydb._manager = CorpusManager(tmp_path)
 
-            result = json.loads(db_search("PASTA"))
+            result = db_search("PASTA")
             assert result["total_matches"] == 1
         finally:
             os.unlink(tmp_path)
@@ -201,7 +201,7 @@ class TestDbSearch:
             manager.close()
             chatydb._manager = CorpusManager(tmp_path)
 
-            result = json.loads(db_search("Full", full_content=True))
+            result = db_search("Full", full_content=True)
             assert "content" in result["results"][0]
             assert "content_preview" not in result["results"][0]
             assert result["results"][0]["content"] == long_content
@@ -238,7 +238,7 @@ class TestDbGet:
             manager.close()
             chatydb._manager = CorpusManager(tmp_path)
 
-            result = json.loads(db_get(doc_id))
+            result = db_get(doc_id)
             assert result["id"] == doc_id
             assert result["name"] == "Sample Item"
             assert result["type"] == "doc"
@@ -262,7 +262,7 @@ class TestDbGet:
                 patch.dict(os.environ, {"CHATYBOT_ACTIVE_DB": db_name}),
                 patch.object(chatydb, "_ensure_db_path", return_value=tmp_path),
             ):
-                result = json.loads(db_get(doc_id))
+                result = db_get(doc_id)
                 assert result["id"] == doc_id
                 assert result["content"] == "Full content X"
         finally:
@@ -278,7 +278,7 @@ class TestDbGet:
             manager.close()
             chatydb._manager = CorpusManager(tmp_path)
 
-            result = json.loads(db_get(9999))
+            result = db_get(9999)
             assert "error" in result
             assert "9999 not found" in result["error"]
         finally:
@@ -293,7 +293,7 @@ class TestDbGet:
             manager.close()
             chatydb._manager = CorpusManager(tmp_path)
 
-            result = json.loads(db_get("not_an_id"))
+            result = db_get("not_an_id")
             assert "error" in result
             assert "Must be an integer" in result["error"]
         finally:
@@ -301,7 +301,7 @@ class TestDbGet:
 
     def test_db_get_no_database(self):
         """db_get returns error when no database selected"""
-        result = json.loads(db_get(1))
+        result = db_get(1)
         assert "error" in result
         assert "No database selected" in result["error"]
 
@@ -319,7 +319,7 @@ class TestDbList:
     def test_db_list_no_directory(self):
         """Returns empty list when db directory does not exist"""
         with patch("os.path.exists", return_value=False):
-            result = json.loads(db_list())
+            result = db_list()
         assert result["databases"] == []
         assert "message" in result
 
@@ -345,7 +345,7 @@ class TestDbList:
                 f.write("ignore me")
 
             with patch("os.path.expanduser", return_value=tmpdir):
-                result = json.loads(db_list())
+                result = db_list()
 
             names = [d["name"] for d in result["databases"]]
             assert "recipes" in names
@@ -410,7 +410,7 @@ class TestDbSummary:
             self._create_test_db(tmp_path)
             chatydb._manager = CorpusManager(tmp_path)
 
-            res = json.loads(db_summary(format="json"))
+            res = db_summary(format="json")
             assert res["total_matched"] == 3
             assert len(res["items"]) == 3
             assert res["items"][0]["prompt"].startswith("Prompt 1")
@@ -429,11 +429,11 @@ class TestDbSummary:
             self._create_test_db(tmp_path)
             chatydb._manager = CorpusManager(tmp_path)
 
-            res = json.loads(db_summary(item_range="1-2", format="json"))
+            res = db_summary(item_range="1-2", format="json")
             assert res["total_matched"] == 2
             assert [it["id"] for it in res["items"]] == [1, 2]
 
-            res_single = json.loads(db_summary(item_range="3", format="json"))
+            res_single = db_summary(item_range="3", format="json")
             assert res_single["total_matched"] == 1
             assert res_single["items"][0]["id"] == 3
         finally:
@@ -471,4 +471,54 @@ class TestDbSummary:
         db_summary(db_name="quietdb", format="json")
         out4 = capsys.readouterr().out
         assert "Database set to" not in out4
+
+    def test_dispatcher_db_search_returns_native_json_object(self, tmp_path):
+        """Test that dispatcher output produces a native JSON object in 'result', not an escaped string."""
+        import subprocess
+        import sys
+
+        fake_home = tmp_path / "home"
+        db_dir = fake_home / ".local" / "share" / "chatybot" / "db"
+        db_dir.mkdir(parents=True)
+        db_file = db_dir / "dispatchdb.json"
+        self._create_test_db(str(db_file))
+
+        config_file = tmp_path / "tools_config.toml"
+        config_file.write_text("""
+[tools.db_search]
+enabled = true
+module = "chatybot.tools.db_tools"
+function = "db_search"
+[tools.db_search.parameters.query]
+type = "string"
+optional = true
+[tools.db_search.parameters.db_name]
+type = "string"
+optional = true
+""")
+
+        payload_file = tmp_path / "invocation.json"
+        payload_file.write_text(json.dumps({
+            "tool": "db_search",
+            "arguments": {"query": "*", "db_name": "dispatchdb"}
+        }))
+
+        env = os.environ.copy()
+        env["HOME"] = str(fake_home)
+
+        proc = subprocess.run(
+            [sys.executable, "-m", "src.chatybot.dispatcher", str(payload_file), "--config", str(config_file)],
+            capture_output=True,
+            text=True,
+            env=env,
+            check=False,
+        )
+        assert proc.returncode == 0
+        envelope = json.loads(proc.stdout)
+        assert envelope["status"] == "success"
+        # The result field MUST be a native dict, not a serialized JSON string
+        assert isinstance(envelope["result"], dict)
+        assert "results" in envelope["result"]
+        assert envelope["result"]["total_matches"] == 3
+
 
