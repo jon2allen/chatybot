@@ -2,11 +2,15 @@
 
 All notable changes, release milestones, and version history for **Chatybot** are documented in this file.
 
-October 15th, 2026 (v0.9.0)
----------------------------
+Unreleased
+----------
 - **TinyDB Persistence & Dispatcher Performance**:
   - **Snapshot-on-Write Optimization**: Moved TinyDB rolling snapshot backups from database activation (`/setdb`) to the first write (`/dblog`) per session, completely eliminating backup churn and rotation on read-only operations and model tools (`db_search`, `db_get`).
-  - **Dispatcher Startup Optimization**: Removed phantom `chatydb` import and unused `log_to_database` hook from `dispatcher.py`, cutting subprocess launch latency from ~150ms to ~60ms (~90ms savings per out-of-process tool call).
+  - **Dispatcher Startup Optimization**: Removed unused `chatydb` import and `log_to_database` hook from `dispatcher.py` (saves ~2–3 ms per tool call).
+  - **Model DB Tool Hardening**: Isolated scoped model queries from active session databases, eliminated double-serialized JSON strings, suppressed stdout output during tool calls, prevented phantom directory and file creation on missing DB queries, and handled corrupted database files gracefully.
+
+October 15th, 2026 (v0.9.0)
+---------------------------
 - **Pluggable Security Release v0.9.0**:
   - Official release of Chatybot Pluggable Security Architecture and integration into master.
   - Bumped version to 0.9.0 across `pyproject.toml`, `chatybot_app.py`, and package initialization.
