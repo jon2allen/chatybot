@@ -113,8 +113,8 @@ def _backup_before_write() -> None:
         return
     if _active_db_name not in _session_backed_up_dbs:
         backup_info = _backup_db(_db_path, _active_db_name)
-        _session_backed_up_dbs.add(_active_db_name)
         if backup_info:
+            _session_backed_up_dbs.add(_active_db_name)
             backup_path, count, max_count = backup_info
             rel_backup = os.path.relpath(backup_path, os.path.dirname(_db_path))
             print(f"[backup] Snapshot saved: {rel_backup} ({count}/{max_count})")

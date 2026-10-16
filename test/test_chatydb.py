@@ -334,5 +334,21 @@ class TestChatyDB:
             if os.path.exists(tmp_path_file):
                 os.unlink(tmp_path_file)
 
+    def test_backup_before_write_only_records_on_success(self, monkeypatch):
+        """Test that failed or skipped backup attempts do not mark the database as backed up."""
+        monkeypatch.setattr(chatydb, "_active_db_name", "testdb")
+        monkeypatch.setattr(chatydb, "_db_path", "/fake/path/testdb.json")
+        monkeypatch.setattr(chatydb, "_session_backed_up_dbs", set())
+
+        # When _backup_db returns None (e.g. initial empty file or temporary failure)
+        monkeypatch.setattr(chatydb, "_backup_db", lambda *args, **kwargs: None)
+        chatydb._backup_before_write()
+        assert "testdb" not in chatydb._session_backed_up_dbs
+
+        # When _backup_db returns valid backup_info
+        monkeypatch.setattr(chatydb, "_backup_db", lambda *args, **kwargs: ("/fake/path/.backups/testdb/testdb.bak.json", 1, 5))
+        chatydb._backup_before_write()
+        assert "testdb" in chatydb._session_backed_up_dbs
+
 
 
