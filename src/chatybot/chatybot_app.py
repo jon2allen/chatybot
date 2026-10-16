@@ -5567,6 +5567,8 @@ class ChatybotApp:
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', result_str)
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
                 _tool_duration_ms = round((time.perf_counter() - _tool_t0) * 1000, 1)
+                if tool_name != "ask_user":
+                    print(f"   Tool time: {_tool_duration_ms:.1f} ms")
 
                 if self._is_permanent_capability_error(result_str) and "[PERMANENT CAPABILITY ERROR]" not in result_str:
                     result_str = self._format_capability_error(tool_name, result_str)
