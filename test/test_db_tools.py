@@ -585,6 +585,21 @@ optional = true
         assert "Database 'recipies' not found" in res_summary["error"]
         assert not ghost_file.exists()
 
+    def test_db_tools_corrupted_database_returns_clean_error(self, tmp_path, monkeypatch):
+        """Test that attempting to query a corrupted JSON database returns a clean structured error."""
+        def mock_ensure_db_path(name):
+            return str(tmp_path / f"{name}.json")
+
+        monkeypatch.setattr(chatydb, "_ensure_db_path", mock_ensure_db_path)
+
+        corrupt_file = tmp_path / "corruptdb.json"
+        corrupt_file.write_text("{ this is not valid json")
+
+        res = db_search(query="*", db_name="corruptdb")
+        assert "error" in res
+        assert "Failed to open database 'corruptdb'" in res["error"]
+
+
 
 
 
