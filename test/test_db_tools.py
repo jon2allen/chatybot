@@ -5,6 +5,7 @@ Unit tests for TinyDB database tools (db_search, db_list).
 
 import json
 import os
+from pathlib import Path
 import tempfile
 from unittest.mock import patch
 
@@ -508,8 +509,9 @@ optional = true
         env = os.environ.copy()
         env["HOME"] = str(fake_home)
 
+        dispatcher = Path(__file__).resolve().parents[1] / "src" / "chatybot" / "dispatcher.py"
         proc = subprocess.run(
-            [sys.executable, "-m", "src.chatybot.dispatcher", str(payload_file), "--config", str(config_file)],
+            [sys.executable, str(dispatcher), str(payload_file), "--config", str(config_file)],
             capture_output=True,
             text=True,
             env=env,
