@@ -120,6 +120,7 @@ class TestDbSearch:
             with (
                 patch.dict(os.environ, {"CHATYBOT_ACTIVE_DB": db_name}),
                 patch.object(chatydb, "_ensure_db_path", return_value=tmp_path),
+                patch.object(chatydb, "_get_db_path", return_value=tmp_path),
             ):
                 result = db_search()
                 assert result["total_matches"] == 3
@@ -261,6 +262,7 @@ class TestDbGet:
             with (
                 patch.dict(os.environ, {"CHATYBOT_ACTIVE_DB": db_name}),
                 patch.object(chatydb, "_ensure_db_path", return_value=tmp_path),
+                patch.object(chatydb, "_get_db_path", return_value=tmp_path),
             ):
                 result = db_get(doc_id)
                 assert result["id"] == doc_id
@@ -527,6 +529,7 @@ optional = true
             return str(tmp_path / f"{name}.json")
 
         monkeypatch.setattr(chatydb, "_ensure_db_path", mock_ensure_db_path)
+        monkeypatch.setattr(chatydb, "_get_db_path", mock_ensure_db_path)
 
         # Create two databases: active_user_db and model_target_db
         db_user = tmp_path / "userdb.json"
@@ -563,6 +566,7 @@ optional = true
             return str(tmp_path / f"{name}.json")
 
         monkeypatch.setattr(chatydb, "_ensure_db_path", mock_ensure_db_path)
+        monkeypatch.setattr(chatydb, "_get_db_path", mock_ensure_db_path)
 
         ghost_file = tmp_path / "recipies.json"
         assert not ghost_file.exists()
@@ -591,6 +595,7 @@ optional = true
             return str(tmp_path / f"{name}.json")
 
         monkeypatch.setattr(chatydb, "_ensure_db_path", mock_ensure_db_path)
+        monkeypatch.setattr(chatydb, "_get_db_path", mock_ensure_db_path)
 
         corrupt_file = tmp_path / "corruptdb.json"
         corrupt_file.write_text("{ this is not valid json")
@@ -598,6 +603,37 @@ optional = true
         res = db_search(query="*", db_name="corruptdb")
         assert "error" in res
         assert "Failed to open database 'corruptdb'" in res["error"]
+
+    def test_get_db_path_does_not_create_directory(self, tmp_path, monkeypatch):
+        """Test that _get_db_path does not invoke os.makedirs or create directories."""
+        fake_home = tmp_path / "fake_home"
+        monkeypatch.setattr(os.path, "expanduser", lambda path: str(fake_home / path.lstrip("~/")))
+        expected_db_file = fake_home / ".local" / "share" / "chatybot" / "db" / "somedb.json"
+        
+        path = chatydb._get_db_path("somedb")
+        assert path == str(expected_db_file)
+        # Directory must not have been created as a side-effect
+        assert not expected_db_file.parent.exists()
+
+    def test_db_tools_missing_active_db_env_returns_error_without_creating_file(self, tmp_path, monkeypatch):
+        """Test that CHATYBOT_ACTIVE_DB pointing to a nonexistent DB returns an error without auto-creating it."""
+        def mock_db_path(name):
+            return str(tmp_path / f"{name}.json")
+
+        monkeypatch.setattr(chatydb, "_ensure_db_path", mock_db_path)
+        monkeypatch.setattr(chatydb, "_get_db_path", mock_db_path)
+        monkeypatch.setattr(chatydb, "_manager", None)
+        monkeypatch.setattr(chatydb, "_active_db_name", None)
+
+        missing_active = "nonexistent_active"
+        target_file = tmp_path / f"{missing_active}.json"
+        assert not target_file.exists()
+
+        with patch.dict(os.environ, {"CHATYBOT_ACTIVE_DB": missing_active}):
+            res = db_search(query="*")
+            assert "error" in res
+            assert f"Active database '{missing_active}' not found" in res["error"]
+            assert not target_file.exists()
 
 
 
