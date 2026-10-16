@@ -34,13 +34,20 @@ def get_active_db() -> str | None:
     return _active_db_name or os.environ.get("CHATYBOT_ACTIVE_DB")
 
 
+def _get_db_path(db_name: str) -> str:
+    """Return the full path to the TinyDB file without creating directories."""
+    base_dir = os.path.expanduser("~/.local/share/chatybot")
+    db_dir = os.path.join(base_dir, "db")
+    return os.path.join(db_dir, f"{db_name}.json")
+
+
 def _ensure_db_path(db_name: str) -> str:
     """Ensure the database directory exists and return the full path to the TinyDB file."""
     base_dir = os.path.expanduser("~/.local/share/chatybot")
     db_dir = os.path.join(base_dir, "db")
     os.makedirs(db_dir, exist_ok=True)
     # TinyDB stores data in a JSON file; we use the provided name with .json extension
-    return os.path.join(db_dir, f"{db_name}.json")
+    return _get_db_path(db_name)
 
 
 def _backup_db(db_path: str, db_name: str, max_backups: int = MAX_DB_BACKUPS) -> tuple[str, int, int] | None:

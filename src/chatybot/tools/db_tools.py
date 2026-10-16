@@ -36,7 +36,7 @@ def _scoped_corpus_manager(
             yield chatydb._manager, None, name
             return
 
-        db_path = chatydb._ensure_db_path(name)
+        db_path = chatydb._get_db_path(name)
         if not os.path.exists(db_path):
             yield None, f"Database '{name}' not found.", name
             return
@@ -56,8 +56,15 @@ def _scoped_corpus_manager(
                 scoped_mgr.close()
     else:
         # Fall back to active database or CHATYBOT_ACTIVE_DB env var
-        if chatydb._manager is None and os.environ.get("CHATYBOT_ACTIVE_DB"):
-            chatydb.set_db(os.environ["CHATYBOT_ACTIVE_DB"], quiet=True)
+        active_env = os.environ.get("CHATYBOT_ACTIVE_DB")
+        if chatydb._manager is None and active_env:
+            active_name = active_env.strip()
+            active_path = chatydb._get_db_path(active_name)
+            if os.path.exists(active_path):
+                chatydb.set_db(active_name, quiet=True)
+            else:
+                yield None, f"Active database '{active_name}' not found.", active_name
+                return
 
         if chatydb._manager is None:
             yield None, "No database selected. Use the db_name parameter or /setdb first.", "active"
