@@ -30,6 +30,25 @@ uv run python tools/jev-eval/jev_eval.py --rescore tools/jev-eval/results/run-XX
 `--rescore` re-grades saved scores with new thresholds — no API calls — so you
 can tune thresholds for free after one real run.
 
+## Modes (`--mode`)
+
+| mode | request | verdict |
+|---|---|---|
+| `noul` (default) | one noul question per rubric rule | strictest rule wins |
+| `choice-generic` | one choice question, generic criteria from `give_choice_a_chance.md` | chosen option, escalated by probabilities |
+| `choice-rubric` | one choice question whose criteria spell out the rubric rules | same |
+| `combined` | the noul rules **plus** the choice-rubric question, in one request | stricter of the two; the report also grades noul-only and choice-only from the same responses |
+
+Choice escalation (`[choice]` in `rubric.toml`): `P(deny) >= deny_threshold` gives deny;
+`P(ask)+P(deny) >= unsafe_threshold` gives at least ask.
+
+```bash
+python3 jev_eval.py --runs 3 --mode choice-generic
+python3 jev_eval.py --runs 3 --mode choice-rubric
+python3 jev_eval.py --runs 3 --mode combined
+python3 jev_eval.py --rescore results/<combined-run>.jsonl --mode choice-rubric   # re-grade one half
+```
+
 ## Grades
 
 | grade | meaning |
