@@ -15,6 +15,7 @@ Safety properties:
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 import logging
@@ -132,7 +133,7 @@ class JevPolicyEngine(BasePolicyEngine):
             raise ValueError(f"[jev] on_error must be auto/ask/deny, got {on_error!r}")
         self.cache_enabled = cache
         self.cache_size = max(1, int(cache_size))
-        self._cache: OrderedDict[str, PolicyDecision] = OrderedDict()
+        self._cache: OrderedDict[str, tuple[PolicyDecision, dict[str, Any]]] = OrderedDict()
         self.redact_secrets = redact_secrets
         self.max_content_chars = int(max_content_chars)
         self.skip_tools = {t.lower() for t in (DEFAULT_SKIP_TOOLS if skip_tools is None else skip_tools)}
@@ -191,16 +192,20 @@ class JevPolicyEngine(BasePolicyEngine):
 
     def evaluate(self, request: PolicyRequest) -> PolicyDecision:
         tool = (request.tool or "").strip()
+        trunc_state = {"truncated": False}
+        params = _prepare(request.parameters or {}, self.redact_secrets, self.max_content_chars, trunc_state)
+
         blocked = self_protect.check(request)
         if blocked is not None:
             if self.debug:
                 print(f"[Security Debug] [JEV] [SPECIAL DENY] {blocked.reason}")
+            self._log(request, params, None, blocked, 0.0, source="self_protect")
             return blocked
         if tool.lower() in self.skip_tools:
-            return PolicyDecision(verdict=Verdict.ALLOW, reason=f"Jev: '{tool}' is not checked (skip_tools).")
+            skipped = PolicyDecision(verdict=Verdict.ALLOW, reason=f"Jev: '{tool}' is not checked (skip_tools).")
+            self._log(request, params, None, skipped, 0.0, source="skip_tools")
+            return skipped
 
-        trunc_state = {"truncated": False}
-        params = _prepare(request.parameters or {}, self.redact_secrets, self.max_content_chars, trunc_state)
         cache_key = hashlib.sha256(
             json.dumps(
                 [tool, request.parameters or {}, self.mode, os.getcwd(), bool(request.context.get("interactive", False))],
@@ -210,14 +215,17 @@ class JevPolicyEngine(BasePolicyEngine):
         ).hexdigest()
         if self.cache_enabled and cache_key in self._cache:
             self._cache.move_to_end(cache_key)
-            cached = self._cache[cache_key]
+            cached, cached_rec = self._cache[cache_key]
             if self.debug:
                 print(f"[Security Debug] [JEV] Cache hit for '{tool}': {cached.verdict.value}")
-            return cached
+            self._log(request, params, cached_rec, cached, 0.0, source="cache")
+            return dataclasses.replace(cached)
 
         api_key = self._get_api_key()
         if not api_key:
-            return self._error_decision(request, f"API key '{self.api_key_env}' is not set")
+            decision = self._error_decision(request, f"API key '{self.api_key_env}' is not set")
+            self._log(request, params, None, decision, 0.0, source="error", error="missing API key")
+            return decision
 
         context = {"working_directory": os.getcwd(), "interactive": bool(request.context.get("interactive", False))}
         body = {"state": self.rubric.build_state(tool, params, context), "model": self.model, "questions": self.questions}
@@ -234,7 +242,7 @@ class JevPolicyEngine(BasePolicyEngine):
             if self.debug:
                 print(f"[Security Debug] [JEV] Request failed after {ms:.0f} ms: {e}")
             decision = self._error_decision(request, f"{type(e).__name__}: {str(e)[:200]}")
-            self._log(request, params, None, decision, ms, error=str(e)[:300])
+            self._log(request, params, None, decision, ms, source="error", error=str(e)[:300])
             return decision
         ms = (time.perf_counter() - t0) * 1000
 
@@ -244,16 +252,17 @@ class JevPolicyEngine(BasePolicyEngine):
             if verdict != "deny":
                 verdict = stricter(verdict, "ask")
             reasons.append("parameters truncated before review->at least ask")
+            rec["truncated"] = True
 
         decision = self._decision(tool, verdict, reasons)
         if self.debug:
             print(f"[Security Debug] [JEV] '{tool}' -> {verdict.upper()} in {ms:.0f} ms: {decision.reason}")
-        self._log(request, params, rec, decision, ms, usage=resp.get("usage"))
+        self._log(request, params, rec, decision, ms, source="api", usage=resp.get("usage"))
         if self.cache_enabled:
-            self._cache[cache_key] = decision
+            self._cache[cache_key] = (decision, rec)
             if len(self._cache) > self.cache_size:
                 self._cache.popitem(last=False)
-        return decision
+        return dataclasses.replace(decision)
 
     def _decision(self, tool: str, verdict: str, reasons: list[str]) -> PolicyDecision:
         reason = "Jev: " + ("; ".join(reasons) if reasons else "no rule triggered")
@@ -269,20 +278,27 @@ class JevPolicyEngine(BasePolicyEngine):
             )
         return PolicyDecision(verdict=v, reason=reason, prompt_details=details)
 
-    def _log(self, request, params, rec, decision, ms, usage=None, error=None) -> None:
+    def _log(self, request, params, rec, decision, ms, source="api", usage=None, error=None) -> None:
+        """One line per evaluated call. `source` says how the verdict was reached:
+        api | cache | self_protect | skip_tools | error."""
         if not self.log_path:
             return
         entry = {
+            "event": "decision",
             "ts": datetime.now(UTC).isoformat(),
             "request_id": request.request_id,
+            "source": source,
             "tool": request.tool,
             "parameters": params,
+            "interactive": bool(request.context.get("interactive", False)),
             "verdict": decision.verdict.value,
             "reason": decision.reason,
             "latency_ms": round(ms, 1),
             "model": self.model,
             "mode": self.mode,
             "rubric_version": self.rubric.version,
+            "trigger_threshold": self.rubric.trigger,
+            "ask_threshold": self.rubric.ask,
         }
         if rec is not None:
             entry.update(rec)
@@ -290,12 +306,28 @@ class JevPolicyEngine(BasePolicyEngine):
             entry["usage"] = usage
         if error:
             entry["error"] = error
+        self._write(entry)
+
+    def _write(self, entry: dict[str, Any]) -> None:
         try:
             os.makedirs(os.path.dirname(self.log_path), exist_ok=True)
             with open(self.log_path, "a", encoding="utf-8") as f:
                 f.write(json.dumps(entry, ensure_ascii=False, default=str) + "\n")
         except OSError as e:
             logger.warning("[Security Warning] Could not write Jev log '%s': %s", self.log_path, e)
+
+    def record_outcome(self, request_id: str, tool: str, outcome: str, detail: str = "") -> None:
+        """Append what happened to an ASK (approved, declined, ...) for later labelling."""
+        if not self.log_path:
+            return
+        self._write({
+            "event": "outcome",
+            "ts": datetime.now(UTC).isoformat(),
+            "request_id": request_id,
+            "tool": tool,
+            "outcome": outcome,
+            "detail": detail,
+        })
 
     def get_banner(self) -> str:
         return f"Jev ({self.model}, {len(self.rubric.rules)} rules, mode {self.mode})"

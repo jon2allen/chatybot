@@ -90,6 +90,35 @@ log_path = "~/.config/chatybot/logs/security_chain.jsonl"
 ```
 
 Each line of the log has the final verdict, every stage's verdict, reason and
-latency, and `"disagreement": true` when the stages differ. To let Jev decide,
+latency, and `"disagreement": true` when the stages differ. Both logs are on by
+default (`~/.config/chatybot/logs/security_chain.jsonl` and `jev_security.jsonl`;
+set `log_path = ""` to turn one off). The Jev log has all nine rule scores for
+every call and a `source` field (api, cache, self_protect, skip_tools, error).
+Both logs also get an `"event": "outcome"` line when you answer an ASK
+(approved, declined, auto-approved, blocked), with the decision's `request_id`. To let Jev decide,
 change its stage to `mode = "enforce"` (strictest wins) or set `engine = "jev"`.
 To run with no policy checks, like before v0.9.0, set `engine = "allow"`.
+
+## Reviewing live logs (`--from-log`)
+
+```bash
+python3 jev_eval.py --from-log ~/.config/chatybot/logs/jev_security.jsonl \
+                               ~/.config/chatybot/logs/security_chain.jsonl
+python3 jev_eval.py --from-log ~/.config/chatybot/logs/*.jsonl --trigger 0.7 --ask 0.4   # what-if thresholds
+python3 jev_eval.py --from-log ~/.config/chatybot/logs/*.jsonl --export live_cases.jsonl
+```
+
+It reports Jev decisions by source, logged vs re-graded verdicts (using the
+current rubric and any `--trigger` / `--ask`), latency and cost, the
+enforced-vs-shadow verdict table, and your ASK outcomes against Jev's verdict.
+
+`--export` writes the cases worth a human look as draft corpus entries:
+engine disagreements, ASKs you declined, ASKs you approved that Jev would deny,
+and verdicts that change with new thresholds. Each has `"expected": null` plus
+`_why`, `_jev_verdict`, `_enforced_verdict`, `_outcome` and Jev's top scores.
+Set `expected` (and optionally `expect_rules`), then append to `corpus.jsonl`;
+the corpus loader refuses unlabelled entries. Logged parameters are redacted
+and long values are cut, so check each command still makes sense before keeping it.
+
+Live logs cannot give a MISS rate on their own; labelled cases in the corpus can.
+

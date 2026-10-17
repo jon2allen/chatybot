@@ -50,6 +50,7 @@ from chatybot.security.jev_rubric import (
     Rubric,
     parse_choice,
     parse_noul,
+    stricter,
 )
 
 
@@ -302,8 +303,182 @@ def report(records, cases_by_id, rubric: Rubric, mode: str, verbose: bool) -> in
 # Main
 # ----------------------------------------------------------------------------
 
+# ----------------------------------------------------------------------------
+# Live logs (--from-log)
+# ----------------------------------------------------------------------------
+
+def _read_jsonl(paths: list[str]) -> list[dict[str, Any]]:
+    out = []
+    for p in paths:
+        for n, line in enumerate(Path(p).expanduser().read_text().splitlines(), 1):
+            if not line.strip():
+                continue
+            try:
+                out.append(json.loads(line))
+            except json.JSONDecodeError:
+                print(f"  skipping malformed line {p}:{n}", file=sys.stderr)
+    return out
+
+
+def from_log(args, rubric: Rubric) -> int:
+    """Summarise live Jev / chain logs, re-grade Jev's saved scores, export cases to label."""
+    events = _read_jsonl(args.from_log)
+    jev = [e for e in events if e.get("event") == "decision" and "source" in e]
+    chain = [e for e in events if e.get("event") == "decision" and "stages" in e]
+    outcomes: dict[str, str] = {}
+    for e in events:
+        if e.get("event") == "outcome" and e.get("request_id"):
+            outcomes[e["request_id"]] = e.get("outcome", "")
+    chain_by_id = {e["request_id"]: e for e in chain if e.get("request_id")}
+    jev_by_id = {e["request_id"]: e for e in jev if e.get("request_id")}
+
+    print(f"\nRead {len(events)} lines: {len(jev)} Jev decisions, {len(chain)} chain decisions, {len(outcomes)} ASK outcomes")
+    print(f"Re-grading with: trigger >= {rubric.trigger} | ask >= {rubric.ask}"
+          + (f" | mode {args.mode_given}" if args.mode_given else " | mode as logged"))
+
+    # ---- Jev decisions
+    if jev:
+        by_source: dict[str, int] = {}
+        for e in jev:
+            by_source[e["source"]] = by_source.get(e["source"], 0) + 1
+        print("\nJev decisions by source: " + ", ".join(f"{k} {v}" for k, v in sorted(by_source.items())))
+        graded = [e for e in jev if e["source"] in ("api", "cache") and ("scores" in e or "choice" in e)]
+        logged = {"allow": 0, "ask": 0, "deny": 0}
+        regraded = {"allow": 0, "ask": 0, "deny": 0}
+        changed = []
+        for e in graded:
+            mode = args.mode_given or e.get("mode", "noul")
+            v, reasons = rubric.evaluate(e, mode)
+            if e.get("truncated") and v != "deny":
+                v = stricter(v, "ask")
+            e["_regraded"] = v
+            logged[e["verdict"]] += 1
+            regraded[v] += 1
+            if v != e["verdict"]:
+                changed.append(e)
+        print(f"  verdicts as logged:  allow {logged['allow']}, ask {logged['ask']}, deny {logged['deny']}")
+        print(f"  verdicts re-graded:  allow {regraded['allow']}, ask {regraded['ask']}, deny {regraded['deny']}")
+        if changed:
+            print(f"  {len(changed)} verdict(s) change with these thresholds:")
+            for e in changed[:20]:
+                print(f"    {e['verdict']:>5} -> {e['_regraded']:<5} {e['tool']}: {short(e, 60)}")
+        api = [e for e in jev if e["source"] == "api"]
+        lat = sorted(e["latency_ms"] for e in api if "latency_ms" in e)
+        if lat:
+            p95 = lat[min(len(lat) - 1, int(0.95 * len(lat)))]
+            print(f"  API latency ms: p50 {statistics.median(lat):.0f} | p95 {p95:.0f} | max {lat[-1]:.0f} ({len(lat)} calls)")
+        cost = sum((e.get("usage") or {}).get("cost", 0) or 0 for e in api)
+        if cost:
+            print(f"  reported cost: ${cost:.4f}")
+        errs = [e for e in jev if e["source"] == "error"]
+        if errs:
+            print(f"  {len(errs)} error(s), e.g. {errs[0].get('error', '')[:100]}")
+
+    # ---- chain comparison
+    if chain:
+        dis = [e for e in chain if e.get("disagreement")]
+        print(f"\nChain decisions: {len(chain)}, disagreements: {len(dis)}")
+        pairs: dict[tuple[str, str], int] = {}
+        for e in chain:
+            enforced = e.get("final", "?")
+            for st in e.get("stages", []):
+                if st.get("mode") == "shadow" and "verdict" in st:
+                    key = (enforced, st["verdict"])
+                    pairs[key] = pairs.get(key, 0) + 1
+        if pairs:
+            print("  enforced -> shadow verdict counts:")
+            for (a, b), n in sorted(pairs.items()):
+                print(f"    {a:>5} -> {b:<5} {n}{'   <- disagreement' if a != b else ''}")
+
+    # ---- outcomes
+    if outcomes:
+        counts: dict[str, int] = {}
+        for o in outcomes.values():
+            counts[o] = counts.get(o, 0) + 1
+        print("\nASK outcomes: " + ", ".join(f"{k} {v}" for k, v in sorted(counts.items())))
+        if jev_by_id:
+            vs: dict[tuple[str, str], int] = {}
+            for rid, o in outcomes.items():
+                j = jev_by_id.get(rid)
+                if j:
+                    k = (o, j.get("_regraded", j["verdict"]))
+                    vs[k] = vs.get(k, 0) + 1
+            if vs:
+                print("  user outcome vs Jev verdict:")
+                for (o, v), n in sorted(vs.items()):
+                    print(f"    {o:<30} Jev {v:<5} {n}")
+
+    # ---- candidates to label
+    cands: dict[str, dict[str, Any]] = {}
+
+    def add(e: dict[str, Any], why: str) -> None:
+        key = json.dumps([e.get("tool"), e.get("parameters")], sort_keys=True, default=str)
+        rid = e.get("request_id", "")
+        c = cands.setdefault(key, {
+            "tool": e.get("tool"),
+            "parameters": e.get("parameters"),
+            "_why": [],
+            "_request_id": rid,
+            "_ts": e.get("ts", ""),
+        })
+        if why not in c["_why"]:
+            c["_why"].append(why)
+        j = jev_by_id.get(rid)
+        ch = chain_by_id.get(rid)
+        if j:
+            c["_jev_verdict"] = j.get("_regraded", j["verdict"])
+            if j.get("scores"):
+                top = sorted(j["scores"].items(), key=lambda kv: -(kv[1] or 0))[:3]
+                c["_jev_top"] = {k: v for k, v in top}
+        if ch:
+            c["_enforced_verdict"] = ch.get("final")
+        if rid in outcomes:
+            c["_outcome"] = outcomes[rid]
+
+    for e in chain:
+        if e.get("disagreement"):
+            add(e, "engines disagreed")
+    for rid, o in outcomes.items():
+        src = chain_by_id.get(rid) or jev_by_id.get(rid)
+        if not src:
+            continue
+        if o == "declined":
+            add(src, "user declined the ASK")
+        j = jev_by_id.get(rid)
+        if o == "approved" and j and j.get("_regraded", j["verdict"]) == "deny":
+            add(src, "user approved what Jev would deny")
+    for e in jev:
+        if "_regraded" in e and e["_regraded"] != e["verdict"]:
+            add(e, "verdict changes with new thresholds")
+
+    print(f"\nCases worth labelling: {len(cands)}")
+    for c in list(cands.values())[:15]:
+        print(f"  [{'; '.join(c['_why'])}] {short(c, 70)}")
+    if args.export:
+        out = Path(args.export).expanduser()
+        stamp = datetime.now().strftime("%Y%m%d")
+        with open(out, "w") as f:
+            for n, c in enumerate(cands.values(), 1):
+                row = {"id": f"live-{stamp}-{n:03d}", "category": "live", "tool": c["tool"],
+                       "parameters": c["parameters"], "expected": None}
+                row.update({k: v for k, v in c.items() if k.startswith("_")})
+                f.write(json.dumps(row, ensure_ascii=False, default=str) + "\n")
+        print(f"\nExported {len(cands)} draft case(s) to {out}.")
+        print("Set each 'expected' to allow / ask / deny, add 'expect_rules' if you like, then append them to corpus.jsonl.")
+        print("Note: parameters are as logged (secrets redacted, long values cut to head and tail).")
+    return 0
+
+
 def load_cases(path: Path, only: str | None, limit: int | None) -> list[dict[str, Any]]:
     cases = [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+    for n, c in enumerate(cases, 1):
+        exp = c.get("expected")
+        labels = [exp] if isinstance(exp, str) else exp
+        if not labels or not all(isinstance(e, str) and e in STRICTNESS for e in labels):
+            raise SystemExit(
+                f"{path}:{n} ({c.get('id', '?')}): 'expected' must be allow, ask, deny or a list of them, "
+                f"got {exp!r}. Label exported live cases before adding them to the corpus."
+            )
     if only:
         keys = [k.strip() for k in only.split(",")]
         cases = [c for c in cases if any(k == c["category"] or k in c["id"] for k in keys)]
@@ -316,6 +491,9 @@ async def main_async(args) -> int:
         rubric.trigger = args.trigger
     if args.ask is not None:
         rubric.ask = args.ask
+
+    if args.from_log:
+        return from_log(args, rubric)
 
     if args.rescore:
         records = [json.loads(l) for l in Path(args.rescore).read_text().splitlines() if l.strip()]
@@ -381,6 +559,11 @@ def main() -> None:
     ap.add_argument("--trigger", type=float, help="override noul trigger_threshold")
     ap.add_argument("--ask", type=float, help="override noul ask_threshold")
     ap.add_argument("--rescore", metavar="RESULTS.jsonl", help="re-grade saved scores without calling the API")
+    ap.add_argument("--from-log", nargs="+", metavar="LOG.jsonl",
+                    help="summarise live jev_security.jsonl / security_chain.jsonl logs, re-grade Jev's saved "
+                         "scores with the current rubric and --trigger/--ask, and list cases worth labelling")
+    ap.add_argument("--export", metavar="OUT.jsonl",
+                    help="with --from-log: write cases worth labelling as draft corpus entries")
     ap.add_argument("--dry-run", action="store_true", help="print request payloads only")
     ap.add_argument("-v", "--verbose", action="store_true", help="show every case, not only failures")
     ap.add_argument("--model", default="typesafe/jev-1.13")

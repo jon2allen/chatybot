@@ -4,6 +4,7 @@ Coordinates configuration loading, engine selection, and policy evaluation.
 Configuration is loaded from ~/.config/chatybot/security.toml (outside tools_config and chat_config).
 """
 
+import dataclasses
 import logging
 import os
 import shutil
@@ -103,6 +104,17 @@ class SecurityManager:
         self.engine = self._build_engine(engine_type, top_level=True)
 
     ENGINE_TYPES = ("builtin", "binary", "allow", "jev", "chain")
+    # Logged by default for the engines whose effectiveness is still being
+    # measured; set log_path = "" in [jev] / [chain] to turn logging off.
+    DEFAULT_JEV_LOG = "~/.config/chatybot/logs/jev_security.jsonl"
+    DEFAULT_CHAIN_LOG = "~/.config/chatybot/logs/security_chain.jsonl"
+    ASK_OUTCOMES = (
+        "approved",                       # user answered yes at the prompt
+        "declined",                       # user answered no
+        "auto_approved_yes_flag",         # -y / --yes
+        "auto_approved_non_interactive",  # non_interactive_ask = "allow"
+        "blocked_non_interactive",        # non_interactive_ask = "deny"
+    )
 
     def _build_engine(self, engine_type: str, top_level: bool = False) -> BasePolicyEngine:
         """Construct one engine from its [section] in the config."""
@@ -155,7 +167,7 @@ class SecurityManager:
                 redact_secrets=bool(jev_cfg.get("redact_secrets", True)),
                 max_content_chars=int(jev_cfg.get("max_content_chars", 8000)),
                 skip_tools=jev_cfg.get("skip_tools"),
-                log_path=jev_cfg.get("log_path", ""),
+                log_path=jev_cfg.get("log_path", self.DEFAULT_JEV_LOG),
                 debug=self.debug,
             )
 
@@ -184,7 +196,7 @@ class SecurityManager:
                 stages=stages,
                 fail_safe=self.fail_safe,
                 shadow_on_deny=bool(chain_cfg.get("shadow_on_deny", True)),
-                log_path=chain_cfg.get("log_path", ""),
+                log_path=chain_cfg.get("log_path", self.DEFAULT_CHAIN_LOG),
                 redact_log=bool(chain_cfg.get("redact_log", True)),
                 debug=self.debug,
             )
@@ -220,12 +232,30 @@ class SecurityManager:
             context=ctx,
         )
         try:
-            return self.engine.evaluate(req)
+            decision = self.engine.evaluate(req)
         except Exception as exc:
-            return PolicyDecision(
+            decision = PolicyDecision(
                 verdict=self.fail_safe,
                 reason=f"Security manager evaluation failed ({exc}). Failing safe to {self.fail_safe.value}.",
             )
+        # Return a copy stamped with the request id (engines may cache and reuse decisions).
+        return dataclasses.replace(decision, request_id=req.request_id)
+
+    def record_outcome(self, decision: PolicyDecision, outcome: str, tool: str = "", detail: str = "") -> None:
+        """Record what happened to an ASK decision (see ASK_OUTCOMES) in the engine's log.
+
+        Engines that keep a decision log (chain, jev) append an outcome line with the
+        same request_id as the decision, so the two can be joined later. Never raises.
+        """
+        if not self.enabled or self.engine is None or not getattr(decision, "request_id", ""):
+            return
+        fn = getattr(self.engine, "record_outcome", None)
+        if fn is None:
+            return
+        try:
+            fn(decision.request_id, tool, outcome, detail)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("[Security Warning] Could not record outcome '%s': %s", outcome, exc)
 
     def get_banner(self) -> str:
         """Return a human-readable banner string describing the active security engine."""

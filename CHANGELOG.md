@@ -9,7 +9,14 @@ Unreleased
   - **`engine = "chain"`**: runs several engines per tool call. `enforce` stages decide (strictest verdict wins; later enforcers are skipped after a DENY); `shadow` stages are pass-through, evaluated and logged only. Optional JSONL comparison log with per-stage verdicts, latency and a disagreement flag; secrets are redacted in the log.
   - **`engine = "jev"`**: TypeSafe Jev decision-model engine driven by a rubric (`~/.config/chatybot/jev_security.toml`, seeded from `security/default_jev_security.toml`). Self-protection floor before any API call, secret redaction, head+tail truncation that forces at least ASK, per-session cache, `on_error` fail-safe (ASK interactive / DENY non-interactive), optional JSONL log, `noul` or `combined` mode.
   - Rubric scoring shared between the engine and the `tools/jev-eval` harness (`security/jev_rubric.py`).
-  - Added `test/test_security_chain_jev.py` (25 tests; Jev HTTP stubbed).
+  - Added `test/test_security_chain_jev.py` (Jev HTTP stubbed).
+- **Jev / chain observability and hardening**:
+  - Jev and chain logs are on by default (`~/.config/chatybot/logs/jev_security.jsonl`, `security_chain.jsonl`); `log_path = ""` turns them off.
+  - The Jev log records every call with a `source` (api, cache, self_protect, skip_tools, error); cached decisions keep their scores and are returned as copies.
+  - ASK outcomes (approved, declined, auto-approved via `-y` or `non_interactive_ask`, blocked non-interactive) are logged with the decision's `request_id` via `SecurityManager.record_outcome`, called from tool dispatch. Decisions now carry `request_id` (not part of the engine wire protocol).
+  - Malformed Jev probabilities (NaN, ±inf, outside 0–1, choice distributions that do not sum to 1) are treated as missing and give ASK instead of ALLOW.
+  - Test that fails if `default_jev_security.toml` and `tools/jev-eval/rubric.toml` drift apart.
+  - `tools/jev-eval/jev_eval.py --from-log`: summarise live logs, re-grade saved Jev scores with new thresholds, and `--export` cases worth labelling as draft corpus entries.
 
 - **TinyDB Persistence & Dispatcher Performance**:
   - **Snapshot-on-Write Optimization**: Moved TinyDB rolling snapshot backups from database activation (`/setdb`) to the first write (`/dblog`) per session, completely eliminating backup churn and rotation on read-only operations and model tools (`db_search`, `db_get`).
