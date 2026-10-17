@@ -23,6 +23,16 @@ from chatybot.security.jev_rubric import CHOICE_KEY, Rubric
 RULE_IDS = [r.id for r in Rubric.load(BUNDLED_RUBRIC).rules]
 
 
+
+@pytest.fixture(autouse=True)
+def isolated_home(tmp_path, monkeypatch):
+    """Engines now log by default under ~/.config/chatybot/logs; keep tests out of the real home."""
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    return home
+
+
 def req(tool, interactive=True, **params):
     return PolicyRequest(tool=tool, parameters=params, context={"interactive": interactive})
 
@@ -434,3 +444,269 @@ def test_jev_rubric_nan_scores_treated_as_uncertain():
     assert verdict == "ask"
     assert "git_push=missing->ask" in reasons
 
+
+
+# --------------------------------------------------------------------------- malformed scores
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf"), -0.3, 1.7, True, "0.9", None])
+def test_malformed_noul_scores_become_ask(bad):
+    rubric = Rubric.load(BUNDLED_RUBRIC)
+    scores = {r.id: 0.02 for r in rubric.rules}
+    scores["git_push"] = bad
+    verdict, reasons = rubric.noul_verdict(scores)
+    assert verdict == "ask", (bad, verdict)
+    assert "git_push=missing->ask" in reasons
+
+
+@pytest.mark.parametrize("raw", [
+    '{"noul": NaN}', '{"noul": Infinity}', '{"noul": -Infinity}', '{"noul": -0.2}', '{"noul": 1.5}',
+    '{"answer": true, "confidence": NaN}',
+])
+def test_parse_noul_rejects_malformed(raw):
+    from chatybot.security.jev_rubric import parse_noul
+
+    assert parse_noul(json.loads(raw)) is None
+
+
+@pytest.mark.parametrize("probs", [
+    '{"allow": 0.1, "ask": NaN, "deny": NaN}',
+    '{"allow": 0.9, "ask": 0.9, "deny": 0.9}',      # does not sum to 1
+    '{"allow": 1.2, "ask": -0.1, "deny": -0.1}',    # out of range
+    '{"allow": "lots", "ask": 0.0, "deny": 0.0}',   # not a number
+])
+def test_malformed_choice_probabilities_become_ask(probs):
+    from chatybot.security.jev_rubric import parse_choice
+
+    rubric = Rubric.load(BUNDLED_RUBRIC)
+    raw = json.loads('{"choice": "allow", "confidence": 0.9, "probabilities": ' + probs + "}")
+    parsed = parse_choice(raw)
+    assert parsed is None
+    assert rubric.choice_verdict(parsed)[0] == "ask"
+    # Also guarded when an already-parsed (e.g. saved) record carries bad numbers
+    assert rubric.choice_verdict({"choice": "allow", "probabilities": {"allow": 0.1, "ask": float("nan"), "deny": float("nan")}})[0] == "ask"
+
+
+def test_valid_choice_still_allows():
+    from chatybot.security.jev_rubric import parse_choice
+
+    rubric = Rubric.load(BUNDLED_RUBRIC)
+    parsed = parse_choice({"choice": "allow", "confidence": 0.97, "probabilities": {"allow": 0.97, "ask": 0.02, "deny": 0.01}})
+    assert rubric.choice_verdict(parsed)[0] == "allow"
+
+
+# --------------------------------------------------------------------------- logging & outcomes
+
+def _lines(path):
+    return [json.loads(l) for l in open(path) if l.strip()]
+
+
+def test_jev_and_chain_log_by_default(tmp_path, jev_key, monkeypatch, isolated_home):
+    monkeypatch.setattr("chatybot.security.jev._urllib_post", FakeJev(scores={"git_push": 0.95}))
+    cfg = tmp_path / "security.toml"
+    cfg.write_text(
+        'engine = "chain"\n[chain]\nstages = [ { engine = "builtin", mode = "enforce" }, { engine = "jev", mode = "shadow" } ]\n'
+    )
+    mgr = SecurityManager(config_path=str(cfg))
+    mgr.evaluate("run_command", {"command": "git push"}, {"interactive": True})
+    logs = isolated_home / ".config" / "chatybot" / "logs"
+    assert (logs / "security_chain.jsonl").exists()
+    assert (logs / "jev_security.jsonl").exists()
+
+    cfg.write_text(cfg.read_text() + 'log_path = ""\n[jev]\nlog_path = ""\n')
+    for f in logs.iterdir():
+        f.unlink()
+    mgr = SecurityManager(config_path=str(cfg))
+    mgr.evaluate("run_command", {"command": "git push --tags"}, {"interactive": True})
+    assert list(logs.iterdir()) == []
+
+
+def test_jev_logs_every_path_with_source(rubric_path, jev_key, tmp_path, monkeypatch):
+    log = tmp_path / "jev.jsonl"
+    eng = make_jev(rubric_path, FakeJev(scores={"git_push": 0.9}), log_path=str(log))
+    eng.evaluate(cmd("git push"))                                           # api
+    eng.evaluate(cmd("git push"))                                           # cache
+    eng.evaluate(req("read_file", path="~/.config/chatybot/security.toml"))  # self_protect
+    eng.evaluate(req("ask_user", question="ok?"))                           # skip_tools
+    sources = [e["source"] for e in _lines(log)]
+    assert sources == ["api", "cache", "self_protect", "skip_tools"]
+    cache_line = _lines(log)[1]
+    assert cache_line["scores"]["git_push"] == 0.9  # scores kept with cached decisions
+    assert all(e["event"] == "decision" for e in _lines(log))
+
+    err_log = tmp_path / "err.jsonl"
+    make_jev(rubric_path, FakeJev(error=TimeoutError("slow")), log_path=str(err_log)).evaluate(cmd("ls"))
+    monkeypatch.delenv("OPENROUTER_API_KEY")
+    monkeypatch.setattr("chatybot.env_utils.load_project_env_files", lambda *a, **k: [])
+    make_jev(rubric_path, FakeJev(), log_path=str(err_log)).evaluate(cmd("ls"))
+    assert [e["source"] for e in _lines(err_log)] == ["error", "error"]
+
+
+def test_cached_decisions_are_copies(rubric_path, jev_key):
+    eng = make_jev(rubric_path, FakeJev(scores={"git_push": 0.9}))
+    first = eng.evaluate(cmd("git push"))
+    first.reason = "tampered"
+    assert eng.evaluate(cmd("git push")).reason != "tampered"
+
+
+def test_manager_stamps_request_id_and_records_outcomes(tmp_path, jev_key, monkeypatch):
+    fake = FakeJev(scores={"destructive_git": 0.9})
+    monkeypatch.setattr("chatybot.security.jev._urllib_post", fake)
+    chain_log, jev_log = tmp_path / "chain.jsonl", tmp_path / "jev.jsonl"
+    cfg = tmp_path / "security.toml"
+    cfg.write_text(f'''
+engine = "chain"
+[jev]
+rubric_path = "{tmp_path / 'r.toml'}"
+log_path = "{jev_log}"
+[chain]
+stages = [ {{ engine = "builtin", mode = "enforce" }}, {{ engine = "jev", mode = "shadow" }} ]
+log_path = "{chain_log}"
+''')
+    mgr = SecurityManager(config_path=str(cfg))
+    d1 = mgr.evaluate("run_command", {"command": "git reset --hard HEAD~1"}, {"interactive": True})
+    d2 = mgr.evaluate("run_command", {"command": "git stash clear"}, {"interactive": True})
+    assert d1.request_id and d2.request_id and d1.request_id != d2.request_id
+    mgr.record_outcome(d1, "declined", tool="run_command")
+    mgr.record_outcome(d2, "approved", tool="run_command")
+
+    chain = _lines(chain_log)
+    assert [e["event"] for e in chain] == ["decision", "decision", "outcome", "outcome"]
+    assert chain[2]["request_id"] == chain[0]["request_id"] == d1.request_id
+    assert chain[2]["outcome"] == "declined" and chain[3]["outcome"] == "approved"
+    jev = _lines(jev_log)
+    outcomes = {e["request_id"]: e["outcome"] for e in jev if e["event"] == "outcome"}
+    assert outcomes == {d1.request_id: "declined", d2.request_id: "approved"}
+    decisions = {e["request_id"] for e in jev if e["event"] == "decision"}
+    assert decisions == {d1.request_id, d2.request_id}
+
+
+def test_record_outcome_is_safe_without_logging_engines(tmp_path):
+    cfg = tmp_path / "security.toml"
+    cfg.write_text('engine = "builtin"\n')
+    mgr = SecurityManager(config_path=str(cfg))
+    dec = mgr.evaluate("run_command", {"command": "ls"})
+    mgr.record_outcome(dec, "approved", tool="run_command")  # builtin has no log: no-op
+    mgr.record_outcome(PolicyDecision(verdict=Verdict.ASK), "approved")  # no request_id: no-op
+    disabled = SecurityManager(config_path=str(cfg), enabled=False)
+    disabled.record_outcome(disabled.evaluate("run_command", {"command": "ls"}), "approved")
+
+
+@pytest.mark.anyio
+async def test_dispatch_records_ask_outcomes_in_chain_log(monkeypatch, tmp_path):
+    """End to end through ChatybotApp.dispatch_tool: each ASK path writes an outcome line."""
+    from chatybot.chatybot_app import ChatybotApp
+
+    chain_log = tmp_path / "chain.jsonl"
+    sec_cfg = tmp_path / "sec.toml"
+    sec_cfg.write_text(
+        'engine = "chain"\nfail_safe = "deny"\nnon_interactive_ask = "deny"\n'
+        '[builtin]\ndefault_verdict = "ask"\n'
+        f'[chain]\nstages = [ {{ engine = "builtin", mode = "enforce" }}, {{ engine = "allow", mode = "shadow" }} ]\n'
+        f'log_path = "{chain_log}"\n'
+    )
+    app = ChatybotApp(security_config_path=str(sec_cfg))
+    app.initialize()
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+
+    answers = iter(["n", "y"])
+
+    async def fake_input(fn, *args, **kwargs):
+        return next(answers)
+
+    monkeypatch.setattr("asyncio.to_thread", fake_input)
+    target = tmp_path / "out.txt"
+    call = json.dumps({"tool": "write_file", "arguments": {"path": str(target), "content": "hi"}})
+    assert "Security Authorization Denied" in await app.dispatch_tool(call)   # declined
+    await app.dispatch_tool(call)                                               # approved
+    app.script_context = True                                                  # now non-interactive
+    assert "non_interactive_ask" in await app.dispatch_tool(call)              # blocked
+
+    events = [json.loads(l) for l in open(chain_log)]
+    decisions = [e for e in events if e["event"] == "decision"]
+    outcomes = [e for e in events if e["event"] == "outcome"]
+    assert [o["outcome"] for o in outcomes] == ["declined", "approved", "blocked_non_interactive"]
+    assert [o["request_id"] for o in outcomes] == [d["request_id"] for d in decisions]
+    assert all(o["tool"] == "write_file" for o in outcomes)
+
+
+def test_engine_rubric_matches_harness_rubric():
+    """The engine's bundled rubric must equal tools/jev-eval/rubric.toml, or the harness
+    stops testing what chatybot runs. Comments may differ; content may not."""
+    import tomllib
+    from pathlib import Path
+
+    harness = Path(__file__).resolve().parent.parent / "tools" / "jev-eval" / "rubric.toml"
+    if not harness.exists():
+        pytest.skip("tools/jev-eval not present (installed package)")
+    with open(BUNDLED_RUBRIC, "rb") as f:
+        engine_cfg = tomllib.load(f)
+    with open(harness, "rb") as f:
+        harness_cfg = tomllib.load(f)
+    assert engine_cfg == harness_cfg, (
+        "src/chatybot/security/default_jev_security.toml and tools/jev-eval/rubric.toml differ; "
+        "copy one over the other (keeping the header comment)"
+    )
+
+
+def test_jev_eval_from_log(tmp_path, jev_key, monkeypatch, capsys):
+    """tools/jev-eval/jev_eval.py --from-log: joins logs, re-grades, exports cases to label."""
+    import argparse
+    import importlib.util
+    from pathlib import Path
+
+    harness_path = Path(__file__).resolve().parent.parent / "tools" / "jev-eval" / "jev_eval.py"
+    if not harness_path.exists():
+        pytest.skip("tools/jev-eval not present")
+    spec = importlib.util.spec_from_file_location("jev_eval", harness_path)
+    jev_eval = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(jev_eval)
+
+    scores = {"git push origin main": {"git_push": 0.94}, "git reset --hard": {"destructive_git": 0.9}}
+
+    def fake(url, body, headers, timeout):
+        s = next((v for k, v in scores.items() if f'"command": "{k}"' in body["state"]), {})
+        return {"answers": {r: {"type": "noul", "noul": s.get(r, 0.03)} for r in RULE_IDS}}
+
+    monkeypatch.setattr("chatybot.security.jev._urllib_post", fake)
+    cfg = tmp_path / "security.toml"
+    cfg.write_text(f'''
+engine = "chain"
+[jev]
+rubric_path = "{tmp_path / 'r.toml'}"
+log_path = "{tmp_path / 'jev.jsonl'}"
+[chain]
+stages = [ {{ engine = "builtin", mode = "enforce" }}, {{ engine = "jev", mode = "shadow" }} ]
+log_path = "{tmp_path / 'chain.jsonl'}"
+''')
+    mgr = SecurityManager(config_path=str(cfg))
+    push = mgr.evaluate("run_command", {"command": "git push origin main"}, {"interactive": True})
+    reset = mgr.evaluate("run_command", {"command": "git reset --hard"}, {"interactive": True})
+    mgr.record_outcome(push, "approved", tool="run_command")
+    mgr.record_outcome(reset, "declined", tool="run_command")
+
+    def run(**kw):
+        ns = argparse.Namespace(from_log=[str(tmp_path / "jev.jsonl"), str(tmp_path / "chain.jsonl")],
+                                export=kw.get("export"), mode_given=None)
+        rubric = Rubric.load(tmp_path / "r.toml")
+        if "trigger" in kw:
+            rubric.trigger = kw["trigger"]
+        return jev_eval.from_log(ns, rubric)
+
+    out = tmp_path / "cands.jsonl"
+    assert run(export=str(out)) == 0
+    text = capsys.readouterr().out
+    assert "2 Jev decisions, 2 chain decisions, 2 ASK outcomes" in text
+    rows = [json.loads(l) for l in open(out)]
+    by_cmd = {r["parameters"]["command"]: r for r in rows}
+    assert "engines disagreed" in by_cmd["git push origin main"]["_why"]
+    assert "user approved what Jev would deny" in by_cmd["git push origin main"]["_why"]
+    assert "user declined the ASK" in by_cmd["git reset --hard"]["_why"]
+    assert all(r["expected"] is None and r["category"] == "live" for r in rows)
+
+    # Unlabelled exports are refused by the corpus loader
+    with pytest.raises(SystemExit):
+        jev_eval.load_cases(out, None, None)
+
+    # Re-grading with a stricter trigger flips Jev's DENY on the push to ASK
+    run(trigger=0.95)
+    assert "deny -> ask" in capsys.readouterr().out

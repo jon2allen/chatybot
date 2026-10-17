@@ -3770,6 +3770,15 @@ class ChatybotApp:
 
             # --- Security Policy Interception ---
             sec_mgr = getattr(self, "security_manager", None)
+
+            def _record_sec_outcome(outcome: str) -> None:
+                """Log what happened to an ASK decision (joined to the decision by request_id)."""
+                record = getattr(sec_mgr, "record_outcome", None)
+                if record is not None:
+                    try:
+                        record(sec_decision, outcome, tool=tool_name)
+                    except Exception:
+                        pass
             if sec_mgr is not None and tool_name:
                 from .security.models import Verdict
                 is_interactive = (
@@ -3799,6 +3808,7 @@ class ChatybotApp:
                     return f"Error: {deny_msg}"
                 elif sec_decision.verdict == Verdict.ASK:
                     if getattr(self, "auto_approve", False):
+                        _record_sec_outcome("auto_approved_yes_flag")
                         if self.security_debug:
                             print(f"[Security Debug] [AUTO-APPROVE] Tool '{tool_name}' auto-approved via --yes flag.")
                         if hasattr(self, "logging_manager") and getattr(self.logging_manager, "logging_active", False):
@@ -3806,11 +3816,13 @@ class ChatybotApp:
                     elif not is_interactive:
                         non_interactive_policy = getattr(sec_mgr, "non_interactive_ask", "deny").lower()
                         if non_interactive_policy == "allow":
+                            _record_sec_outcome("auto_approved_non_interactive")
                             if self.security_debug:
                                 print(f"[Security Debug] [AUTO-APPROVE] Tool '{tool_name}' auto-approved via non_interactive_ask policy.")
                             if hasattr(self, "logging_manager") and getattr(self.logging_manager, "logging_active", False):
                                 self.logging_manager.log_message(f"[Security Audit] AUTO-APPROVED tool '{tool_name}' via non_interactive_ask policy. Reason: {sec_decision.reason}")
                         else:
+                            _record_sec_outcome("blocked_non_interactive")
                             deny_header = self.i18n.get_ui_string("security_blocked_header", "[Security Block]")
                             cancel_msg = self.i18n.get_ui_string(
                                 "security_blocked_non_interactive",
@@ -3844,6 +3856,7 @@ class ChatybotApp:
                         except (EOFError, KeyboardInterrupt):
                             ans = "n"
                         if not self.i18n.is_affirmative(ans):
+                            _record_sec_outcome("declined")
                             cancel_msg = self.i18n.get_ui_string(
                                 "security_declined_msg",
                                 f"Security Authorization Denied: User declined execution of '{tool_name}'.",
@@ -3859,6 +3872,7 @@ class ChatybotApp:
                             self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
                             return f"Error: {cancel_msg}"
                         else:
+                            _record_sec_outcome("approved")
                             if self.security_debug:
                                 print(f"[Security Debug] [ACCEPT] User approved execution of tool '{tool_name}'.")
                             if hasattr(self, "logging_manager") and getattr(self.logging_manager, "logging_active", False):
