@@ -7,12 +7,13 @@ Configuration is loaded from ~/.config/chatybot/security.toml (outside tools_con
 import logging
 import os
 import shutil
-from typing import Any
 import tomllib
+from typing import Any
 
+from chatybot.security.adapters.stdio_binary import StdioBinaryPolicyEngine
+from chatybot.security.allow_all import AllowAllPolicyEngine
 from chatybot.security.base import BasePolicyEngine
 from chatybot.security.builtin import BuiltinPolicyEngine
-from chatybot.security.adapters.stdio_binary import StdioBinaryPolicyEngine
 from chatybot.security.models import PolicyDecision, PolicyRequest, Verdict
 
 logger = logging.getLogger(__name__)
@@ -84,34 +85,13 @@ class SecurityManager:
                 print(warn_msg)
         self.non_interactive_ask = "allow" if raw_non_interactive == "allow" else "deny"
 
-        engine_type = self.config.get("engine", "builtin").lower()
+        engine_type = str(self.config.get("engine", "builtin")).lower()
 
         if self.debug:
             print(f"[Security Debug] Loading security configuration from '{config_to_load}'...")
             print(f"[Security Debug] Engine type: '{engine_type}', Fail-safe verdict: '{self.fail_safe.value.upper()}'.")
 
-        if engine_type == "binary":
-            bin_cfg = self.config.get("binary", {})
-            raw_path = bin_cfg.get("path", "")
-            bin_path = os.path.abspath(os.path.expanduser(raw_path)) if raw_path else ""
-            if bin_path and os.path.exists(bin_path):
-                self.engine = StdioBinaryPolicyEngine(
-                    binary_path=bin_path,
-                    timeout_seconds=float(bin_cfg.get("timeout_seconds", 2.0)),
-                    fail_safe=self.fail_safe.value,
-                    args=bin_cfg.get("args", []),
-                    debug=self.debug,
-                )
-                return
-            # If binary not found, fallback to builtin engine with a prominent security warning
-            warn_msg = (
-                f"[Security Warning] Configured binary path not found: '{raw_path}' "
-                f"(resolved: '{bin_path}'). Falling back to builtin Python policy engine."
-            )
-            logger.warning(warn_msg)
-            print(warn_msg)
-            engine_type = "builtin"
-        elif engine_type != "builtin":
+        if engine_type not in self.ENGINE_TYPES:
             warn_msg = (
                 f"[Security Warning] Unsupported or unknown engine type '{engine_type}'. "
                 "Falling back to builtin Python policy engine."
@@ -120,9 +100,98 @@ class SecurityManager:
             print(warn_msg)
             engine_type = "builtin"
 
-        # Default to builtin
+        self.engine = self._build_engine(engine_type, top_level=True)
+
+    ENGINE_TYPES = ("builtin", "binary", "allow", "jev", "chain")
+
+    def _build_engine(self, engine_type: str, top_level: bool = False) -> BasePolicyEngine:
+        """Construct one engine from its [section] in the config."""
+        if engine_type == "binary":
+            bin_cfg = self.config.get("binary", {})
+            raw_path = bin_cfg.get("path", "")
+            bin_path = os.path.abspath(os.path.expanduser(raw_path)) if raw_path else ""
+            if bin_path and os.path.exists(bin_path):
+                return StdioBinaryPolicyEngine(
+                    binary_path=bin_path,
+                    timeout_seconds=float(bin_cfg.get("timeout_seconds", 2.0)),
+                    fail_safe=self.fail_safe.value,
+                    args=bin_cfg.get("args", []),
+                    debug=self.debug,
+                )
+            # If binary not found, fallback to builtin engine with a prominent security warning
+            warn_msg = (
+                f"[Security Warning] Configured binary path not found: '{raw_path}' "
+                f"(resolved: '{bin_path}'). Falling back to builtin Python policy engine."
+            )
+            logger.warning(warn_msg)
+            print(warn_msg)
+            return self._build_engine("builtin")
+
+        if engine_type == "allow":
+            allow_cfg = self.config.get("allow", {})
+            protect = bool(allow_cfg.get("protect_security_config", True))
+            warn_msg = (
+                "[Security Warning] engine = 'allow': tools run WITHOUT policy checks (pre-0.9.0 behavior)"
+                + ("; security configuration is still protected." if protect else "; security self-protection is OFF.")
+            )
+            logger.warning(warn_msg)
+            print(warn_msg)
+            return AllowAllPolicyEngine(protect_security_config=protect, debug=self.debug)
+
+        if engine_type == "jev":
+            from chatybot.security.jev import DEFAULT_RUBRIC_PATH, JevPolicyEngine
+
+            jev_cfg = self.config.get("jev", {})
+            return JevPolicyEngine(
+                rubric_path=jev_cfg.get("rubric_path", DEFAULT_RUBRIC_PATH),
+                model=jev_cfg.get("model", "typesafe/jev-1.13"),
+                base_url=jev_cfg.get("base_url", "https://openrouter.ai"),
+                endpoint_path=jev_cfg.get("endpoint_path", "/api/alpha/decisions"),
+                api_key_env=jev_cfg.get("api_key_env", "OPENROUTER_API_KEY"),
+                timeout_seconds=float(jev_cfg.get("timeout_seconds", 2.5)),
+                on_error=jev_cfg.get("on_error", "auto"),
+                mode=jev_cfg.get("mode", "noul"),
+                cache=bool(jev_cfg.get("cache", True)),
+                redact_secrets=bool(jev_cfg.get("redact_secrets", True)),
+                max_content_chars=int(jev_cfg.get("max_content_chars", 8000)),
+                skip_tools=jev_cfg.get("skip_tools"),
+                log_path=jev_cfg.get("log_path", ""),
+                debug=self.debug,
+            )
+
+        if engine_type == "chain":
+            if not top_level:
+                raise ValueError("[chain] stages cannot themselves be 'chain'")
+            from chatybot.security.chain import ChainedPolicyEngine, ChainStage
+
+            chain_cfg = self.config.get("chain", {})
+            raw_stages = chain_cfg.get("stages", [])
+            if not isinstance(raw_stages, list) or not raw_stages:
+                raise ValueError("[chain] stages must be a non-empty list")
+            stages = []
+            for item in raw_stages:
+                if isinstance(item, str):
+                    name, mode = item.strip().lower(), "enforce"
+                elif isinstance(item, dict):
+                    name = str(item.get("engine", "")).strip().lower()
+                    mode = str(item.get("mode", "enforce")).strip().lower()
+                else:
+                    raise ValueError(f"[chain] invalid stage entry: {item!r}")
+                if name not in self.ENGINE_TYPES or name == "chain":
+                    raise ValueError(f"[chain] unknown stage engine '{name}' (expected builtin, binary, allow or jev)")
+                stages.append(ChainStage(name=name, engine=self._build_engine(name), mode=mode))
+            return ChainedPolicyEngine(
+                stages=stages,
+                fail_safe=self.fail_safe,
+                shadow_on_deny=bool(chain_cfg.get("shadow_on_deny", True)),
+                log_path=chain_cfg.get("log_path", ""),
+                redact_log=bool(chain_cfg.get("redact_log", True)),
+                debug=self.debug,
+            )
+
+        # Default: builtin
         builtin_cfg = self.config.get("builtin", {})
-        self.engine = BuiltinPolicyEngine(
+        return BuiltinPolicyEngine(
             rules=builtin_cfg.get("rules"),
             dsl_rules=builtin_cfg.get("dsl_rules") or builtin_cfg.get("rules_dsl"),
             default_verdict=builtin_cfg.get("default_verdict", "ask"),

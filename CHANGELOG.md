@@ -4,6 +4,13 @@ All notable changes, release milestones, and version history for **Chatybot** ar
 
 Unreleased
 ----------
+- **Jev Security Engine, Chaining & Allow Mode** (branch `jev_security`):
+  - **`engine = "allow"`**: runs tools without policy checks, like chatybot before v0.9.0. Persistent in `security.toml` (unlike `--no-security`), prints a startup warning, and by default still protects `security.toml`, `jev_security.toml`, `*.racf` and `~/.config/chatybot/.env` (`[allow] protect_security_config`).
+  - **`engine = "chain"`**: runs several engines per tool call. `enforce` stages decide (strictest verdict wins; later enforcers are skipped after a DENY); `shadow` stages are pass-through, evaluated and logged only. Optional JSONL comparison log with per-stage verdicts, latency and a disagreement flag; secrets are redacted in the log.
+  - **`engine = "jev"`**: TypeSafe Jev decision-model engine driven by a rubric (`~/.config/chatybot/jev_security.toml`, seeded from `security/default_jev_security.toml`). Self-protection floor before any API call, secret redaction, head+tail truncation that forces at least ASK, per-session cache, `on_error` fail-safe (ASK interactive / DENY non-interactive), optional JSONL log, `noul` or `combined` mode.
+  - Rubric scoring shared between the engine and the `tools/jev-eval` harness (`security/jev_rubric.py`).
+  - Added `test/test_security_chain_jev.py` (25 tests; Jev HTTP stubbed).
+
 - **TinyDB Persistence & Dispatcher Performance**:
   - **Snapshot-on-Write Optimization**: Moved TinyDB rolling snapshot backups from database activation (`/setdb`) to the first write (`/dblog`) per session, completely eliminating backup churn and rotation on read-only operations and model tools (`db_search`, `db_get`).
   - **Dispatcher Startup Optimization**: Removed unused `chatydb` import and `log_to_database` hook from `dispatcher.py` (saves ~2–3 ms per tool call).

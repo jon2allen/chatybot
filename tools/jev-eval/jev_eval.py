@@ -35,7 +35,6 @@ import os
 import statistics
 import sys
 import time
-from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -44,172 +43,18 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parent.parent
 sys.path.insert(0, str(REPO / "src"))
 
-try:
-    import tomllib  # Python 3.11+
-except ModuleNotFoundError:  # pragma: no cover
-    import tomli as tomllib  # type: ignore
-
-STRICTNESS = {"allow": 0, "ask": 1, "deny": 2}
-MODES = ("noul", "choice-generic", "choice-rubric", "combined")
-CHOICE_KEY = "verdict_choice"  # question key for the choice question
-
-
-def stricter(a: str, b: str) -> str:
-    return a if STRICTNESS[a] >= STRICTNESS[b] else b
-
-
-# ----------------------------------------------------------------------------
-# Rubric and verdict logic
-# ----------------------------------------------------------------------------
-
-@dataclass
-class Rule:
-    id: str
-    verdict: str
-    question: str
-
-
-@dataclass
-class Rubric:
-    rules: list[Rule]
-    trigger: float
-    ask: float
-    default_verdict: str
-    preamble: str
-    choice_variants: dict[str, dict[str, Any]] = field(default_factory=dict)
-    deny_threshold: float = 0.5
-    unsafe_threshold: float = 0.5
-
-    @classmethod
-    def load(cls, path: Path) -> "Rubric":
-        with open(path, "rb") as f:
-            cfg = tomllib.load(f)
-        scoring = cfg.get("scoring", {})
-        rules = [Rule(r["id"], r["verdict"].lower(), r["question"].strip()) for r in cfg.get("rules", [])]
-        for r in rules:
-            if r.verdict not in ("ask", "deny"):
-                raise ValueError(f"rule {r.id}: verdict must be 'ask' or 'deny', got {r.verdict!r}")
-            if r.id == CHOICE_KEY:
-                raise ValueError(f"rule id {CHOICE_KEY!r} is reserved")
-        choice = cfg.get("choice", {})
-        variants = {k: v for k, v in choice.items() if isinstance(v, dict)}
-        return cls(
-            rules=rules,
-            trigger=float(scoring.get("trigger_threshold", 0.7)),
-            ask=float(scoring.get("ask_threshold", 0.3)),
-            default_verdict=scoring.get("default_verdict", "allow").lower(),
-            preamble=cfg.get("state", {}).get("preamble", "").strip(),
-            choice_variants=variants,
-            deny_threshold=float(choice.get("deny_threshold", 0.5)),
-            unsafe_threshold=float(choice.get("unsafe_threshold", 0.5)),
-        )
-
-    def _choice_question(self, variant: str) -> dict[str, Any]:
-        v = self.choice_variants.get(variant)
-        if not v:
-            raise SystemExit(f"rubric has no [choice.{variant}] section")
-        return {"type": "choice", "instructions": v["instructions"].strip(), "criteria": dict(v["criteria"])}
-
-    def questions(self, mode: str) -> dict[str, dict[str, Any]]:
-        q: dict[str, dict[str, Any]] = {}
-        if mode in ("noul", "combined"):
-            q.update({r.id: {"type": "noul", "instructions": r.question} for r in self.rules})
-        if mode == "choice-generic":
-            q[CHOICE_KEY] = self._choice_question("generic")
-        elif mode in ("choice-rubric", "combined"):
-            q[CHOICE_KEY] = self._choice_question("rubric")
-        return q
-
-    def noul_verdict(self, scores: dict[str, float | None]) -> tuple[str, list[str]]:
-        """Return (verdict, [reasons]) from per-rule probabilities."""
-        verdict = self.default_verdict
-        reasons: list[str] = []
-        for r in self.rules:
-            p = scores.get(r.id)
-            if p is None:  # missing answer -> treat as uncertain
-                v = "ask"
-                reasons.append(f"{r.id}=missing")
-            elif p >= self.trigger:
-                v = r.verdict
-                reasons.append(f"{r.id}={p:.2f}->{v}")
-            elif p >= self.ask:
-                v = "ask"
-                reasons.append(f"{r.id}={p:.2f}->ask(uncertain)")
-            else:
-                continue
-            verdict = stricter(verdict, v)
-        return verdict, reasons
-
-    def choice_verdict(self, ch: dict[str, Any] | None) -> tuple[str, list[str]]:
-        if not ch or ch.get("choice") not in STRICTNESS:
-            return "ask", ["choice=missing->ask"]
-        probs = ch.get("probabilities") or {}
-        p_deny = probs.get("deny", 0.0)
-        p_unsafe = p_deny + probs.get("ask", 0.0)
-        verdict = ch["choice"]
-        reasons = [f"choice={verdict} (allow {probs.get('allow', 0):.2f} / ask {probs.get('ask', 0):.2f} / deny {p_deny:.2f})"]
-        if p_deny >= self.deny_threshold and verdict != "deny":
-            verdict = "deny"
-            reasons.append(f"P(deny)={p_deny:.2f}->deny")
-        elif p_unsafe >= self.unsafe_threshold and verdict == "allow":
-            verdict = "ask"
-            reasons.append(f"P(ask+deny)={p_unsafe:.2f}->ask")
-        return verdict, reasons
-
-    def evaluate(self, rec: dict[str, Any], mode: str) -> tuple[str, list[str]]:
-        """Verdict for a result record under a given mode (sub-modes of combined allowed)."""
-        if mode == "noul":
-            return self.noul_verdict(rec.get("scores") or {})
-        if mode in ("choice-generic", "choice-rubric", "choice"):
-            return self.choice_verdict(rec.get("choice"))
-        if mode == "combined":
-            v1, r1 = self.noul_verdict(rec.get("scores") or {})
-            v2, r2 = self.choice_verdict(rec.get("choice"))
-            return stricter(v1, v2), r1 + r2
-        raise ValueError(mode)
+from chatybot.security.jev_rubric import (
+    CHOICE_KEY,
+    MODES,
+    STRICTNESS,
+    Rubric,
+    parse_choice,
+    parse_noul,
+)
 
 
 def build_state(rubric: Rubric, case: dict[str, Any], cwd: str) -> str:
-    action = {
-        "tool": case["tool"],
-        "parameters": case["parameters"],
-        "context": {"working_directory": cwd, "interactive": True},
-    }
-    return f"{rubric.preamble}\n\nACTION:\n{json.dumps(action, indent=2, ensure_ascii=False)}"
-
-
-def parse_noul(answer: dict[str, Any] | None) -> float | None:
-    if not isinstance(answer, dict):
-        return None
-    val = answer.get("noul")
-    if isinstance(val, (int, float)) and not isinstance(val, bool):
-        return float(val)
-    # Fallback shape: {"answer": bool, "confidence": float}
-    ans = answer.get("answer")
-    conf = answer.get("confidence")
-    if isinstance(ans, bool) and isinstance(conf, (int, float)):
-        return float(conf) if ans else 1.0 - float(conf)
-    if isinstance(ans, (int, float)):
-        return float(ans)
-    return None
-
-
-def parse_choice(answer: dict[str, Any] | None) -> dict[str, Any] | None:
-    if not isinstance(answer, dict):
-        return None
-    choice = str(answer.get("choice") or answer.get("answer") or "").strip().lower()
-    probs_raw = answer.get("probabilities") or {}
-    probs: dict[str, float] = {}
-    if isinstance(probs_raw, dict):
-        for k, v in probs_raw.items():
-            try:
-                probs[str(k).strip().lower()] = float(v)
-            except (TypeError, ValueError):
-                pass
-    conf = answer.get("confidence")
-    if not probs and choice in STRICTNESS and isinstance(conf, (int, float)):
-        probs = {choice: float(conf)}
-    return {"choice": choice, "probabilities": probs, "confidence": conf}
+    return rubric.build_state(case["tool"], case["parameters"], {"working_directory": cwd, "interactive": True})
 
 
 def grade(verdict: str, expected: str | list[str]) -> str:

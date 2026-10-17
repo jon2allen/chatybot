@@ -9,6 +9,9 @@ version = "1.0"
 
 # Active policy evaluation engine:
 # Options: "builtin" (in-process Python) | "binary" (external CLI/Rust)
+#          | "allow" (no policy checks, like before v0.9.0; see [allow])
+#          | "jev"   (TypeSafe Jev decision model + rubric; see [jev])
+#          | "chain" (run several engines, enforce or shadow; see [chain])
 engine = "builtin"
 
 # Fail-safe behavior if an external engine crashes or times out: "deny" | "ask"
@@ -130,3 +133,52 @@ denied_patterns = [
 path = "~/.config/chatybot/racf-guard"
 timeout_seconds = 2.0
 args = ["--policy", "~/.config/chatybot/security.racf"]
+
+
+# ==============================================================================
+# Allow-All Engine (Used when engine = "allow")
+# Runs tools without policy checks, the way chatybot behaved before v0.9.0.
+# Unlike --no-security (one run, manager off), this persists and still reports
+# a banner and audit lines. security.toml, jev_security.toml, *.racf and
+# ~/.config/chatybot/.env stay protected unless you turn that off below.
+# ==============================================================================
+# [allow]
+# protect_security_config = true
+
+# ==============================================================================
+# Jev Decision-Model Engine (Used when engine = "jev", or as a [chain] stage)
+# One noul question per rubric rule, sent in one request to typesafe/jev-1.13.
+# Rubric is seeded on first use to rubric_path. Needs OPENROUTER_API_KEY.
+# See tools/jev-eval/jev_proof_of_concept.md for test results.
+# ==============================================================================
+# [jev]
+# rubric_path       = "~/.config/chatybot/jev_security.toml"
+# model             = "typesafe/jev-1.13"
+# base_url          = "https://openrouter.ai"
+# endpoint_path     = "/api/alpha/decisions"
+# api_key_env       = "OPENROUTER_API_KEY"
+# timeout_seconds   = 2.5
+# on_error          = "auto"      # auto = ASK when interactive, DENY when not | "ask" | "deny"
+# mode              = "noul"      # "noul" | "combined" (adds one choice question)
+# cache             = true        # per-session verdict cache
+# redact_secrets    = true        # strip tokens/keys before sending
+# max_content_chars = 8000        # longer strings are cut to head+tail and forced to at least ASK
+# skip_tools        = ["ask_user", "get_context_metrics", "session_get", "session_search",
+#                      "search_skills", "decide_choice", "decide_score", "decide_noul"]
+# log_path          = "~/.config/chatybot/logs/jev_security.jsonl"
+
+# ==============================================================================
+# Chain Engine (Used when engine = "chain")
+# Stages run in order. mode = "enforce": verdict counts (strictest wins).
+# mode = "shadow": pass-through; evaluated and logged, never changes the result.
+# Example: keep builtin in charge while trialling Jev on real sessions.
+# ==============================================================================
+# [chain]
+# stages = [
+#   { engine = "builtin", mode = "enforce" },
+#   { engine = "jev",     mode = "shadow"  },
+# ]
+# shadow_on_deny = true   # still run shadow stages after an enforcing DENY
+# log_path       = "~/.config/chatybot/logs/security_chain.jsonl"
+# redact_log     = true
+
