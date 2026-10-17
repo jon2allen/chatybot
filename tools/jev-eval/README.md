@@ -66,3 +66,30 @@ python3 jev_eval.py --rescore results/<combined-run>.jsonl --mode choice-rubric 
 - p95 latency comfortably under the engine's time budget (~1–2 s)
 
 See `jev_proof_of_concept.md` for the full write-up and test history; `baseline/` holds the rubric and raw results for each recorded run.
+
+## Trying it inside chatybot
+
+The engine reads the same rubric format; its scoring code lives in
+`src/chatybot/security/jev_rubric.py` and this harness imports it, so the
+harness tests the code chatybot runs. The engine's default rubric
+(`src/chatybot/security/default_jev_security.toml`, seeded to
+`~/.config/chatybot/jev_security.toml`) is a copy of `rubric.toml` here; keep them in sync.
+
+Shadow testing (builtin stays in charge, Jev's verdicts are only logged) in
+`~/.config/chatybot/security.toml`:
+
+```toml
+engine = "chain"
+
+[chain]
+stages = [
+  { engine = "builtin", mode = "enforce" },
+  { engine = "jev",     mode = "shadow"  },
+]
+log_path = "~/.config/chatybot/logs/security_chain.jsonl"
+```
+
+Each line of the log has the final verdict, every stage's verdict, reason and
+latency, and `"disagreement": true` when the stages differ. To let Jev decide,
+change its stage to `mode = "enforce"` (strictest wins) or set `engine = "jev"`.
+To run with no policy checks, like before v0.9.0, set `engine = "allow"`.
