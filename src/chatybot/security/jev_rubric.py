@@ -34,6 +34,40 @@ def stricter(a: str, b: str) -> str:
     return a if STRICTNESS[a] >= STRICTNESS[b] else b
 
 
+PROB_SUM_TOLERANCE = 0.05
+
+
+def valid_probability(value: Any) -> float | None:
+    """A probability from Jev, or None if it is not a finite number in [0, 1].
+
+    Anything malformed (NaN, +/-inf, negative, above 1, bool, text) is treated
+    as a missing answer, which the scoring turns into ASK rather than ALLOW.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    v = float(value)
+    if not math.isfinite(v) or v < 0.0 or v > 1.0:
+        return None
+    return v
+
+
+def valid_choice_probabilities(probs: Any) -> dict[str, float] | None:
+    """Validated choice distribution, {} if none was given, or None if malformed."""
+    if not probs:
+        return {}
+    if not isinstance(probs, dict):
+        return None
+    out: dict[str, float] = {}
+    for k, v in probs.items():
+        p = valid_probability(v)
+        if p is None:
+            return None
+        out[str(k).strip().lower()] = p
+    if abs(sum(out.values()) - 1.0) > PROB_SUM_TOLERANCE:
+        return None
+    return out
+
+
 @dataclass
 class Rule:
     id: str
@@ -122,8 +156,8 @@ class Rubric:
         verdict = self.default_verdict
         reasons: list[str] = []
         for r in self.rules:
-            p = scores.get(r.id)
-            if p is None or math.isnan(p):  # missing or invalid answer -> treat as uncertain
+            p = valid_probability(scores.get(r.id))
+            if p is None:  # missing or malformed (NaN, inf, out of range) -> treat as uncertain
                 v = "ask"
                 reasons.append(f"{r.id}=missing->ask")
             elif p >= self.trigger:
@@ -140,7 +174,9 @@ class Rubric:
     def choice_verdict(self, ch: dict[str, Any] | None) -> tuple[str, list[str]]:
         if not ch or ch.get("choice") not in STRICTNESS:
             return "ask", ["choice=missing->ask"]
-        probs = ch.get("probabilities") or {}
+        probs = valid_choice_probabilities(ch.get("probabilities"))
+        if probs is None:
+            return "ask", ["choice=invalid probabilities->ask"]
         p_deny = probs.get("deny", 0.0)
         p_unsafe = p_deny + probs.get("ask", 0.0)
         verdict = ch["choice"]
@@ -180,34 +216,43 @@ class Rubric:
 
 
 def parse_noul(answer: dict[str, Any] | None) -> float | None:
+    """Probability from a noul answer, or None if missing or malformed."""
     if not isinstance(answer, dict):
         return None
     val = answer.get("noul")
     if isinstance(val, (int, float)) and not isinstance(val, bool):
-        return float(val)
+        return valid_probability(val)
     # Fallback shape: {"answer": bool, "confidence": float}
     ans = answer.get("answer")
-    conf = answer.get("confidence")
-    if isinstance(ans, bool) and isinstance(conf, (int, float)):
-        return float(conf) if ans else 1.0 - float(conf)
+    conf = valid_probability(answer.get("confidence"))
+    if isinstance(ans, bool) and conf is not None:
+        return conf if ans else 1.0 - conf
     if isinstance(ans, (int, float)) and not isinstance(ans, bool):
-        return float(ans)
+        return valid_probability(ans)
     return None
 
 
 def parse_choice(answer: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Choice answer with a validated distribution, or None if missing or malformed."""
     if not isinstance(answer, dict):
         return None
     choice = str(answer.get("choice") or answer.get("answer") or "").strip().lower()
-    probs_raw = answer.get("probabilities") or {}
-    probs: dict[str, float] = {}
-    if isinstance(probs_raw, dict):
+    probs_raw = answer.get("probabilities")
+    probs: dict[str, float] | None
+    if isinstance(probs_raw, dict) and probs_raw:
+        cleaned: dict[str, Any] = {}
         for k, v in probs_raw.items():
             try:
-                probs[str(k).strip().lower()] = float(v)
+                cleaned[k] = float(v)
             except (TypeError, ValueError):
-                pass
+                cleaned[k] = None
+        probs = valid_choice_probabilities(cleaned)
+        if probs is None:
+            return None  # malformed distribution -> scored as ASK
+    else:
+        probs = {}
     conf = answer.get("confidence")
-    if not probs and choice in STRICTNESS and isinstance(conf, (int, float)):
-        probs = {choice: float(conf)}
+    conf_v = valid_probability(conf)
+    if not probs and choice in STRICTNESS and conf_v is not None:
+        probs = {choice: conf_v}
     return {"choice": choice, "probabilities": probs, "confidence": conf}

@@ -21,7 +21,9 @@ from typing import Any
 
 from chatybot.security.models import PolicyDecision, PolicyRequest, Verdict
 
-CONFIG_DIR = os.path.abspath(os.path.expanduser("~/.config/chatybot"))
+def config_dir() -> str:
+    """chatybot's config folder, resolved at call time (follows $HOME)."""
+    return os.path.abspath(os.path.expanduser("~/.config/chatybot"))
 
 _PATH_TOOLS = {
     "read_file", "write_file", "delete_file", "list_directory", "file_info",
@@ -43,12 +45,13 @@ def _is_protected_path(raw: str) -> bool:
         candidates.add(os.path.realpath(next(iter(candidates))))
     except OSError:
         pass
-    secrets_file = os.path.join(CONFIG_DIR, ".env")
+    cfg_dir = config_dir()
+    secrets_file = os.path.join(cfg_dir, ".env")
     for p in candidates:
         base = os.path.basename(p).lower()
         if "security.toml" in base or base.endswith(".racf"):
             return True
-        if os.path.normcase(p) in {os.path.normcase(secrets_file), os.path.normcase(CONFIG_DIR)}:
+        if os.path.normcase(p) in {os.path.normcase(secrets_file), os.path.normcase(cfg_dir)}:
             return True
     return False
 

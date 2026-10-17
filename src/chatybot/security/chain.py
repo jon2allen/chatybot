@@ -139,6 +139,7 @@ class ChainedPolicyEngine(BasePolicyEngine):
 
             params = _prepare(request.parameters or {}, True, 4000, {"truncated": False})
         entry = {
+            "event": "decision",
             "ts": datetime.now(UTC).isoformat(),
             "request_id": request.request_id,
             "tool": request.tool,
@@ -149,12 +150,34 @@ class ChainedPolicyEngine(BasePolicyEngine):
             "disagreement": len(verdicts) > 1,
             "stages": results,
         }
+        self._write(entry)
+
+    def _write(self, entry: dict[str, Any]) -> None:
         try:
             os.makedirs(os.path.dirname(self.log_path), exist_ok=True)
             with open(self.log_path, "a", encoding="utf-8") as f:
                 f.write(json.dumps(entry, ensure_ascii=False, default=str) + "\n")
         except OSError as e:
             logger.warning("[Security Warning] Could not write chain log '%s': %s", self.log_path, e)
+
+    def record_outcome(self, request_id: str, tool: str, outcome: str, detail: str = "") -> None:
+        """Append what happened to an ASK (approved, declined, ...) and pass it on to stages that log."""
+        if self.log_path:
+            self._write({
+                "event": "outcome",
+                "ts": datetime.now(UTC).isoformat(),
+                "request_id": request_id,
+                "tool": tool,
+                "outcome": outcome,
+                "detail": detail,
+            })
+        for stage in self.stages:
+            fn = getattr(stage.engine, "record_outcome", None)
+            if fn is not None:
+                try:
+                    fn(request_id, tool, outcome, detail)
+                except Exception as e:  # noqa: BLE001
+                    logger.warning("[Security Warning] Stage '%s' could not record outcome: %s", stage.name, e)
 
     def get_banner(self) -> str:
         parts = []

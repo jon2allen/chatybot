@@ -165,7 +165,7 @@ args = ["--policy", "~/.config/chatybot/security.racf"]
 # max_content_chars = 8000        # longer strings are cut to head+tail and forced to at least ASK
 # skip_tools        = ["ask_user", "get_context_metrics", "session_get", "session_search",
 #                      "search_skills", "decide_choice", "decide_score", "decide_noul"]
-# log_path          = "~/.config/chatybot/logs/jev_security.jsonl"
+# log_path          = "~/.config/chatybot/logs/jev_security.jsonl"   # default; "" turns logging off
 
 # ==============================================================================
 # Chain Engine (Used when engine = "chain")
@@ -179,6 +179,8 @@ args = ["--policy", "~/.config/chatybot/security.racf"]
 #   { engine = "jev",     mode = "shadow"  },
 # ]
 # shadow_on_deny = true   # still run shadow stages after an enforcing DENY
-# log_path       = "~/.config/chatybot/logs/security_chain.jsonl"
+# log_path       = "~/.config/chatybot/logs/security_chain.jsonl"   # default; "" turns logging off
+# Logs also record what happened to each ASK (approved / declined / auto-approved / blocked),
+# joined to the decision by request_id. Review with: tools/jev-eval/jev_eval.py --from-log
 # redact_log     = true
 

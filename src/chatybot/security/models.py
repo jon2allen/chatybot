@@ -60,6 +60,9 @@ class PolicyDecision:
     reason: str = ""
     prompt_details: PolicyPromptDetails | None = None
     modified_parameters: dict[str, Any] | None = None
+    # Set by SecurityManager so outcomes (user approved/declined an ASK) can be
+    # joined to the logged decision. Not part of the engine wire protocol.
+    request_id: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         d: dict[str, Any] = {
