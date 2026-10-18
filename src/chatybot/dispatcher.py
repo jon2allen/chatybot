@@ -29,6 +29,8 @@ except ImportError:
     except ImportError:
         tomllib = None
 
+from chatybot.tool_args import unwrap_tool_args  # noqa: E402  (shared with security; re-exported)
+
 DEFAULT_CONFIG_PATH = os.path.expanduser("~/.config/chatybot/tools_config.toml")
 if not os.path.exists(DEFAULT_CONFIG_PATH):
     DEFAULT_CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tools_config.toml")
@@ -81,23 +83,6 @@ def write_json_response(data: dict[str, Any], status_code: int = 0):
     """
     print(json.dumps(data, indent=2, cls=DecimalJSONEncoder, ensure_ascii=False))
     sys.exit(status_code)
-
-
-def unwrap_tool_args(parameters: Any) -> Any:
-    """Unwrap nested 'parameters' or 'args' dictionary envelopes if and only if
-    the envelope key is the sole key in the dictionary.
-
-    Repeats until no lone envelope remains. If other keys are present beside
-    'parameters' or 'args', it does NOT unwrap (preventing decoy envelope attacks).
-    """
-    params = parameters
-    while isinstance(params, dict) and len(params) == 1 and ("parameters" in params or "args" in params):
-        inner = params.get("parameters") if "parameters" in params else params.get("args")
-        if isinstance(inner, dict):
-            params = inner
-        else:
-            break
-    return params
 
 
 def validate_and_route(invocation: dict[str, Any], config: dict[str, Any]) -> tuple[Any, list, dict]:

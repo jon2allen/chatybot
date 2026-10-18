@@ -58,7 +58,7 @@ from .commands import registry as _command_registry
 from .commands.context import CommandContext
 from .commands.registry import CommandAction, CommandResult
 from .config_manager import ConfigManager
-from .dispatcher import unwrap_tool_args
+from .tool_args import unwrap_tool_args
 from .image_generator import ImageGenerator
 from .image_manager import ImageManager
 from .logging_manager import LoggingManager
@@ -3995,13 +3995,9 @@ class ChatybotApp:
                     return err_msg
                 try:
                     from .tools.interact_utils import ask_user
+                    # Already normalized by unwrap_tool_args at the top of dispatch_tool,
+                    # so these are exactly the arguments the security check judged.
                     args = tool_call.get("arguments", {}) or {}
-                    # Some LLMs wrap arguments inside a "parameters" or "arguments" sub-dictionary
-                    if isinstance(args, dict):
-                        if "parameters" in args and isinstance(args["parameters"], dict):
-                            args = args["parameters"]
-                        elif "arguments" in args and isinstance(args["arguments"], dict):
-                            args = args["arguments"]
 
                     res = ask_user(
                         prompt=args.get("prompt", ""),
@@ -4047,12 +4043,9 @@ class ChatybotApp:
                         async_decide_noul,
                         async_decide_score,
                     )
+                    # Already normalized by unwrap_tool_args at the top of dispatch_tool,
+                    # so these are exactly the arguments the security check judged.
                     args = tool_call.get("arguments", {}) or {}
-                    if isinstance(args, dict):
-                        if "parameters" in args and isinstance(args["parameters"], dict):
-                            args = args["parameters"]
-                        elif "arguments" in args and isinstance(args["arguments"], dict):
-                            args = args["arguments"]
 
                     if tool_name == "decide_score":
                         res = await async_decide_score(app=self, **args)
@@ -4088,12 +4081,9 @@ class ChatybotApp:
                     return err_msg
                 try:
                     from .tools import skill_utils
+                    # Already normalized by unwrap_tool_args at the top of dispatch_tool,
+                    # so these are exactly the arguments the security check judged.
                     args = tool_call.get("arguments", {}) or {}
-                    if isinstance(args, dict):
-                        if "parameters" in args and isinstance(args["parameters"], dict):
-                            args = args["parameters"]
-                        elif "arguments" in args and isinstance(args["arguments"], dict):
-                            args = args["arguments"]
 
                     if tool_name == "call_skill":
                         res = skill_utils.call_skill(
