@@ -4,9 +4,11 @@ Coordinates configuration loading, engine selection, and policy evaluation.
 Configuration is loaded from ~/.config/chatybot/security.toml (outside tools_config and chat_config).
 """
 
+import dataclasses
 import logging
 import os
 import shutil
+import time
 import tomllib
 from typing import Any
 
@@ -140,7 +142,7 @@ class SecurityManager:
     ) -> PolicyDecision:
         """Evaluate a tool invocation against the active policy engine."""
         if not self.enabled:
-            return PolicyDecision(verdict=Verdict.ALLOW, reason="Security evaluation disabled.")
+            return PolicyDecision(verdict=Verdict.ALLOW, reason="Security evaluation disabled.", duration_ms=0.0)
 
         ctx = dict(context or {})
         if self.debug and "debug" not in ctx:
@@ -153,13 +155,21 @@ class SecurityManager:
             parameters=params,
             context=ctx,
         )
+        t0 = time.perf_counter()
         try:
-            return self.engine.evaluate(req)
+            decision = self.engine.evaluate(req)
         except Exception as exc:
-            return PolicyDecision(
+            decision = PolicyDecision(
                 verdict=self.fail_safe,
                 reason=f"Security manager evaluation failed ({exc}). Failing safe to {self.fail_safe.value}.",
             )
+        duration_ms = round((time.perf_counter() - t0) * 1000, 2)
+        if self.debug:
+            print(
+                f"[Security Debug] [TIME] Security evaluation for '{tool}' completed in "
+                f"{duration_ms:.2f} ms ({decision.verdict.value})"
+            )
+        return dataclasses.replace(decision, duration_ms=duration_ms)
 
     def get_banner(self) -> str:
         """Return a human-readable banner string describing the active security engine."""
