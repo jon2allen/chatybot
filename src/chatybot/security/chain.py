@@ -148,6 +148,7 @@ class ChainedPolicyEngine(BasePolicyEngine):
             "final": final.verdict.value,
             "decided_by": decided_by,
             "disagreement": len(verdicts) > 1,
+            "total_ms": round(sum(r.get("latency_ms", 0.0) for r in results), 1),
             "stages": results,
         }
         self._write(entry)

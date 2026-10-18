@@ -63,11 +63,13 @@ class PolicyDecision:
     # Set by SecurityManager so outcomes (user approved/declined an ASK) can be
     # joined to the logged decision. Not part of the engine wire protocol.
     request_id: str = ""
+    duration_ms: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
         d: dict[str, Any] = {
             "status": self.verdict.value,
             "reason": self.reason,
+            "duration_ms": self.duration_ms,
         }
         if self.prompt_details:
             d["prompt_details"] = self.prompt_details.to_dict()
