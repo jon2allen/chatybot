@@ -10,7 +10,7 @@ import shutil
 import tomllib
 from typing import Any
 
-from chatybot.dispatcher import unwrap_tool_args
+from chatybot.tool_args import unwrap_tool_args
 from chatybot.security.adapters.stdio_binary import StdioBinaryPolicyEngine
 from chatybot.security.base import BasePolicyEngine
 from chatybot.security.builtin import BuiltinPolicyEngine

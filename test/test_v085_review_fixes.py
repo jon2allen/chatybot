@@ -733,3 +733,58 @@ path: /tmp
     assert calls[0]["arguments"]["path"] == "/tmp/a.py"
     assert calls[1]["tool"] == "list_directory"
     assert calls[1]["arguments"]["path"] == "/tmp"
+
+
+def test_unwrap_tool_args_shared_module_and_arguments_envelope():
+    """One rule in chatybot.tool_args; dispatcher re-exports the same function."""
+    from chatybot import dispatcher
+    from chatybot.tool_args import unwrap_tool_args
+
+    assert dispatcher.unwrap_tool_args is unwrap_tool_args
+    assert unwrap_tool_args({"arguments": {"name": "x"}}) == {"name": "x"}
+    assert unwrap_tool_args({"arguments": {"parameters": {"name": "x"}}}) == {"name": "x"}
+    decoy = {"name": "harmless", "arguments": {"name": "other"}}
+    assert unwrap_tool_args(decoy) == decoy
+    assert unwrap_tool_args({"parameters": "not-a-dict"}) == {"parameters": "not-a-dict"}
+    assert unwrap_tool_args({"other": {"name": "x"}}) == {"other": {"name": "x"}}
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("arguments, expected_name", [
+    ({"name": "harmless", "parameters": {"name": "other"}}, "harmless"),   # decoy beside real args: not unwrapped
+    ({"name": "harmless", "arguments": {"name": "other"}}, "harmless"),
+    ({"parameters": {"name": "wrapped"}}, "wrapped"),                       # lone envelope: unwrapped for both
+    ({"arguments": {"name": "wrapped"}}, "wrapped"),
+])
+async def test_in_app_tools_run_with_the_arguments_security_judged(monkeypatch, tmp_path, arguments, expected_name):
+    """call_skill used to unwrap envelopes beside other keys after the security check;
+    now security and execution see the same arguments."""
+    import json
+
+    from chatybot.tools import skill_utils
+
+    sec_cfg = tmp_path / "sec.toml"
+    sec_cfg.write_text('engine = "builtin"\nnon_interactive_ask = "allow"\n[builtin]\ndefault_verdict = "allow"\ndsl_rules = ["allow call skill"]\n')
+    app = ChatybotApp(security_config_path=str(sec_cfg))
+    app.initialize()
+
+    judged = {}
+    real_evaluate = app.security_manager.evaluate
+
+    def spy_evaluate(tool, parameters=None, context=None):
+        judged["params"] = dict(parameters or {})
+        return real_evaluate(tool, parameters, context)
+
+    ran = {}
+
+    def fake_call_skill(name="", app=None, **kw):
+        ran["name"] = name
+        return {"status": "success", "content": "ok"}
+
+    monkeypatch.setattr(app.security_manager, "evaluate", spy_evaluate)
+    monkeypatch.setattr(skill_utils, "call_skill", fake_call_skill)
+    monkeypatch.setattr(app, "tool_overrides", {}, raising=False)
+
+    await app.dispatch_tool(json.dumps({"tool": "call_skill", "arguments": arguments}))
+    assert ran.get("name") == expected_name
+    assert judged["params"].get("name") == expected_name
