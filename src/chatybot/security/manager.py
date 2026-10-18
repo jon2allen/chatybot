@@ -11,6 +11,7 @@ import shutil
 import tomllib
 from typing import Any
 
+from chatybot.dispatcher import unwrap_tool_args
 from chatybot.security.adapters.stdio_binary import StdioBinaryPolicyEngine
 from chatybot.security.allow_all import AllowAllPolicyEngine
 from chatybot.security.base import BasePolicyEngine
@@ -226,12 +227,7 @@ class SecurityManager:
         if self.debug and "debug" not in ctx:
             ctx["debug"] = True
 
-        params = dict(parameters or {})
-        while isinstance(params.get("parameters"), dict) or isinstance(params.get("args"), dict):
-            if isinstance(params.get("parameters"), dict):
-                params = params["parameters"]
-            elif isinstance(params.get("args"), dict):
-                params = params["args"]
+        params = unwrap_tool_args(dict(parameters or {}))
 
         req = PolicyRequest(
             tool=tool,
