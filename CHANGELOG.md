@@ -10,6 +10,9 @@ Unreleased
   - **`engine = "jev"`**: TypeSafe Jev decision-model engine driven by a rubric (`~/.config/chatybot/jev_security.toml`, seeded from `security/default_jev_security.toml`). Self-protection floor before any API call, secret redaction, head+tail truncation that forces at least ASK, per-session cache, `on_error` fail-safe (ASK interactive / DENY non-interactive), optional JSONL log, `noul` or `combined` mode.
   - Rubric scoring shared between the engine and the `tools/jev-eval` harness (`security/jev_rubric.py`).
   - Added `test/test_security_chain_jev.py` (Jev HTTP stubbed).
+- **Tool argument envelopes (security fix)**:
+  - Models sometimes wrap tool arguments as `{"parameters": {...}}`, `{"args": {...}}` or `{"arguments": {...}}`. Previously the security check judged the wrapped form while execution unwrapped it, so builtin path/command checks and self-protection could be bypassed (e.g. a wrapped `read_file /etc/passwd` was allowed).
+  - One rule now lives in `chatybot/tool_args.py` (`unwrap_tool_args`): unwrap only a lone envelope key, repeatedly. `dispatch_tool` normalizes once before the security check, and `SecurityManager.evaluate`, the tool-call normalizer, `dispatcher.py` and the in-app tools (`ask_user`, `decide_*`, `call_skill`, `search_skills`) all use the same arguments, so a decoy envelope beside real arguments can no longer be judged in their place.
 - **Jev / chain observability and hardening**:
   - Jev and chain logs are on by default (`~/.config/chatybot/logs/jev_security.jsonl`, `security_chain.jsonl`); `log_path = ""` turns them off.
   - The Jev log records every call with a `source` (api, cache, self_protect, skip_tools, error); cached decisions keep their scores and are returned as copies.
