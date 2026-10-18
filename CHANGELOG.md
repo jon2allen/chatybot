@@ -4,6 +4,9 @@ All notable changes, release milestones, and version history for **Chatybot** ar
 
 Unreleased
 ----------
+- **Tool argument envelopes (security fix)**:
+  - Models sometimes wrap tool arguments as `{"parameters": {...}}`, `{"args": {...}}` or `{"arguments": {...}}`. Previously the security check judged the wrapped form while execution unwrapped it, so builtin path/command checks and self-protection could be bypassed (e.g. a wrapped `read_file /etc/passwd` was allowed).
+  - One rule now lives in `chatybot/tool_args.py` (`unwrap_tool_args`): unwrap only a lone envelope key, repeatedly. `dispatch_tool` normalizes once before the security check, and `SecurityManager.evaluate`, the tool-call normalizer, `dispatcher.py` and the in-app tools (`ask_user`, `decide_*`, `call_skill`, `search_skills`) all use the same arguments, so a decoy envelope beside real arguments can no longer be judged in their place.
 - **TinyDB Persistence & Dispatcher Performance**:
   - **Snapshot-on-Write Optimization**: Moved TinyDB rolling snapshot backups from database activation (`/setdb`) to the first write (`/dblog`) per session, completely eliminating backup churn and rotation on read-only operations and model tools (`db_search`, `db_get`).
   - **Dispatcher Startup Optimization**: Removed unused `chatydb` import and `log_to_database` hook from `dispatcher.py` (saves ~2–3 ms per tool call).
