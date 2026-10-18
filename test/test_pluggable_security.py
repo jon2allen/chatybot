@@ -1503,6 +1503,36 @@ def test_security_manager_decoy_envelope_not_unwrapped(tmp_path):
     assert dec_cmd.verdict == Verdict.DENY
 
 
+def test_security_evaluation_duration_instrumentation(tmp_path, capsys):
+    """Verify that SecurityManager.evaluate measures execution time and populates duration_ms."""
+    cfg = tmp_path / "security.toml"
+    cfg.write_text('engine = "builtin"\n[builtin]\ndefault_verdict = "allow"\n')
+
+    # 1. Normal evaluation with debug=False
+    mgr = SecurityManager(config_path=str(cfg), debug=False)
+    dec = mgr.evaluate(tool="read_file", parameters={"path": "README.md"})
+    assert isinstance(dec.duration_ms, float)
+    assert dec.duration_ms >= 0.0
+    dec_dict = dec.to_dict()
+    assert "duration_ms" in dec_dict
+    assert dec_dict["duration_ms"] == dec.duration_ms
+
+    # 2. Disabled manager returns duration_ms = 0.0
+    mgr_disabled = SecurityManager(config_path=str(cfg), enabled=False)
+    dec_disabled = mgr_disabled.evaluate(tool="read_file", parameters={"path": "README.md"})
+    assert dec_disabled.duration_ms == 0.0
+    assert dec_disabled.to_dict()["duration_ms"] == 0.0
+
+    # 3. Debug mode prints timing trace
+    mgr_debug = SecurityManager(config_path=str(cfg), debug=True)
+    dec_debug = mgr_debug.evaluate(tool="read_file", parameters={"path": "README.md"})
+    captured = capsys.readouterr()
+    assert "[Security Debug] [TIME]" in captured.out
+    assert "completed in" in captured.out
+    assert f"{dec_debug.duration_ms:.2f} ms" in captured.out
+
+
+
 
 
 
