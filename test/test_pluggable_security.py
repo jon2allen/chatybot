@@ -1450,6 +1450,36 @@ non_interactive_ask = "prompt_user"
     assert "Unsupported non_interactive_ask setting 'prompt_user'" in warning_text
 
 
+def test_security_manager_unwraps_nested_parameters(tmp_path):
+    """Verify that arguments wrapped inside {'parameters': {...}} or {'args': {...}} cannot bypass policy rules."""
+    cfg = tmp_path / "security.toml"
+    cfg.write_text('engine = "builtin"\n[builtin]\ndefault_verdict = "ask"\n')
+    mgr = SecurityManager(config_path=str(cfg))
+
+    # 1. read_file with /etc/passwd wrapped in 'parameters' must still be DENIED
+    dec_read = mgr.evaluate(
+        tool="read_file",
+        parameters={"parameters": {"path": "/etc/passwd"}},
+    )
+    assert dec_read.verdict == Verdict.DENY
+    assert "protected path" in dec_read.reason.lower()
+
+    # 2. run_command with 'rm -rf /' wrapped in 'parameters' must still be DENIED
+    dec_cmd = mgr.evaluate(
+        tool="run_command",
+        parameters={"parameters": {"command": "rm -rf /"}},
+    )
+    assert dec_cmd.verdict == Verdict.DENY
+
+    # 3. Double-wrapped parameters
+    dec_double = mgr.evaluate(
+        tool="run_command",
+        parameters={"parameters": {"args": {"command": "rm -rf /"}}},
+    )
+    assert dec_double.verdict == Verdict.DENY
+
+
+
 
 
 
