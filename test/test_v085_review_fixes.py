@@ -552,6 +552,20 @@ def test_extract_tool_calls_unwraps_nested_json_and_action_envelopes():
     assert calls3[0]["arguments"]["target"] == "static double get_time_seconds(void) {"
     assert calls3[0]["arguments"]["replacement"] == "double get_time_seconds(void) {"
 
+    # 4. Parameters wrapper under tool (e.g. {"tool": "run_command", "parameters": {"command": "..."}})
+    text4 = '{"tool": "run_command", "parameters": {"command": "cat src/main.rs"}}'
+    calls4 = app.extract_tool_calls(text4)
+    assert len(calls4) == 1
+    assert calls4[0]["tool"] == "run_command"
+    assert calls4[0]["arguments"] == {"command": "cat src/main.rs"}
+
+    # 5. Nested arguments with single parameters key
+    text5 = '{"tool": "run_command", "arguments": {"parameters": {"command": "ls -la"}}}'
+    calls5 = app.extract_tool_calls(text5)
+    assert len(calls5) == 1
+    assert calls5[0]["tool"] == "run_command"
+    assert calls5[0]["arguments"] == {"command": "ls -la"}
+
 
 
 def test_read_file_tolerates_list_and_string_ranges():

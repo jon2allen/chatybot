@@ -4576,11 +4576,26 @@ class ChatybotApp:
                         tool_name = tool_name.split(".")[-1]
                     data["tool"] = tool_name
                     if "arguments" not in data:
-                        data["arguments"] = {k: v for k, v in data.items() if k != "tool"}
+                        if isinstance(data.get("parameters"), dict):
+                            data["arguments"] = data["parameters"]
+                        elif isinstance(data.get("args"), dict):
+                            data["arguments"] = data["args"]
+                        elif isinstance(data.get("parameters"), str):
+                            parsed_params = parse_json_or_dict(data["parameters"])
+                            data["arguments"] = parsed_params if isinstance(parsed_params, dict) else {k: v for k, v in data.items() if k != "tool"}
+                        elif isinstance(data.get("args"), str):
+                            parsed_args = parse_json_or_dict(data["args"])
+                            data["arguments"] = parsed_args if isinstance(parsed_args, dict) else {k: v for k, v in data.items() if k != "tool"}
+                        else:
+                            data["arguments"] = {k: v for k, v in data.items() if k != "tool"}
                     elif isinstance(data["arguments"], str):
                         parsed_args = parse_json_or_dict(data["arguments"])
                         if isinstance(parsed_args, dict):
                             data["arguments"] = parsed_args
+                    if isinstance(data.get("arguments"), dict) and len(data["arguments"]) == 1 and ("parameters" in data["arguments"] or "args" in data["arguments"]):
+                        inner = data["arguments"].get("parameters") if "parameters" in data["arguments"] else data["arguments"].get("args")
+                        if isinstance(inner, dict):
+                            data["arguments"] = inner
                     return data
                 elif "tool_name" in data:
                     tool_name = str(data["tool_name"])
@@ -4591,6 +4606,10 @@ class ChatybotApp:
                         parsed_args = parse_json_or_dict(args)
                         if isinstance(parsed_args, dict):
                             args = parsed_args
+                    if isinstance(args, dict) and len(args) == 1 and ("parameters" in args or "args" in args):
+                        inner = args.get("parameters") if "parameters" in args else args.get("args")
+                        if isinstance(inner, dict):
+                            args = inner
                     return {"tool": tool_name, "arguments": args}
                 elif "name" in data:
                     tool_name = str(data["name"])
@@ -4601,16 +4620,24 @@ class ChatybotApp:
                         parsed_args = parse_json_or_dict(args)
                         if isinstance(parsed_args, dict):
                             args = parsed_args
+                    if isinstance(args, dict) and len(args) == 1 and ("parameters" in args or "args" in args):
+                        inner = args.get("parameters") if "parameters" in args else args.get("args")
+                        if isinstance(inner, dict):
+                            args = inner
                     return {"tool": tool_name, "arguments": args}
                 elif "function" in data:
                     tool_name = str(data["function"])
                     if "." in tool_name:
                         tool_name = tool_name.split(".")[-1]
-                    args = data.get("arguments") if "arguments" in data else data.get("args") if "args" in data else {k: v for k, v in data.items() if k != "function"}
+                    args = data.get("arguments") if "arguments" in data else data.get("args") if "args" in data else data.get("parameters") if "parameters" in data else {k: v for k, v in data.items() if k != "function"}
                     if isinstance(args, str):
                         parsed_args = parse_json_or_dict(args)
                         if isinstance(parsed_args, dict):
                             args = parsed_args
+                    if isinstance(args, dict) and len(args) == 1 and ("parameters" in args or "args" in args):
+                        inner = args.get("parameters") if "parameters" in args else args.get("args")
+                        if isinstance(inner, dict):
+                            args = inner
                     return {"tool": tool_name, "arguments": args}
                 elif len(data) == 1:
                     k, v = next(iter(data.items()))
