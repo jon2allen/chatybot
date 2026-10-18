@@ -4,6 +4,11 @@ All notable changes, release milestones, and version history for **Chatybot** ar
 
 Unreleased
 ----------
+- **Pluggable Security Evaluation Instrumentation**:
+  - Measured execution duration (`duration_ms`) inside `SecurityManager.evaluate()` using `time.perf_counter()`, stamped onto `PolicyDecision`.
+  - Exposed evaluation duration in `--security` debug trace lines (`[Security Debug] [TIME] Security evaluation for '{tool}' completed in {ms} ms ({verdict})`).
+  - Recorded security evaluation time in the agentic loop output alongside tool duration: `Tool time: X.X ms (security: Y.Y ms)` (or `<0.1 ms` for sub-0.1ms checks).
+  - Saved `SECURITY_EVAL_TIME_MS` script buffer variable in `dispatch_tool` for scripts and inspection.
 - **Tool argument envelopes (security fix)**:
   - Models sometimes wrap tool arguments as `{"parameters": {...}}`, `{"args": {...}}` or `{"arguments": {...}}`. Previously the security check judged the wrapped form while execution unwrapped it, so builtin path/command checks and self-protection could be bypassed (e.g. a wrapped `read_file /etc/passwd` was allowed).
   - One rule now lives in `chatybot/tool_args.py` (`unwrap_tool_args`): unwrap only a lone envelope key, repeatedly. `dispatch_tool` normalizes once before the security check, and `SecurityManager.evaluate`, the tool-call normalizer, `dispatcher.py` and the in-app tools (`ask_user`, `decide_*`, `call_skill`, `search_skills`) all use the same arguments, so a decoy envelope beside real arguments can no longer be judged in their place.
