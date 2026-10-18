@@ -145,9 +145,16 @@ class SecurityManager:
         if self.debug and "debug" not in ctx:
             ctx["debug"] = True
 
+        params = dict(parameters or {})
+        while isinstance(params.get("parameters"), dict) or isinstance(params.get("args"), dict):
+            if isinstance(params.get("parameters"), dict):
+                params = params["parameters"]
+            elif isinstance(params.get("args"), dict):
+                params = params["args"]
+
         req = PolicyRequest(
             tool=tool,
-            parameters=parameters or {},
+            parameters=params,
             context=ctx,
         )
         try:
