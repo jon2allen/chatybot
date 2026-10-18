@@ -710,3 +710,67 @@ log_path = "{tmp_path / 'chain.jsonl'}"
     # Re-grading with a stricter trigger flips Jev's DENY on the push to ASK
     run(trigger=0.95)
     assert "deny -> ask" in capsys.readouterr().out
+
+
+def test_jev_context_target_exists(rubric_path, jev_key, tmp_path):
+    fake = FakeJev()
+    eng = make_jev(rubric_path, fake)
+
+    existing_file = tmp_path / "exists.txt"
+    existing_file.write_text("hello")
+    non_existing = tmp_path / "not_exists.txt"
+
+    # 1. Existing file -> target_exists: True
+    eng.evaluate(req("write_file", path=str(existing_file), content="new content"))
+    state1 = fake.calls[0]["body"]["state"]
+    action1 = json.loads(state1.split("ACTION:\n")[1])
+    assert action1["context"]["target_exists"] is True
+
+    # 2. Non-existent file -> target_exists: False
+    eng.evaluate(req("write_file", path=str(non_existing), content="brand new"))
+    state2 = fake.calls[1]["body"]["state"]
+    action2 = json.loads(state2.split("ACTION:\n")[1])
+    assert action2["context"]["target_exists"] is False
+
+    # 3. Non-file tool -> target_exists not in context
+    eng.evaluate(cmd("ls -l"))
+    state3 = fake.calls[2]["body"]["state"]
+    action3 = json.loads(state3.split("ACTION:\n")[1])
+    assert "target_exists" not in action3["context"]
+
+
+def test_jev_from_log_approved_ask_candidate(tmp_path, jev_key, monkeypatch):
+    import argparse
+    import importlib.util
+    from pathlib import Path
+
+    harness_path = Path(__file__).resolve().parents[1] / "tools" / "jev-eval" / "jev_eval.py"
+    spec = importlib.util.spec_from_file_location("jev_eval", harness_path)
+    jev_eval = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(jev_eval)
+
+    fake = FakeJev(scores={"data_loss": 0.55})
+    rubric = tmp_path / "r.toml"
+    rubric.write_bytes(open(BUNDLED_RUBRIC, "rb").read())
+    log = tmp_path / "jev.jsonl"
+    cfg = tmp_path / "security.toml"
+    cfg.write_text(f'''
+engine = "jev"
+[jev]
+rubric_path = "{rubric}"
+log_path = "{log}"
+''')
+    mgr = SecurityManager(config_path=str(cfg))
+    mgr.engine.http_post = fake
+
+    dec = mgr.evaluate("write_file", {"path": "src/main.rs", "content": "fn main() {}"}, {"interactive": True})
+    assert dec.verdict == Verdict.ASK
+    mgr.record_outcome(dec, "approved", tool="write_file")
+
+    ns = argparse.Namespace(from_log=[str(log)], export=str(tmp_path / "cands.jsonl"), mode_given=None)
+    rub = Rubric.load(rubric)
+    assert jev_eval.from_log(ns, rub) == 0
+    rows = [json.loads(l) for l in open(tmp_path / "cands.jsonl")]
+    assert len(rows) == 1
+    assert any("candidate false positive" in w for w in rows[0]["_why"])
+

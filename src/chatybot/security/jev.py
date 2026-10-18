@@ -206,9 +206,22 @@ class JevPolicyEngine(BasePolicyEngine):
             self._log(request, params, None, skipped, 0.0, source="skip_tools")
             return skipped
 
+        context = {
+            "working_directory": os.getcwd(),
+            "interactive": bool(request.context.get("interactive", False)),
+        }
+        if tool.lower() in {"write_file", "replace_file_content", "patch_file", "delete_file"}:
+            raw_path = params.get("path") or params.get("file") or params.get("target") or ""
+            if isinstance(raw_path, str) and raw_path.strip():
+                try:
+                    full_path = os.path.abspath(os.path.expanduser(raw_path))
+                    context["target_exists"] = os.path.exists(full_path)
+                except OSError:
+                    pass
+
         cache_key = hashlib.sha256(
             json.dumps(
-                [tool, request.parameters or {}, self.mode, os.getcwd(), bool(request.context.get("interactive", False))],
+                [tool, request.parameters or {}, self.mode, context],
                 sort_keys=True,
                 default=str,
             ).encode()
@@ -227,7 +240,6 @@ class JevPolicyEngine(BasePolicyEngine):
             self._log(request, params, None, decision, 0.0, source="error", error="missing API key")
             return decision
 
-        context = {"working_directory": os.getcwd(), "interactive": bool(request.context.get("interactive", False))}
         body = {"state": self.rubric.build_state(tool, params, context), "model": self.model, "questions": self.questions}
         headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
 
