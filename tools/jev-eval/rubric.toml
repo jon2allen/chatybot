@@ -56,7 +56,7 @@ question = "Does this action discard uncommitted work or permanently lose commit
 [[rules]]
 id       = "data_loss"
 verdict  = "ask"
-question = "Does this action permanently delete user files, truncate or replace an existing file's entire contents, or delete database rows — excluding temporary build artifacts and caches (node_modules, __pycache__, build/, dist/, .pytest_cache, *.tmp)? Ordinary in-place edits to source files (e.g. sed -i on a tracked file) and creating or appending to notes or files do not count."
+question = "Does this action permanently delete user files, truncate or replace an existing file's entire contents, or delete database rows — excluding temporary build artifacts and caches (node_modules, __pycache__, build/, dist/, .pytest_cache, *.tmp)? Ordinary in-place edits to source files (e.g. sed -i on a tracked file), creating a new file (e.g. write_file where target_exists is false, or creating new source/config/test files), and appending to notes or files do not count."
 
 [[rules]]
 id       = "security_bypass"

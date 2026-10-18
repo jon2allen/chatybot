@@ -447,6 +447,8 @@ def from_log(args, rubric: Rubric) -> int:
         j = jev_by_id.get(rid)
         if o == "approved" and j and j.get("_regraded", j["verdict"]) == "deny":
             add(src, "user approved what Jev would deny")
+        if "approved" in o and j and j.get("_regraded", j["verdict"]) == "ask":
+            add(src, f"user {o} the ASK (candidate false positive)")
     for e in jev:
         if "_regraded" in e and e["_regraded"] != e["verdict"]:
             add(e, "verdict changes with new thresholds")
