@@ -87,6 +87,11 @@ def validate_and_route(invocation: dict[str, Any], config: dict[str, Any]) -> tu
     """Validates the invocation against config rules and prepares dynamic routing execution."""
     tool_name = invocation.get("tool")
     args = invocation.get("arguments", {})
+    if isinstance(args, dict) and len(args) == 1 and ("parameters" in args or "args" in args):
+        inner_cand = args.get("parameters") if "parameters" in args else args.get("args")
+        if isinstance(inner_cand, dict):
+            args = inner_cand
+            invocation["arguments"] = args
 
     if not tool_name:
         raise ValueError("Invalid invocation block: 'tool' field missing.")
