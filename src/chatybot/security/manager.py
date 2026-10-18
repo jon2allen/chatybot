@@ -8,6 +8,7 @@ import dataclasses
 import logging
 import os
 import shutil
+import time
 import tomllib
 from typing import Any
 
@@ -221,7 +222,7 @@ class SecurityManager:
     ) -> PolicyDecision:
         """Evaluate a tool invocation against the active policy engine."""
         if not self.enabled:
-            return PolicyDecision(verdict=Verdict.ALLOW, reason="Security evaluation disabled.")
+            return PolicyDecision(verdict=Verdict.ALLOW, reason="Security evaluation disabled.", duration_ms=0.0)
 
         ctx = dict(context or {})
         if self.debug and "debug" not in ctx:
@@ -234,6 +235,7 @@ class SecurityManager:
             parameters=params,
             context=ctx,
         )
+        t0 = time.perf_counter()
         try:
             decision = self.engine.evaluate(req)
         except Exception as exc:
@@ -241,8 +243,14 @@ class SecurityManager:
                 verdict=self.fail_safe,
                 reason=f"Security manager evaluation failed ({exc}). Failing safe to {self.fail_safe.value}.",
             )
-        # Return a copy stamped with the request id (engines may cache and reuse decisions).
-        return dataclasses.replace(decision, request_id=req.request_id)
+        duration_ms = round((time.perf_counter() - t0) * 1000, 2)
+        if self.debug:
+            print(
+                f"[Security Debug] [TIME] Security evaluation for '{tool}' completed in "
+                f"{duration_ms:.2f} ms ({decision.verdict.value})"
+            )
+        # Return a copy stamped with the request id and duration (engines may cache and reuse decisions).
+        return dataclasses.replace(decision, request_id=req.request_id, duration_ms=duration_ms)
 
     def record_outcome(self, decision: PolicyDecision, outcome: str, tool: str = "", detail: str = "") -> None:
         """Record what happened to an ASK decision (see ASK_OUTCOMES) in the engine's log.

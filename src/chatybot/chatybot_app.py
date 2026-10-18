@@ -86,6 +86,7 @@ class ChatybotApp:
         self.auto_approve: bool = auto_approve
         self.no_security: bool = no_security
         self.security_config_path: str | None = security_config_path
+        self.last_security_duration_ms: float = 0.0
         self.single_run_mode: bool = False
         # Initialize managers
         from .localization import LocalizationManager
@@ -3773,6 +3774,7 @@ class ChatybotApp:
 
             # --- Security Policy Interception ---
             sec_mgr = getattr(self, "security_manager", None)
+            self.last_security_duration_ms = 0.0
 
             def _record_sec_outcome(outcome: str) -> None:
                 """Log what happened to an ASK decision (joined to the decision by request_id)."""
@@ -3797,6 +3799,9 @@ class ChatybotApp:
                         "interactive": is_interactive,
                     },
                 )
+                self.last_security_duration_ms = getattr(sec_decision, "duration_ms", 0.0)
+                if hasattr(self, "buffer_manager") and self.buffer_manager is not None:
+                    self.buffer_manager.set_script_var('SECURITY_EVAL_TIME_MS', f"{self.last_security_duration_ms:.2f}")
                 if sec_decision.verdict == Verdict.DENY:
                     deny_header = self.i18n.get_ui_string("security_blocked_header", "[Security Block]")
                     deny_msg = self.i18n.get_ui_string("security_blocked_msg", f"Security Policy Blocked: {sec_decision.reason}", reason=sec_decision.reason)
@@ -5589,8 +5594,13 @@ class ChatybotApp:
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', result_str)
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
                 _tool_duration_ms = round((time.perf_counter() - _tool_t0) * 1000, 1)
+                _sec_ms = getattr(self, "last_security_duration_ms", 0.0)
                 if tool_name != "ask_user":
-                    print(f"   Tool time: {_tool_duration_ms:.1f} ms")
+                    if _sec_ms > 0:
+                        _sec_str = f"{_sec_ms:.1f} ms" if _sec_ms >= 0.1 else "<0.1 ms"
+                        print(f"   Tool time: {_tool_duration_ms:.1f} ms (security: {_sec_str})")
+                    else:
+                        print(f"   Tool time: {_tool_duration_ms:.1f} ms")
 
                 if self._is_permanent_capability_error(result_str) and "[PERMANENT CAPABILITY ERROR]" not in result_str:
                     result_str = self._format_capability_error(tool_name, result_str)
