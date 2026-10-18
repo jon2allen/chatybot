@@ -55,7 +55,10 @@ from chatybot.security.jev_rubric import (
 
 
 def build_state(rubric: Rubric, case: dict[str, Any], cwd: str) -> str:
-    return rubric.build_state(case["tool"], case["parameters"], {"working_directory": cwd, "interactive": True})
+    ctx = {"working_directory": cwd, "interactive": True}
+    if "context" in case and isinstance(case["context"], dict):
+        ctx.update(case["context"])
+    return rubric.build_state(case["tool"], case["parameters"], ctx)
 
 
 def grade(verdict: str, expected: str | list[str]) -> str:
@@ -447,8 +450,8 @@ def from_log(args, rubric: Rubric) -> int:
         j = jev_by_id.get(rid)
         if o == "approved" and j and j.get("_regraded", j["verdict"]) == "deny":
             add(src, "user approved what Jev would deny")
-        if "approved" in o and j and j.get("_regraded", j["verdict"]) == "ask":
-            add(src, f"user {o} the ASK (candidate false positive)")
+        if o == "approved" and j and j.get("_regraded", j["verdict"]) == "ask":
+            add(src, "user approved the ASK (candidate false positive)")
     for e in jev:
         if "_regraded" in e and e["_regraded"] != e["verdict"]:
             add(e, "verdict changes with new thresholds")
