@@ -567,6 +567,25 @@ def test_extract_tool_calls_unwraps_nested_json_and_action_envelopes():
     assert calls5[0]["arguments"] == {"command": "ls -la"}
 
 
+def test_unwrap_tool_args_lone_envelope_vs_decoy():
+    """Verify that unwrap_tool_args unwraps lone envelope keys but refuses to unwrap when decoy envelopes are beside real parameters."""
+    from chatybot.dispatcher import unwrap_tool_args
+
+    # 1. Lone parameter envelope
+    assert unwrap_tool_args({"parameters": {"command": "ls"}}) == {"command": "ls"}
+    assert unwrap_tool_args({"args": {"command": "ls"}}) == {"command": "ls"}
+
+    # 2. Multi-level lone envelope
+    assert unwrap_tool_args({"parameters": {"args": {"command": "ls"}}}) == {"command": "ls"}
+
+    # 3. Decoy envelope beside real parameters -> MUST NOT unwrap!
+    decoy = {"path": "/etc/passwd", "args": {"path": "README.md"}}
+    assert unwrap_tool_args(decoy) == decoy
+
+    decoy2 = {"command": "rm -rf /", "parameters": {"command": "ls"}}
+    assert unwrap_tool_args(decoy2) == decoy2
+
+
 
 def test_read_file_tolerates_list_and_string_ranges():
     """Verify read_file parses start_line when provided as a list [start, end] or string range '[start, end]' / 'start-end'."""

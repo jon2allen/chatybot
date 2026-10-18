@@ -7,12 +7,13 @@ Configuration is loaded from ~/.config/chatybot/security.toml (outside tools_con
 import logging
 import os
 import shutil
-from typing import Any
 import tomllib
+from typing import Any
 
+from chatybot.dispatcher import unwrap_tool_args
+from chatybot.security.adapters.stdio_binary import StdioBinaryPolicyEngine
 from chatybot.security.base import BasePolicyEngine
 from chatybot.security.builtin import BuiltinPolicyEngine
-from chatybot.security.adapters.stdio_binary import StdioBinaryPolicyEngine
 from chatybot.security.models import PolicyDecision, PolicyRequest, Verdict
 
 logger = logging.getLogger(__name__)
@@ -145,12 +146,7 @@ class SecurityManager:
         if self.debug and "debug" not in ctx:
             ctx["debug"] = True
 
-        params = dict(parameters or {})
-        while isinstance(params.get("parameters"), dict) or isinstance(params.get("args"), dict):
-            if isinstance(params.get("parameters"), dict):
-                params = params["parameters"]
-            elif isinstance(params.get("args"), dict):
-                params = params["args"]
+        params = unwrap_tool_args(dict(parameters or {}))
 
         req = PolicyRequest(
             tool=tool,

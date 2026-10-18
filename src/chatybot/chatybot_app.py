@@ -58,6 +58,7 @@ from .commands import registry as _command_registry
 from .commands.context import CommandContext
 from .commands.registry import CommandAction, CommandResult
 from .config_manager import ConfigManager
+from .dispatcher import unwrap_tool_args
 from .image_generator import ImageGenerator
 from .image_manager import ImageManager
 from .logging_manager import LoggingManager
@@ -3766,7 +3767,9 @@ class ChatybotApp:
         
         if tool_call and isinstance(tool_call, dict):
             tool_name = tool_call.get("tool", "")
-            tool_args = tool_call.get("arguments", {})
+            tool_args = unwrap_tool_args(tool_call.get("arguments", {}))
+            tool_call["arguments"] = tool_args
+            invocation_json = json.dumps(tool_call)
 
             # --- Security Policy Interception ---
             sec_mgr = getattr(self, "security_manager", None)
@@ -4592,10 +4595,7 @@ class ChatybotApp:
                         parsed_args = parse_json_or_dict(data["arguments"])
                         if isinstance(parsed_args, dict):
                             data["arguments"] = parsed_args
-                    if isinstance(data.get("arguments"), dict) and len(data["arguments"]) == 1 and ("parameters" in data["arguments"] or "args" in data["arguments"]):
-                        inner = data["arguments"].get("parameters") if "parameters" in data["arguments"] else data["arguments"].get("args")
-                        if isinstance(inner, dict):
-                            data["arguments"] = inner
+                    data["arguments"] = unwrap_tool_args(data.get("arguments", {}))
                     return data
                 elif "tool_name" in data:
                     tool_name = str(data["tool_name"])
@@ -4606,10 +4606,7 @@ class ChatybotApp:
                         parsed_args = parse_json_or_dict(args)
                         if isinstance(parsed_args, dict):
                             args = parsed_args
-                    if isinstance(args, dict) and len(args) == 1 and ("parameters" in args or "args" in args):
-                        inner = args.get("parameters") if "parameters" in args else args.get("args")
-                        if isinstance(inner, dict):
-                            args = inner
+                    args = unwrap_tool_args(args)
                     return {"tool": tool_name, "arguments": args}
                 elif "name" in data:
                     tool_name = str(data["name"])
@@ -4620,10 +4617,7 @@ class ChatybotApp:
                         parsed_args = parse_json_or_dict(args)
                         if isinstance(parsed_args, dict):
                             args = parsed_args
-                    if isinstance(args, dict) and len(args) == 1 and ("parameters" in args or "args" in args):
-                        inner = args.get("parameters") if "parameters" in args else args.get("args")
-                        if isinstance(inner, dict):
-                            args = inner
+                    args = unwrap_tool_args(args)
                     return {"tool": tool_name, "arguments": args}
                 elif "function" in data:
                     tool_name = str(data["function"])
@@ -4634,10 +4628,7 @@ class ChatybotApp:
                         parsed_args = parse_json_or_dict(args)
                         if isinstance(parsed_args, dict):
                             args = parsed_args
-                    if isinstance(args, dict) and len(args) == 1 and ("parameters" in args or "args" in args):
-                        inner = args.get("parameters") if "parameters" in args else args.get("args")
-                        if isinstance(inner, dict):
-                            args = inner
+                    args = unwrap_tool_args(args)
                     return {"tool": tool_name, "arguments": args}
                 elif len(data) == 1:
                     k, v = next(iter(data.items()))
