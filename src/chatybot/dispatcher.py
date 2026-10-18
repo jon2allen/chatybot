@@ -83,15 +83,28 @@ def write_json_response(data: dict[str, Any], status_code: int = 0):
     sys.exit(status_code)
 
 
+def unwrap_tool_args(parameters: Any) -> Any:
+    """Unwrap nested 'parameters' or 'args' dictionary envelopes if and only if
+    the envelope key is the sole key in the dictionary.
+
+    Repeats until no lone envelope remains. If other keys are present beside
+    'parameters' or 'args', it does NOT unwrap (preventing decoy envelope attacks).
+    """
+    params = parameters
+    while isinstance(params, dict) and len(params) == 1 and ("parameters" in params or "args" in params):
+        inner = params.get("parameters") if "parameters" in params else params.get("args")
+        if isinstance(inner, dict):
+            params = inner
+        else:
+            break
+    return params
+
+
 def validate_and_route(invocation: dict[str, Any], config: dict[str, Any]) -> tuple[Any, list, dict]:
     """Validates the invocation against config rules and prepares dynamic routing execution."""
     tool_name = invocation.get("tool")
-    args = invocation.get("arguments", {})
-    if isinstance(args, dict) and len(args) == 1 and ("parameters" in args or "args" in args):
-        inner_cand = args.get("parameters") if "parameters" in args else args.get("args")
-        if isinstance(inner_cand, dict):
-            args = inner_cand
-            invocation["arguments"] = args
+    args = unwrap_tool_args(invocation.get("arguments", {}))
+    invocation["arguments"] = args
 
     if not tool_name:
         raise ValueError("Invalid invocation block: 'tool' field missing.")
