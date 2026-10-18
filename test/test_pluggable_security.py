@@ -1479,6 +1479,31 @@ def test_security_manager_unwraps_nested_parameters(tmp_path):
     assert dec_double.verdict == Verdict.DENY
 
 
+def test_security_manager_decoy_envelope_not_unwrapped(tmp_path):
+    """Verify that a decoy envelope beside real arguments is not unwrapped, ensuring the real arguments are evaluated."""
+    cfg = tmp_path / "security.toml"
+    cfg.write_text('engine = "builtin"\n[builtin]\ndefault_verdict = "ask"\n')
+    mgr = SecurityManager(config_path=str(cfg))
+
+    # read_file with real /etc/passwd and decoy README.md in 'args' envelope
+    # If unwrap mistakenly unwrapped 'args', it would evaluate README.md (ALLOW).
+    # With lone-envelope unwrapping, it evaluates /etc/passwd and must be DENIED!
+    dec = mgr.evaluate(
+        tool="read_file",
+        parameters={"path": "/etc/passwd", "args": {"path": "README.md"}},
+    )
+    assert dec.verdict == Verdict.DENY
+    assert "protected path" in dec.reason.lower()
+
+    # run_command with real 'rm -rf /' and decoy 'ls' in 'parameters' envelope
+    dec_cmd = mgr.evaluate(
+        tool="run_command",
+        parameters={"command": "rm -rf /", "parameters": {"command": "ls"}},
+    )
+    assert dec_cmd.verdict == Verdict.DENY
+
+
+
 
 
 
