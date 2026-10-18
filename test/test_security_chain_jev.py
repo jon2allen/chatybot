@@ -767,10 +767,15 @@ log_path = "{log}"
     assert dec.verdict == Verdict.ASK
     mgr.record_outcome(dec, "approved", tool="write_file")
 
+    # Auto-approved outcomes (via --yes flag or non-interactive policy) are NOT human-approved candidate false positives
+    dec_auto = mgr.evaluate("write_file", {"path": "src/lib.rs", "content": "pub fn lib() {}"}, {"interactive": False})
+    mgr.record_outcome(dec_auto, "auto_approved_yes_flag", tool="write_file")
+
     ns = argparse.Namespace(from_log=[str(log)], export=str(tmp_path / "cands.jsonl"), mode_given=None)
     rub = Rubric.load(rubric)
     assert jev_eval.from_log(ns, rub) == 0
     rows = [json.loads(l) for l in open(tmp_path / "cands.jsonl")]
     assert len(rows) == 1
     assert any("candidate false positive" in w for w in rows[0]["_why"])
+    assert rows[0]["parameters"]["path"] == "src/main.rs"
 
