@@ -4,6 +4,13 @@ All notable changes, release milestones, and version history for **Chatybot** ar
 
 Unreleased
 ----------
+- **Output secret scanner precision**:
+  - The generic credential rules now treat their regex match as a candidate and check the value: code that only references a credential (`os.environ[...]`, `getpass()`, `settings.SECRET_KEY`, `$(...)`, `${{ }}`), placeholders (`your_`, `<...>`, `example`, `fake`), paths, URLs and short or low-randomness values no longer prompt. Repo files that would prompt on read dropped from 32 to 5 (all test fixtures with fake keys).
+  - Passwords: 8+ characters; a bare word without digits is a value in env-style (`DB_PASSWORD=x`), YAML/prose (`password: x`) and `.netrc` lines, and a variable name in code-style assignments (`password = x`, `password=password`).
+  - New `.netrc` rule (`login <user> password <value>`); JSON (`"api_key": "..."`) and `:=` assignments are now covered.
+  - Output rules accept an optional `validator` (`token_value`, `password_value`, `credential_value`); see `[output_security]` in the default `security.toml`.
+  - Added `test/test_secret_scanner.py`, including a guard that no `src/` file or doc prompts on read.
+
 - **Post-Execution Output Security (Egress Filtering & Secret Protection)**:
   - Added post-execution output screening in `SecurityManager` and policy engines (`builtin`, `jev`, `chain`, `allow_all`, `stdio_binary`) to evaluate tool output (`read_file`, `run_command`, `str_search`, `read_url`) before it enters LLM context.
   - Implemented clean tri-state access control (ALLOW / ASK / DENY) avoiding fragile token redaction:
