@@ -4318,8 +4318,9 @@ class ChatybotApp:
             self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', str(result.returncode))
             
             if result.returncode != 0:
-                print(f"Tool dispatch failed: {result.stderr}")
-                return f"Error: Tool execution failed with exit code {result.returncode}: {result.stderr or result.stdout or 'Unknown error'}"
+                print(f"Tool dispatch failed with exit code {result.returncode}")
+                err_msg = f"Error: Tool execution failed with exit code {result.returncode}: {result.stderr or result.stdout or 'Unknown error'}"
+                return await _finalize_tool_return(err_msg)
             else:
                 print("Tool dispatched successfully")
                 if tool_call and tool_call.get('tool') == 'change_dir':
@@ -4362,7 +4363,8 @@ class ChatybotApp:
             self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
             self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', str(e))
             self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '-1')
-            return f"Error: Tool dispatch failed: {e!s}"
+            err_msg = f"Error: Tool dispatch failed: {e!s}"
+            return await _finalize_tool_return(err_msg)
         finally:
             # Clean up temp file
             try:
