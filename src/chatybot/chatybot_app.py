@@ -3809,20 +3809,40 @@ class ChatybotApp:
             return f"Error: {deny_msg}"
 
         elif post_decision.verdict == Verdict.ASK:
+            def _record_post_outcome(outcome: str) -> None:
+                record = getattr(sec_mgr, "record_outcome", None)
+                if record is not None:
+                    try:
+                        record(post_decision, outcome, tool=tool_name)
+                    except Exception:
+                        pass
+
             if getattr(self, "auto_approve", False):
+                _record_post_outcome("auto_approved_yes_flag")
                 if self.security_debug:
                     print(f"[Security Debug] [OUTPUT ACCEPT] Auto-approved output of '{tool_name}' via --yes flag.")
+                if hasattr(self, "logging_manager") and getattr(self.logging_manager, "logging_active", False):
+                    self.logging_manager.log_message(f"[Security Audit] AUTO-APPROVED OUTPUT of tool '{tool_name}' via --yes flag. Reason: {post_decision.reason}")
                 return raw_output
 
             if not is_interactive:
                 non_interactive_policy = getattr(sec_mgr, "non_interactive_ask", "deny").lower()
                 if non_interactive_policy == "allow":
+                    _record_post_outcome("auto_approved_non_interactive")
                     if self.security_debug:
                         print(f"[Security Debug] [OUTPUT ACCEPT] Auto-approved output of '{tool_name}' via non_interactive_ask policy.")
+                    if hasattr(self, "logging_manager") and getattr(self.logging_manager, "logging_active", False):
+                        self.logging_manager.log_message(f"[Security Audit] AUTO-APPROVED OUTPUT of tool '{tool_name}' via non_interactive_ask policy. Reason: {post_decision.reason}")
                     return raw_output
                 else:
+                    _record_post_outcome("blocked_non_interactive")
+                    deny_header = self.i18n.get_ui_string("security_output_blocked_header", "[Security Output Block]") if hasattr(self, "i18n") and hasattr(self.i18n, "get_ui_string") else "[Security Output Block]"
                     block_msg = f"Non-interactive session blocked output review for '{tool_name}': {post_decision.reason}"
-                    print(f"\n[Security Block] {block_msg}")
+                    if self.security_debug:
+                        print(f"[Security Debug] [OUTPUT DENY] Non-interactive execution blocked output of '{tool_name}'.")
+                    print(f"\n{deny_header} {block_msg}")
+                    if hasattr(self, "logging_manager") and getattr(self.logging_manager, "logging_active", False):
+                        self.logging_manager.log_message(f"[Security Audit] BLOCKED NON-INTERACTIVE OUTPUT of tool '{tool_name}'. Reason: {post_decision.reason}")
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', block_msg)
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
@@ -3830,22 +3850,32 @@ class ChatybotApp:
 
             prompt_title = post_decision.prompt_details.title if post_decision.prompt_details else "Sensitive Output Review"
             prompt_msg = post_decision.prompt_details.message if post_decision.prompt_details else f"Output from '{tool_name}' contains potential sensitive material: {post_decision.reason}"
+            yes_char, no_char = self.i18n.get_prompt_choice_letters() if hasattr(self, "i18n") and hasattr(self.i18n, "get_prompt_choice_letters") else ("y", "n")
+            prompt_str = self.i18n.get_ui_string("security_output_proceed_prompt", f"Authorize LLM to view this output? [{yes_char}/{no_char}]: ", yes_char=yes_char, no_char=no_char) if hasattr(self, "i18n") and hasattr(self.i18n, "get_ui_string") else f"Authorize LLM to view this output? [{yes_char}/{no_char}]: "
+
             print(f"\n{'='*60}")
             print(f"[{prompt_title}] {prompt_msg}")
             print(f"Reason: {post_decision.reason}")
             print(f"{'='*60}")
             try:
-                answer = (await asyncio.to_thread(input, "Authorize LLM to view this output? [y/N]: ")).strip().lower()
+                answer = (await asyncio.to_thread(input, prompt_str)).strip().lower()
             except (EOFError, KeyboardInterrupt):
-                answer = "n"
+                answer = no_char
 
-            if answer in ("y", "yes"):
+            is_aff = self.i18n.is_affirmative(answer) if hasattr(self, "i18n") and hasattr(self.i18n, "is_affirmative") else answer in ("y", "yes")
+            if is_aff:
+                _record_post_outcome("approved")
                 if self.security_debug:
                     print(f"[Security Debug] [OUTPUT ACCEPT] User approved output of '{tool_name}'.")
+                if hasattr(self, "logging_manager") and getattr(self.logging_manager, "logging_active", False):
+                    self.logging_manager.log_message(f"[Security Audit] USER APPROVED OUTPUT of tool '{tool_name}'. Reason: {post_decision.reason}")
                 return raw_output
             else:
+                _record_post_outcome("declined")
                 cancel_msg = f"User declined LLM access to output of tool '{tool_name}'."
                 print(f"[Security Block] {cancel_msg}")
+                if hasattr(self, "logging_manager") and getattr(self.logging_manager, "logging_active", False):
+                    self.logging_manager.log_message(f"[Security Audit] USER DECLINED OUTPUT of tool '{tool_name}'. Reason: {post_decision.reason}")
                 self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
                 self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', cancel_msg)
                 self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
