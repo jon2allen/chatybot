@@ -1557,20 +1557,31 @@ def test_builtin_evaluate_output_patterns():
     assert dec_aws.verdict == Verdict.ASK
     assert "aws access key" in dec_aws.reason.lower()
 
-    # 4. API Key -> ASK
+    # 4. API Key -> ASK for 32+ char keys; short identifiers allowed
     api_out = "OPENAI_API_KEY=sk-abcdefghijklmnopqrstuvwxyz123456"
     req_api = PolicyRequest(tool="read_file", output=api_out, phase="output")
     dec_api = engine.evaluate_output(req_api)
     assert dec_api.verdict == Verdict.ASK
     assert "secret api key" in dec_api.reason.lower()
 
-    # 5. Bearer token -> ASK
+    # Short sk- identifier (e.g. CLI package or module) does not trigger false positive
+    short_sk = "import sk-learn-module-id"
+    dec_short_sk = engine.evaluate_output(PolicyRequest(tool="read_file", output=short_sk, phase="output"))
+    assert dec_short_sk.verdict == Verdict.ALLOW
+
+    # 5. Bearer token & Passwords (quoted and unquoted assignments) -> ASK
     bearer_out = "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.xyz"
     req_bearer = PolicyRequest(tool="read_file", output=bearer_out, phase="output")
-    dec_bearer = engine.evaluate_output(req_bearer)
-    assert dec_bearer.verdict == Verdict.ASK
+    assert engine.evaluate_output(req_bearer).verdict == Verdict.ASK
+
+    unquoted_pass = "DATABASE_URL=postgres://user\nPASSWORD=supersecretpassword123\nHOST=localhost"
+    assert engine.evaluate_output(PolicyRequest(tool="read_file", output=unquoted_pass, phase="output")).verdict == Verdict.ASK
+
+    quoted_pass = "database:\n  password: 'mysecretpassword123'\n"
+    assert engine.evaluate_output(PolicyRequest(tool="read_file", output=quoted_pass, phase="output")).verdict == Verdict.ASK
 
     # 6. Safe output -> ALLOW
+
     safe_out = "def hello():\n    return 'Hello, World!'\n"
     req_safe = PolicyRequest(tool="read_file", output=safe_out, phase="output")
     dec_safe = engine.evaluate_output(req_safe)
