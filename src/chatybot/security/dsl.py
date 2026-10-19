@@ -44,6 +44,14 @@ class SecurityRuleAST:
     operator: str              # 'contains', 'endswith', 'startswith', 'equals', 'matches'
     value: str                 # Pattern or string value
     reason: str | None = None  # Optional explicit explanation
+    compiled_regex: re.Pattern | None = None
+
+    def __post_init__(self):
+        if self.operator == "matches" and self.compiled_regex is None and self.value:
+            try:
+                self.compiled_regex = re.compile(self.value, re.IGNORECASE)
+            except re.error:
+                self.compiled_regex = None
 
     def format_definition(self) -> str:
         """Format parsed AST details into a readable string representation."""
@@ -175,15 +183,19 @@ class SecurityRuleAST:
                 if val_lower == pat_lower or val_collapsed == pat_collapsed:
                     return True
             elif self.operator == "matches":
-                try:
-                    if bool(re.search(self.value, val_str, re.IGNORECASE)):
+                if self.compiled_regex is not None:
+                    if bool(self.compiled_regex.search(val_str)):
                         return True
-                except re.error as exc:
-                    logger.warning(
-                        "[Security Warning] Regex evaluation error with pattern '%s': %s",
-                        self.value,
-                        exc,
-                    )
+                else:
+                    try:
+                        if bool(re.search(self.value, val_str, re.IGNORECASE)):
+                            return True
+                    except re.error as exc:
+                        logger.warning(
+                            "[Security Warning] Regex evaluation error with pattern '%s': %s",
+                            self.value,
+                            exc,
+                        )
 
         return False
 
