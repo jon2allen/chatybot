@@ -1758,6 +1758,49 @@ async def test_chatybot_app_output_security_non_interactive(tmp_path):
     assert token_secret in res_passed
 
 
+@pytest.mark.anyio
+async def test_chatybot_app_output_security_screens_errors_and_tracebacks(tmp_path):
+    """Verify that error messages and stderr tracebacks containing sensitive tokens are not exempted from screening."""
+    import json
+    from chatybot.chatybot_app import ChatybotApp
+
+    sec_cfg = tmp_path / "sec.toml"
+    sec_cfg.write_text('version = "1.0"\nengine = "builtin"\n')
+
+    app = ChatybotApp(security_config_path=str(sec_cfg))
+    app.initialize()
+
+    # 1. Raw string starting with 'Error:' containing private key -> blocked
+    error_raw = "Error: Authentication failed with key:\n-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA0...\n-----END RSA PRIVATE KEY-----"
+    res_err = await app._evaluate_output_security(
+        tool_name="run_command",
+        tool_args={"command": "ssh -i id_rsa host"},
+        raw_output=error_raw,
+        is_interactive=True,
+    )
+    assert "Error: Output Withheld:" in res_err
+    assert "BEGIN RSA PRIVATE KEY" not in res_err
+
+    # 2. JSON output with stderr traceback containing private key -> blocked
+    json_stderr = json.dumps({
+        "status": "error",
+        "error": "command returned 1",
+        "result": {
+            "stdout": "",
+            "stderr": "Traceback:\nValueError: Failed loading key: -----BEGIN EC PRIVATE KEY-----\nMHQCAQEEI...\n-----END EC PRIVATE KEY-----",
+        },
+    })
+    res_stderr = await app._evaluate_output_security(
+        tool_name="run_command",
+        tool_args={"command": "python script.py"},
+        raw_output=json_stderr,
+        is_interactive=True,
+    )
+    assert "Error: Output Withheld:" in res_stderr
+    assert "BEGIN EC PRIVATE KEY" not in res_stderr
+
+
+
 
 
 
