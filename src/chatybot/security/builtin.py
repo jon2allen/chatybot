@@ -419,8 +419,13 @@ class BuiltinPolicyEngine(BasePolicyEngine):
             print(f"[Security Debug] [{tag}] Tier 4 Baseline Tool: {tool_raw} -> {decision.reason}")
         return decision
 
+    def supports_output_evaluation(self) -> bool:
+        """Builtin engine implements pattern-based post-execution output screening."""
+        return True
+
     def evaluate_output(self, request: PolicyRequest) -> PolicyDecision:
         """Scan tool output after I/O execution against output rules."""
+
         output = request.output or ""
         if not output.strip():
             return PolicyDecision(verdict=Verdict.ALLOW, reason="Empty output.")

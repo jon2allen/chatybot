@@ -276,7 +276,11 @@ class JevPolicyEngine(BasePolicyEngine):
                 self._cache.popitem(last=False)
         return dataclasses.replace(decision)
 
+    def supports_output_evaluation(self) -> bool:
+        return True
+
     def evaluate_output(self, request: PolicyRequest) -> PolicyDecision:
+
         tool = (request.tool or "").strip()
         output = request.output or ""
         if not output.strip():
