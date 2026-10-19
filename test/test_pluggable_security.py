@@ -1584,6 +1584,15 @@ def test_builtin_evaluate_output_patterns():
     quoted_pass = "database:\n  password: 'mysecretpassword123'\n"
     assert engine.evaluate_output(PolicyRequest(tool="read_file", output=quoted_pass, phase="output")).verdict == Verdict.ASK
 
+    # 6. Expanded secret patterns (Gemini, Groq, HF, Slack, DB URL, JWT, generic env assignment)
+    assert engine.evaluate_output(PolicyRequest(tool="read_file", output="GEMINI_API_KEY=AIzaSyD-1234567890abcdef1234567890ab", phase="output")).verdict == Verdict.ASK
+    assert engine.evaluate_output(PolicyRequest(tool="read_file", output="GROQ_API_KEY=gsk_1234567890abcdef1234567890abcdef1234567890abcdef", phase="output")).verdict == Verdict.ASK
+    assert engine.evaluate_output(PolicyRequest(tool="read_file", output="HF_TOKEN=hf_abcdefghijklmnopqrstuvwxyz12345678", phase="output")).verdict == Verdict.ASK
+    assert engine.evaluate_output(PolicyRequest(tool="read_file", output="SLACK_TOKEN=xoxb-1234567890-abcdefghijkl", phase="output")).verdict == Verdict.ASK
+    assert engine.evaluate_output(PolicyRequest(tool="read_file", output="DB_URI=postgres://appuser:mypassword123@localhost:5432/db", phase="output")).verdict == Verdict.ASK
+    assert engine.evaluate_output(PolicyRequest(tool="read_file", output="token=eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c", phase="output")).verdict == Verdict.ASK
+    assert engine.evaluate_output(PolicyRequest(tool="read_file", output="MISTRAL_API_KEY=abcdef1234567890abcdef1234567890", phase="output")).verdict == Verdict.ASK
+
     # 6. Safe output -> ALLOW
 
     safe_out = "def hello():\n    return 'Hello, World!'\n"
@@ -1949,6 +1958,28 @@ async def test_dispatch_tool_nonzero_exit_and_exception_screened(tmp_path, monke
 
     assert "Error: Output Withheld:" in res
     assert "BEGIN RSA PRIVATE KEY" not in res
+
+
+def test_manager_output_floor_screens_across_all_engines(tmp_path):
+    """Verify that SecurityManager floor screens outputs even with engine = 'allow'."""
+    sec_cfg = tmp_path / "allow_sec.toml"
+    sec_cfg.write_text('version = "1.0"\nengine = "allow"\n')
+    mgr = SecurityManager(config_path=str(sec_cfg))
+
+    # Safe output allowed by allow engine
+    dec_safe = mgr.evaluate_output("read_file", {}, "hello world")
+    assert dec_safe.verdict == Verdict.ALLOW
+
+    # Private key caught by manager floor even under allow engine
+    priv_key = "-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA0...\n-----END RSA PRIVATE KEY-----"
+    dec_priv = mgr.evaluate_output("read_file", {}, priv_key)
+    assert dec_priv.verdict == Verdict.DENY
+    assert "private cryptographic key" in dec_priv.reason.lower()
+
+    # Secret API key caught by manager floor
+    dec_key = mgr.evaluate_output("read_file", {}, "OPENAI_API_KEY=sk-abcdefghijklmnopqrstuvwxyz123456")
+    assert dec_key.verdict == Verdict.ASK
+    assert "secret api key" in dec_key.reason.lower()
 
 
 
