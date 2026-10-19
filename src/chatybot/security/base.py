@@ -18,7 +18,7 @@ class BasePolicyEngine(ABC):
 
     def supports_output_evaluation(self) -> bool:
         """Return True if this engine explicitly implements output screening."""
-        return False
+        return type(self).evaluate_output is not BasePolicyEngine.evaluate_output
 
     def evaluate_output(self, request: PolicyRequest) -> PolicyDecision:
         """Evaluate a tool's output after I/O execution. Default allows output."""
