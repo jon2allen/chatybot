@@ -286,13 +286,6 @@ class JevPolicyEngine(BasePolicyEngine):
         if not output.strip():
             return PolicyDecision(verdict=Verdict.ALLOW, reason="Empty output.")
 
-        blocked = self_protect.check(request)
-        if blocked is not None:
-            if self.debug:
-                print(f"[Security Debug] [JEV] [OUTPUT SPECIAL DENY] {blocked.reason}")
-            self._log(request, request.parameters, None, blocked, 0.0, source="self_protect")
-            return blocked
-
         trunc_state = {"truncated": False}
         max_chars = min(self.max_content_chars, 4000)
         output_preview = _prepare(output, self.redact_secrets, max_chars, trunc_state)
