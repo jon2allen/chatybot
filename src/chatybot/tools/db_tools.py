@@ -42,9 +42,10 @@ def _scoped_corpus_manager(
             return
 
         try:
+            # Cheaply verify the JSON file is well-formed without loading all TinyDB records into memory
+            with open(db_path, "rb") as f:
+                json.load(f)
             scoped_mgr = CorpusManager(db_path)
-            # Verify database JSON is well-formed immediately
-            _ = scoped_mgr.items.all()
         except Exception as err:
             yield None, f"Failed to open database '{name}': {err}", name
             return
