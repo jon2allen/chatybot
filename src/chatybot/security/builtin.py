@@ -92,9 +92,10 @@ class BuiltinPolicyEngine(BasePolicyEngine):
         {"pattern": r"-----BEGIN [A-Z0-9_-]+ PRIVATE KEY-----", "verdict": "deny", "reason": "Output contains private cryptographic key"},
         {"pattern": r"\b(?:ghp|gho|ghs|github_pat)_[A-Za-z0-9_]{16,}\b", "verdict": "ask", "reason": "Output contains GitHub authentication token"},
         {"pattern": r"\bAKIA[0-9A-Z]{16}\b", "verdict": "ask", "reason": "Output contains AWS Access Key ID"},
-        {"pattern": r"\bsk-[A-Za-z0-9_-]{20,}\b", "verdict": "ask", "reason": "Output contains secret API key"},
-        {"pattern": r"(?i)\b(?:bearer\s+[A-Za-z0-9._~+/=-]{20,}|password\s*[:=]\s*['\"][^\s'\"]{6,}['\"])", "verdict": "ask", "reason": "Output contains password or bearer token"},
+        {"pattern": r"\bsk-[A-Za-z0-9_-]{32,}\b", "verdict": "ask", "reason": "Output contains secret API key"},
+        {"pattern": r"(?i)\b(?:bearer\s+[A-Za-z0-9._~+/=-]{20,}|(?:password|passwd)\s*[:=]\s*(?:['\"][^\s'\"]{6,}['\"]|[^\s'\"#;]{6,}))", "verdict": "ask", "reason": "Output contains password or bearer token"},
     ]
+
 
     def __init__(
         self,
