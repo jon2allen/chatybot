@@ -87,11 +87,18 @@ class SecurityManager:
                 print(warn_msg)
         self.non_interactive_ask = "allow" if raw_non_interactive == "allow" else "deny"
 
+        output_cfg = self.config.get("output_security", {})
+        self.output_security_enabled = bool(output_cfg.get("enabled", True))
+        self.output_security_tools = set(
+            output_cfg.get("tools", ["read_file", "run_command", "str_search", "read_url"])
+        )
+
         engine_type = self.config.get("engine", "builtin").lower()
 
         if self.debug:
             print(f"[Security Debug] Loading security configuration from '{config_to_load}'...")
             print(f"[Security Debug] Engine type: '{engine_type}', Fail-safe verdict: '{self.fail_safe.value.upper()}'.")
+            print(f"[Security Debug] Output security enabled: {self.output_security_enabled} on tools: {sorted(self.output_security_tools)}")
 
         if engine_type == "binary":
             bin_cfg = self.config.get("binary", {})
@@ -109,7 +116,7 @@ class SecurityManager:
             # If binary not found, fallback to builtin engine with a prominent security warning
             warn_msg = (
                 f"[Security Warning] Configured binary path not found: '{raw_path}' "
-                f"(resolved: '{bin_path}'). Falling back to builtin Python policy engine."
+                f"(resolved: '{bin_path}'). Failing back to builtin Python policy engine."
             )
             logger.warning(warn_msg)
             print(warn_msg)
@@ -125,14 +132,17 @@ class SecurityManager:
 
         # Default to builtin
         builtin_cfg = self.config.get("builtin", {})
+        output_rules = self.config.get("output_security", {}).get("rules") or builtin_cfg.get("output_rules")
         self.engine = BuiltinPolicyEngine(
             rules=builtin_cfg.get("rules"),
             dsl_rules=builtin_cfg.get("dsl_rules") or builtin_cfg.get("rules_dsl"),
             default_verdict=builtin_cfg.get("default_verdict", "ask"),
             denied_paths=builtin_cfg.get("path_restrictions", {}).get("denied_paths"),
             denied_command_patterns=builtin_cfg.get("command_rules", {}).get("denied_patterns"),
+            output_rules=output_rules,
             debug=self.debug,
         )
+
 
     def evaluate(
         self,
@@ -170,6 +180,52 @@ class SecurityManager:
                 f"{duration_ms:.2f} ms ({decision.verdict.value})"
             )
         return dataclasses.replace(decision, duration_ms=duration_ms)
+
+    def evaluate_output(
+        self,
+        tool: str,
+        output: str,
+        parameters: dict[str, Any] | None = None,
+        context: dict[str, Any] | None = None,
+    ) -> PolicyDecision:
+        """Evaluate a tool invocation's post-I/O output against the active security engine."""
+        if not self.enabled or not self.output_security_enabled:
+            return PolicyDecision(verdict=Verdict.ALLOW, reason="Output security disabled.", duration_ms=0.0)
+
+        tool_norm = (tool or "").strip().lower()
+        if tool_norm not in self.output_security_tools:
+            return PolicyDecision(verdict=Verdict.ALLOW, reason=f"Tool '{tool}' not in output security scope.", duration_ms=0.0)
+
+        ctx = dict(context or {})
+        if self.debug and "debug" not in ctx:
+            ctx["debug"] = True
+
+        params = unwrap_tool_args(dict(parameters or {}))
+
+        req = PolicyRequest(
+            tool=tool,
+            parameters=params,
+            context=ctx,
+            output=output,
+            phase="output",
+        )
+        t0 = time.perf_counter()
+        try:
+            fn = getattr(self.engine, "evaluate_output", self.engine.evaluate)
+            decision = fn(req)
+        except Exception as exc:
+            decision = PolicyDecision(
+                verdict=self.fail_safe,
+                reason=f"Security manager output evaluation failed ({exc}). Failing safe to {self.fail_safe.value}.",
+            )
+        duration_ms = round((time.perf_counter() - t0) * 1000, 2)
+        if self.debug:
+            print(
+                f"[Security Debug] [TIME] Post-I/O security evaluation for '{tool}' completed in "
+                f"{duration_ms:.2f} ms ({decision.verdict.value})"
+            )
+        return dataclasses.replace(decision, request_id=req.request_id, duration_ms=duration_ms)
+
 
     def get_banner(self) -> str:
         """Return a human-readable banner string describing the active security engine."""
