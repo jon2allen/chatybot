@@ -1637,6 +1637,23 @@ enabled = false
     dec_off = mgr_out_disabled.evaluate_output(tool="read_file", output="-----BEGIN RSA PRIVATE KEY-----")
     assert dec_off.verdict == Verdict.ALLOW
 
+    # 4. Default configuration scans grep_search and exempts ask_user
+    cfg_default = tmp_path / "security_default.toml"
+    cfg_default.write_text("""
+version = "1.0"
+engine = "builtin"
+[output_security]
+enabled = true
+""")
+    mgr_default = SecurityManager(config_path=str(cfg_default))
+    # grep_search is scanned
+    dec_grep = mgr_default.evaluate_output(tool="grep_search", output="api_key = 'sk-abcdefghijklmnopqrstuvwxyz123456'")
+    assert dec_grep.verdict == Verdict.ASK
+    # ask_user is exempt
+    dec_exempt = mgr_default.evaluate_output(tool="ask_user", output="api_key = 'sk-abcdefghijklmnopqrstuvwxyz123456'")
+    assert dec_exempt.verdict == Verdict.ALLOW
+    assert "exempt" in dec_exempt.reason.lower()
+
 
 @pytest.mark.anyio
 async def test_chatybot_app_output_security_deny_blocks_and_hides_content(tmp_path, monkeypatch):
