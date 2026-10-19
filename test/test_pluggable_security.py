@@ -2017,6 +2017,74 @@ def test_known_secret_matching_from_environment_and_env_file(tmp_path, monkeypat
     assert "DB_PASSWORD" in reason
 
 
+@pytest.mark.anyio
+async def test_output_security_ask_resolution_and_outcomes(tmp_path, monkeypatch):
+    """Verify that output security ASK prompts use i18n affirmative checking and record outcomes."""
+    import asyncio
+    from chatybot.chatybot_app import ChatybotApp
+
+    sec_cfg = tmp_path / "sec.toml"
+    sec_cfg.write_text('version = "1.0"\nengine = "builtin"\n')
+    app = ChatybotApp(security_config_path=str(sec_cfg))
+    app.initialize()
+
+    recorded_outcomes = []
+    monkeypatch.setattr(
+        app.security_manager,
+        "record_outcome",
+        lambda dec, outcome, tool="": recorded_outcomes.append((outcome, tool)),
+    )
+
+    logged_messages = []
+    class FakeLoggingManager:
+        logging_active = True
+        def log_message(self, msg):
+            logged_messages.append(msg)
+    app.logging_manager = FakeLoggingManager()
+
+    output_with_secret = "Token is ghp_1234567890abcdef123456"
+
+    # 1. Interactive approval with non-English affirmative (e.g. 'oui')
+    async def mock_affirmative(fn, *args):
+        return "oui"
+    monkeypatch.setattr(asyncio, "to_thread", mock_affirmative)
+
+    res_approved = await app._evaluate_output_security("read_file", {"path": "keys.txt"}, output_with_secret, is_interactive=True)
+    assert res_approved == output_with_secret
+    assert ("approved", "read_file") in recorded_outcomes
+    assert any("USER APPROVED OUTPUT" in msg for msg in logged_messages)
+
+    # 2. Interactive denial ('n')
+    async def mock_denial(fn, *args):
+        return "n"
+    monkeypatch.setattr(asyncio, "to_thread", mock_denial)
+
+    res_denied = await app._evaluate_output_security("read_file", {"path": "keys.txt"}, output_with_secret, is_interactive=True)
+    assert "Error: User declined LLM access" in res_denied
+    assert ("declined", "read_file") in recorded_outcomes
+    assert any("USER DECLINED OUTPUT" in msg for msg in logged_messages)
+
+    # 3. auto_approve (--yes flag)
+    app.auto_approve = True
+    res_auto = await app._evaluate_output_security("read_file", {"path": "keys.txt"}, output_with_secret, is_interactive=True)
+    assert res_auto == output_with_secret
+    assert ("auto_approved_yes_flag", "read_file") in recorded_outcomes
+    app.auto_approve = False
+
+    # 4. Non-interactive with non_interactive_ask = "allow"
+    app.security_manager.non_interactive_ask = "allow"
+    res_non_int_allow = await app._evaluate_output_security("read_file", {"path": "keys.txt"}, output_with_secret, is_interactive=False)
+    assert res_non_int_allow == output_with_secret
+    assert ("auto_approved_non_interactive", "read_file") in recorded_outcomes
+
+    # 5. Non-interactive with non_interactive_ask = "deny"
+    app.security_manager.non_interactive_ask = "deny"
+    res_non_int_deny = await app._evaluate_output_security("read_file", {"path": "keys.txt"}, output_with_secret, is_interactive=False)
+    assert "Error: Non-interactive session blocked output review" in res_non_int_deny
+    assert ("blocked_non_interactive", "read_file") in recorded_outcomes
+
+
+
 
 
 
