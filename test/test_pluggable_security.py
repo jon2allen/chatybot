@@ -1866,6 +1866,44 @@ tools = ["read_file", "run_command", "search_skills"]
         skill_utils.search_skills = orig_search
 
 
+def test_base_engine_supports_output_evaluation_auto_detection():
+    """Verify BasePolicyEngine dynamically detects evaluate_output overrides and manager respects gate."""
+    from chatybot.security.base import BasePolicyEngine
+    from chatybot.security.manager import SecurityManager
+
+    class DefaultEngine(BasePolicyEngine):
+        def evaluate(self, request):
+            return PolicyDecision(verdict=Verdict.ALLOW)
+
+    class CustomOutputEngine(BasePolicyEngine):
+        def evaluate(self, request):
+            return PolicyDecision(verdict=Verdict.ALLOW)
+
+        def evaluate_output(self, request):
+            return PolicyDecision(verdict=Verdict.DENY, reason="blocked in output")
+
+    default_eng = DefaultEngine()
+    assert default_eng.supports_output_evaluation() is False
+
+    custom_eng = CustomOutputEngine()
+    assert custom_eng.supports_output_evaluation() is True
+
+    # SecurityManager skips engines where supports_output_evaluation is False
+    mgr = SecurityManager(enabled=True)
+    mgr.engine = default_eng
+    dec = mgr.evaluate_output("read_file", {}, "some output")
+    assert dec.verdict == Verdict.ALLOW
+    assert "Engine does not inspect output." in dec.reason
+
+    # SecurityManager invokes engines where supports_output_evaluation is True
+    mgr_custom = SecurityManager(enabled=True)
+    mgr_custom.engine = custom_eng
+    dec_custom = mgr_custom.evaluate_output("read_file", {}, "some output")
+    assert dec_custom.verdict == Verdict.DENY
+    assert "blocked in output" in dec_custom.reason
+
+
+
 
 
 
