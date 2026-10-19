@@ -3903,7 +3903,11 @@ class ChatybotApp:
                 and not getattr(self, "single_run_mode", False)
             )
 
+            async def _finalize_tool_return(res_str: str) -> str:
+                return await self._evaluate_output_security(tool_name, tool_args, res_str, is_interactive)
+
             # --- Security Policy Interception ---
+
             sec_mgr = getattr(self, "security_manager", None)
             self.last_security_duration_ms = 0.0
 
@@ -4049,7 +4053,7 @@ class ChatybotApp:
                             self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', '')
                             self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '0')
                         print("MCP tool executed successfully")
-                        return result_str
+                        return await _finalize_tool_return(result_str)
                     except Exception as e:
                         err_msg = f"MCP tool execution failed: {e}"
                         if self._is_permanent_capability_error(err_msg):
@@ -4059,7 +4063,8 @@ class ChatybotApp:
                         self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', err_msg)
                         self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', err_msg)
                         self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
-                        return f"Error: {err_msg}"
+                        return await _finalize_tool_return(f"Error: {err_msg}")
+
             elif tool_name == "get_context_metrics":
                 is_enabled = self.tool_overrides.get(tool_name, True)
                 if not is_enabled:
@@ -4080,13 +4085,13 @@ class ChatybotApp:
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', '')
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '0')
                     print("Tool dispatched successfully (in-process context_metrics)")
-                    return result_str
+                    return await _finalize_tool_return(result_str)
                 except Exception as e:
                     err_msg = f"Error: Context metrics tool execution failed: {e}"
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', str(e))
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
-                    return err_msg
+                    return await _finalize_tool_return(err_msg)
             elif tool_name in ("session_search", "session_get"):
                 is_enabled = self.tool_overrides.get(tool_name, True)
                 if not is_enabled:
@@ -4108,13 +4113,14 @@ class ChatybotApp:
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', '')
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '0')
                     print(f"Tool dispatched successfully (in-process {tool_name})")
-                    return await self._evaluate_output_security(tool_name, tool_args, result_str, is_interactive)
+                    return await _finalize_tool_return(result_str)
                 except Exception as e:
                     err_msg = f"Error: {tool_name} execution failed: {e}"
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', str(e))
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
-                    return err_msg
+                    return await _finalize_tool_return(err_msg)
+
             elif tool_name == "ask_user":
                 is_enabled = self.tool_overrides.get(tool_name, True)
                 if not is_enabled:
@@ -4149,13 +4155,13 @@ class ChatybotApp:
                         print(f"\n[ask_user] Recorded answer: {res['answer']!r}")
                     elif res["status"] == "skipped":
                         print(f"\n[ask_user] Skipped: {res.get('reason', '')}")
-                    return result_str
+                    return await _finalize_tool_return(result_str)
                 except Exception as e:
                     err_msg = f"Error: ask_user tool execution failed: {e}"
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', str(e))
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
-                    return err_msg
+                    return await _finalize_tool_return(err_msg)
             elif tool_name in ("decide_score", "decide_choice", "decide_noul"):
                 is_enabled = self.tool_overrides.get(tool_name, False)
                 if not is_enabled:
@@ -4194,13 +4200,13 @@ class ChatybotApp:
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', '')
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '0')
                     print(f"Tool dispatched successfully (in-process {tool_name})")
-                    return result_str
+                    return await _finalize_tool_return(result_str)
                 except Exception as e:
                     err_msg = f"Error: {tool_name} execution failed: {e}"
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', str(e))
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
-                    return err_msg
+                    return await _finalize_tool_return(err_msg)
             elif tool_name in ("call_skill", "search_skills"):
                 is_enabled = self.tool_overrides.get(tool_name, True)
                 if not is_enabled:
@@ -4246,13 +4252,14 @@ class ChatybotApp:
                         print(f"Tool dispatched successfully (in-process {tool_name})")
                     else:
                         print(f"{tool_name} failed: {res.get('reason', 'unknown')}")
-                    return result_str
+                    return await _finalize_tool_return(result_str)
                 except Exception as e:
                     err_msg = f"Error: {tool_name} tool execution failed: {e}"
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', str(e))
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
-                    return err_msg
+                    return await _finalize_tool_return(err_msg)
+
 
         # Create a temporary file for the invocation
         with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', suffix='.json', delete=False) as tmp_file:
@@ -4345,7 +4352,8 @@ class ChatybotApp:
                 except (json.JSONDecodeError, TypeError):
                     pass
 
-                return await self._evaluate_output_security(tool_name, tool_args, result.stdout, is_interactive)
+                return await _finalize_tool_return(result.stdout)
+
             
         except (json.JSONDecodeError, TypeError) as e:
             print(f"Error dispatching tool: {e}")
