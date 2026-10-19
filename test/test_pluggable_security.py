@@ -2084,6 +2084,45 @@ async def test_output_security_ask_resolution_and_outcomes(tmp_path, monkeypatch
     assert ("blocked_non_interactive", "read_file") in recorded_outcomes
 
 
+def test_secret_scanner_literal_prefiltering():
+    """Verify that literal pre-filters bypass regexes for clean text and trigger on matches."""
+    from chatybot.security.secret_scanner import SecretScanner
+
+    scanner = SecretScanner()
+
+    # 1. Clean output without any literal triggers passes without running regexes
+    clean_text = "def hello():\n    return 'Hello World from python function'\n"
+    assert scanner.scan(clean_text) is None
+
+    # 2. Case-sensitive literal matches trigger regex
+    assert scanner.scan("Found key: gsk_1234567890abcdef1234567890abcdef1234567890") is not None
+
+    # 3. Case-insensitive literal matches trigger regex
+    assert scanner.scan("Exported TOKEN = 'my_super_secret_value_123'") is not None
+    assert scanner.scan("Connecting with Password: my_secret_password_here") is not None
+
+    # 4. Custom rule with literals and literals_ci
+    custom_rules = [
+        {
+            "pattern": r"ACME-[0-9]{8}",
+            "literals": ["ACME-"],
+            "verdict": "deny",
+            "reason": "Internal ACME identifier",
+        },
+        {
+            "pattern": r"(?i)confidential-code-\d+",
+            "literals_ci": ["confidential-code-"],
+            "verdict": "ask",
+            "reason": "Confidential code",
+        },
+    ]
+    custom_scanner = SecretScanner(rules=custom_rules, known_secrets={})
+    assert custom_scanner.scan("Normal text without ACME") is None
+    assert custom_scanner.scan("Code: ACME-12345678") == (Verdict.DENY, "Secret scanner: Internal ACME identifier")
+    assert custom_scanner.scan("See CONFIDENTIAL-CODE-999") == (Verdict.ASK, "Secret scanner: Confidential code")
+
+
+
 
 
 
