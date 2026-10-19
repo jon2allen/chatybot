@@ -124,6 +124,22 @@ class BuiltinPolicyEngine(BasePolicyEngine):
             os.path.abspath(os.path.expanduser(p))
             for p in (denied_paths or self.DEFAULT_DENIED_PATHS)
         ]
+        self._precomputed_denied_targets: set[str] = set()
+        for denied in self.denied_paths:
+            d_abs = denied.lower()
+            self._precomputed_denied_targets.add(d_abs)
+            try:
+                d_real = os.path.realpath(d_abs).lower()
+                if d_real.startswith("/system/volumes/data/"):
+                    self._precomputed_denied_targets.add(d_real[len("/system/volumes/data"):])
+                else:
+                    self._precomputed_denied_targets.add(d_real)
+                if d_real.startswith("/private/"):
+                    self._precomputed_denied_targets.add(d_real[len("/private"):])
+                    self._precomputed_denied_targets.add(d_real)
+            except Exception:
+                pass
+
         self.denied_command_patterns = (
             denied_command_patterns or self.DEFAULT_DENIED_COMMAND_PATTERNS
         )
@@ -265,31 +281,15 @@ class BuiltinPolicyEngine(BasePolicyEngine):
                             print(f"[Security Debug] [SPECIAL DENY] Tier 0 Security Policy Protection: '{target_path}' -> {decision.reason}")
                         return decision
 
-                    for denied in self.denied_paths:
-                        denied_targets = set()
-                        d_abs = os.path.abspath(os.path.expanduser(denied)).lower()
-                        denied_targets.add(d_abs)
-                        try:
-                            d_real = os.path.realpath(d_abs).lower()
-                            if d_real.startswith("/system/volumes/data/"):
-                                denied_targets.add(d_real[len("/system/volumes/data"):])
-                            else:
-                                denied_targets.add(d_real)
-                            if d_real.startswith("/private/"):
-                                denied_targets.add(d_real[len("/private"):])
-                                denied_targets.add(d_real)
-                        except Exception:
-                            pass
-
-                        for d_target in denied_targets:
-                            if check_p_lower == d_target or check_p_lower.startswith(d_target + os.sep):
-                                decision = PolicyDecision(
-                                    verdict=Verdict.DENY,
-                                    reason=f"Access to protected path '{target_path}' is denied by policy.",
-                                )
-                                if self.debug:
-                                    print(f"[Security Debug] [SPECIAL DENY] Tier 0 Protected Path: '{target_path}' -> {decision.reason}")
-                                return decision
+                    for d_target in self._precomputed_denied_targets:
+                        if check_p_lower == d_target or check_p_lower.startswith(d_target + os.sep):
+                            decision = PolicyDecision(
+                                verdict=Verdict.DENY,
+                                reason=f"Access to protected path '{target_path}' is denied by policy.",
+                            )
+                            if self.debug:
+                                print(f"[Security Debug] [SPECIAL DENY] Tier 0 Protected Path: '{target_path}' -> {decision.reason}")
+                            return decision
 
         if tool == "run_command":
             # Tier 0: Direct check against Chatybot sub-process execution
