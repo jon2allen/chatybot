@@ -38,19 +38,25 @@ class PolicyRequest:
     tool: str
     parameters: dict[str, Any] = field(default_factory=dict)
     context: dict[str, Any] = field(default_factory=dict)
+    output: str | None = None
+    phase: str = "input"  # "input" | "output"
     version: str = "1.0"
     request_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     timestamp: str = field(default_factory=lambda: datetime.now(tz=timezone.utc).isoformat())
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        d = {
             "version": self.version,
             "request_id": self.request_id,
             "timestamp": self.timestamp,
+            "phase": self.phase,
             "tool": self.tool,
             "parameters": self.parameters,
             "context": self.context,
         }
+        if self.output is not None:
+            d["output"] = self.output
+        return d
 
 
 @dataclass
@@ -60,6 +66,9 @@ class PolicyDecision:
     reason: str = ""
     prompt_details: PolicyPromptDetails | None = None
     modified_parameters: dict[str, Any] | None = None
+    # Set by SecurityManager so outcomes (user approved/declined an ASK) can be
+    # joined to the logged decision. Not part of the engine wire protocol.
+    request_id: str = ""
     duration_ms: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
