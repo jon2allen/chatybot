@@ -1831,6 +1831,42 @@ def test_binary_engine_output_evaluation_capability():
     assert bin_engine_enabled.supports_output_evaluation() is True
 
 
+@pytest.mark.anyio
+async def test_dispatch_tool_in_process_returns_funneled_through_output_security(tmp_path):
+    """Verify that in-process tool returns (such as search_skills) funnel through output security when scoped."""
+    import json
+    from chatybot.chatybot_app import ChatybotApp
+
+
+    sec_cfg = tmp_path / "sec.toml"
+    sec_cfg.write_text("""
+version = "1.0"
+engine = "builtin"
+[output_security]
+enabled = true
+tools = ["read_file", "run_command", "search_skills"]
+""")
+    app = ChatybotApp(security_config_path=str(sec_cfg))
+    app.initialize()
+
+    import chatybot.tools.skill_utils as skill_utils
+    orig_search = skill_utils.search_skills
+    try:
+        skill_utils.search_skills = lambda query, limit, app: {
+            "status": "success",
+            "matches": ["-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA0..."],
+        }
+        res = await app.dispatch_tool(json.dumps({
+            "tool": "search_skills",
+            "arguments": {"query": "credentials"},
+        }))
+        assert "Error: Output Withheld:" in res
+        assert "BEGIN RSA PRIVATE KEY" not in res
+    finally:
+        skill_utils.search_skills = orig_search
+
+
+
 
 
 
