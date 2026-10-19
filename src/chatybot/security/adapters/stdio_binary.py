@@ -1,6 +1,15 @@
 """
 Stdio Binary Policy Engine Adapter
 Communicates with an external binary or executable script via stdin/stdout using JSON.
+
+Protocol:
+- Stdin: Serialized PolicyRequest JSON.
+  - Pre-execution input phase:
+    {"version": "1.0", "phase": "input", "tool": "...", "parameters": {...}, "context": {...}}
+  - Post-execution output phase (when supports_output = True):
+    {"version": "1.0", "phase": "output", "tool": "...", "parameters": {...}, "output": "...", "context": {...}}
+- Stdout: Serialized PolicyDecision JSON.
+  {"status": "allow" | "ask" | "deny", "reason": "...", ...}
 """
 
 import json
@@ -130,7 +139,13 @@ class StdioBinaryPolicyEngine(BasePolicyEngine):
         return self.supports_output
 
     def evaluate_output(self, request: PolicyRequest) -> PolicyDecision:
-        """Evaluate a tool invocation's output using the external binary if supported."""
+        """Evaluate a tool invocation's output using the external binary if supported.
+
+        When supports_output is True, sends PolicyRequest JSON over stdin with
+        phase='output' and the raw tool result in the 'output' field. External
+        binaries that support output screening should inspect request['phase']
+        and request['output'] to screen data before return.
+        """
         if not self.supports_output:
             return PolicyDecision(verdict=Verdict.ALLOW, reason="External binary policy engine does not inspect tool output.")
         return self.evaluate(request)
