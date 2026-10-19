@@ -6,6 +6,7 @@ connection strings, and authentication tokens in tool outputs.
 
 from __future__ import annotations
 
+import math
 import os
 import re
 from pathlib import Path
@@ -52,6 +53,117 @@ def _is_valid_secret_value(value: str) -> bool:
     return True
 
 
+# ---------------------------------------------------------------------------
+# Value validation for the generic assignment rules
+#
+# The generic rules ("*_KEY = ...", "password: ...", "Bearer ...", .netrc) find
+# *candidates*; a candidate only counts when its value looks like a real secret
+# literal, not code that refers to one. This keeps reads of ordinary source
+# files (os.environ[...], getpass(), settings.SECRET_KEY, placeholders) quiet.
+# Real keys are still caught exactly by known-secret matching and by the
+# provider-specific rules above, so these rules can afford to be strict.
+# ---------------------------------------------------------------------------
+
+_PLACEHOLDER_MARKERS = (
+    "your_", "your-", "yourkey", "xxx", "changeme", "change_me", "change-me",
+    "example", "placeholder", "replace", "dummy", "sample", "redacted",
+    "...", "***", "todo", "fixme", "insert", "fake",
+)
+_CODE_CHARS = frozenset("()[]{}$`<>\\")
+_DOTTED_IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+$")
+_IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+_NON_SECRET_WORDS = frozenset({
+    "true", "false", "none", "null", "nil", "undefined", "required", "optional",
+    "str", "string", "int", "bytes", "bool", "any", "env", "secret", "token",
+})
+_PASSWORD_KEY = re.compile(r"(?i)pass(?:word|wd|phrase)|pwd")
+MIN_TOKEN_LEN = 16
+MIN_PASSWORD_LEN = 8
+MIN_ENTROPY_BITS = 3.2
+
+
+def _shannon_entropy(value: str) -> float:
+    counts: dict[str, int] = {}
+    for ch in value:
+        counts[ch] = counts.get(ch, 0) + 1
+    n = len(value)
+    return -sum((c / n) * math.log2(c / n) for c in counts.values())
+
+
+def looks_like_secret_value(raw: str, *, password: bool = False, style: str = "prose") -> bool:
+    """True when a matched value looks like a real secret literal, not code or a placeholder.
+
+    Tokens/keys: >= 16 chars, letters and digits, Shannon entropy >= 3.2 bits/char.
+    Passwords:   >= 8 chars. A bare word without digits (new_password) is a variable
+                 name when the assignment is code-style (``password = x``,
+                 ``password=password`` kwargs, ``:=``); in env-style lines
+                 (``DB_PASSWORD=hunterhunter``), YAML/prose (``password: x``) and
+                 .netrc it counts as a value.
+    ``style`` is one of "code", "env", "prose".
+    Either kind is rejected when it contains code syntax ( ( [ { $ ` < > \\ ),
+    is a dotted name (settings.SECRET_KEY), a path or URL, or a placeholder.
+    """
+    if not raw:
+        return False
+    quoted = len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in "\"'"
+    value = (raw[1:-1] if quoted else raw).strip()
+    if not value or any(c.isspace() for c in value):
+        return False
+    low = value.lower()
+    if low in _NON_SECRET_WORDS:
+        return False
+    if any(marker in low for marker in _PLACEHOLDER_MARKERS):
+        return False
+    if any(c in _CODE_CHARS for c in value):
+        return False
+    if _DOTTED_IDENT.match(value) and not any(c.isdigit() for c in value):
+        return False  # settings.SECRET_KEY, os.environ (tokens like eyJ...J9.xyz have digits)
+    if value.startswith(("/", "~", "./", "../", "http://", "https://", "file:")):
+        return False
+    if password:
+        if len(value) < MIN_PASSWORD_LEN:
+            return False
+        if _IDENT.match(value) and not any(c.isdigit() for c in value):
+            if quoted and "_" in value:
+                return False  # "new_password": a field or variable name in quotes
+            if not quoted and style == "code":
+                return False  # password = new_password / password=password
+        return True
+    if len(value) < MIN_TOKEN_LEN:
+        return False
+    if not (any(c.isalpha() for c in value) and any(c.isdigit() for c in value)):
+        return False
+    return _shannon_entropy(value) >= MIN_ENTROPY_BITS
+
+
+def _assignment_style(key: str, sep: str) -> str:
+    """'env' for KEY=value, 'prose' for key: value, otherwise 'code'."""
+    op = sep.strip()
+    if op == ":":
+        return "prose"
+    if op == "=" and sep == "=" and key == key.upper():
+        return "env"  # UPPER_KEY=value with no spaces around '='
+    return "code"
+
+
+def _validate_match(name: str, match: re.Match[str]) -> bool:
+    groups = match.groupdict()
+    raw = groups.get("val") or (match.group(1) if match.lastindex else match.group(0))
+    if name == "credential_value":
+        key = groups.get("key") or ""
+        return looks_like_secret_value(
+            raw, password=bool(_PASSWORD_KEY.search(key)), style=_assignment_style(key, groups.get("sep") or "")
+        )
+    if name == "token_value":
+        return looks_like_secret_value(raw, password=False)
+    if name == "password_value":
+        return looks_like_secret_value(raw, password=True)
+    return True
+
+
+VALIDATORS = ("credential_value", "token_value", "password_value")
+
+
 class SecretScanner:
     """Always-on deterministic scanner evaluated at the SecurityManager level.
 
@@ -84,12 +196,19 @@ class SecretScanner:
          "verdict": "ask", "reason": "Output contains JWT authentication token"},
         {"pattern": r"\b(?:postgres|postgresql|mysql|redis|mongodb|amqp|mssql)://[^/\s:@]+:[^/\s:@]+@", "literals": ["://"],
          "verdict": "ask", "reason": "Output contains database connection string with credentials"},
-        {"pattern": r"(?i)\b(?:bearer\s+[A-Za-z0-9._~+/=-]{20,}|(?:password|passwd)\s*[:=]\s*(?:['\"][^\s'\"]{6,}['\"]|[^\s'\"#;]{6,}))",
-         "literals_ci": ["bearer", "password", "passwd"],
-         "verdict": "ask", "reason": "Output contains password or bearer token"},
-        {"pattern": r"(?i)(?:API_?KEY|SECRET_?KEY|TOKEN|SECRET)\s*[:=]\s*(?:['\"][^\s'\"]{8,}['\"]|[^\s'\"#;]{8,})",
-         "literals_ci": ["key", "token", "secret"],
-         "verdict": "ask", "reason": "Output contains environment variable credential assignment"},
+        {"pattern": r"(?i)\bbearer\s+(?P<val>[A-Za-z0-9._~+/=-]{20,})",
+         "literals_ci": ["bearer"], "validator": "token_value",
+         "verdict": "ask", "reason": "Output contains bearer token"},
+        {"pattern": r"(?i)\blogin\s+\S+\s+password\s+(?P<val>\S+)",
+         "literals_ci": ["password"], "validator": "password_value",
+         "verdict": "ask", "reason": "Output contains .netrc-style login password"},
+        {"pattern": (
+            r"(?i)\b(?P<key>[A-Z0-9_.-]*?(?:API_?KEY|SECRET_?KEY|ACCESS_?KEY|PRIVATE_?KEY|AUTH_?TOKEN|ACCESS_?TOKEN"
+            r"|REFRESH_?TOKEN|TOKEN|SECRET|PASSWORD|PASSWD|PASSPHRASE|PWD|CREDENTIALS?)[A-Z0-9_]*)"
+            r"[\"']?(?P<sep>\s*(?::=|[:=])\s*)(?P<val>\"[^\"\n]*\"|'[^'\n]*'|[^\s'\"#;,]+)"
+         ),
+         "literals_ci": ["key", "token", "secret", "pass", "pwd", "credential"], "validator": "credential_value",
+         "verdict": "ask", "reason": "Output contains credential assignment"},
     ]
 
     def __init__(
@@ -100,7 +219,7 @@ class SecretScanner:
     ):
         raw_rules = rules if rules is not None else self.DEFAULT_OUTPUT_RULES
         self._compiled_rules: list[
-            tuple[re.Pattern[str], Verdict, str, tuple[str, ...] | None, tuple[str, ...] | None]
+            tuple[re.Pattern[str], Verdict, str, tuple[str, ...] | None, tuple[str, ...] | None, str | None]
         ] = []
         for r in raw_rules:
             pat_str = r.get("pattern", "")
@@ -115,7 +234,10 @@ class SecretScanner:
             message = f"Secret scanner: {r.get('reason', 'Output matched security pattern')}"
             lits = tuple(r["literals"]) if r.get("literals") else None
             lits_ci = tuple(s.lower() for s in r["literals_ci"]) if r.get("literals_ci") else None
-            self._compiled_rules.append((compiled, verdict, message, lits, lits_ci))
+            validator = r.get("validator")
+            if validator is not None and validator not in VALIDATORS:
+                validator = None
+            self._compiled_rules.append((compiled, verdict, message, lits, lits_ci, validator))
 
         self._custom_known_secrets = known_secrets
         self._config_env_path = config_env_path
@@ -206,12 +328,17 @@ class SecretScanner:
                     return False
             return True
 
+        def _rule_hits(pattern: re.Pattern[str], validator: str | None) -> bool:
+            if validator is None:
+                return pattern.search(text) is not None
+            return any(_validate_match(validator, m) for m in pattern.finditer(text))
+
         # 1. Check DENY rules first (e.g. private cryptographic keys)
-        for pattern, verdict, message, lits, lits_ci in self._compiled_rules:
+        for pattern, verdict, message, lits, lits_ci, validator in self._compiled_rules:
             if verdict == Verdict.DENY:
                 if not _matches_literals(lits, lits_ci):
                     continue
-                if pattern.search(text):
+                if _rule_hits(pattern, validator):
                     return verdict, message
 
         # 2. Check known secrets from environment and config files (exact substring match)
@@ -220,11 +347,11 @@ class SecretScanner:
                 return Verdict.ASK, f"Secret scanner: Output contains configured secret ({key_name})"
 
         # 3. Check remaining pattern rules (e.g. ASK) with literal pre-filtering
-        for pattern, verdict, message, lits, lits_ci in self._compiled_rules:
+        for pattern, verdict, message, lits, lits_ci, validator in self._compiled_rules:
             if verdict != Verdict.DENY:
                 if not _matches_literals(lits, lits_ci):
                     continue
-                if pattern.search(text):
+                if _rule_hits(pattern, validator):
                     return verdict, message
 
         return None
