@@ -801,10 +801,18 @@ def test_allow_engine_evaluate_output():
 
 def test_jev_evaluate_output(rubric_path, jev_key):
     fake = FakeJev(scores={"secrets": 0.95})
-    eng = make_jev(rubric_path, fake)
+    # Default: output_scan is False, supports_output_evaluation() is False
+    default_eng = make_jev(rubric_path, fake)
+    assert default_eng.supports_output_evaluation() is False
+    req_out = PolicyRequest(tool="read_file", parameters={"path": "notes.txt"}, output="some output content", phase="output")
+    assert default_eng.evaluate_output(req_out).verdict == Verdict.ALLOW
+    assert len(fake.calls) == 0
+
+    # Opted-in: output_scan=True enables LLM output evaluation
+    eng = make_jev(rubric_path, fake, output_scan=True)
+    assert eng.supports_output_evaluation() is True
 
     # 1. Output evaluation sends phase="output_inspection" in state and scores rubric
-    req_out = PolicyRequest(tool="read_file", parameters={"path": "notes.txt"}, output="some output content", phase="output")
     dec = eng.evaluate_output(req_out)
     assert dec.verdict == Verdict.DENY
     assert len(fake.calls) == 1
