@@ -1564,10 +1564,14 @@ def test_builtin_evaluate_output_patterns():
     assert dec_api.verdict == Verdict.ASK
     assert "secret api key" in dec_api.reason.lower()
 
-    # Short sk- identifier (e.g. CLI package or module) does not trigger false positive
-    short_sk = "import sk-learn-module-id"
-    dec_short_sk = engine.evaluate_output(PolicyRequest(tool="read_file", output=short_sk, phase="output"))
-    assert dec_short_sk.verdict == Verdict.ALLOW
+    # Project-prefixed sk- keys (e.g. sk-proj-...) trigger ASK
+    proj_api = "OPENAI_API_KEY=sk-proj-abcdefghijklmnopqrstuvwxyz123456"
+    assert engine.evaluate_output(PolicyRequest(tool="read_file", output=proj_api, phase="output")).verdict == Verdict.ASK
+
+    # Short or long kebab-case identifiers (e.g. CLI package or module) do not trigger false positive
+    kebab_sk = "import sk-dataset-processing-pipeline-production-v2"
+    dec_kebab_sk = engine.evaluate_output(PolicyRequest(tool="read_file", output=kebab_sk, phase="output"))
+    assert dec_kebab_sk.verdict == Verdict.ALLOW
 
     # 5. Bearer token & Passwords (quoted and unquoted assignments) -> ASK
     bearer_out = "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.xyz"
