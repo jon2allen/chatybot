@@ -120,6 +120,8 @@ class SecretScanner:
         self._custom_known_secrets = known_secrets
         self._config_env_path = config_env_path
         self._cached_file_secrets: dict[str, str] = self._load_file_secrets(config_env_path)
+        self._cached_known_secrets: dict[str, str] = {}
+        self.refresh_known_secrets()
 
     @staticmethod
     def _parse_env_file_safely(path: Path) -> dict[str, str]:
@@ -169,15 +171,22 @@ class SecretScanner:
                 secrets[v.strip().strip("\"'")] = k
         return secrets
 
-    def get_known_secrets(self) -> dict[str, str]:
-        """Return all known secrets, sorted by length descending."""
+    def refresh_known_secrets(self) -> dict[str, str]:
+        """Refresh and cache known secrets from custom values, config files, and os.environ."""
         if self._custom_known_secrets is not None:
             combined = dict(self._custom_known_secrets)
         else:
             combined = dict(self._cached_file_secrets)
             env_secrets = self.extract_secrets_from_dict(dict(os.environ))
             combined.update(env_secrets)
-        return dict(sorted(combined.items(), key=lambda item: len(item[0]), reverse=True))
+        self._cached_known_secrets = dict(sorted(combined.items(), key=lambda item: len(item[0]), reverse=True))
+        return self._cached_known_secrets
+
+    def get_known_secrets(self) -> dict[str, str]:
+        """Return cached known secrets sorted by length descending."""
+        if not self._cached_known_secrets:
+            return self.refresh_known_secrets()
+        return self._cached_known_secrets
 
     def scan(self, text: str) -> tuple[Verdict, str] | None:
         """Scan text against compiled rules and known secrets. Returns (Verdict, reason) or None."""
@@ -206,8 +215,7 @@ class SecretScanner:
                     return verdict, message
 
         # 2. Check known secrets from environment and config files (exact substring match)
-        known = self.get_known_secrets()
-        for secret_val, key_name in known.items():
+        for secret_val, key_name in self._cached_known_secrets.items():
             if secret_val in text:
                 return Verdict.ASK, f"Secret scanner: Output contains configured secret ({key_name})"
 
