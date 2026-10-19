@@ -135,7 +135,14 @@ denied_patterns = [
 # ==============================================================================
 [output_security]
 enabled = true
-tools = ["read_file", "run_command", "str_search", "read_url"]
+# By default, all data retrieval tools (read_file, run_command, grep_search,
+# find_files, MCP tools, session search, skill search, etc.) are screened for
+# sensitive credentials. Only interactive prompts and state mutation tools are exempt:
+exempt_tools = [
+    "ask_user", "decide_choice", "decide_score", "decide_noul", "get_context_metrics",
+    "write_file", "replace_file_content", "patch_file", "delete_file",
+    "make_directory", "remove_directory", "change_dir",
+]
 
 # Default output pattern rules (when omitted, engine defaults apply):
 # rules = [
