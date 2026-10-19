@@ -276,6 +276,90 @@ class JevPolicyEngine(BasePolicyEngine):
                 self._cache.popitem(last=False)
         return dataclasses.replace(decision)
 
+    def evaluate_output(self, request: PolicyRequest) -> PolicyDecision:
+        tool = (request.tool or "").strip()
+        output = request.output or ""
+        if not output.strip():
+            return PolicyDecision(verdict=Verdict.ALLOW, reason="Empty output.")
+
+        blocked = self_protect.check(request)
+        if blocked is not None:
+            if self.debug:
+                print(f"[Security Debug] [JEV] [OUTPUT SPECIAL DENY] {blocked.reason}")
+            self._log(request, request.parameters, None, blocked, 0.0, source="self_protect")
+            return blocked
+
+        trunc_state = {"truncated": False}
+        max_chars = min(self.max_content_chars, 4000)
+        output_preview = _prepare(output, self.redact_secrets, max_chars, trunc_state)
+
+        context = {
+            "phase": "output_inspection",
+            "working_directory": os.getcwd(),
+            "interactive": bool(request.context.get("interactive", False)),
+        }
+
+        cache_key = hashlib.sha256(
+            json.dumps(["output", tool, output_preview, self.mode, context], sort_keys=True, default=str).encode()
+        ).hexdigest()
+        if self.cache_enabled and cache_key in self._cache:
+            self._cache.move_to_end(cache_key)
+            cached, cached_rec = self._cache[cache_key]
+            if self.debug:
+                print(f"[Security Debug] [JEV] Output cache hit for '{tool}': {cached.verdict.value}")
+            self._log(request, request.parameters, cached_rec, cached, 0.0, source="cache")
+            return dataclasses.replace(cached)
+
+        api_key = self._get_api_key()
+        if not api_key:
+            decision = self._error_decision(request, f"API key '{self.api_key_env}' is not set")
+            self._log(request, request.parameters, None, decision, 0.0, source="error", error="missing API key")
+            return decision
+
+        state_action = {
+            "phase": "output_inspection",
+            "tool": tool,
+            "parameters": request.parameters or {},
+            "context": context,
+            "output_preview": output_preview,
+        }
+        state_text = f"{self.rubric.preamble}\n\nACTION OUTPUT TO JUDGE:\n{json.dumps(state_action, indent=2, ensure_ascii=False)}"
+        body = {"state": state_text, "model": self.model, "questions": self.questions}
+        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+
+        t0 = time.perf_counter()
+        try:
+            resp = self._http_post(self.url, body, headers, self.timeout_seconds)
+            answers = resp.get("answers") if isinstance(resp, dict) else None
+            if not isinstance(answers, dict) or not answers:
+                raise ValueError("response has no answers")
+        except Exception as e:
+            ms = (time.perf_counter() - t0) * 1000
+            if self.debug:
+                print(f"[Security Debug] [JEV] Output check failed after {ms:.0f} ms: {e}")
+            decision = self._error_decision(request, f"{type(e).__name__}: {str(e)[:200]}")
+            self._log(request, request.parameters, None, decision, ms, source="error", error=str(e)[:300])
+            return decision
+        ms = (time.perf_counter() - t0) * 1000
+
+        rec = self.rubric.parse_answers(answers, self.mode)
+        verdict, reasons = self.rubric.evaluate(rec, self.mode)
+        if trunc_state["truncated"]:
+            if verdict != "deny":
+                verdict = stricter(verdict, "ask")
+            reasons.append("output truncated before review->at least ask")
+            rec["truncated"] = True
+
+        decision = self._decision(tool, verdict, reasons)
+        if self.debug:
+            print(f"[Security Debug] [JEV] Output of '{tool}' -> {verdict.upper()} in {ms:.0f} ms: {decision.reason}")
+        self._log(request, request.parameters, rec, decision, ms, source="api", usage=resp.get("usage"))
+        if self.cache_enabled:
+            self._cache[cache_key] = (decision, rec)
+            if len(self._cache) > self.cache_size:
+                self._cache.popitem(last=False)
+        return dataclasses.replace(decision)
+
     def _decision(self, tool: str, verdict: str, reasons: list[str]) -> PolicyDecision:
         reason = "Jev: " + ("; ".join(reasons) if reasons else "no rule triggered")
         v = Verdict(verdict)
