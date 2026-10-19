@@ -24,14 +24,17 @@ class StdioBinaryPolicyEngine(BasePolicyEngine):
         timeout_seconds: float = 2.0,
         fail_safe: str = "deny",
         args: list[str] | None = None,
+        supports_output: bool = False,
         debug: bool = False,
     ):
         self.binary_path = binary_path
         self.timeout_seconds = timeout_seconds
         self.fail_safe = Verdict(fail_safe)
         self.args = list(args or [])
+        self.supports_output = supports_output
         self.debug = debug
         self._banner_cache: str | None = None
+
 
     def _fail_safe_decision(self, reason: str) -> PolicyDecision:
         return PolicyDecision(verdict=self.fail_safe, reason=reason)
@@ -123,9 +126,15 @@ class StdioBinaryPolicyEngine(BasePolicyEngine):
                 f"External policy evaluation failed ({type(exc).__name__}: {exc}). Failing safe to {self.fail_safe.value}."
             )
 
+    def supports_output_evaluation(self) -> bool:
+        return self.supports_output
+
     def evaluate_output(self, request: PolicyRequest) -> PolicyDecision:
-        """Evaluate a tool invocation's output using the external binary."""
+        """Evaluate a tool invocation's output using the external binary if supported."""
+        if not self.supports_output:
+            return PolicyDecision(verdict=Verdict.ALLOW, reason="External binary policy engine does not inspect tool output.")
         return self.evaluate(request)
+
 
     def get_banner(self) -> str:
         """Query the external binary with --banner to retrieve its identification banner.
