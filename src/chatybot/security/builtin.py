@@ -106,9 +106,14 @@ class BuiltinPolicyEngine(BasePolicyEngine):
         self.rules = {k.lower(): str(v).lower() for k, v in self.DEFAULT_TOOL_RULES.items()}
         if rules:
             self.rules.update({k.lower(): str(v).lower() for k, v in rules.items()})
+        self._custom_output_rules = output_rules is not None
         self.output_rules = (
             output_rules if output_rules is not None else list(self.DEFAULT_OUTPUT_RULES)
         )
+        if self._custom_output_rules:
+            self._output_scanner = SecretScanner(rules=self.output_rules, known_secrets={})
+        else:
+            self._output_scanner = None
 
         raw_default = str(default_verdict or "ask").strip().lower()
         try:
@@ -421,39 +426,29 @@ class BuiltinPolicyEngine(BasePolicyEngine):
 
     def evaluate_output(self, request: PolicyRequest) -> PolicyDecision:
         """Scan tool output after I/O execution against output rules."""
-
         output = request.output or ""
         if not output.strip():
             return PolicyDecision(verdict=Verdict.ALLOW, reason="Empty output.")
 
-        for rule in self.output_rules:
-            pattern = rule.get("pattern", "")
-            if not pattern:
-                continue
-            try:
-                if re.search(pattern, output):
-                    v_str = str(rule.get("verdict", "ask")).lower()
-                    try:
-                        verdict = Verdict(v_str)
-                    except ValueError:
-                        verdict = Verdict.ASK
-                    reason = rule.get("reason", "Output matched security filter")
-                    if self.debug:
-                        print(f"[Security Debug] [OUTPUT RULE] '{request.tool}' output matched '{pattern}' -> {verdict.value.upper()}")
-                    details = None
-                    if verdict == Verdict.ASK:
-                        details = PolicyPromptDetails(
-                            title=f"Sensitive Output in {request.tool}",
-                            message=f"Output from '{request.tool}' contains potential sensitive data: {reason}. Allow LLM to view?",
-                            risk_level="high",
-                        )
-                    return PolicyDecision(
-                        verdict=verdict,
-                        reason=f"Builtin output rule: {reason}",
-                        prompt_details=details,
-                    )
-            except re.error:
-                continue
+        # If custom scanner is configured, use it; otherwise evaluate against shared default rules with SecretScanner
+        scanner = self._output_scanner if self._output_scanner is not None else SecretScanner()
+        match = scanner.scan(output)
+        if match is not None:
+            verdict, reason = match
+            if self.debug:
+                print(f"[Security Debug] [OUTPUT RULE] '{request.tool}' output matched -> {verdict.value.upper()}")
+            details = None
+            if verdict == Verdict.ASK:
+                details = PolicyPromptDetails(
+                    title=f"Sensitive Output in {request.tool}",
+                    message=f"Output from '{request.tool}' contains potential sensitive data: {reason}. Allow LLM to view?",
+                    risk_level="high",
+                )
+            return PolicyDecision(
+                verdict=verdict,
+                reason=f"Builtin output rule: {reason}",
+                prompt_details=details,
+            )
 
         return PolicyDecision(verdict=Verdict.ALLOW, reason="No sensitive content detected in output.")
 
