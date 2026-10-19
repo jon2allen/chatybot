@@ -3750,9 +3750,9 @@ class ChatybotApp:
             return raw_output
 
         # Extract textual content from tool output JSON if possible
-        import json
         content_to_check = raw_output
         try:
+
             parsed = json.loads(raw_output)
             if isinstance(parsed, dict):
                 if "result" in parsed:
