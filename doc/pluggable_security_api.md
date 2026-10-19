@@ -104,9 +104,12 @@ Piped to the binary's `stdin` as a single-line or pretty-printed JSON object:
 | `version` | `string` | Yes | Protocol version string (currently `"1.0"`). |
 | `request_id` | `string` | Yes | Unique UUIDv4 string identifying this evaluation request. |
 | `timestamp` | `string` | Yes | ISO 8601 UTC timestamp of the tool dispatch request. |
+| `phase` | `string` | No | Evaluation phase: `"input"` (pre-execution, default) or `"output"` (post-execution egress screening). |
 | `tool` | `string` | Yes | Name of the tool being executed (e.g. `run_command`, `write_file`, `mcp__postgres__query`). |
 | `parameters` | `object` | Yes | Dictionary of tool arguments submitted by the model. |
+| `output` | `string` | Conditional | Raw string output returned by the tool execution. Present when `phase == "output"`. |
 | `context` | `object` | Yes | Ambient execution metadata: `session_id` (`str`), `interactive` (`bool`), `user` (`str`), `debug` (`bool`). |
+
 
 ---
 
