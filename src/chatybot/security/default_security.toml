@@ -156,8 +156,14 @@ exempt_tools = [
 #     { pattern = '\bsk-(?:[A-Za-z0-9]+-){0,2}[A-Za-z0-9]{32,}\b', verdict = "ask", reason = "Output contains secret API key" },
 #     { pattern = '\beyJ[A-Za-z0-9-_=]+\.eyJ[A-Za-z0-9-_=]+\.[A-Za-z0-9-_.+/=]+\b', verdict = "ask", reason = "Output contains JWT authentication token" },
 #     { pattern = '\b(?:postgres|postgresql|mysql|redis|mongodb|amqp|mssql)://[^/\s:@]+:[^/\s:@]+@', verdict = "ask", reason = "Output contains database connection string with credentials" },
-#     { pattern = '(?i)\b(?:bearer\s+[A-Za-z0-9._~+/=-]{20,}|(?:password|passwd)\s*[:=]\s*(?:[\'"][^\s\'"]{6,}[\'"]|[^\s\'"#;]{6,}))', verdict = "ask", reason = "Output contains password or bearer token" },
-#     { pattern = '(?i)\b(?:[A-Z0-9_]*(?:API_KEY|APIKEY|SECRET_KEY|SECRETKEY|AUTH_TOKEN|AUTHTOKEN|ACCESS_TOKEN|TOKEN|SECRET))\s*[:=]\s*(?:[\'"][^\s\'"]{8,}[\'"]|[^\s\'"#;]{8,})', verdict = "ask", reason = "Output contains environment variable credential assignment" },
+#     { pattern = '(?i)\bbearer\s+(?P<val>[A-Za-z0-9._~+/=-]{20,})', validator = "token_value", verdict = "ask", reason = "Output contains bearer token" },
+#     { pattern = '(?i)\blogin\s+\S+\s+password\s+(?P<val>\S+)', validator = "password_value", verdict = "ask", reason = "Output contains .netrc-style login password" },
+#     { pattern = '''(?i)\b(?P<key>[A-Z0-9_.-]*?(?:API_?KEY|SECRET_?KEY|ACCESS_?KEY|PRIVATE_?KEY|AUTH_?TOKEN|ACCESS_?TOKEN|REFRESH_?TOKEN|TOKEN|SECRET|PASSWORD|PASSWD|PASSPHRASE|PWD|CREDENTIALS?)[A-Z0-9_]*)["']?(?P<sep>\s*(?::=|[:=])\s*)(?P<val>"[^"\n]*"|'[^'\n]*'|[^\s'"#;,]+)''', validator = "credential_value", verdict = "ask", reason = "Output contains credential assignment" },
+#
+# validator (optional): the regex only finds candidates; the named group 'val' must also look like a
+# real secret. "token_value" = 16+ chars, letters and digits, high randomness; "password_value" = 8+ chars;
+# "credential_value" = password rules if the 'key' group names a password, else token rules. All three
+# skip code (os.environ[...], getpass(), settings.X, $(...), {{ }}) and placeholders (your_, <...>, example, fake).
 # ]
 
 
