@@ -1982,6 +1982,42 @@ def test_manager_output_floor_screens_across_all_engines(tmp_path):
     assert "secret api key" in dec_key.reason.lower()
 
 
+def test_known_secret_matching_from_environment_and_env_file(tmp_path, monkeypatch):
+    """Verify exact substring matching against environment variables and .env files."""
+    # 1. Un-prefixed raw hex token in os.environ (would not match sk- or other regexes)
+    raw_hex_token = "deadbeef12345678deadbeef12345678"
+    monkeypatch.setenv("MISTRAL_API_KEY", raw_hex_token)
+    # Also set a path variable containing 'AUTH' and short variable containing 'KEY'
+    monkeypatch.setenv("SSH_AUTH_SOCK", "/tmp/ssh-agent.sock")
+    monkeypatch.setenv("MY_KEY", "short")
+    monkeypatch.setenv("SECURITY_EVAL_TIME_MS", "5000")
+
+    sec_cfg = tmp_path / "sec.toml"
+    sec_cfg.write_text('version = "1.0"\nengine = "allow"\n')
+    mgr = SecurityManager(config_path=str(sec_cfg))
+
+    # Output containing the exact secret from MISTRAL_API_KEY triggers ASK
+    dec1 = mgr.evaluate_output("run_command", {}, f"Model response from server with key {raw_hex_token}")
+    assert dec1.verdict == Verdict.ASK
+    assert "MISTRAL_API_KEY" in dec1.reason
+
+    # Output containing non-secret path or short value is ALLOWed
+    dec_safe = mgr.evaluate_output("run_command", {}, "Agent connected to /tmp/ssh-agent.sock with short key")
+    assert dec_safe.verdict == Verdict.ALLOW
+
+    # 2. Test reading secret from a config .env file
+    custom_env = tmp_path / "custom.env"
+    custom_env.write_text("DB_PASSWORD=superSecretPassword123!\n")
+    from chatybot.security.secret_scanner import SecretScanner
+    scanner = SecretScanner(config_env_path=custom_env)
+    res = scanner.scan("Connection string host=db password=superSecretPassword123! port=5432")
+    assert res is not None
+    verdict, reason = res
+    assert verdict == Verdict.ASK
+    assert "DB_PASSWORD" in reason
+
+
+
 
 
 
