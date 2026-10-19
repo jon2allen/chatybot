@@ -53,8 +53,12 @@ class Fixed(BasePolicyEngine):
             raise RuntimeError("stage exploded")
         return PolicyDecision(verdict=self.verdict, reason=self.reason)
 
+    def supports_output_evaluation(self):
+        return True
+
     def evaluate_output(self, request):
         return self.evaluate(request)
+
 
 
 
@@ -828,6 +832,28 @@ def test_chain_evaluate_output():
     assert dec.verdict == Verdict.ASK
     assert enforcer.calls == 1
     assert shadow.calls == 1
+
+
+def test_chain_output_evaluation_skips_unsupported_stage():
+    """Verify that a chain stage without output evaluation support does not invoke evaluate()."""
+    class LegacyEngine(BasePolicyEngine):
+        def __init__(self):
+            self.calls = 0
+
+        def evaluate(self, request):
+            self.calls += 1
+            return PolicyDecision(verdict=Verdict.DENY, reason="Legacy engine blocks everything")
+
+    legacy = LegacyEngine()
+    chain = ChainedPolicyEngine(
+        stages=[ChainStage("legacy", legacy, "enforce")],
+        log_path="",
+    )
+    req = PolicyRequest(tool="read_file", output="hello", phase="output")
+    dec = chain.evaluate_output(req)
+    assert dec.verdict == Verdict.ALLOW
+    assert legacy.calls == 0  # evaluate was NOT called!
+
 
 
 

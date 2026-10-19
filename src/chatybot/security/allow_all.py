@@ -35,7 +35,11 @@ class AllowAllPolicyEngine(BasePolicyEngine):
             print(f"[Security Debug] [ALLOW ENGINE] Permitted '{request.tool}' without policy checks.")
         return PolicyDecision(verdict=Verdict.ALLOW, reason="Allow engine: no policy checks (pre-0.9.0 behavior).")
 
+    def supports_output_evaluation(self) -> bool:
+        return True
+
     def evaluate_output(self, request: PolicyRequest) -> PolicyDecision:
+
         if self.protect_security_config:
             blocked = self_protect.check(request)
             if blocked is not None:

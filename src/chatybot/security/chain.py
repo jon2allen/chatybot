@@ -73,8 +73,16 @@ class ChainedPolicyEngine(BasePolicyEngine):
     def _run_stage(self, stage: ChainStage, request: PolicyRequest, output_phase: bool = False) -> tuple[PolicyDecision | None, float, str | None]:
         t0 = time.perf_counter()
         try:
-            fn = stage.engine.evaluate_output if output_phase and hasattr(stage.engine, "evaluate_output") else stage.engine.evaluate
+            if output_phase:
+                if hasattr(stage.engine, "supports_output_evaluation") and not stage.engine.supports_output_evaluation():
+                    return PolicyDecision(verdict=Verdict.ALLOW, reason=f"Stage '{stage.name}' does not inspect output."), 0.0, None
+                fn = getattr(stage.engine, "evaluate_output", None)
+                if fn is None:
+                    return PolicyDecision(verdict=Verdict.ALLOW, reason=f"Stage '{stage.name}' does not implement evaluate_output."), 0.0, None
+            else:
+                fn = stage.engine.evaluate
             dec = fn(request)
+
             if not isinstance(dec, PolicyDecision):
                 raise TypeError(f"engine returned {type(dec).__name__}, not PolicyDecision")
             return dec, (time.perf_counter() - t0) * 1000, None
