@@ -112,6 +112,8 @@ class JevPolicyEngine(BasePolicyEngine):
         redact_secrets: bool = True,
         max_content_chars: int = 8000,
         skip_tools: list[str] | None = None,
+        output_scan: bool = False,
+        supports_output: bool | None = None,
         log_path: str = "",
         debug: bool = False,
         http_post: Callable[[str, dict[str, Any], dict[str, str], float], dict[str, Any]] | None = None,
@@ -137,6 +139,7 @@ class JevPolicyEngine(BasePolicyEngine):
         self.redact_secrets = redact_secrets
         self.max_content_chars = int(max_content_chars)
         self.skip_tools = {t.lower() for t in (DEFAULT_SKIP_TOOLS if skip_tools is None else skip_tools)}
+        self.output_scan = bool(supports_output if supports_output is not None else output_scan)
         self.log_path = os.path.abspath(os.path.expanduser(log_path)) if log_path else ""
         self._http_post = http_post or _urllib_post
         self._api_key: str | None = None
@@ -277,9 +280,11 @@ class JevPolicyEngine(BasePolicyEngine):
         return dataclasses.replace(decision)
 
     def supports_output_evaluation(self) -> bool:
-        return True
+        return self.output_scan
 
     def evaluate_output(self, request: PolicyRequest) -> PolicyDecision:
+        if not self.output_scan:
+            return PolicyDecision(verdict=Verdict.ALLOW, reason="Jev output evaluation disabled.")
 
         tool = (request.tool or "").strip()
         output = request.output or ""

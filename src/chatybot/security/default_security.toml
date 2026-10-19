@@ -206,6 +206,7 @@ args = ["--policy", "~/.config/chatybot/security.racf"]
 # max_content_chars = 8000        # longer strings are cut to head+tail and forced to at least ASK
 # skip_tools        = ["ask_user", "get_context_metrics", "session_get", "session_search",
 #                      "search_skills", "decide_choice", "decide_score", "decide_noul"]
+# output_scan       = false       # opt-in LLM output screening; deterministic SecretScanner floor handles secrets
 # log_path          = "~/.config/chatybot/logs/jev_security.jsonl"   # default; "" turns logging off
 
 # ==============================================================================
