@@ -284,6 +284,21 @@ class SecurityManager:
             )
         return dataclasses.replace(decision, request_id=req.request_id, duration_ms=duration_ms)
 
+    def record_outcome(self, decision: PolicyDecision, outcome: str, tool: str = "", detail: str = "") -> None:
+        """Record what happened to an ASK decision (see ASK_OUTCOMES) in the engine's log.
+
+        Engines that keep a decision log (chain, jev) append an outcome line with the
+        same request_id as the decision, so the two can be joined later. Never raises.
+        """
+        if not self.enabled or self.engine is None or not getattr(decision, "request_id", ""):
+            return
+        fn = getattr(self.engine, "record_outcome", None)
+        if fn is None:
+            return
+        try:
+            fn(decision.request_id, tool, outcome, detail)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("[Security Warning] Could not record outcome '%s': %s", outcome, exc)
 
     def get_banner(self) -> str:
         """Return a human-readable banner string describing the active security engine."""
