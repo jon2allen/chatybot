@@ -205,6 +205,7 @@ class SecurityManager:
                 redact_secrets=bool(jev_cfg.get("redact_secrets", True)),
                 max_content_chars=int(jev_cfg.get("max_content_chars", 8000)),
                 skip_tools=jev_cfg.get("skip_tools"),
+                output_scan=bool(jev_cfg.get("output_scan", False)),
                 log_path=jev_cfg.get("log_path", self.DEFAULT_JEV_LOG),
                 debug=self.debug,
             )
