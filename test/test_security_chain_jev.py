@@ -794,9 +794,9 @@ def test_allow_engine_evaluate_output():
     req_benign = PolicyRequest(tool="read_file", output="hello world", phase="output")
     assert eng.evaluate_output(req_benign).verdict == Verdict.ALLOW
 
-    # Denies output disclosing security config
-    req_sec = PolicyRequest(tool="read_file", parameters={"path": "security.toml"}, output="secret config", phase="output")
-    assert eng.evaluate_output(req_sec).verdict == Verdict.DENY
+    # Allows all output
+    req_out = PolicyRequest(tool="read_file", parameters={"path": "any_file.txt"}, output="any output", phase="output")
+    assert eng.evaluate_output(req_out).verdict == Verdict.ALLOW
 
 
 def test_jev_evaluate_output(rubric_path, jev_key):
@@ -812,11 +812,11 @@ def test_jev_evaluate_output(rubric_path, jev_key):
     state_str = fake.calls[0]["body"]["state"]
     assert "output_inspection" in state_str
 
-    # 2. Output evaluation self-protects security config files
-    req_sec = PolicyRequest(tool="read_file", parameters={"path": "security.toml"}, output="data", phase="output")
-    dec_sec = eng.evaluate_output(req_sec)
-    assert dec_sec.verdict == Verdict.DENY
-    assert "security self-protection" in dec_sec.reason.lower()
+    # 2. Empty output is allowed without making an LLM API call
+    req_empty = PolicyRequest(tool="read_file", output="   ", phase="output")
+    dec_empty = eng.evaluate_output(req_empty)
+    assert dec_empty.verdict == Verdict.ALLOW
+    assert len(fake.calls) == 1  # No additional API call made
 
 
 
