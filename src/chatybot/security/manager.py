@@ -213,8 +213,12 @@ class SecurityManager:
         )
         t0 = time.perf_counter()
         try:
-            fn = getattr(self.engine, "evaluate_output", self.engine.evaluate)
-            decision = fn(req)
+            if hasattr(self.engine, "supports_output_evaluation") and not self.engine.supports_output_evaluation():
+                decision = PolicyDecision(verdict=Verdict.ALLOW, reason="Engine does not inspect output.")
+            elif hasattr(self.engine, "evaluate_output"):
+                decision = self.engine.evaluate_output(req)
+            else:
+                decision = PolicyDecision(verdict=Verdict.ALLOW, reason="Engine does not implement evaluate_output.")
         except Exception as exc:
             decision = PolicyDecision(
                 verdict=self.fail_safe,
