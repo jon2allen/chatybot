@@ -144,13 +144,20 @@ exempt_tools = [
     "make_directory", "remove_directory", "change_dir",
 ]
 
-# Default output pattern rules (when omitted, engine defaults apply):
+# Default output pattern rules (when omitted, SecretScanner defaults apply across all engines):
 # rules = [
 #     { pattern = "-----BEGIN [A-Z0-9_-]+ PRIVATE KEY-----", verdict = "deny", reason = "Output contains private cryptographic key" },
 #     { pattern = '\b(?:ghp|gho|ghs|github_pat)_[A-Za-z0-9_]{16,}\b', verdict = "ask", reason = "Output contains GitHub authentication token" },
 #     { pattern = '\bAKIA[0-9A-Z]{16}\b', verdict = "ask", reason = "Output contains AWS Access Key ID" },
+#     { pattern = '\bAIza[0-9A-Za-z-_]{30,}\b', verdict = "ask", reason = "Output contains Google / Gemini API key" },
+#     { pattern = '\bgsk_[A-Za-z0-9]{40,}\b', verdict = "ask", reason = "Output contains Groq API key" },
+#     { pattern = '\bhf_[A-Za-z0-9]{30,}\b', verdict = "ask", reason = "Output contains Hugging Face token" },
+#     { pattern = '\bxox[baprs]-[A-Za-z0-9-]{10,}\b', verdict = "ask", reason = "Output contains Slack token" },
 #     { pattern = '\bsk-(?:[A-Za-z0-9]+-){0,2}[A-Za-z0-9]{32,}\b', verdict = "ask", reason = "Output contains secret API key" },
+#     { pattern = '\beyJ[A-Za-z0-9-_=]+\.eyJ[A-Za-z0-9-_=]+\.[A-Za-z0-9-_.+/=]+\b', verdict = "ask", reason = "Output contains JWT authentication token" },
+#     { pattern = '\b(?:postgres|postgresql|mysql|redis|mongodb|amqp|mssql)://[^/\s:@]+:[^/\s:@]+@', verdict = "ask", reason = "Output contains database connection string with credentials" },
 #     { pattern = '(?i)\b(?:bearer\s+[A-Za-z0-9._~+/=-]{20,}|(?:password|passwd)\s*[:=]\s*(?:[\'"][^\s\'"]{6,}[\'"]|[^\s\'"#;]{6,}))', verdict = "ask", reason = "Output contains password or bearer token" },
+#     { pattern = '(?i)\b(?:[A-Z0-9_]*(?:API_KEY|APIKEY|SECRET_KEY|SECRETKEY|AUTH_TOKEN|AUTHTOKEN|ACCESS_TOKEN|TOKEN|SECRET))\s*[:=]\s*(?:[\'"][^\s\'"]{8,}[\'"]|[^\s\'"#;]{8,})', verdict = "ask", reason = "Output contains environment variable credential assignment" },
 # ]
 
 

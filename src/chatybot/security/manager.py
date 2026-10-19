@@ -16,7 +16,7 @@ from chatybot.tool_args import unwrap_tool_args
 from chatybot.security.adapters.stdio_binary import StdioBinaryPolicyEngine
 from chatybot.security.base import BasePolicyEngine
 from chatybot.security.builtin import BuiltinPolicyEngine
-from chatybot.security.models import PolicyDecision, PolicyRequest, Verdict
+from chatybot.security.models import PolicyDecision, PolicyPromptDetails, PolicyRequest, Verdict
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +52,8 @@ class SecurityManager:
         self.fail_safe = Verdict.DENY
         self.non_interactive_ask: str = "deny"
         self.engine: BasePolicyEngine | None = None
+        from chatybot.security.secret_scanner import SecretScanner
+        self.secret_scanner: SecretScanner = SecretScanner()
 
         if self.enabled:
             self._load_config_and_initialize()
@@ -114,7 +116,10 @@ class SecurityManager:
             raw_exempt = output_cfg.get("exempt_tools", self.DEFAULT_EXEMPT_TOOLS)
             self.output_security_exempt_tools = {str(t).lower() for t in raw_exempt}
 
-        engine_type = self.config.get("engine", "builtin").lower()
+        from chatybot.security.secret_scanner import SecretScanner
+        self.secret_scanner = SecretScanner(rules=output_cfg.get("rules"))
+
+        engine_type = str(self.config.get("engine", "builtin")).lower()
 
         if self.debug:
             print(f"[Security Debug] Loading security configuration from '{config_to_load}'...")
@@ -245,7 +250,22 @@ class SecurityManager:
         )
         t0 = time.perf_counter()
         try:
-            if hasattr(self.engine, "supports_output_evaluation") and not self.engine.supports_output_evaluation():
+            # Deterministic floor check: secret scanner always executes across all engines
+            scanner = getattr(self, "secret_scanner", None)
+            floor_match = scanner.scan(output) if scanner is not None else None
+            if floor_match is not None:
+                floor_verdict, floor_reason = floor_match
+                prompt_details = None
+                if floor_verdict == Verdict.ASK:
+                    prompt_details = PolicyPromptDetails(
+                        title=f"Sensitive Output in {tool}",
+                        message=f"Output from '{tool}' contains potential sensitive data: {floor_reason}. Allow LLM to view?",
+                        risk_level="high",
+                    )
+                decision = PolicyDecision(verdict=floor_verdict, reason=floor_reason, prompt_details=prompt_details)
+                if self.debug:
+                    print(f"[Security Debug] [OUTPUT FLOOR] '{tool}' matched {floor_reason} -> {floor_verdict.value.upper()}")
+            elif hasattr(self.engine, "supports_output_evaluation") and not self.engine.supports_output_evaluation():
                 decision = PolicyDecision(verdict=Verdict.ALLOW, reason="Engine does not inspect output.")
             elif hasattr(self.engine, "evaluate_output"):
                 decision = self.engine.evaluate_output(req)
