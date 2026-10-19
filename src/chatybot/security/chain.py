@@ -67,6 +67,13 @@ class ChainedPolicyEngine(BasePolicyEngine):
         self.fail_safe = fail_safe
         self.shadow_on_deny = shadow_on_deny
         self.log_path = os.path.abspath(os.path.expanduser(log_path)) if log_path else ""
+        self._log_dir_ensured = False
+        if self.log_path:
+            try:
+                os.makedirs(os.path.dirname(self.log_path), exist_ok=True)
+                self._log_dir_ensured = True
+            except OSError:
+                pass
         self.redact_log = redact_log
         self.debug = debug
 
@@ -171,7 +178,9 @@ class ChainedPolicyEngine(BasePolicyEngine):
 
     def _write(self, entry: dict[str, Any]) -> None:
         try:
-            os.makedirs(os.path.dirname(self.log_path), exist_ok=True)
+            if not self._log_dir_ensured:
+                os.makedirs(os.path.dirname(self.log_path), exist_ok=True)
+                self._log_dir_ensured = True
             with open(self.log_path, "a", encoding="utf-8") as f:
                 f.write(json.dumps(entry, ensure_ascii=False, default=str) + "\n")
         except OSError as e:
