@@ -110,8 +110,10 @@ class SecurityManager:
                     timeout_seconds=float(bin_cfg.get("timeout_seconds", 2.0)),
                     fail_safe=self.fail_safe.value,
                     args=bin_cfg.get("args", []),
+                    supports_output=bool(bin_cfg.get("supports_output", False)),
                     debug=self.debug,
                 )
+
                 return
             # If binary not found, fallback to builtin engine with a prominent security warning
             warn_msg = (
