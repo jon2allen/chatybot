@@ -283,6 +283,11 @@ class JevPolicyEngine(BasePolicyEngine):
 
         tool = (request.tool or "").strip()
         output = request.output or ""
+        if tool.lower() in self.skip_tools:
+            skipped = PolicyDecision(verdict=Verdict.ALLOW, reason=f"Jev: '{tool}' output is not checked (skip_tools).")
+            self._log(request, {"output_length": len(output)}, None, skipped, 0.0, source="skip_tools")
+            return skipped
+
         if not output.strip():
             return PolicyDecision(verdict=Verdict.ALLOW, reason="Empty output.")
 

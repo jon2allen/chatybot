@@ -818,6 +818,13 @@ def test_jev_evaluate_output(rubric_path, jev_key):
     assert dec_empty.verdict == Verdict.ALLOW
     assert len(fake.calls) == 1  # No additional API call made
 
+    # 3. skip_tools bypasses LLM API call during output evaluation
+    req_skip = PolicyRequest(tool="ask_user", output="some user prompt response", phase="output")
+    dec_skip = eng.evaluate_output(req_skip)
+    assert dec_skip.verdict == Verdict.ALLOW
+    assert "skip_tools" in dec_skip.reason
+    assert len(fake.calls) == 1  # Still 1, no call made for skip_tools
+
 
 
 def test_chain_evaluate_output():
