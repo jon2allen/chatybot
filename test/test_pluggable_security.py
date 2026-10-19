@@ -1800,6 +1800,27 @@ async def test_chatybot_app_output_security_screens_errors_and_tracebacks(tmp_pa
     assert "BEGIN EC PRIVATE KEY" not in res_stderr
 
 
+def test_binary_engine_output_evaluation_capability():
+    """Verify StdioBinaryPolicyEngine respects supports_output and doesn't run input checks on output."""
+    # 1. Default supports_output=False returns ALLOW without invoking subprocess
+    bin_engine_disabled = StdioBinaryPolicyEngine(
+        binary_path="/nonexistent/binary",
+        supports_output=False,
+    )
+    assert bin_engine_disabled.supports_output_evaluation() is False
+    dec = bin_engine_disabled.evaluate_output(PolicyRequest(tool="read_file", output="secret", phase="output"))
+    assert dec.verdict == Verdict.ALLOW
+    assert "does not inspect" in dec.reason
+
+    # 2. supports_output=True reports capability
+    bin_engine_enabled = StdioBinaryPolicyEngine(
+        binary_path="/nonexistent/binary",
+        supports_output=True,
+    )
+    assert bin_engine_enabled.supports_output_evaluation() is True
+
+
+
 
 
 

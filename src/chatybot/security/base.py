@@ -16,6 +16,10 @@ class BasePolicyEngine(ABC):
         """Evaluate a tool request and return a tri-state PolicyDecision."""
         raise NotImplementedError
 
+    def supports_output_evaluation(self) -> bool:
+        """Return True if this engine explicitly implements output screening."""
+        return False
+
     def evaluate_output(self, request: PolicyRequest) -> PolicyDecision:
         """Evaluate a tool's output after I/O execution. Default allows output."""
         return PolicyDecision(verdict=Verdict.ALLOW, reason="Output allowed by default.")
