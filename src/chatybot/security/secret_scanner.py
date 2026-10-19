@@ -53,43 +53,69 @@ def _is_valid_secret_value(value: str) -> bool:
 
 
 class SecretScanner:
-    """Always-on deterministic scanner evaluated at the SecurityManager level."""
+    """Always-on deterministic scanner evaluated at the SecurityManager level.
 
-    DEFAULT_OUTPUT_RULES: list[dict[str, str]] = [
-        {"pattern": r"-----BEGIN [A-Z0-9_-]+ PRIVATE KEY-----", "verdict": "deny", "reason": "Output contains private cryptographic key"},
-        {"pattern": r"\b(?:ghp|gho|ghs|github_pat)_[A-Za-z0-9_]{16,}\b", "verdict": "ask", "reason": "Output contains GitHub authentication token"},
-        {"pattern": r"\bAKIA[0-9A-Z]{16}\b", "verdict": "ask", "reason": "Output contains AWS Access Key ID"},
-        {"pattern": r"\bAIza[0-9A-Za-z-_]{30,}\b", "verdict": "ask", "reason": "Output contains Google / Gemini API key"},
-        {"pattern": r"\bgsk_[A-Za-z0-9]{40,}\b", "verdict": "ask", "reason": "Output contains Groq API key"},
-        {"pattern": r"\bhf_[A-Za-z0-9]{30,}\b", "verdict": "ask", "reason": "Output contains Hugging Face token"},
-        {"pattern": r"\bxox[baprs]-[A-Za-z0-9-]{10,}\b", "verdict": "ask", "reason": "Output contains Slack token"},
-        {"pattern": r"\bsk-(?:[A-Za-z0-9]+-){0,2}[A-Za-z0-9]{32,}\b", "verdict": "ask", "reason": "Output contains secret API key"},
-        {"pattern": r"\beyJ[A-Za-z0-9-_=]+\.eyJ[A-Za-z0-9-_=]+\.[A-Za-z0-9-_.+/=]+\b", "verdict": "ask", "reason": "Output contains JWT authentication token"},
-        {"pattern": r"\b(?:postgres|postgresql|mysql|redis|mongodb|amqp|mssql)://[^/\s:@]+:[^/\s:@]+@", "verdict": "ask", "reason": "Output contains database connection string with credentials"},
-        {"pattern": r"(?i)\b(?:bearer\s+[A-Za-z0-9._~+/=-]{20,}|(?:password|passwd)\s*[:=]\s*(?:['\"][^\s'\"]{6,}['\"]|[^\s'\"#;]{6,}))", "verdict": "ask", "reason": "Output contains password or bearer token"},
-        {"pattern": r"(?i)\b(?:[A-Z0-9_]*(?:API_KEY|APIKEY|SECRET_KEY|SECRETKEY|AUTH_TOKEN|AUTHTOKEN|ACCESS_TOKEN|TOKEN|SECRET))\s*[:=]\s*(?:['\"][^\s'\"]{8,}['\"]|[^\s'\"#;]{8,})", "verdict": "ask", "reason": "Output contains environment variable credential assignment"},
+    Each rule may carry optional ``literals``: substrings that MUST appear in any
+    text the pattern can match. Before running a regex, the scanner does a cheap
+    ``in`` check for those literals and skips the regex when none is present.
+    ``literals_ci`` works the same way but is checked against ``text.lower()``
+    (use it for case-insensitive rules; give the literals in lowercase).
+    Rules without literals are always run.
+    """
+
+    DEFAULT_OUTPUT_RULES: list[dict[str, Any]] = [
+        {"pattern": r"-----BEGIN [A-Z0-9_-]+ PRIVATE KEY-----", "literals": ["PRIVATE KEY-----"],
+         "verdict": "deny", "reason": "Output contains private cryptographic key"},
+        {"pattern": r"\b(?:ghp|gho|ghs|github_pat)_[A-Za-z0-9_]{16,}\b", "literals": ["ghp_", "gho_", "ghs_", "github_pat_"],
+         "verdict": "ask", "reason": "Output contains GitHub authentication token"},
+        {"pattern": r"\bAKIA[0-9A-Z]{16}\b", "literals": ["AKIA"],
+         "verdict": "ask", "reason": "Output contains AWS Access Key ID"},
+        {"pattern": r"\bAIza[0-9A-Za-z\-_]{30,}\b", "literals": ["AIza"],
+         "verdict": "ask", "reason": "Output contains Google / Gemini API key"},
+        {"pattern": r"\bgsk_[A-Za-z0-9]{40,}\b", "literals": ["gsk_"],
+         "verdict": "ask", "reason": "Output contains Groq API key"},
+        {"pattern": r"\bhf_[A-Za-z0-9]{30,}\b", "literals": ["hf_"],
+         "verdict": "ask", "reason": "Output contains Hugging Face token"},
+        {"pattern": r"\bxox[baprs]-[A-Za-z0-9-]{10,}\b", "literals": ["xox"],
+         "verdict": "ask", "reason": "Output contains Slack token"},
+        {"pattern": r"\bsk-(?:[A-Za-z0-9]+-){0,2}[A-Za-z0-9]{32,}\b", "literals": ["sk-"],
+         "verdict": "ask", "reason": "Output contains secret API key"},
+        {"pattern": r"\beyJ[A-Za-z0-9\-_=]+\.eyJ[A-Za-z0-9\-_=]+\.[A-Za-z0-9\-_.+/=]+\b", "literals": ["eyJ"],
+         "verdict": "ask", "reason": "Output contains JWT authentication token"},
+        {"pattern": r"\b(?:postgres|postgresql|mysql|redis|mongodb|amqp|mssql)://[^/\s:@]+:[^/\s:@]+@", "literals": ["://"],
+         "verdict": "ask", "reason": "Output contains database connection string with credentials"},
+        {"pattern": r"(?i)\b(?:bearer\s+[A-Za-z0-9._~+/=-]{20,}|(?:password|passwd)\s*[:=]\s*(?:['\"][^\s'\"]{6,}['\"]|[^\s'\"#;]{6,}))",
+         "literals_ci": ["bearer", "password", "passwd"],
+         "verdict": "ask", "reason": "Output contains password or bearer token"},
+        {"pattern": r"(?i)(?:API_?KEY|SECRET_?KEY|TOKEN|SECRET)\s*[:=]\s*(?:['\"][^\s'\"]{8,}['\"]|[^\s'\"#;]{8,})",
+         "literals_ci": ["key", "token", "secret"],
+         "verdict": "ask", "reason": "Output contains environment variable credential assignment"},
     ]
 
     def __init__(
         self,
-        rules: list[dict[str, str]] | None = None,
+        rules: list[dict[str, Any]] | None = None,
         known_secrets: dict[str, str] | None = None,
         config_env_path: str | Path | None = None,
     ):
         raw_rules = rules if rules is not None else self.DEFAULT_OUTPUT_RULES
-        self._compiled_rules: list[tuple[re.Pattern, Verdict, str]] = []
+        self._compiled_rules: list[
+            tuple[re.Pattern[str], Verdict, str, tuple[str, ...] | None, tuple[str, ...] | None]
+        ] = []
         for r in raw_rules:
             pat_str = r.get("pattern", "")
             if not pat_str:
                 continue
             try:
                 compiled = re.compile(pat_str)
-                v_str = str(r.get("verdict", "ask")).strip().lower()
-                verdict = Verdict.DENY if v_str == "deny" else Verdict.ASK
-                reason = r.get("reason", "Output matched security pattern")
-                self._compiled_rules.append((compiled, verdict, reason))
             except re.error:
                 continue
+            v_str = str(r.get("verdict", "ask")).strip().lower()
+            verdict = Verdict.DENY if v_str == "deny" else Verdict.ASK
+            message = f"Secret scanner: {r.get('reason', 'Output matched security pattern')}"
+            lits = tuple(r["literals"]) if r.get("literals") else None
+            lits_ci = tuple(s.lower() for s in r["literals_ci"]) if r.get("literals_ci") else None
+            self._compiled_rules.append((compiled, verdict, message, lits, lits_ci))
 
         self._custom_known_secrets = known_secrets
         self._config_env_path = config_env_path
@@ -155,13 +181,29 @@ class SecretScanner:
 
     def scan(self, text: str) -> tuple[Verdict, str] | None:
         """Scan text against compiled rules and known secrets. Returns (Verdict, reason) or None."""
-        if not text or not text.strip():
+        if not text or text.isspace():
             return None
 
+        lowered: str | None = None
+
+        def _matches_literals(lits: tuple[str, ...] | None, lits_ci: tuple[str, ...] | None) -> bool:
+            nonlocal lowered
+            if lits is not None and not any(s in text for s in lits):
+                return False
+            if lits_ci is not None:
+                if lowered is None:
+                    lowered = text.lower()
+                if not any(s in lowered for s in lits_ci):
+                    return False
+            return True
+
         # 1. Check DENY rules first (e.g. private cryptographic keys)
-        for pattern, verdict, reason in self._compiled_rules:
-            if verdict == Verdict.DENY and pattern.search(text):
-                return verdict, f"Secret scanner: {reason}"
+        for pattern, verdict, message, lits, lits_ci in self._compiled_rules:
+            if verdict == Verdict.DENY:
+                if not _matches_literals(lits, lits_ci):
+                    continue
+                if pattern.search(text):
+                    return verdict, message
 
         # 2. Check known secrets from environment and config files (exact substring match)
         known = self.get_known_secrets()
@@ -169,9 +211,12 @@ class SecretScanner:
             if secret_val in text:
                 return Verdict.ASK, f"Secret scanner: Output contains configured secret ({key_name})"
 
-        # 3. Check remaining pattern rules (e.g. ASK)
-        for pattern, verdict, reason in self._compiled_rules:
-            if verdict != Verdict.DENY and pattern.search(text):
-                return verdict, f"Secret scanner: {reason}"
+        # 3. Check remaining pattern rules (e.g. ASK) with literal pre-filtering
+        for pattern, verdict, message, lits, lits_ci in self._compiled_rules:
+            if verdict != Verdict.DENY:
+                if not _matches_literals(lits, lits_ci):
+                    continue
+                if pattern.search(text):
+                    return verdict, message
 
         return None
