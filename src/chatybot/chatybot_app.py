@@ -3740,11 +3740,13 @@ class ChatybotApp:
         raw_output: str,
         is_interactive: bool,
     ) -> str:
-        """Scan tool output after I/O execution against the active security engine."""
         sec_mgr = getattr(self, "security_manager", None)
         if sec_mgr is None or not getattr(sec_mgr, "output_security_enabled", True):
             return raw_output
-        if tool_name.lower() not in getattr(sec_mgr, "output_security_tools", {"read_file", "run_command", "str_search", "read_url"}):
+        if hasattr(sec_mgr, "is_tool_scanned"):
+            if not sec_mgr.is_tool_scanned(tool_name):
+                return raw_output
+        elif tool_name.lower() in getattr(sec_mgr, "DEFAULT_EXEMPT_TOOLS", set()):
             return raw_output
         if not raw_output:
             return raw_output
