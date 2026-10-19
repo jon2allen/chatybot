@@ -26,6 +26,22 @@ class SecurityManager:
     """Manages policy engine initialization, configuration parsing, and evaluation."""
 
     DEFAULT_CONFIG_PATH = "~/.config/chatybot/security.toml"
+    DEFAULT_EXEMPT_TOOLS: set[str] = {
+        # Interactive prompts and decision scoring
+        "ask_user",
+        "decide_choice",
+        "decide_score",
+        "decide_noul",
+        "get_context_metrics",
+        # Filesystem mutation tools (return write acknowledgments, not content)
+        "write_file",
+        "replace_file_content",
+        "patch_file",
+        "delete_file",
+        "make_directory",
+        "remove_directory",
+        "change_dir",
+    }
 
     def __init__(self, config_path: str | None = None, enabled: bool = True, debug: bool = False):
         self.enabled = enabled
@@ -88,18 +104,24 @@ class SecurityManager:
                 print(warn_msg)
         self.non_interactive_ask = "allow" if raw_non_interactive == "allow" else "deny"
 
+
         output_cfg = self.config.get("output_security", {})
         self.output_security_enabled = bool(output_cfg.get("enabled", True))
-        self.output_security_tools = set(
-            output_cfg.get("tools", ["read_file", "run_command", "str_search", "read_url"])
-        )
+        if "tools" in output_cfg:
+            self.output_security_tools: set[str] | None = {str(t).lower() for t in output_cfg["tools"]}
+            self.output_security_exempt_tools: set[str] = set()
+        else:
+            self.output_security_tools = None
+            raw_exempt = output_cfg.get("exempt_tools", self.DEFAULT_EXEMPT_TOOLS)
+            self.output_security_exempt_tools = {str(t).lower() for t in raw_exempt}
 
         engine_type = str(self.config.get("engine", "builtin")).lower()
 
         if self.debug:
             print(f"[Security Debug] Loading security configuration from '{config_to_load}'...")
             print(f"[Security Debug] Engine type: '{engine_type}', Fail-safe verdict: '{self.fail_safe.value.upper()}'.")
-            print(f"[Security Debug] Output security enabled: {self.output_security_enabled} on tools: {sorted(self.output_security_tools)}")
+            scope_desc = f"whitelist: {sorted(self.output_security_tools)}" if self.output_security_tools is not None else f"all except exempt: {sorted(self.output_security_exempt_tools)}"
+            print(f"[Security Debug] Output security enabled: {self.output_security_enabled} ({scope_desc})")
 
         if engine_type not in self.ENGINE_TYPES:
             warn_msg = (
@@ -263,6 +285,17 @@ class SecurityManager:
         # Return a copy stamped with the request id and duration (engines may cache and reuse decisions).
         return dataclasses.replace(decision, request_id=req.request_id, duration_ms=duration_ms)
 
+    def is_tool_scanned(self, tool: str) -> bool:
+        """Return True if tool output should be screened by output security."""
+        if not getattr(self, "output_security_enabled", True):
+            return False
+        t = (tool or "").strip().lower()
+        tools_whitelist = getattr(self, "output_security_tools", None)
+        if tools_whitelist is not None:
+            return t in tools_whitelist
+        exempt = getattr(self, "output_security_exempt_tools", self.DEFAULT_EXEMPT_TOOLS)
+        return t not in exempt
+
     def evaluate_output(
         self,
         tool: str,
@@ -274,8 +307,8 @@ class SecurityManager:
         if not self.enabled or not getattr(self, "output_security_enabled", True):
             return PolicyDecision(verdict=Verdict.ALLOW, reason="Output security disabled.", duration_ms=0.0)
 
-        if tool.lower() not in getattr(self, "output_security_tools", {"read_file", "run_command", "str_search", "read_url"}):
-            return PolicyDecision(verdict=Verdict.ALLOW, reason=f"Tool '{tool}' not in output security scope.", duration_ms=0.0)
+        if not self.is_tool_scanned(tool):
+            return PolicyDecision(verdict=Verdict.ALLOW, reason=f"Tool '{tool}' exempt from output security.", duration_ms=0.0)
 
         if not output or not output.strip():
             return PolicyDecision(verdict=Verdict.ALLOW, reason="Empty output.", duration_ms=0.0)
