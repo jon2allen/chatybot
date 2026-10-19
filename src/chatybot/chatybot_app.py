@@ -3753,30 +3753,31 @@ class ChatybotApp:
 
         # Extract textual content from tool output JSON if possible
         content_to_check = raw_output
-        try:
-
-            parsed = json.loads(raw_output)
-            if isinstance(parsed, dict):
-                if "result" in parsed:
-                    inner = parsed["result"]
-                    if isinstance(inner, str):
-                        content_to_check = inner
-                    elif isinstance(inner, dict):
-                        parts = []
-                        if "stdout" in inner and inner["stdout"]:
-                            parts.append(str(inner["stdout"]))
-                        if "stderr" in inner and inner["stderr"]:
-                            parts.append(str(inner["stderr"]))
-                        if "content" in inner and inner["content"]:
-                            parts.append(str(inner["content"]))
-                        if parts:
-                            content_to_check = "\n".join(parts)
-                        else:
-                            content_to_check = json.dumps(inner, ensure_ascii=False)
-                elif "error" in parsed:
-                    content_to_check = str(parsed["error"])
-        except (json.JSONDecodeError, TypeError):
-            pass
+        stripped = raw_output.lstrip()
+        if stripped.startswith(("{", "[")):
+            try:
+                parsed = json.loads(raw_output)
+                if isinstance(parsed, dict):
+                    if "result" in parsed:
+                        inner = parsed["result"]
+                        if isinstance(inner, str):
+                            content_to_check = inner
+                        elif isinstance(inner, dict):
+                            parts = []
+                            if "stdout" in inner and inner["stdout"]:
+                                parts.append(str(inner["stdout"]))
+                            if "stderr" in inner and inner["stderr"]:
+                                parts.append(str(inner["stderr"]))
+                            if "content" in inner and inner["content"]:
+                                parts.append(str(inner["content"]))
+                            if parts:
+                                content_to_check = "\n".join(parts)
+                            else:
+                                content_to_check = json.dumps(inner, ensure_ascii=False)
+                    elif "error" in parsed:
+                        content_to_check = str(parsed["error"])
+            except (json.JSONDecodeError, TypeError):
+                pass
 
 
         post_decision = sec_mgr.evaluate_output(
