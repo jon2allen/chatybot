@@ -186,8 +186,8 @@ class SecurityManager:
     def evaluate_output(
         self,
         tool: str,
-        output: str,
         parameters: dict[str, Any] | None = None,
+        output: str = "",
         context: dict[str, Any] | None = None,
     ) -> PolicyDecision:
         """Evaluate a tool invocation's post-I/O output against the active security engine."""
