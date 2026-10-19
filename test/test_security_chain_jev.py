@@ -53,6 +53,10 @@ class Fixed(BasePolicyEngine):
             raise RuntimeError("stage exploded")
         return PolicyDecision(verdict=self.verdict, reason=self.reason)
 
+    def evaluate_output(self, request):
+        return self.evaluate(request)
+
+
 
 class FakeJev:
     """Records requests and returns noul answers from a scores dict."""
@@ -778,4 +782,52 @@ log_path = "{log}"
     assert len(rows) == 1
     assert any("candidate false positive" in w for w in rows[0]["_why"])
     assert rows[0]["parameters"]["path"] == "src/main.rs"
+
+
+def test_allow_engine_evaluate_output():
+    eng = AllowAllPolicyEngine(protect_security_config=True)
+    # Allows benign output
+    req_benign = PolicyRequest(tool="read_file", output="hello world", phase="output")
+    assert eng.evaluate_output(req_benign).verdict == Verdict.ALLOW
+
+    # Denies output disclosing security config
+    req_sec = PolicyRequest(tool="read_file", parameters={"path": "security.toml"}, output="secret config", phase="output")
+    assert eng.evaluate_output(req_sec).verdict == Verdict.DENY
+
+
+def test_jev_evaluate_output(rubric_path, jev_key):
+    fake = FakeJev(scores={"secrets": 0.95})
+    eng = make_jev(rubric_path, fake)
+
+    # 1. Output evaluation sends phase="output_inspection" in state and scores rubric
+    req_out = PolicyRequest(tool="read_file", parameters={"path": "notes.txt"}, output="some output content", phase="output")
+    dec = eng.evaluate_output(req_out)
+    assert dec.verdict == Verdict.DENY
+    assert len(fake.calls) == 1
+
+    state_str = fake.calls[0]["body"]["state"]
+    assert "output_inspection" in state_str
+
+    # 2. Output evaluation self-protects security config files
+    req_sec = PolicyRequest(tool="read_file", parameters={"path": "security.toml"}, output="data", phase="output")
+    dec_sec = eng.evaluate_output(req_sec)
+    assert dec_sec.verdict == Verdict.DENY
+    assert "security self-protection" in dec_sec.reason.lower()
+
+
+
+def test_chain_evaluate_output():
+    enforcer = Fixed(Verdict.ASK, reason="Sensitive output detected")
+    shadow = Fixed(Verdict.ALLOW)
+    chain = ChainedPolicyEngine(
+        stages=[ChainStage("enforce_stg", enforcer, "enforce"), ChainStage("shadow_stg", shadow, "shadow")],
+        log_path="",
+    )
+    req_secret = PolicyRequest(tool="read_file", output="some secret output", phase="output")
+    dec = chain.evaluate_output(req_secret)
+    assert dec.verdict == Verdict.ASK
+    assert enforcer.calls == 1
+    assert shadow.calls == 1
+
+
 

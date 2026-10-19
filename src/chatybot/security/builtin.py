@@ -88,6 +88,14 @@ class BuiltinPolicyEngine(BasePolicyEngine):
         "> /dev/disk",
     ]
 
+    DEFAULT_OUTPUT_RULES: list[dict[str, str]] = [
+        {"pattern": r"-----BEGIN [A-Z0-9_-]+ PRIVATE KEY-----", "verdict": "deny", "reason": "Output contains private cryptographic key"},
+        {"pattern": r"\b(?:ghp|gho|ghs|github_pat)_[A-Za-z0-9_]{16,}\b", "verdict": "ask", "reason": "Output contains GitHub authentication token"},
+        {"pattern": r"\bAKIA[0-9A-Z]{16}\b", "verdict": "ask", "reason": "Output contains AWS Access Key ID"},
+        {"pattern": r"\bsk-[A-Za-z0-9_-]{20,}\b", "verdict": "ask", "reason": "Output contains secret API key"},
+        {"pattern": r"(?i)\b(?:bearer\s+[A-Za-z0-9._~+/=-]{20,}|password\s*[:=]\s*['\"][^\s'\"]{6,}['\"])", "verdict": "ask", "reason": "Output contains password or bearer token"},
+    ]
+
     def __init__(
         self,
         rules: dict[str, str] | None = None,
@@ -95,12 +103,16 @@ class BuiltinPolicyEngine(BasePolicyEngine):
         default_verdict: str = "ask",
         denied_paths: list[str] | None = None,
         denied_command_patterns: list[str] | None = None,
+        output_rules: list[dict[str, str]] | None = None,
         debug: bool = False,
     ):
         self.debug = debug
         self.rules = {k.lower(): str(v).lower() for k, v in self.DEFAULT_TOOL_RULES.items()}
         if rules:
             self.rules.update({k.lower(): str(v).lower() for k, v in rules.items()})
+        self.output_rules = (
+            output_rules if output_rules is not None else list(self.DEFAULT_OUTPUT_RULES)
+        )
 
         raw_default = str(default_verdict or "ask").strip().lower()
         try:
@@ -407,7 +419,45 @@ class BuiltinPolicyEngine(BasePolicyEngine):
             print(f"[Security Debug] [{tag}] Tier 4 Baseline Tool: {tool_raw} -> {decision.reason}")
         return decision
 
+    def evaluate_output(self, request: PolicyRequest) -> PolicyDecision:
+        """Scan tool output after I/O execution against output rules."""
+        output = request.output or ""
+        if not output.strip():
+            return PolicyDecision(verdict=Verdict.ALLOW, reason="Empty output.")
+
+        for rule in self.output_rules:
+            pattern = rule.get("pattern", "")
+            if not pattern:
+                continue
+            try:
+                if re.search(pattern, output):
+                    v_str = str(rule.get("verdict", "ask")).lower()
+                    try:
+                        verdict = Verdict(v_str)
+                    except ValueError:
+                        verdict = Verdict.ASK
+                    reason = rule.get("reason", "Output matched security filter")
+                    if self.debug:
+                        print(f"[Security Debug] [OUTPUT RULE] '{request.tool}' output matched '{pattern}' -> {verdict.value.upper()}")
+                    details = None
+                    if verdict == Verdict.ASK:
+                        details = PolicyPromptDetails(
+                            title=f"Sensitive Output in {request.tool}",
+                            message=f"Output from '{request.tool}' contains potential sensitive data: {reason}. Allow LLM to view?",
+                            risk_level="high",
+                        )
+                    return PolicyDecision(
+                        verdict=verdict,
+                        reason=f"Builtin output rule: {reason}",
+                        prompt_details=details,
+                    )
+            except re.error:
+                continue
+
+        return PolicyDecision(verdict=Verdict.ALLOW, reason="No sensitive content detected in output.")
+
     def get_banner(self) -> str:
         rule_count = len(self.dsl_rules)
         return f"Builtin Python Engine ({rule_count} DSL rules, {len(self.rules)} tool defaults)"
+
 

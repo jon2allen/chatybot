@@ -125,6 +125,29 @@ denied_patterns = [
 ]
 
 # ==============================================================================
+# Post-Execution Output Security (Egress Filtering)
+# Screen tool output (e.g. read_file, run_command, str_search) before it enters LLM context.
+# Tri-state verdict:
+#   ALLOW: Output enters context untouched.
+#   ASK:   Interactive prompt asks user whether LLM is authorized to view output.
+#          If approved, untouched output is passed; if declined, output is withheld.
+#   DENY:  Hard block. Output is dropped, security error returned to model.
+# ==============================================================================
+[output_security]
+enabled = true
+tools = ["read_file", "run_command", "str_search", "read_url"]
+
+# Default output pattern rules (when omitted, engine defaults apply):
+# rules = [
+#     { pattern = "-----BEGIN [A-Z0-9_-]+ PRIVATE KEY-----", verdict = "deny", reason = "Output contains private cryptographic key" },
+#     { pattern = '\b(?:ghp|gho|ghs|github_pat)_[A-Za-z0-9_]{16,}\b', verdict = "ask", reason = "Output contains GitHub authentication token" },
+#     { pattern = '\bAKIA[0-9A-Z]{16}\b', verdict = "ask", reason = "Output contains AWS Access Key ID" },
+#     { pattern = '\bsk-[A-Za-z0-9_-]{20,}\b', verdict = "ask", reason = "Output contains secret API key" },
+#     { pattern = '(?i)\b(?:bearer\s+[A-Za-z0-9._~+/=-]{20,}|password\s*[:=]\s*[\'"][^\s\'"]{6,}[\'"])', verdict = "ask", reason = "Output contains password or bearer token" },
+# ]
+
+
+# ==============================================================================
 # External Engine Configuration (Used when engine = "binary")
 # ==============================================================================
 

@@ -4,7 +4,18 @@ All notable changes, release milestones, and version history for **Chatybot** ar
 
 Unreleased
 ----------
+- **Post-Execution Output Security (Egress Filtering & Secret Protection)**:
+  - Added post-execution output screening in `SecurityManager` and policy engines (`builtin`, `jev`, `chain`, `allow_all`, `stdio_binary`) to evaluate tool output (`read_file`, `run_command`, `str_search`, `read_url`) before it enters LLM context.
+  - Implemented clean tri-state access control (ALLOW / ASK / DENY) avoiding fragile token redaction:
+    - **ALLOW**: Untouched raw tool output enters LLM context.
+    - **ASK**: Prompts user interactively to authorize LLM viewing sensitive data. If approved (`y`), raw output is passed completely intact; if declined (`n`), output is withheld. Respects `-y`/auto-approve and `non_interactive_ask` ("deny" blocks, "allow" permits).
+    - **DENY**: Hard blocks disclosure, erases raw output from context, sets `TOOL_DISPATCH_EXIT_CODE = '1'`, and returns a clear policy violation error.
+  - Added built-in regex rules detecting private cryptographic keys (DENY), GitHub tokens (ASK), AWS keys (ASK), API keys (ASK), and bearer tokens/passwords (ASK).
+  - Added `[output_security]` configuration section in `default_security.toml` with `enabled`, `tools`, and customizable `rules`.
+  - Added output security evaluation latency measurement (`last_security_duration_ms`) and debug trace logging.
+  - Added comprehensive test coverage across `test/test_pluggable_security.py` and `test/test_security_chain_jev.py`.
 - **Jev Security Engine, Chaining & Allow Mode** (branch `jev_security`):
+
   - **`engine = "allow"`**: runs tools without policy checks, like chatybot before v0.9.0. Persistent in `security.toml` (unlike `--no-security`), prints a startup warning, and by default still protects `security.toml`, `jev_security.toml`, `*.racf` and `~/.config/chatybot/.env` (`[allow] protect_security_config`).
   - **`engine = "chain"`**: runs several engines per tool call. `enforce` stages decide (strictest verdict wins; later enforcers are skipped after a DENY); `shadow` stages are pass-through, evaluated and logged only. Optional JSONL comparison log with per-stage verdicts, latency and a disagreement flag; secrets are redacted in the log.
   - **`engine = "jev"`**: TypeSafe Jev decision-model engine driven by a rubric (`~/.config/chatybot/jev_security.toml`, seeded from `security/default_jev_security.toml`). Self-protection floor before any API call, secret redaction, head+tail truncation that forces at least ASK, per-session cache, `on_error` fail-safe (ASK interactive / DENY non-interactive), optional JSONL log, `noul` or `combined` mode.

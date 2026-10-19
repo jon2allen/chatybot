@@ -70,10 +70,11 @@ class ChainedPolicyEngine(BasePolicyEngine):
         self.redact_log = redact_log
         self.debug = debug
 
-    def _run_stage(self, stage: ChainStage, request: PolicyRequest) -> tuple[PolicyDecision | None, float, str | None]:
+    def _run_stage(self, stage: ChainStage, request: PolicyRequest, output_phase: bool = False) -> tuple[PolicyDecision | None, float, str | None]:
         t0 = time.perf_counter()
         try:
-            dec = stage.engine.evaluate(request)
+            fn = stage.engine.evaluate_output if output_phase and hasattr(stage.engine, "evaluate_output") else stage.engine.evaluate
+            dec = fn(request)
             if not isinstance(dec, PolicyDecision):
                 raise TypeError(f"engine returned {type(dec).__name__}, not PolicyDecision")
             return dec, (time.perf_counter() - t0) * 1000, None
@@ -81,6 +82,12 @@ class ChainedPolicyEngine(BasePolicyEngine):
             return None, (time.perf_counter() - t0) * 1000, f"{type(e).__name__}: {e}"
 
     def evaluate(self, request: PolicyRequest) -> PolicyDecision:
+        return self._evaluate_common(request, output_phase=False)
+
+    def evaluate_output(self, request: PolicyRequest) -> PolicyDecision:
+        return self._evaluate_common(request, output_phase=True)
+
+    def _evaluate_common(self, request: PolicyRequest, output_phase: bool = False) -> PolicyDecision:
         final: PolicyDecision | None = None
         final_stage = ""
         denied = False
@@ -94,7 +101,7 @@ class ChainedPolicyEngine(BasePolicyEngine):
                 results.append({"stage": stage.name, "mode": stage.mode, "skipped": "shadow_on_deny = false"})
                 continue
 
-            dec, ms, err = self._run_stage(stage, request)
+            dec, ms, err = self._run_stage(stage, request, output_phase=output_phase)
             entry: dict[str, Any] = {"stage": stage.name, "mode": stage.mode, "latency_ms": round(ms, 1)}
             if err is not None:
                 entry["error"] = err[:300]
@@ -111,7 +118,8 @@ class ChainedPolicyEngine(BasePolicyEngine):
             if self.debug:
                 tag = "SHADOW" if stage.mode == "shadow" else "ENFORCE"
                 shown = entry.get("verdict", "error").upper()
-                print(f"[Security Debug] [CHAIN] [{tag}] {stage.name}: {shown} ({ms:.0f} ms) {entry.get('reason') or entry.get('error', '')}")
+                phase_tag = "[OUTPUT] " if output_phase else ""
+                print(f"[Security Debug] [CHAIN] {phase_tag}[{tag}] {stage.name}: {shown} ({ms:.0f} ms) {entry.get('reason') or entry.get('error', '')}")
 
             if stage.mode == "enforce" and dec is not None:
                 if final is None or _STRICT[dec.verdict] > _STRICT[final.verdict]:
