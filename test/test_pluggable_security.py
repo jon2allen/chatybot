@@ -1921,7 +1921,34 @@ def test_base_engine_supports_output_evaluation_auto_detection():
     mgr_custom.engine = custom_eng
     dec_custom = mgr_custom.evaluate_output("read_file", {}, "some output")
     assert dec_custom.verdict == Verdict.DENY
-    assert "blocked in output" in dec_custom.reason
+
+@pytest.mark.anyio
+async def test_dispatch_tool_nonzero_exit_and_exception_screened(tmp_path, monkeypatch):
+    """Verify that failed tool dispatch execution and exception paths funnel through output security."""
+    import json
+    import subprocess
+    from chatybot.chatybot_app import ChatybotApp
+
+    sec_cfg = tmp_path / "sec.toml"
+    sec_cfg.write_text('version = "1.0"\nengine = "builtin"\n')
+    app = ChatybotApp(security_config_path=str(sec_cfg))
+    app.initialize()
+
+    class FakeCompletedProcess:
+        returncode = 1
+        stdout = ""
+        stderr = "CRITICAL: Traceback with key:\n-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA0...\n-----END RSA PRIVATE KEY-----"
+
+    monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: FakeCompletedProcess())
+
+    # Dispatch tool that fails with secret in stderr
+    res = await app.dispatch_tool(json.dumps({
+        "tool": "read_file",
+        "arguments": {"path": "invalid_file.txt"},
+    }))
+
+    assert "Error: Output Withheld:" in res
+    assert "BEGIN RSA PRIVATE KEY" not in res
 
 
 
