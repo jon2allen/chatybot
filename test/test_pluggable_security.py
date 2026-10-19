@@ -1532,6 +1532,234 @@ def test_security_evaluation_duration_instrumentation(tmp_path, capsys):
     assert f"{dec_debug.duration_ms:.2f} ms" in captured.out
 
 
+def test_builtin_evaluate_output_patterns():
+    """Verify built-in engine detects sensitive patterns in post-execution output."""
+    engine = BuiltinPolicyEngine()
+
+    # 1. Private cryptographic key -> DENY
+    priv_key = "-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA0...\n-----END RSA PRIVATE KEY-----"
+    req_priv = PolicyRequest(tool="read_file", output=priv_key, phase="output")
+    dec_priv = engine.evaluate_output(req_priv)
+    assert dec_priv.verdict == Verdict.DENY
+    assert "private cryptographic key" in dec_priv.reason.lower()
+
+    # 2. GitHub Token -> ASK
+    gh_out = "export GITHUB_TOKEN=ghp_1234567890abcdef1234567890abcdef"
+    req_gh = PolicyRequest(tool="run_command", output=gh_out, phase="output")
+    dec_gh = engine.evaluate_output(req_gh)
+    assert dec_gh.verdict == Verdict.ASK
+    assert "github authentication token" in dec_gh.reason.lower()
+
+    # 3. AWS Key -> ASK
+    aws_out = "AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE"
+    req_aws = PolicyRequest(tool="run_command", output=aws_out, phase="output")
+    dec_aws = engine.evaluate_output(req_aws)
+    assert dec_aws.verdict == Verdict.ASK
+    assert "aws access key" in dec_aws.reason.lower()
+
+    # 4. API Key -> ASK
+    api_out = "OPENAI_API_KEY=sk-abcdefghijklmnopqrstuvwxyz123456"
+    req_api = PolicyRequest(tool="read_file", output=api_out, phase="output")
+    dec_api = engine.evaluate_output(req_api)
+    assert dec_api.verdict == Verdict.ASK
+    assert "secret api key" in dec_api.reason.lower()
+
+    # 5. Bearer token -> ASK
+    bearer_out = "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.xyz"
+    req_bearer = PolicyRequest(tool="read_file", output=bearer_out, phase="output")
+    dec_bearer = engine.evaluate_output(req_bearer)
+    assert dec_bearer.verdict == Verdict.ASK
+
+    # 6. Safe output -> ALLOW
+    safe_out = "def hello():\n    return 'Hello, World!'\n"
+    req_safe = PolicyRequest(tool="read_file", output=safe_out, phase="output")
+    dec_safe = engine.evaluate_output(req_safe)
+    assert dec_safe.verdict == Verdict.ALLOW
+
+    # 7. Custom output rules
+    custom_rules = [
+        {"pattern": r"CONFIDENTIAL_PROJECT_\w+", "verdict": "deny", "reason": "Confidential internal project name"},
+    ]
+    custom_engine = BuiltinPolicyEngine(output_rules=custom_rules)
+    dec_custom = custom_engine.evaluate_output(PolicyRequest(tool="read_file", output="Ref: CONFIDENTIAL_PROJECT_AURORA", phase="output"))
+    assert dec_custom.verdict == Verdict.DENY
+    assert "confidential internal project" in dec_custom.reason.lower()
+
+
+def test_security_manager_evaluate_output(tmp_path, capsys):
+    """Verify SecurityManager output filtering, tool gating, duration stamping, and debug logging."""
+    cfg = tmp_path / "security.toml"
+    cfg.write_text("""
+version = "1.0"
+engine = "builtin"
+[output_security]
+enabled = true
+tools = ["read_file", "run_command"]
+""")
+
+    # 1. Matching tool evaluated and timed
+    mgr = SecurityManager(config_path=str(cfg), debug=True)
+    dec = mgr.evaluate_output(tool="read_file", output="AKIAIOSFODNN7EXAMPLE", parameters={"path": "creds.env"})
+    assert dec.verdict == Verdict.ASK
+    assert dec.duration_ms >= 0.0
+    captured = capsys.readouterr()
+    assert "[Security Debug] [TIME] Post-I/O security evaluation for 'read_file' completed in" in captured.out
+
+    # 2. Tool not in scope returns ALLOW with 0ms
+    dec_out_of_scope = mgr.evaluate_output(tool="list_directory", output="AKIAIOSFODNN7EXAMPLE")
+    assert dec_out_of_scope.verdict == Verdict.ALLOW
+    assert dec_out_of_scope.duration_ms == 0.0
+
+    # 3. Output security globally disabled in config
+    cfg_disabled = tmp_path / "security_disabled.toml"
+    cfg_disabled.write_text("""
+version = "1.0"
+engine = "builtin"
+[output_security]
+enabled = false
+""")
+    mgr_out_disabled = SecurityManager(config_path=str(cfg_disabled))
+    dec_off = mgr_out_disabled.evaluate_output(tool="read_file", output="-----BEGIN RSA PRIVATE KEY-----")
+    assert dec_off.verdict == Verdict.ALLOW
+
+
+@pytest.mark.anyio
+async def test_chatybot_app_output_security_deny_blocks_and_hides_content(tmp_path, monkeypatch):
+    """Verify that a DENY verdict drops the output entirely, sets exit code 1, and returns error."""
+    import json
+    from chatybot.chatybot_app import ChatybotApp
+
+    sec_cfg = tmp_path / "sec.toml"
+    sec_cfg.write_text('version = "1.0"\nengine = "builtin"\n')
+
+    app = ChatybotApp(security_config_path=str(sec_cfg))
+    app.initialize()
+
+    raw_output = json.dumps({
+        "status": "success",
+        "tool": "read_file",
+        "result": "-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA0...\n-----END RSA PRIVATE KEY-----",
+    })
+
+    scrubbed = await app._evaluate_output_security(
+        tool_name="read_file",
+        tool_args={"path": "/home/user/id_rsa"},
+        raw_output=raw_output,
+        is_interactive=True,
+    )
+
+    assert "Error: Output Withheld:" in scrubbed
+    assert "private cryptographic key" in scrubbed.lower()
+    # Confirm private key is NOT leaked
+    assert "BEGIN RSA PRIVATE KEY" not in scrubbed
+    assert app.buffer_manager.get_script_var("TOOL_DISPATCH_EXIT_CODE") == "1"
+
+
+@pytest.mark.anyio
+async def test_chatybot_app_output_security_ask_interactive_options(tmp_path, monkeypatch):
+    """Verify interactive ASK behavior: user approval passes raw output intact, user decline drops it."""
+    import json
+    from chatybot.chatybot_app import ChatybotApp
+
+    sec_cfg = tmp_path / "sec.toml"
+    sec_cfg.write_text('version = "1.0"\nengine = "builtin"\n')
+
+    app = ChatybotApp(security_config_path=str(sec_cfg))
+    app.initialize()
+
+    token_secret = "ghp_1234567890abcdef1234567890abcdef"
+    raw_output = json.dumps({
+        "status": "success",
+        "tool": "run_command",
+        "result": f"Exported: {token_secret}",
+    })
+
+    # 1. User accepts ('y') -> untouched raw output passed
+    async def mock_accept(fn, *args, **kwargs):
+        return "y"
+
+    monkeypatch.setattr("asyncio.to_thread", mock_accept)
+    res_allowed = await app._evaluate_output_security(
+        tool_name="run_command",
+        tool_args={"command": "env"},
+        raw_output=raw_output,
+        is_interactive=True,
+    )
+    assert res_allowed == raw_output
+    assert token_secret in res_allowed
+
+    # 2. User declines ('n') -> output dropped, exit code 1
+    async def mock_decline(fn, *args, **kwargs):
+        return "n"
+
+    monkeypatch.setattr("asyncio.to_thread", mock_decline)
+    res_declined = await app._evaluate_output_security(
+        tool_name="run_command",
+        tool_args={"command": "env"},
+        raw_output=raw_output,
+        is_interactive=True,
+    )
+    assert "Error: User declined LLM access to output" in res_declined
+    assert token_secret not in res_declined
+    assert app.buffer_manager.get_script_var("TOOL_DISPATCH_EXIT_CODE") == "1"
+
+    # 3. Auto-approve (assume_yes / -y flag) -> passes raw output intact
+    app_yes = ChatybotApp(auto_approve=True, security_config_path=str(sec_cfg))
+    app_yes.initialize()
+    res_auto = await app_yes._evaluate_output_security(
+        tool_name="run_command",
+        tool_args={"command": "env"},
+        raw_output=raw_output,
+        is_interactive=True,
+    )
+    assert res_auto == raw_output
+    assert token_secret in res_auto
+
+
+
+@pytest.mark.anyio
+async def test_chatybot_app_output_security_non_interactive(tmp_path):
+    """Verify non_interactive_ask behavior when running non-interactively without -y."""
+    import json
+    from chatybot.chatybot_app import ChatybotApp
+
+    # Config with non_interactive_ask = "deny"
+    sec_deny = tmp_path / "sec_deny.toml"
+    sec_deny.write_text('version = "1.0"\nengine = "builtin"\nnon_interactive_ask = "deny"\n')
+    app_deny = ChatybotApp(security_config_path=str(sec_deny))
+    app_deny.initialize()
+
+    token_secret = "ghp_1234567890abcdef1234567890abcdef"
+    raw_output = json.dumps({"result": f"Found key: {token_secret}"})
+
+    res_blocked = await app_deny._evaluate_output_security(
+        tool_name="read_file",
+        tool_args={"path": "api.txt"},
+        raw_output=raw_output,
+        is_interactive=False,
+    )
+    assert "Error: Non-interactive session blocked output review" in res_blocked
+    assert token_secret not in res_blocked
+
+
+    # Config with non_interactive_ask = "allow"
+    sec_allow = tmp_path / "sec_allow.toml"
+    sec_allow.write_text('version = "1.0"\nengine = "builtin"\nnon_interactive_ask = "allow"\n')
+    app_allow = ChatybotApp(security_config_path=str(sec_allow))
+    app_allow.initialize()
+
+    res_passed = await app_allow._evaluate_output_security(
+        tool_name="read_file",
+        tool_args={"path": "api.txt"},
+        raw_output=raw_output,
+        is_interactive=False,
+    )
+    assert res_passed == raw_output
+    assert token_secret in res_passed
+
+
+
+
 
 
 

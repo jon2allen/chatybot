@@ -4,7 +4,18 @@ All notable changes, release milestones, and version history for **Chatybot** ar
 
 Unreleased
 ----------
+- **Post-Execution Output Security (Egress Filtering & Secret Protection)**:
+  - Added post-execution output screening in `SecurityManager` and policy engines (`builtin`, `stdio_binary`) to evaluate tool output (`read_file`, `run_command`, `str_search`, `read_url`) before it enters LLM context.
+  - Implemented clean tri-state access control (ALLOW / ASK / DENY) avoiding fragile token redaction:
+    - **ALLOW**: Untouched raw tool output enters LLM context.
+    - **ASK**: Prompts user interactively to authorize LLM viewing sensitive data. If approved (`y`), raw output is passed completely intact; if declined (`n`), output is withheld. Respects `-y`/auto-approve and `non_interactive_ask` ("deny" blocks, "allow" permits).
+    - **DENY**: Hard blocks disclosure, erases raw output from context, sets `TOOL_DISPATCH_EXIT_CODE = '1'`, and returns a clear policy violation error.
+  - Added built-in regex rules detecting private cryptographic keys (DENY), GitHub tokens (ASK), AWS keys (ASK), API keys (ASK), and bearer tokens/passwords (ASK).
+  - Added `[output_security]` configuration section in `default_security.toml` with `enabled`, `tools`, and customizable `rules`.
+  - Added output security evaluation latency measurement (`last_security_duration_ms`) and debug trace logging.
+  - Added comprehensive unit and integration tests for output security in `test/test_pluggable_security.py`.
 - **Pluggable Security Evaluation Instrumentation**:
+
   - Measured execution duration (`duration_ms`) inside `SecurityManager.evaluate()` using `time.perf_counter()`, stamped onto `PolicyDecision`.
   - Exposed evaluation duration in `--security` debug trace lines (`[Security Debug] [TIME] Security evaluation for '{tool}' completed in {ms} ms ({verdict})`).
   - Recorded security evaluation time in the agentic loop output alongside tool duration: `Tool time: X.X ms (security: Y.Y ms)` (or `<0.1 ms` for sub-0.1ms checks).

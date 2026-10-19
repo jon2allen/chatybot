@@ -123,6 +123,10 @@ class StdioBinaryPolicyEngine(BasePolicyEngine):
                 f"External policy evaluation failed ({type(exc).__name__}: {exc}). Failing safe to {self.fail_safe.value}."
             )
 
+    def evaluate_output(self, request: PolicyRequest) -> PolicyDecision:
+        """Evaluate a tool invocation's output using the external binary."""
+        return self.evaluate(request)
+
     def get_banner(self) -> str:
         """Query the external binary with --banner to retrieve its identification banner.
 

@@ -3733,6 +3733,118 @@ class ChatybotApp:
             return f"{raw_error.strip()}\n\n{guidance}"
         return guidance
 
+    async def _evaluate_output_security(
+        self,
+        tool_name: str,
+        tool_args: dict[str, Any],
+        raw_output: str,
+        is_interactive: bool,
+    ) -> str:
+        """Scan tool output after I/O execution against the active security engine."""
+        sec_mgr = getattr(self, "security_manager", None)
+        if sec_mgr is None or not getattr(sec_mgr, "output_security_enabled", True):
+            return raw_output
+        if tool_name.lower() not in getattr(sec_mgr, "output_security_tools", {"read_file", "run_command", "str_search", "read_url"}):
+            return raw_output
+        if not raw_output or raw_output.startswith("Error:"):
+            return raw_output
+
+        # Extract textual content from tool output JSON if possible
+        import json
+        content_to_check = raw_output
+        try:
+            parsed = json.loads(raw_output)
+            if isinstance(parsed, dict) and "result" in parsed:
+                inner = parsed["result"]
+                if isinstance(inner, str):
+                    content_to_check = inner
+                elif isinstance(inner, dict):
+                    parts = []
+                    if "stdout" in inner and inner["stdout"]:
+                        parts.append(str(inner["stdout"]))
+                    if "content" in inner and inner["content"]:
+                        parts.append(str(inner["content"]))
+                    if parts:
+                        content_to_check = "\n".join(parts)
+                    else:
+                        content_to_check = json.dumps(inner, ensure_ascii=False)
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+        post_decision = sec_mgr.evaluate_output(
+            tool=tool_name,
+            parameters=tool_args if isinstance(tool_args, dict) else {},
+            output=content_to_check,
+            context={
+                "session_id": getattr(self, "session_id", ""),
+                "interactive": is_interactive,
+            },
+        )
+        post_ms = getattr(post_decision, "duration_ms", 0.0)
+        self.last_security_duration_ms = getattr(self, "last_security_duration_ms", 0.0) + post_ms
+        if hasattr(self, "buffer_manager") and self.buffer_manager is not None:
+            self.buffer_manager.set_script_var('SECURITY_EVAL_TIME_MS', f"{self.last_security_duration_ms:.2f}")
+
+        from .security.models import Verdict
+
+        if post_decision.verdict == Verdict.DENY:
+            deny_header = self.i18n.get_ui_string("security_output_blocked_header", "[Security Output Block]")
+            deny_msg = self.i18n.get_ui_string("security_output_blocked_msg", f"Output Withheld: {post_decision.reason}", reason=post_decision.reason)
+            if self.security_debug:
+                print(f"[Security Debug] [OUTPUT DENY] Suppressed output of tool '{tool_name}': {post_decision.reason}")
+            print(f"\n{deny_header} {deny_msg}")
+            if hasattr(self, "logging_manager") and getattr(self.logging_manager, "logging_active", False):
+                self.logging_manager.log_message(f"[Security Audit] BLOCKED OUTPUT of tool '{tool_name}'. Reason: {post_decision.reason}")
+            self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
+            self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', deny_msg)
+            self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
+            return f"Error: {deny_msg}"
+
+        elif post_decision.verdict == Verdict.ASK:
+            if getattr(self, "auto_approve", False):
+                if self.security_debug:
+                    print(f"[Security Debug] [OUTPUT ACCEPT] Auto-approved output of '{tool_name}' via --yes flag.")
+                return raw_output
+
+            if not is_interactive:
+                non_interactive_policy = getattr(sec_mgr, "non_interactive_ask", "deny").lower()
+                if non_interactive_policy == "allow":
+                    if self.security_debug:
+                        print(f"[Security Debug] [OUTPUT ACCEPT] Auto-approved output of '{tool_name}' via non_interactive_ask policy.")
+                    return raw_output
+                else:
+                    block_msg = f"Non-interactive session blocked output review for '{tool_name}': {post_decision.reason}"
+                    print(f"\n[Security Block] {block_msg}")
+                    self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
+                    self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', block_msg)
+                    self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
+                    return f"Error: {block_msg}"
+
+            prompt_title = post_decision.prompt_details.title if post_decision.prompt_details else "Sensitive Output Review"
+            prompt_msg = post_decision.prompt_details.message if post_decision.prompt_details else f"Output from '{tool_name}' contains potential sensitive material: {post_decision.reason}"
+            print(f"\n{'='*60}")
+            print(f"[{prompt_title}] {prompt_msg}")
+            print(f"Reason: {post_decision.reason}")
+            print(f"{'='*60}")
+            try:
+                answer = (await asyncio.to_thread(input, "Authorize LLM to view this output? [y/N]: ")).strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                answer = "n"
+
+            if answer in ("y", "yes"):
+                if self.security_debug:
+                    print(f"[Security Debug] [OUTPUT ACCEPT] User approved output of '{tool_name}'.")
+                return raw_output
+            else:
+                cancel_msg = f"User declined LLM access to output of tool '{tool_name}'."
+                print(f"[Security Block] {cancel_msg}")
+                self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
+                self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', cancel_msg)
+                self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
+                return f"Error: {cancel_msg}"
+
+        return raw_output
+
     async def dispatch_tool(self, invocation_json: str | None = None) -> str:
         """
         Dispatch a tool invocation to the dispatcher.
@@ -3768,20 +3880,37 @@ class ChatybotApp:
         
         if tool_call and isinstance(tool_call, dict):
             tool_name = tool_call.get("tool", "")
-            tool_args = unwrap_tool_args(tool_call.get("arguments", {}))
+            raw_args = (
+                tool_call.get("arguments")
+                if "arguments" in tool_call
+                else tool_call.get("parameters")
+                if "parameters" in tool_call
+                else tool_call.get("args", {})
+            )
+            tool_args = unwrap_tool_args(raw_args or {})
             tool_call["arguments"] = tool_args
             invocation_json = json.dumps(tool_call)
+
+            is_interactive = (
+                sys.stdin.isatty()
+                and not getattr(self, "script_context", False)
+                and not getattr(self, "single_run_mode", False)
+            )
 
             # --- Security Policy Interception ---
             sec_mgr = getattr(self, "security_manager", None)
             self.last_security_duration_ms = 0.0
+
+            def _record_sec_outcome(outcome: str) -> None:
+                """Log what happened to an ASK decision (joined to the decision by request_id)."""
+                record = getattr(sec_mgr, "record_outcome", None)
+                if record is not None:
+                    try:
+                        record(sec_decision, outcome, tool=tool_name)
+                    except Exception:
+                        pass
             if sec_mgr is not None and tool_name:
                 from .security.models import Verdict
-                is_interactive = (
-                    sys.stdin.isatty()
-                    and not getattr(self, "script_context", False)
-                    and not getattr(self, "single_run_mode", False)
-                )
                 sec_decision = sec_mgr.evaluate(
                     tool=tool_name,
                     parameters=tool_args if isinstance(tool_args, dict) else {},
@@ -3807,6 +3936,7 @@ class ChatybotApp:
                     return f"Error: {deny_msg}"
                 elif sec_decision.verdict == Verdict.ASK:
                     if getattr(self, "auto_approve", False):
+                        _record_sec_outcome("auto_approved_yes_flag")
                         if self.security_debug:
                             print(f"[Security Debug] [AUTO-APPROVE] Tool '{tool_name}' auto-approved via --yes flag.")
                         if hasattr(self, "logging_manager") and getattr(self.logging_manager, "logging_active", False):
@@ -3814,11 +3944,13 @@ class ChatybotApp:
                     elif not is_interactive:
                         non_interactive_policy = getattr(sec_mgr, "non_interactive_ask", "deny").lower()
                         if non_interactive_policy == "allow":
+                            _record_sec_outcome("auto_approved_non_interactive")
                             if self.security_debug:
                                 print(f"[Security Debug] [AUTO-APPROVE] Tool '{tool_name}' auto-approved via non_interactive_ask policy.")
                             if hasattr(self, "logging_manager") and getattr(self.logging_manager, "logging_active", False):
                                 self.logging_manager.log_message(f"[Security Audit] AUTO-APPROVED tool '{tool_name}' via non_interactive_ask policy. Reason: {sec_decision.reason}")
                         else:
+                            _record_sec_outcome("blocked_non_interactive")
                             deny_header = self.i18n.get_ui_string("security_blocked_header", "[Security Block]")
                             cancel_msg = self.i18n.get_ui_string(
                                 "security_blocked_non_interactive",
@@ -3852,6 +3984,7 @@ class ChatybotApp:
                         except (EOFError, KeyboardInterrupt):
                             ans = "n"
                         if not self.i18n.is_affirmative(ans):
+                            _record_sec_outcome("declined")
                             cancel_msg = self.i18n.get_ui_string(
                                 "security_declined_msg",
                                 f"Security Authorization Denied: User declined execution of '{tool_name}'.",
@@ -3867,6 +4000,7 @@ class ChatybotApp:
                             self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
                             return f"Error: {cancel_msg}"
                         else:
+                            _record_sec_outcome("approved")
                             if self.security_debug:
                                 print(f"[Security Debug] [ACCEPT] User approved execution of tool '{tool_name}'.")
                             if hasattr(self, "logging_manager") and getattr(self.logging_manager, "logging_active", False):
@@ -3968,7 +4102,7 @@ class ChatybotApp:
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', '')
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '0')
                     print(f"Tool dispatched successfully (in-process {tool_name})")
-                    return result_str
+                    return await self._evaluate_output_security(tool_name, tool_args, result_str, is_interactive)
                 except Exception as e:
                     err_msg = f"Error: {tool_name} execution failed: {e}"
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
@@ -4205,7 +4339,7 @@ class ChatybotApp:
                 except (json.JSONDecodeError, TypeError):
                     pass
 
-                return result.stdout
+                return await self._evaluate_output_security(tool_name, tool_args, result.stdout, is_interactive)
             
         except (json.JSONDecodeError, TypeError) as e:
             print(f"Error dispatching tool: {e}")
