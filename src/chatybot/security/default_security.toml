@@ -157,6 +157,9 @@ tools = ["read_file", "run_command", "str_search", "read_url"]
 path = "~/.config/chatybot/racf-guard"
 timeout_seconds = 2.0
 args = ["--policy", "~/.config/chatybot/security.racf"]
+# Set supports_output = true if your external binary inspects post-I/O tool output (phase = "output")
+# supports_output = false
+
 
 
 # ==============================================================================
