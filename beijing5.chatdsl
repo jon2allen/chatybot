@@ -18,7 +18,6 @@ set comparison = "comparison_report.txt"
 # Disable session history to prevent cross-model context accumulation
 /session history off
 
-/clearfile
 /multiline
 Please create a comprehensive set of 10 questions about ${city}  street food that would test an AI's knowledge depth and accuracy. Include questions about:
 
@@ -39,7 +38,6 @@ Format as numbered questions, one per line.
 /save ${output_dir}/${question_file}
 
 # Set up output directory (simulated by using different filenames)
-/clearfile
 
 # Test Model 1 (mistral_1)
 /model ${model1}
@@ -54,7 +52,6 @@ Format as numbered questions, one per line.
 /filebank2 ${output_dir}/${results2}
 
 # Generate comparison report
-/clearfile
 /multiline
 Analyze the following two sets of responses about ${city} street food from different AI models.
 Compare them for:
@@ -88,7 +85,6 @@ Also give an overall assessment of which model demonstrates better knowledge of 
 /save ${output_dir}/${comparison}
 /filebank3 ${output_dir}/${comparison}
 
-/clearfile
 /multiline
 Create a scoring table (1-10 scale) for each model across these categories:
 1. Historical accuracy
@@ -101,15 +97,25 @@ Based on the comparison report in {filebank3}, \n fill in the scores and calcula
 ;;
 /multiline
 /save ${output_dir}/scores_${model1}_vs_${model2}.txt
-
+/filebank4 ${output_dir}/scores_${model1}_vs_${model2}.txt
 # Final summary
-/clearfle
+# /clearflle
+/trace rawpayload on
 /multiline
 Based on all the previous analysis, provide a final verdict:
 Which model (${model1} or ${model2}) has superior knowledge of ${city} street food?
 What are the key strengths of each model's responses?
-What recommendations would you make for someone seeking information about ${city} street food?
+What recommendations would you make for someone seeking information about ${city} street food? 
+
+comparison.txt
+${filebank3}}
+
+mistral model results
+${filebank1}}
+
+nvidia model results:
+${filebank2}}
+
 ;;
-/multiline
 /save ${output_dir}/final_verdict.txt
 
