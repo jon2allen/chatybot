@@ -260,6 +260,10 @@ class ChatybotApp:
         self._definition_grammar = None
         self._invocation_grammar = None
 
+        # Per-tool-loop security refusal memory
+        self._loop_security_refusals: dict[str, tuple[str, str]] | None = None
+        self._loop_output_refusals: dict[str, tuple[str, str]] | None = None
+
     @property
     def tool_append_mode(self) -> str:
         return self._tool_append_mode
@@ -3750,6 +3754,12 @@ class ChatybotApp:
             return f"Security refusal (final): {clean_reason} {guidance}"
         return f"Security refusal (final): {clean_reason}. {guidance}"
 
+    def _build_security_refusal_key(self, tool_name: str, tool_args: Any) -> str:
+        """Build normalised key for loop security refusal caching."""
+        norm_args = unwrap_tool_args(tool_args if isinstance(tool_args, dict) else {})
+        args_json = json.dumps(norm_args, sort_keys=True, default=str)
+        return f"{tool_name}:{args_json}"
+
     async def _evaluate_output_security(
         self,
         tool_name: str,
@@ -3767,6 +3777,20 @@ class ChatybotApp:
             return raw_output
         if not raw_output:
             return raw_output
+
+        # Check per-loop output refusal cache
+        output_cache_key = None
+        if getattr(self, "in_tool_loop", False) and self._loop_output_refusals is not None:
+            output_cache_key = self._build_security_refusal_key(tool_name, tool_args)
+            if output_cache_key in self._loop_output_refusals:
+                cached_res, cached_err = self._loop_output_refusals[output_cache_key]
+                if self.security_debug:
+                    print(f"[Security Debug] [LOOP CACHE HIT] Returning stored output refusal for '{tool_name}' without re-evaluating.")
+                if hasattr(self, "buffer_manager") and self.buffer_manager is not None:
+                    self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
+                    self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', cached_err)
+                    self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
+                return cached_res
 
         # Extract textual content from tool output JSON if possible
         content_to_check = raw_output
@@ -3824,7 +3848,10 @@ class ChatybotApp:
             self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
             self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', deny_msg)
             self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
-            return self._format_security_refusal(deny_msg)
+            refusal_str = self._format_security_refusal(deny_msg)
+            if output_cache_key is not None and self._loop_output_refusals is not None:
+                self._loop_output_refusals[output_cache_key] = (refusal_str, deny_msg)
+            return refusal_str
 
         elif post_decision.verdict == Verdict.ASK:
             def _record_post_outcome(outcome: str) -> None:
@@ -3864,7 +3891,10 @@ class ChatybotApp:
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', block_msg)
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
-                    return self._format_security_refusal(block_msg)
+                    refusal_str = self._format_security_refusal(block_msg)
+                    if output_cache_key is not None and self._loop_output_refusals is not None:
+                        self._loop_output_refusals[output_cache_key] = (refusal_str, block_msg)
+                    return refusal_str
 
             prompt_title = post_decision.prompt_details.title if post_decision.prompt_details else "Sensitive Output Review"
             prompt_msg = post_decision.prompt_details.message if post_decision.prompt_details else f"Output from '{tool_name}' contains potential sensitive material: {post_decision.reason}"
@@ -3897,7 +3927,10 @@ class ChatybotApp:
                 self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
                 self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', cancel_msg)
                 self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
-                return self._format_security_refusal(cancel_msg)
+                refusal_str = self._format_security_refusal(cancel_msg)
+                if output_cache_key is not None and self._loop_output_refusals is not None:
+                    self._loop_output_refusals[output_cache_key] = (refusal_str, cancel_msg)
+                return refusal_str
 
         return raw_output
 
@@ -3969,6 +4002,20 @@ class ChatybotApp:
                         record(sec_decision, outcome, tool=tool_name)
                     except Exception:
                         pass
+            # Check per-loop pre-execution refusal cache
+            sec_cache_key = None
+            if getattr(self, "in_tool_loop", False) and self._loop_security_refusals is not None and tool_name:
+                sec_cache_key = self._build_security_refusal_key(tool_name, tool_args)
+                if sec_cache_key in self._loop_security_refusals:
+                    cached_res, cached_err = self._loop_security_refusals[sec_cache_key]
+                    if self.security_debug:
+                        print(f"[Security Debug] [LOOP CACHE HIT] Returning stored pre-execution refusal for '{tool_name}' without re-evaluating.")
+                    if hasattr(self, "buffer_manager") and self.buffer_manager is not None:
+                        self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
+                        self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', cached_err)
+                        self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
+                    return cached_res
+
             if sec_mgr is not None and tool_name:
                 from .security.models import Verdict
                 sec_decision = sec_mgr.evaluate(
@@ -3993,7 +4040,10 @@ class ChatybotApp:
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', deny_msg)
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
-                    return self._format_security_refusal(deny_msg)
+                    refusal_str = self._format_security_refusal(deny_msg)
+                    if sec_cache_key is not None and self._loop_security_refusals is not None:
+                        self._loop_security_refusals[sec_cache_key] = (refusal_str, deny_msg)
+                    return refusal_str
                 elif sec_decision.verdict == Verdict.ASK:
                     if getattr(self, "auto_approve", False):
                         _record_sec_outcome("auto_approved_yes_flag")
@@ -4026,7 +4076,10 @@ class ChatybotApp:
                             self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
                             self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', cancel_msg)
                             self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
-                            return self._format_security_refusal(cancel_msg)
+                            refusal_str = self._format_security_refusal(cancel_msg)
+                            if sec_cache_key is not None and self._loop_security_refusals is not None:
+                                self._loop_security_refusals[sec_cache_key] = (refusal_str, cancel_msg)
+                            return refusal_str
                     else:
                         risk = sec_decision.prompt_details.risk_level if sec_decision.prompt_details else "medium"
                         msg = sec_decision.prompt_details.message if sec_decision.prompt_details else f"Authorize '{tool_name}'?"
@@ -4058,7 +4111,10 @@ class ChatybotApp:
                             self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
                             self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', cancel_msg)
                             self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
-                            return self._format_security_refusal(cancel_msg)
+                            refusal_str = self._format_security_refusal(cancel_msg)
+                            if sec_cache_key is not None and self._loop_security_refusals is not None:
+                                self._loop_security_refusals[sec_cache_key] = (refusal_str, cancel_msg)
+                            return refusal_str
                         else:
                             _record_sec_outcome("approved")
                             if self.security_debug:
@@ -5693,6 +5749,8 @@ class ChatybotApp:
         # Enable tool loop state
         self.in_tool_loop = True
         self._turn_skills_loaded = []  # Track skills loaded in this tool loop
+        self._loop_security_refusals = {}  # Cache pre-execution security refusals in this loop
+        self._loop_output_refusals = {}    # Cache output security refusals in this loop
 
         # Preserve user-set rate limits across loop initializations
         if self._cached_rate_limit_delay is not None:
@@ -5908,6 +5966,8 @@ class ChatybotApp:
         # Clean up loop state
         self.in_tool_loop = False
         self._turn_skills_loaded = []
+        self._loop_security_refusals = None
+        self._loop_output_refusals = None
 
         # If final_natural_language_response is not set, fallback
         if not final_natural_language_response:
@@ -6929,6 +6989,8 @@ class ChatybotApp:
                 if hasattr(self, 'in_tool_loop') and self.in_tool_loop:
                     self.in_tool_loop = False
                     self._turn_skills_loaded = []
+                    self._loop_security_refusals = None
+                    self._loop_output_refusals = None
                 
                 if self.control_c_count >= 2:
                     # Second Ctrl+C - exit program

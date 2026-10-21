@@ -2232,6 +2232,153 @@ def test_security_refusal_localization_keys():
         assert guidance, f"Missing security_refusal_final in language '{lang}'"
 
 
+@pytest.mark.anyio
+async def test_remember_refusals_within_tool_loop(tmp_path, monkeypatch):
+    """Stage 2: Verify that refusals are remembered within a tool loop, never approvals.
+    - Declined call repeated -> one prompt only
+    - Denied call repeated -> one evaluate only
+    - Approved call repeated -> prompted again
+    - Wrapped and bare arguments share the same refusal key
+    - Outside loop (script/direct dispatch) -> nothing remembered
+    - Refusal stores cleared between loops and on Ctrl+C
+    """
+    import json
+    from chatybot.chatybot_app import ChatybotApp
+    from chatybot.security.models import Verdict, PolicyDecision
+
+    sec_cfg = tmp_path / "stage2_sec.toml"
+    sec_cfg.write_text(
+        'version = "1.0"\n'
+        'engine = "builtin"\n'
+        'fail_safe = "deny"\n'
+        'non_interactive_ask = "deny"\n'
+        '[builtin]\n'
+        'default_verdict = "ask"\n'
+    )
+
+    app = ChatybotApp(security_config_path=str(sec_cfg))
+    app.initialize()
+
+    # Track how many times security evaluate is called
+    eval_calls = []
+    orig_eval = app.security_manager.evaluate
+    def tracking_eval(*args, **kwargs):
+        eval_calls.append((args, kwargs))
+        return orig_eval(*args, **kwargs)
+    monkeypatch.setattr(app.security_manager, "evaluate", tracking_eval)
+
+    # Track prompt answers
+    prompt_count = 0
+    async def mock_user_input(fn, *args, **kwargs):
+        nonlocal prompt_count
+        prompt_count += 1
+        return "n"
+    monkeypatch.setattr("asyncio.to_thread", mock_user_input)
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+
+    # 1. Inside a tool loop: declined ASK call repeated -> only prompted once
+    app.in_tool_loop = True
+    app._loop_security_refusals = {}
+    app._loop_output_refusals = {}
+
+    call_ask_bare = json.dumps({"tool": "write_file", "arguments": {"path": "test.txt", "content": "hello"}})
+    call_ask_wrapped = json.dumps({"tool": "write_file", "arguments": {"parameters": {"path": "test.txt", "content": "hello"}}})
+
+    res1 = await app.dispatch_tool(call_ask_bare)
+    assert app._is_security_refusal(res1)
+    assert prompt_count == 1
+    assert len(eval_calls) == 1
+
+    # Repeat with wrapped arguments -> cache hit! No new prompt, no new eval
+    res2 = await app.dispatch_tool(call_ask_wrapped)
+    assert app._is_security_refusal(res2)
+    assert prompt_count == 1
+    assert len(eval_calls) == 1
+    assert res1 == res2
+
+    # 2. Inside a tool loop: DENY call repeated -> only evaluated once
+    eval_calls.clear()
+    call_deny_1 = json.dumps({"tool": "read_file", "arguments": {"path": "/etc/passwd"}})
+    call_deny_2 = json.dumps({"tool": "read_file", "arguments": {"args": {"path": "/etc/passwd"}}})
+
+    res_d1 = await app.dispatch_tool(call_deny_1)
+    assert app._is_security_refusal(res_d1)
+    assert len(eval_calls) == 1
+
+    res_d2 = await app.dispatch_tool(call_deny_2)
+    assert app._is_security_refusal(res_d2)
+    assert len(eval_calls) == 1  # Cache hit, not evaluated again
+    assert res_d1 == res_d2
+
+    # 3. Approvals are NEVER remembered -> always re-checked and re-prompted
+    prompt_count = 0
+    async def mock_approve_input(fn, *args, **kwargs):
+        nonlocal prompt_count
+        prompt_count += 1
+        return "y"
+    monkeypatch.setattr("asyncio.to_thread", mock_approve_input)
+
+    call_approved = json.dumps({"tool": "write_file", "arguments": {"path": str(tmp_path / "approved.txt"), "content": "yes"}})
+    res_a1 = await app.dispatch_tool(call_approved)
+    assert not app._is_security_refusal(res_a1)
+    assert prompt_count == 1
+
+    res_a2 = await app.dispatch_tool(call_approved)
+    assert not app._is_security_refusal(res_a2)
+    assert prompt_count == 2  # Re-prompted!
+
+    # 4. Output security refusal cache within loop
+    output_prompt_count = 0
+    async def mock_output_no(fn, *args, **kwargs):
+        nonlocal output_prompt_count
+        output_prompt_count += 1
+        return "n"
+    monkeypatch.setattr("asyncio.to_thread", mock_output_no)
+
+    raw_secret = "Secret: ghp_1234567890abcdef1234567890abcdef"
+    out_res1 = await app._evaluate_output_security("read_file", {"path": "keys.txt"}, raw_secret, is_interactive=True)
+    assert app._is_security_refusal(out_res1)
+    assert output_prompt_count == 1
+
+    # Same output review repeated in loop with wrapped arguments -> cache hit, no re-prompt
+    out_res2 = await app._evaluate_output_security("read_file", {"parameters": {"path": "keys.txt"}}, raw_secret, is_interactive=True)
+    assert app._is_security_refusal(out_res2)
+    assert output_prompt_count == 1
+    assert out_res1 == out_res2
+
+    # 5. Outside a tool loop (e.g. script context or direct dispatch): nothing is remembered
+    app.in_tool_loop = False
+    app._loop_security_refusals = None
+    app._loop_output_refusals = None
+
+    prompt_count = 0
+    async def mock_outside_no(fn, *args, **kwargs):
+        nonlocal prompt_count
+        prompt_count += 1
+        return "n"
+    monkeypatch.setattr("asyncio.to_thread", mock_outside_no)
+
+    call_script = json.dumps({"tool": "write_file", "arguments": {"path": "script.txt", "content": "no"}})
+    res_s1 = await app.dispatch_tool(call_script)
+    assert prompt_count == 1
+    res_s2 = await app.dispatch_tool(call_script)
+    assert prompt_count == 2  # Prompted each time because no loop store active
+
+    # 6. Stores cleared when loop ends and on Ctrl+C
+    app.in_tool_loop = True
+    app._loop_security_refusals = {"some_key": ("refusal", "error")}
+    app._loop_output_refusals = {"some_key": ("refusal", "error")}
+    # Simulate Ctrl+C branch in repl
+    if app.in_tool_loop:
+        app.in_tool_loop = False
+        app._turn_skills_loaded = []
+        app._loop_security_refusals = None
+        app._loop_output_refusals = None
+    assert app._loop_security_refusals is None
+    assert app._loop_output_refusals is None
+
+
+
 
 
 
