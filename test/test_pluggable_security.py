@@ -621,13 +621,15 @@ async def test_dispatch_tool_async_security_confirmation_and_audit(monkeypatch, 
 
     monkeypatch.setattr("asyncio.to_thread", mock_input)
     res_deny = await app.dispatch_tool(json.dumps({"tool": "write_file", "arguments": {"path": "test.txt", "content": "hi"}}))
-    assert "Error: Security Authorization Denied" in res_deny
+    assert res_deny.startswith("Security refusal (final):")
+    assert "Security Authorization Denied" in res_deny
     assert any("[Security Audit] USER DECLINED tool 'write_file'" in m for m in logged_messages)
 
     # 2. Blocked Tier 0 tool creates BLOCKED audit log
     logged_messages.clear()
     res_tier0 = await app.dispatch_tool(json.dumps({"tool": "read_file", "arguments": {"path": "/etc/passwd"}}))
-    assert "Error: Security Policy Blocked" in res_tier0
+    assert res_tier0.startswith("Security refusal (final):")
+    assert "Security Policy Blocked" in res_tier0
     assert any("[Security Audit] BLOCKED tool 'read_file'" in m for m in logged_messages)
 
 
@@ -679,13 +681,15 @@ async def test_auto_approve_yes_flag(monkeypatch, tmp_path):
     # 2. Tier 0 DENY tool (read_file /etc/passwd) is STILL BLOCKED even with auto_approve=True!
     logged_messages.clear()
     res_deny = await app.dispatch_tool(json.dumps({"tool": "read_file", "arguments": {"path": "/etc/passwd"}}))
-    assert "Error: Security Policy Blocked" in res_deny
+    assert res_deny.startswith("Security refusal (final):")
+    assert "Security Policy Blocked" in res_deny
     assert any("[Security Audit] BLOCKED tool 'read_file'" in m for m in logged_messages)
 
     # 3. Spawning chatybot sub-process via run_command is strictly DENIED even with auto_approve=True!
     logged_messages.clear()
     res_cmd = await app.dispatch_tool(json.dumps({"tool": "run_command", "arguments": {"command": "chatybot --script escape.chatdsl -y"}}))
-    assert "Error: Security Policy Blocked" in res_cmd
+    assert res_cmd.startswith("Security refusal (final):")
+    assert "Security Policy Blocked" in res_cmd
     assert any("[Security Audit] BLOCKED tool 'run_command'" in m for m in logged_messages)
 
 
@@ -820,7 +824,8 @@ async def test_security_manager_init_failure_fails_closed(monkeypatch):
 
     # Any tool call must be strictly BLOCKED
     res = await app.dispatch_tool(json.dumps({"tool": "read_file", "arguments": {"path": "test.txt"}}))
-    assert "Error: Security Policy Blocked" in res
+    assert res.startswith("Security refusal (final):")
+    assert "Security Policy Blocked" in res
     assert "fail-closed" in res
 
 
@@ -1689,7 +1694,8 @@ async def test_chatybot_app_output_security_deny_blocks_and_hides_content(tmp_pa
         is_interactive=True,
     )
 
-    assert "Error: Output Withheld:" in scrubbed
+    assert scrubbed.startswith("Security refusal (final):")
+    assert "Output Withheld:" in scrubbed
     assert "private cryptographic key" in scrubbed.lower()
     # Confirm private key is NOT leaked
     assert "BEGIN RSA PRIVATE KEY" not in scrubbed
@@ -1740,7 +1746,8 @@ async def test_chatybot_app_output_security_ask_interactive_options(tmp_path, mo
         raw_output=raw_output,
         is_interactive=True,
     )
-    assert "Error: User declined LLM access to output" in res_declined
+    assert res_declined.startswith("Security refusal (final):")
+    assert "User declined LLM access to output" in res_declined
     assert token_secret not in res_declined
     assert app.buffer_manager.get_script_var("TOOL_DISPATCH_EXIT_CODE") == "1"
 
@@ -1779,7 +1786,8 @@ async def test_chatybot_app_output_security_non_interactive(tmp_path):
         raw_output=raw_output,
         is_interactive=False,
     )
-    assert "Error: Non-interactive session blocked output review" in res_blocked
+    assert res_blocked.startswith("Security refusal (final):")
+    assert "Non-interactive session blocked output review" in res_blocked
     assert token_secret not in res_blocked
 
 
@@ -1819,7 +1827,8 @@ async def test_chatybot_app_output_security_screens_errors_and_tracebacks(tmp_pa
         raw_output=error_raw,
         is_interactive=True,
     )
-    assert "Error: Output Withheld:" in res_err
+    assert res_err.startswith("Security refusal (final):")
+    assert "Output Withheld:" in res_err
     assert "BEGIN RSA PRIVATE KEY" not in res_err
 
     # 2. JSON output with stderr traceback containing private key -> blocked
@@ -1837,7 +1846,8 @@ async def test_chatybot_app_output_security_screens_errors_and_tracebacks(tmp_pa
         raw_output=json_stderr,
         is_interactive=True,
     )
-    assert "Error: Output Withheld:" in res_stderr
+    assert res_stderr.startswith("Security refusal (final):")
+    assert "Output Withheld:" in res_stderr
     assert "BEGIN EC PRIVATE KEY" not in res_stderr
 
 
@@ -1890,7 +1900,8 @@ tools = ["read_file", "run_command", "search_skills"]
             "tool": "search_skills",
             "arguments": {"query": "credentials"},
         }))
-        assert "Error: Output Withheld:" in res
+        assert res.startswith("Security refusal (final):")
+        assert "Output Withheld:" in res
         assert "BEGIN RSA PRIVATE KEY" not in res
     finally:
         skill_utils.search_skills = orig_search
@@ -1956,7 +1967,8 @@ async def test_dispatch_tool_nonzero_exit_and_exception_screened(tmp_path, monke
         "arguments": {"path": "invalid_file.txt"},
     }))
 
-    assert "Error: Output Withheld:" in res
+    assert res.startswith("Security refusal (final):")
+    assert "Output Withheld:" in res
     assert "BEGIN RSA PRIVATE KEY" not in res
 
 
@@ -2060,7 +2072,8 @@ async def test_output_security_ask_resolution_and_outcomes(tmp_path, monkeypatch
     monkeypatch.setattr(asyncio, "to_thread", mock_denial)
 
     res_denied = await app._evaluate_output_security("read_file", {"path": "keys.txt"}, output_with_secret, is_interactive=True)
-    assert "Error: User declined LLM access" in res_denied
+    assert res_denied.startswith("Security refusal (final):")
+    assert "User declined LLM access" in res_denied
     assert ("declined", "read_file") in recorded_outcomes
     assert any("USER DECLINED OUTPUT" in msg for msg in logged_messages)
 
@@ -2080,7 +2093,8 @@ async def test_output_security_ask_resolution_and_outcomes(tmp_path, monkeypatch
     # 5. Non-interactive with non_interactive_ask = "deny"
     app.security_manager.non_interactive_ask = "deny"
     res_non_int_deny = await app._evaluate_output_security("read_file", {"path": "keys.txt"}, output_with_secret, is_interactive=False)
-    assert "Error: Non-interactive session blocked output review" in res_non_int_deny
+    assert res_non_int_deny.startswith("Security refusal (final):")
+    assert "Non-interactive session blocked output review" in res_non_int_deny
     assert ("blocked_non_interactive", "read_file") in recorded_outcomes
 
 
@@ -2120,6 +2134,102 @@ def test_secret_scanner_literal_prefiltering():
     assert custom_scanner.scan("Normal text without ACME") is None
     assert custom_scanner.scan("Code: ACME-12345678") == (Verdict.DENY, "Secret scanner: Internal ACME identifier")
     assert custom_scanner.scan("See CONFIDENTIAL-CODE-999") == (Verdict.ASK, "Secret scanner: Confidential code")
+
+
+@pytest.mark.anyio
+async def test_security_refusals_are_final(tmp_path, monkeypatch):
+    """Stage 1: Verify all 4 refusal paths return final security refusal with guidance.
+    Also verify TOOL_DISPATCH_EXIT_CODE=1 and TOOL_DISPATCH_ERROR are preserved."""
+    import json
+    from chatybot.chatybot_app import ChatybotApp
+
+    # Config with non_interactive_ask = "deny"
+    sec_cfg = tmp_path / "stage1_sec.toml"
+    sec_cfg.write_text(
+        'version = "1.0"\n'
+        'engine = "builtin"\n'
+        'fail_safe = "deny"\n'
+        'non_interactive_ask = "deny"\n'
+        '[builtin]\n'
+        'default_verdict = "ask"\n'
+    )
+
+    app = ChatybotApp(security_config_path=str(sec_cfg))
+    app.initialize()
+
+    guidance_en = "Do not retry this action or an equivalent one. Tell the user what you were trying to do and ask how to proceed."
+
+    # 1. Pre-execution DENY (Tier 0 protected path /etc/passwd)
+    res_deny = await app.dispatch_tool(json.dumps({"tool": "read_file", "arguments": {"path": "/etc/passwd"}}))
+    assert app._is_security_refusal(res_deny)
+    assert res_deny.startswith("Security refusal (final):")
+    assert guidance_en in res_deny
+    assert app.buffer_manager.get_script_var("TOOL_DISPATCH_EXIT_CODE") == "1"
+    assert "Security Policy Blocked:" in app.buffer_manager.get_script_var("TOOL_DISPATCH_ERROR")
+
+    # 2. Pre-execution Non-interactive block (non_interactive_ask = "deny")
+    app.script_context = True  # force non-interactive
+    res_non_int = await app.dispatch_tool(json.dumps({"tool": "write_file", "arguments": {"path": "test.txt", "content": "hi"}}))
+    assert app._is_security_refusal(res_non_int)
+    assert res_non_int.startswith("Security refusal (final):")
+    assert "rejected by non_interactive_ask policy" in res_non_int
+    assert guidance_en in res_non_int
+    assert app.buffer_manager.get_script_var("TOOL_DISPATCH_EXIT_CODE") == "1"
+    assert "rejected by non_interactive_ask policy" in app.buffer_manager.get_script_var("TOOL_DISPATCH_ERROR")
+    app.script_context = False
+
+    # 3. Pre-execution User-declined ASK
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+    async def mock_no(fn, *args, **kwargs):
+        return "n"
+    monkeypatch.setattr("asyncio.to_thread", mock_no)
+
+    res_user_declined = await app.dispatch_tool(json.dumps({"tool": "write_file", "arguments": {"path": "test.txt", "content": "hi"}}))
+    assert app._is_security_refusal(res_user_declined)
+    assert res_user_declined.startswith("Security refusal (final):")
+    assert "Security Authorization Denied: User declined execution" in res_user_declined
+    assert guidance_en in res_user_declined
+    assert app.buffer_manager.get_script_var("TOOL_DISPATCH_EXIT_CODE") == "1"
+    assert "User declined execution" in app.buffer_manager.get_script_var("TOOL_DISPATCH_ERROR")
+
+    # 4. Post-execution Output security decline
+    raw_secret_output = "Secret: ghp_1234567890abcdef1234567890abcdef"
+    res_output_declined = await app._evaluate_output_security(
+        tool_name="read_file",
+        tool_args={"path": "keys.txt"},
+        raw_output=raw_secret_output,
+        is_interactive=True,
+    )
+    assert app._is_security_refusal(res_output_declined)
+    assert res_output_declined.startswith("Security refusal (final):")
+    assert "User declined LLM access to output" in res_output_declined
+    assert guidance_en in res_output_declined
+    assert app.buffer_manager.get_script_var("TOOL_DISPATCH_EXIT_CODE") == "1"
+    assert "User declined LLM access to output" in app.buffer_manager.get_script_var("TOOL_DISPATCH_ERROR")
+
+    # Post-execution Output non-interactive block
+    res_output_non_int = await app._evaluate_output_security(
+        tool_name="read_file",
+        tool_args={"path": "keys.txt"},
+        raw_output=raw_secret_output,
+        is_interactive=False,
+    )
+    assert app._is_security_refusal(res_output_non_int)
+    assert res_output_non_int.startswith("Security refusal (final):")
+    assert "Non-interactive session blocked output review" in res_output_non_int
+    assert guidance_en in res_output_non_int
+    assert app.buffer_manager.get_script_var("TOOL_DISPATCH_EXIT_CODE") == "1"
+    assert "Non-interactive session blocked output review" in app.buffer_manager.get_script_var("TOOL_DISPATCH_ERROR")
+
+
+def test_security_refusal_localization_keys():
+    """Verify security_refusal_final exists in all 6 supported languages."""
+    from chatybot.localization import LocalizationManager
+    langs = ["en", "es", "fr", "zh", "it", "ar"]
+    for lang in langs:
+        loc = LocalizationManager(locale=lang)
+        guidance = loc.get_ui_string("security_refusal_final", "")
+        assert guidance, f"Missing security_refusal_final in language '{lang}'"
 
 
 
