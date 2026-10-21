@@ -260,9 +260,10 @@ class ChatybotApp:
         self._definition_grammar = None
         self._invocation_grammar = None
 
-        # Per-tool-loop security refusal memory
+        # Per-tool-loop security refusal memory and limit tracking
         self._loop_security_refusals: dict[str, tuple[str, str]] | None = None
         self._loop_output_refusals: dict[str, tuple[str, str]] | None = None
+        self._loop_refusals: list[dict[str, Any]] = []
 
     @property
     def tool_append_mode(self) -> str:
@@ -3760,6 +3761,22 @@ class ChatybotApp:
         args_json = json.dumps(norm_args, sort_keys=True, default=str)
         return f"{tool_name}:{args_json}"
 
+    def _format_refusal_limit_summary(self, refusal_records: list[dict[str, Any]]) -> str:
+        """Format a concise summary of refused actions and reasons when loop limit is hit."""
+        lines = ["Security refusals during this loop:"]
+        for idx, rec in enumerate(refusal_records, 1):
+            t_name = rec.get("tool", "unknown")
+            r_reason = rec.get("reason", "").strip()
+            # If the reason still has full refusal boilerplate, extract clean portion
+            if "Security refusal (final):" in r_reason:
+                r_reason = r_reason.split("Security refusal (final):", 1)[-1].strip()
+                # Remove guidance instruction suffix if present
+                for punct in (". Do not retry", " Do not retry"):
+                    if punct in r_reason:
+                        r_reason = r_reason.split(punct, 1)[0].strip()
+            lines.append(f"{idx}. Tool: {t_name} - Reason: {r_reason}")
+        return "\n".join(lines)
+
     async def _evaluate_output_security(
         self,
         tool_name: str,
@@ -5751,6 +5768,7 @@ class ChatybotApp:
         self._turn_skills_loaded = []  # Track skills loaded in this tool loop
         self._loop_security_refusals = {}  # Cache pre-execution security refusals in this loop
         self._loop_output_refusals = {}    # Cache output security refusals in this loop
+        self._loop_refusals = []           # Track security refusals in this loop for limit enforcement
 
         # Preserve user-set rate limits across loop initializations
         if self._cached_rate_limit_delay is not None:
@@ -5816,6 +5834,7 @@ class ChatybotApp:
                 tool_calls = tool_calls[:self.max_tool_calls_per_turn]
 
             results = []
+            refusal_limit_hit = False
             for tc in tool_calls:
                 tool_name = tc.get("tool")
                 tool_args = tc.get("arguments", {})
@@ -5896,6 +5915,48 @@ class ChatybotApp:
                         f"  Arguments: {safe_json_dumps(tool_args)}\n"
                         f"  Result: {result_str}"
                     )
+
+                # Check security refusal limit per tool loop
+                if self._is_security_refusal(result_str):
+                    self._loop_refusals.append({
+                        "turn": turn_count + 1,
+                        "tool": tool_name,
+                        "arguments": tool_args,
+                        "reason": result_str,
+                    })
+                    sec_mgr = getattr(self, "security_manager", None)
+                    max_refusals = getattr(sec_mgr, "max_refusals_per_loop", 3) if sec_mgr is not None else 3
+                    if max_refusals > 0 and len(self._loop_refusals) >= max_refusals:
+                        summary_text = self._format_refusal_limit_summary(self._loop_refusals)
+                        limit_header = "[Security Limit]"
+                        if hasattr(self, "i18n") and hasattr(self.i18n, "get_ui_string"):
+                            limit_header = self.i18n.get_ui_string("security_blocked_header", limit_header)
+                            limit_msg = self.i18n.get_ui_string(
+                                "security_refusal_limit_reached",
+                                f"Reached security refusal limit ({max_refusals}) in tool loop. Terminating loop.",
+                                limit=max_refusals,
+                            )
+                        else:
+                            limit_msg = f"Reached security refusal limit ({max_refusals}) in tool loop. Terminating loop."
+
+                        print(f"\n{limit_header} {limit_msg}")
+                        print(f"\n{summary_text}\n")
+                        final_natural_language_response = f"{limit_msg}\n\n{summary_text}"
+
+                        is_interactive = (
+                            sys.stdin.isatty()
+                            and not getattr(self, "script_context", False)
+                            and not getattr(self, "single_run_mode", False)
+                        )
+                        if not is_interactive:
+                            self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
+                            self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', limit_msg)
+
+                        refusal_limit_hit = True
+                        break
+
+            if refusal_limit_hit:
+                break
             
             for tc in excess_calls:
                 tool_name = tc.get("tool")
@@ -5968,6 +6029,7 @@ class ChatybotApp:
         self._turn_skills_loaded = []
         self._loop_security_refusals = None
         self._loop_output_refusals = None
+        self._loop_refusals = []
 
         # If final_natural_language_response is not set, fallback
         if not final_natural_language_response:
@@ -6991,6 +7053,7 @@ class ChatybotApp:
                     self._turn_skills_loaded = []
                     self._loop_security_refusals = None
                     self._loop_output_refusals = None
+                    self._loop_refusals = []
                 
                 if self.control_c_count >= 2:
                     # Second Ctrl+C - exit program
