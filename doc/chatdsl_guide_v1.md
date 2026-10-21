@@ -1186,6 +1186,28 @@ if not ${fast} then /model openai_gpt4
 | Backslash in value | Not allowed - use forward slashes |
 | Command not recognized | Check for typos and `/` prefix |
 
+### Known Limitation: Process Exit Codes
+
+`chatybot --script <file>` and `chatybot --run "<command>"` always exit with status `0`, even when commands in the script fail. `/quit` does not take an exit code. A shell script or CI job therefore cannot tell from the exit status whether a ChatDSL script succeeded.
+
+Failures are reported inside the script through system variables, which the script can test:
+
+| Variable | Set by | On failure |
+| :--- | :--- | :--- |
+| `${RUN_EXIT_CODE}`, `${RUN_ERROR}` | `/run <command>` | The shell command's exit code (non-zero) and its stderr |
+| `${TOOL_DISPATCH_EXIT_CODE}`, `${TOOL_DISPATCH_ERROR}` | `/tool <invocation>` and each call in a tool loop | `1` and the reason, for security refusals (blocked, declined, or rejected because the script is non-interactive), dispatch errors, a tool loop stopped by the security refusal limit, and a tool loop stopped by the loop guard |
+| `${TOOL_DISPATCH_RESULT}` | `/tool <invocation>` | The tool's JSON result. Some tools report failure only here, as `"status": "error"` (for example `read_file` on a missing file), while `${TOOL_DISPATCH_EXIT_CODE}` stays `0` |
+
+```dsl
+/run ls /no/such/dir
+if ${RUN_EXIT_CODE} != "0" then /echo "Shell command failed (${RUN_EXIT_CODE}): ${RUN_ERROR}"
+
+/tool {"tool": "run_command", "arguments": {"command": "make test"}}
+if ${TOOL_DISPATCH_EXIT_CODE} != "0" then /echo "Tool call refused or failed: ${TOOL_DISPATCH_ERROR}"
+```
+
+*Possible future enhancement:* `/quit <code>`, so a script can set its own exit status after checking these variables, and optionally a non-zero exit from `--script` when the script stops on an unhandled error.
+
 ## Performance Tips
 
 ### Rate Limiting
