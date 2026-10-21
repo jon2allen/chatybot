@@ -200,3 +200,53 @@ def test_redact_known_secret_any_shape():
 ])
 def test_redact_leaves_ordinary_commands_and_code_alone(scanner, text):
     assert scanner.redact(text) == (text, 0)
+
+
+# --------------------------------------------------------------------------- command-line passwords
+
+CLI_PASSWORDS = [
+    ("curl -u admin:hunter2 https://api.example.com/v1", "hunter2", "curl -u admin:<redacted>"),
+    ("curl --user deploy:Zq8vLm2pXw9rTt4Y https://ci.example.com", "Zq8vLm2pXw9rTt4Y", "curl --user deploy:<redacted>"),
+    ("curl -s -uadmin:hunter2 https://x", "hunter2", "-uadmin:<redacted>"),
+    ("curl --proxy-user px:Pr0xyPw https://x", "Pr0xyPw", "--proxy-user px:<redacted>"),
+    ("curl -u 'admin:hunter2' https://x", "hunter2", "'admin:<redacted>'"),
+    ("curl -u admin:12345678 https://x", "12345678", "admin:<redacted>"),
+    ("mysql -u root -phunter2 appdb", "hunter2", "-p<redacted> appdb"),
+    ("mysqldump -uroot -pS3cr3t! db > d.sql", "S3cr3t!", "-p<redacted> db"),
+    ("sshpass -p hunter2 ssh admin@10.0.0.5", "hunter2", "sshpass -p <redacted> ssh"),
+    ("sshpass -p 'hunter 2' ssh a@b", "hunter 2", "sshpass -p <redacted> ssh"),
+    ("mysql -u root --password=hunter2 appdb", "hunter2", "--password=<redacted> appdb"),
+    ("wget --http-password=hunter2 https://x", "hunter2", "--http-password=<redacted>"),
+]
+
+
+@pytest.mark.parametrize("text, secret, kept", CLI_PASSWORDS)
+def test_cli_passwords_are_redacted_and_screened(scanner, text, secret, kept):
+    out, n = scanner.redact(text)
+    assert secret not in out and n >= 1
+    assert kept in out
+    assert scanner.scan(text) is not None
+
+
+@pytest.mark.parametrize("text", [
+    "curl -u $API_USER:$API_PASS https://api.example.com",
+    'curl -u "${U}:${P}" https://x',
+    "curl -u admin https://x",                    # curl prompts for the password
+    "curl -u user:pass https://x",                # placeholder
+    "curl -u USER:PASSWORD https://x",            # documentation placeholder
+    "mytool --password=VALUE",
+    "curl -u admin:<redacted> https://x",
+    "curl --user-agent foo:bar https://x",
+    "docker run -u 1000:1000 alpine",
+    "sort -u names.txt | uniq",
+    "ps -u root",
+    "mysql -u root -p appdb",                     # mysql prompts
+    "mysql -h db -P 3306 -u root appdb",          # -P is the port
+    "mysql -u root --password appdb",             # --password with no value prompts
+    "sshpass -p $SSHPASS ssh a@b",
+    "python manage.py --password-file /run/secrets/pw",
+    "pytest -p no:cacheprovider tests/",
+])
+def test_cli_password_lookalikes_unchanged(scanner, text):
+    assert scanner.redact(text) == (text, 0)
+    assert scanner.scan(text) is None

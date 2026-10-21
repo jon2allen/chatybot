@@ -4,6 +4,10 @@ All notable changes, release milestones, and version history for **Chatybot** ar
 
 Unreleased
 ----------
+- **Command-line passwords in redaction and output screening**:
+  - `curl -u user:password` (and `-uuser:pw`, `--user`, `--proxy-user`), `mysql`/`mysqldump`/`mariadb -pPASSWORD`, `sshpass -p PASSWORD` and `--password=PASSWORD` were not recognized at all (even long random passwords), so they were sent to the Jev API and written to the logs, and reading a script containing one did not prompt. They are now redacted (`curl -u admin:<redacted>`) and screened, with no minimum length since the position is unambiguous.
+  - Shell expansions (`$API_PASS`, `${P}`), prompting forms (`curl -u admin`, `mysql -p`, `mysql --password db`), placeholders (`user:pass`, `--password=VALUE`) and look-alikes (`docker -u 1000:1000`, `sort -u`, `ps -u`, `mysql -P 3306`) are left alone.
+  - New validators `cli_password` and `flag_credential` for custom `[output_security]` rules.
 - **Security refusals in tool loops**:
   - Refusals are final, not errors: a security DENY, a declined ASK, a non-interactive block and a refused output now return `Security refusal (final): <reason>. Do not retry this action or an equivalent one. Tell the user what you were trying to do and ask how to proceed.` instead of `Error: ...`, which weaker models treated as transient and retried. Script variables (`TOOL_DISPATCH_EXIT_CODE=1`, `TOOL_DISPATCH_ERROR`) are unchanged. Guidance string localized in all six languages.
   - Refusal memory per tool loop: a refused call repeated with the same (normalized) arguments gets the stored refusal back without a new policy evaluation, Jev call or prompt, and without running the tool again when its output was refused. Only refusals are remembered, never approvals. Scripts and direct `/tool` dispatches are unaffected.
