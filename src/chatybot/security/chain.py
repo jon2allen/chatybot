@@ -158,9 +158,9 @@ class ChainedPolicyEngine(BasePolicyEngine):
         verdicts = {r["verdict"] for r in results if "verdict" in r}
         params: Any = request.parameters
         if self.redact_log:
-            from chatybot.security.jev import _prepare
+            from chatybot.security.jev import prepare_for_log
 
-            params = _prepare(request.parameters or {}, True, 4000, {"truncated": False})
+            params = prepare_for_log(request.parameters or {})
         entry = {
             "event": "decision",
             "ts": datetime.now(UTC).isoformat(),
@@ -205,6 +205,9 @@ class ChainedPolicyEngine(BasePolicyEngine):
                 except Exception as e:  # noqa: BLE001
                     logger.warning("[Security Warning] Stage '%s' could not record outcome: %s", stage.name, e)
 
+    # Loop refusal events describe the tool loop, not a stage, so the chain logs
+    # them once in its own log and does not pass them on (that double-counted
+    # them when security_chain.jsonl and jev_security.jsonl were read together).
     def record_refusal_repeat(
         self,
         request_id: str,
@@ -213,32 +216,12 @@ class ChainedPolicyEngine(BasePolicyEngine):
         reason: str = "",
         session_id: str = "",
     ) -> None:
-        """Log a repeat tool refusal served from the per-loop cache."""
+        """Log a repeat tool refusal served from the per-loop memory."""
         if not self.log_path:
             return
-        params = parameters or {}
-        if self.redact_log:
-            try:
-                from chatybot.security.jev import _prepare
-                params = _prepare(params, True, 4000, {"truncated": False})
-            except Exception:  # noqa: BLE001
-                pass
-        self._write({
-            "event": "refusal_repeat",
-            "ts": datetime.now(UTC).isoformat(),
-            "session_id": session_id,
-            "request_id": request_id,
-            "tool": tool,
-            "parameters": params,
-            "reason": reason,
-        })
-        for stage in self.stages:
-            fn = getattr(stage.engine, "record_refusal_repeat", None)
-            if fn is not None:
-                try:
-                    fn(request_id, tool, parameters=params, reason=reason, session_id=session_id)
-                except Exception as e:  # noqa: BLE001
-                    logger.warning("[Security Warning] Stage '%s' could not record refusal_repeat: %s", stage.name, e)
+        from chatybot.security.jev import refusal_repeat_entry
+
+        self._write(refusal_repeat_entry(request_id, tool, parameters, reason, session_id, redact=self.redact_log))
 
     def record_refusal_limit(
         self,
@@ -247,37 +230,12 @@ class ChainedPolicyEngine(BasePolicyEngine):
         refused_calls: list[dict[str, Any]] | None = None,
         session_id: str = "",
     ) -> None:
-        """Log a loop termination triggered by reaching the security refusal limit."""
+        """Log a loop ended by reaching the security refusal limit."""
         if not self.log_path:
             return
-        calls = refused_calls or []
-        if self.redact_log:
-            try:
-                from chatybot.security.jev import _prepare
-                redacted_calls = []
-                for call in calls:
-                    c_copy = dict(call)
-                    if "arguments" in c_copy and isinstance(c_copy["arguments"], dict):
-                        c_copy["arguments"] = _prepare(c_copy["arguments"], True, 4000, {"truncated": False})
-                    redacted_calls.append(c_copy)
-                calls = redacted_calls
-            except Exception:  # noqa: BLE001
-                pass
-        self._write({
-            "event": "refusal_limit",
-            "ts": datetime.now(UTC).isoformat(),
-            "session_id": session_id,
-            "limit": limit,
-            "request_ids": request_ids or [],
-            "refused_calls": calls,
-        })
-        for stage in self.stages:
-            fn = getattr(stage.engine, "record_refusal_limit", None)
-            if fn is not None:
-                try:
-                    fn(limit, request_ids=request_ids, refused_calls=calls, session_id=session_id)
-                except Exception as e:  # noqa: BLE001
-                    logger.warning("[Security Warning] Stage '%s' could not record refusal_limit: %s", stage.name, e)
+        from chatybot.security.jev import refusal_limit_entry
+
+        self._write(refusal_limit_entry(limit, request_ids, refused_calls, session_id, redact=self.redact_log))
 
     def get_banner(self) -> str:
         parts = []
