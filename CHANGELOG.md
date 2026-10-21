@@ -4,6 +4,11 @@ All notable changes, release milestones, and version history for **Chatybot** ar
 
 Unreleased
 ----------
+- **Jev payload redaction now uses SecretScanner (security fix)**:
+  - Requests to the Jev API, Jev/chain logs and payload traces were redacted with an older pattern list that missed Groq (`gsk_`), Hugging Face (`hf_`), Google (`AIza`), JWTs, keys passed as command-line flags, and the user's own unprefixed keys. `jev.redact_text` now runs `SecretScanner.redact()` first: exact known secrets (`<redacted:KEY_NAME>`), whole private-key blocks, and every provider/assignment rule, replacing only the value so Jev still sees the command.
+  - New `SecretScanner.redact()`; new rules for command-line flag credentials (`--api-key X`, `--token X`, `--password X`) and HTTP Basic credentials; database-URL passwords are now value-checked (placeholders like `user:password@` are ignored).
+  - Shell expansions (`$VAR`, `${VAR}`, `$(cmd)`) and `Bearer`/`Basic` scheme words are no longer redacted, so Jev can see intent such as keychain reads.
+
 - **Output secret scanner precision**:
   - The generic credential rules now treat their regex match as a candidate and check the value: code that only references a credential (`os.environ[...]`, `getpass()`, `settings.SECRET_KEY`, `$(...)`, `${{ }}`), placeholders (`your_`, `<...>`, `example`, `fake`), paths, URLs and short or low-randomness values no longer prompt. Repo files that would prompt on read dropped from 32 to 5 (all test fixtures with fake keys).
   - Passwords: 8+ characters; a bare word without digits is a value in env-style (`DB_PASSWORD=x`), YAML/prose (`password: x`) and `.netrc` lines, and a variable name in code-style assignments (`password = x`, `password=password`).

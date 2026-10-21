@@ -75,6 +75,7 @@ _IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _NON_SECRET_WORDS = frozenset({
     "true", "false", "none", "null", "nil", "undefined", "required", "optional",
     "str", "string", "int", "bytes", "bool", "any", "env", "secret", "token",
+    "password", "passwd", "passphrase",
 })
 _PASSWORD_KEY = re.compile(r"(?i)pass(?:word|wd|phrase)|pwd")
 MIN_TOKEN_LEN = 16
@@ -194,14 +195,23 @@ class SecretScanner:
          "verdict": "ask", "reason": "Output contains secret API key"},
         {"pattern": r"\beyJ[A-Za-z0-9\-_=]+\.eyJ[A-Za-z0-9\-_=]+\.[A-Za-z0-9\-_.+/=]+\b", "literals": ["eyJ"],
          "verdict": "ask", "reason": "Output contains JWT authentication token"},
-        {"pattern": r"\b(?:postgres|postgresql|mysql|redis|mongodb|amqp|mssql)://[^/\s:@]+:[^/\s:@]+@", "literals": ["://"],
+        {"pattern": r"\b(?:postgres|postgresql|mysql|redis|mongodb|amqp|mssql)://[^/\s:@]+:(?P<val>[^/\s:@]+)@", "literals": ["://"], "validator": "password_value",
          "verdict": "ask", "reason": "Output contains database connection string with credentials"},
         {"pattern": r"(?i)\bbearer\s+(?P<val>[A-Za-z0-9._~+/=-]{20,})",
          "literals_ci": ["bearer"], "validator": "token_value",
          "verdict": "ask", "reason": "Output contains bearer token"},
+        {"pattern": r"(?i)\bbasic\s+(?P<val>[A-Za-z0-9+/]{12,}={0,2})",
+         "literals_ci": ["basic"], "validator": "token_value",
+         "verdict": "ask", "reason": "Output contains HTTP Basic credentials"},
         {"pattern": r"(?i)\blogin\s+\S+\s+password\s+(?P<val>\S+)",
          "literals_ci": ["password"], "validator": "password_value",
          "verdict": "ask", "reason": "Output contains .netrc-style login password"},
+        {"pattern": (
+            r"(?i)(?<![\w-])--?(?P<key>[a-z0-9-]*(?:api-?key|access-?key|secret-?key|auth-?token|access-?token|token|secret"
+            r"|password|passwd|passphrase|key))(?![a-z0-9-])(?P<sep>[= ]+)(?P<val>\"[^\"\n]*\"|'[^'\n]*'|[^\s'\"]+)"
+         ),
+         "literals": ["-"], "validator": "credential_value",
+         "verdict": "ask", "reason": "Output contains credential passed as a command-line flag"},
         {"pattern": (
             r"(?i)\b(?P<key>[A-Z0-9_.-]*?(?:API_?KEY|SECRET_?KEY|ACCESS_?KEY|PRIVATE_?KEY|AUTH_?TOKEN|ACCESS_?TOKEN"
             r"|REFRESH_?TOKEN|TOKEN|SECRET|PASSWORD|PASSWD|PASSPHRASE|PWD|CREDENTIALS?)[A-Z0-9_]*)"
@@ -309,6 +319,59 @@ class SecretScanner:
         if not self._cached_known_secrets:
             return self.refresh_known_secrets()
         return self._cached_known_secrets
+
+    _PEM_BLOCK = re.compile(
+        r"-----BEGIN [A-Z0-9 _-]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z0-9 _-]*PRIVATE KEY-----|\Z)"
+    )
+
+    def redact(self, text: str) -> tuple[str, int]:
+        """Return (text with secrets replaced, number of replacements).
+
+        Uses the same knowledge as scan(): exact known secrets (your keys from the
+        environment and .env files), whole private-key blocks, and every pattern
+        rule. For rules with a 'val' group only the value is replaced
+        (``api_key=<redacted>``, ``postgres://user:<redacted>@host``); rules with a
+        validator only redact values that pass it, so code like ``os.environ[...]``
+        is left readable.
+        """
+        if not text or text.isspace():
+            return text, 0
+        count = 0
+        for secret_val, key_name in self._cached_known_secrets.items():
+            if secret_val in text:
+                count += text.count(secret_val)
+                text = text.replace(secret_val, f"<redacted:{key_name}>")
+        text, n = self._PEM_BLOCK.subn("<redacted-private-key>", text)
+        count += n
+
+        for pattern, _verdict, _message, lits, lits_ci, validator in self._compiled_rules:
+            if lits is not None and not any(lit in text for lit in lits):
+                continue
+            if lits_ci is not None:
+                low = text.lower()
+                if not any(lit in low for lit in lits_ci):
+                    continue
+            hits = 0
+
+            def _replace(m: re.Match[str]) -> str:
+                nonlocal hits
+                if validator is not None and not _validate_match(validator, m):
+                    return m.group(0)
+                whole = m.group(0)
+                if "val" in m.groupdict() and m.group("val") is not None:
+                    start, end = m.span("val")
+                    if whole[start - m.start():end - m.start()].startswith("<redacted"):
+                        return whole
+                    hits += 1
+                    return whole[: start - m.start()] + "<redacted>" + whole[end - m.start():]
+                if whole.startswith("<redacted"):
+                    return whole
+                hits += 1
+                return "<redacted>"
+
+            text = pattern.sub(_replace, text)
+            count += hits
+        return text, count
 
     def scan(self, text: str) -> tuple[Verdict, str] | None:
         """Scan text against compiled rules and known secrets. Returns (Verdict, reason) or None."""

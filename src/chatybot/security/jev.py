@@ -52,9 +52,13 @@ DEFAULT_SKIP_TOOLS = [
     "search_skills", "decide_choice", "decide_score", "decide_noul",
 ]
 
+# Legacy command patterns, applied after SecretScanner.redact(). The assignment rule
+# skips shell expansions ($VAR, ${VAR}, $(cmd)) and auth-scheme words (Bearer, Basic):
+# they are not secrets, and hiding them would hide intent (e.g. keychain reads) from Jev.
 _REDACTIONS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"(?i)\b(bearer)\s+[A-Za-z0-9._~+/=-]{8,}"), r"\1 <redacted>"),
-    (re.compile(r"""(?i)\b([A-Z0-9_]*(?:api[_-]?key|token|secret|passw(?:or)?d)[A-Z0-9_]*|authorization)\s*([=:])\s*(?:(['"])(.*?)\3|[^\s'\"&;|]+)"""), r"\1\2<redacted>"),
+    (re.compile(r"(?i)\b(basic)\s+(?=[A-Za-z+/]*[0-9+/])[A-Za-z0-9+/]{12,}={0,2}"), r"\1 <redacted>"),
+    (re.compile(r"""(?i)\b([A-Z0-9_]*(?:api[_-]?key|token|secret|passw(?:or)?d)[A-Z0-9_]*|authorization)\s*([=:])\s*(?!\$|(?:bearer|basic)\b)(?:(['"])(?!\$)(.*?)\3|[^\s'\"&;|]+)"""), r"\1\2<redacted>"),
     (re.compile(r"\bsk-[A-Za-z0-9_-]{12,}"), "<redacted-key>"),
     (re.compile(r"\b(?:ghp|gho|ghs|github_pat)_[A-Za-z0-9_]{12,}"), "<redacted-key>"),
     (re.compile(r"\bAKIA[0-9A-Z]{16}\b"), "<redacted-key>"),
@@ -63,7 +67,32 @@ _REDACTIONS: list[tuple[re.Pattern[str], str]] = [
 ]
 
 
+_SCANNER: Any = None
+
+
+def _secret_scanner() -> Any:
+    """Shared SecretScanner (known secrets from env/.env plus provider patterns), built once."""
+    global _SCANNER
+    if _SCANNER is None:
+        try:
+            from chatybot.security.secret_scanner import SecretScanner
+
+            _SCANNER = SecretScanner()
+        except Exception as e:  # noqa: BLE001
+            logger.warning("[Security Warning] SecretScanner unavailable for Jev redaction: %s", e)
+            _SCANNER = False
+    return _SCANNER or None
+
+
 def redact_text(text: str) -> str:
+    """Remove secrets before text leaves the machine (Jev requests, logs, traces).
+
+    First the SecretScanner (exact known secrets, private-key blocks, provider key
+    formats, flag/assignment credentials), then the legacy command patterns.
+    """
+    scanner = _secret_scanner()
+    if scanner is not None:
+        text, _ = scanner.redact(text)
     for pattern, repl in _REDACTIONS:
         text = pattern.sub(repl, text)
     return text

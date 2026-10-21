@@ -138,3 +138,65 @@ def test_reading_chatybot_source_and_docs_does_not_prompt(scanner):
         if hit is not None:
             flagged.append(f"{f.relative_to(REPO)}: {hit[1]}")
     assert flagged == []
+
+
+# --------------------------------------------------------------------------- redaction
+# Fake keys are assembled at runtime so this file never contains a provider-format
+# literal (GitHub push protection scans the source).
+
+def _fake(prefix: str, body: str) -> str:
+    return prefix + body
+
+
+GROQ = _fake("gsk_", "aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789ABCDEFGHIJKLMN")
+HF = _fake("hf_", "aBcDeFgHiJkLmNoPqRsTuVwXyZ01234567")
+GOOGLE = _fake("AIza", "SyA1b2C3d4E5f6G7h8I9j0KlMnOpQrStUv")
+JWT = _fake("eyJhbGciOiJIUzI1NiJ9", ".eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U")
+UNPREFIXED = _fake("Zq8wE7rT6yU5", "iO4pA3sD2fG1hJ0kL9")
+PEM_BODY = _fake("b3BlbnNzaC1r", "ZXktdjEAAAAA")
+
+
+@pytest.mark.parametrize("text, secret, kept", [
+    (f"groq-cli --key {GROQ} chat", GROQ, "groq-cli --key"),
+    (f"huggingface-cli login --token {HF}", HF, "huggingface-cli login --token"),
+    (f'curl "https://example.googleapis.com/v1/models?key={GOOGLE}"', GOOGLE, "googleapis.com"),
+    (f'curl -H "X-Auth: {JWT}" https://api.example.com', JWT, "X-Auth:"),
+    (f"mytool --password {UNPREFIXED} --verbose", UNPREFIXED, "--verbose"),
+    ("psql postgres://admin:" + "S3cretPassw0rd@db:5432/x", "S3cretPassw0rd", "postgres://admin:"),
+    ("Authorization: Basic " + "dXNlcjpwYXNzd29yZA==", "dXNlcjpwYXNzd29yZA==", "Authorization: Basic"),
+    (f"ACME_API_KEY={UNPREFIXED} ./run.sh", UNPREFIXED, "ACME_API_KEY="),
+])
+def test_redact_removes_secret_keeps_context(scanner, text, secret, kept):
+    out, n = scanner.redact(text)
+    assert secret not in out
+    assert kept in out
+    assert n >= 1
+
+
+def test_redact_private_key_block(scanner):
+    text = "cat <<EOF > k.pem\n-----BEGIN OPENSSH PRIVATE KEY-----\n" + PEM_BODY + "\n-----END OPENSSH PRIVATE KEY-----\nEOF"
+    out, _ = scanner.redact(text)
+    assert PEM_BODY not in out
+    assert "<redacted-private-key>" in out and out.startswith("cat <<EOF")
+
+
+def test_redact_known_secret_any_shape():
+    s = SecretScanner(known_secrets={UNPREFIXED: "MISTRAL_API_KEY"})
+    out, n = s.redact(f'mistral chat --model large --x "{UNPREFIXED}"')
+    assert UNPREFIXED not in out and "<redacted:MISTRAL_API_KEY>" in out and n == 1
+
+
+@pytest.mark.parametrize("text", [
+    "git push origin main",
+    "python -m pytest test/ -q --maxfail 1",
+    "mytool --max-tokens 4096 --token-limit 128000",
+    "ssh -i ~/.ssh/id_ed25519 host",
+    'grep -rn "api_key" src/',
+    "export OPENAI_API_KEY=$(security find-generic-password -s openai -w)",
+    "docker run -e API_KEY=${API_KEY} img",
+    'curl -H "Authorization: Bearer $TOKEN" https://api.example.com',
+    "This is a basic configuration example",
+    "API_KEY = os.environ['OPENAI_API_KEY']",
+])
+def test_redact_leaves_ordinary_commands_and_code_alone(scanner, text):
+    assert scanner.redact(text) == (text, 0)
