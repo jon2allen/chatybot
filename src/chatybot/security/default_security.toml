@@ -161,11 +161,17 @@ exempt_tools = [
 #     { pattern = '\b(?:postgres|postgresql|mysql|redis|mongodb|amqp|mssql)://[^/\s:@]+:[^/\s:@]+@', verdict = "ask", reason = "Output contains database connection string with credentials" },
 #     { pattern = '(?i)\bbearer\s+(?P<val>[A-Za-z0-9._~+/=-]{20,})', validator = "token_value", verdict = "ask", reason = "Output contains bearer token" },
 #     { pattern = '(?i)\blogin\s+\S+\s+password\s+(?P<val>\S+)', validator = "password_value", verdict = "ask", reason = "Output contains .netrc-style login password" },
+#     { pattern = '''(?i:\bcurl\b)[^\n|;&]*?\s(?:-u\s*|-U\s*|--(?:proxy-)?user(?:\s+|=))(?P<q>["']?)[^\s:'"]*:(?P<val>[^\s'"]+)''', validator = "cli_password", verdict = "ask", reason = "Output contains password passed to curl as user:password" },
+#     { pattern = '''(?i:\b(?:mysql|mysqldump|mysqladmin|mariadb)\b)[^\n|;&]*?\s-p(?P<val>[^\s'"-][^\s'"]*)''', validator = "cli_password", verdict = "ask", reason = "Output contains MySQL password passed with -p" },
+#     { pattern = '''\bsshpass\s+-p\s*(?P<val>"[^"\n]*"|'[^'\n]*'|[^\s'"]+)''', validator = "cli_password", verdict = "ask", reason = "Output contains password passed to sshpass" },
 #     { pattern = '''(?i)\b(?P<key>[A-Z0-9_.-]*?(?:API_?KEY|SECRET_?KEY|ACCESS_?KEY|PRIVATE_?KEY|AUTH_?TOKEN|ACCESS_?TOKEN|REFRESH_?TOKEN|TOKEN|SECRET|PASSWORD|PASSWD|PASSPHRASE|PWD|CREDENTIALS?)[A-Z0-9_]*)["']?(?P<sep>\s*(?::=|[:=])\s*)(?P<val>"[^"\n]*"|'[^'\n]*'|[^\s'"#;,]+)''', validator = "credential_value", verdict = "ask", reason = "Output contains credential assignment" },
 #
 # validator (optional): the regex only finds candidates; the named group 'val' must also look like a
 # real secret. "token_value" = 16+ chars, letters and digits, high randomness; "password_value" = 8+ chars;
-# "credential_value" = password rules if the 'key' group names a password, else token rules. All three
+# "credential_value" = password rules if the 'key' group names a password, else token rules;
+# "cli_password" = any non-trivial value in an unambiguous password position (curl -u user:VALUE,
+# mysql -pVALUE, sshpass -p VALUE), no length minimum; "flag_credential" = cli_password for
+# password flags (--password X), token rules for other flags (--api-key X). All three
 # skip code (os.environ[...], getpass(), settings.X, $(...), {{ }}) and placeholders (your_, <...>, example, fake).
 # ]
 

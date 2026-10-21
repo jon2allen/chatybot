@@ -666,11 +666,11 @@ Before an action leaves the machine (the Jev request, the Jev and chain decision
 - **Your own keys:** exact matches of the values of secret-named environment variables (`*_KEY`, `*_TOKEN`, `*_SECRET`, `*PASSWORD*`, ...) and of `~/.config/chatybot/.env` and the project `.env`, 12 characters or longer, become `<redacted:KEY_NAME>`, whatever their format.
 - **Private keys:** whole `-----BEGIN ... PRIVATE KEY-----` blocks become `<redacted-private-key>`.
 - **Provider key formats:** `sk-...` (OpenAI, OpenRouter, Anthropic), GitHub `ghp_/gho_/ghs_/github_pat_`, AWS `AKIA...`, Google `AIza...`, Groq `gsk_...`, Hugging Face `hf_...`, Slack `xox?-...`, and JWTs.
-- **Credential values:** `KEY=value`, `"api_key": "..."`, `api_key: value`, command-line flags (`--api-key X`, `--token X`, `--password X`), `Bearer` and `Basic` credentials, and passwords in database URLs. Only the value is replaced (`--token <redacted>`, `postgres://admin:<redacted>@db`), so Jev still sees what the command does.
+- **Credential values:** `KEY=value`, `"api_key": "..."`, `api_key: value`, command-line flags (`--api-key X`, `--token X`, `--password=X`), passwords on the command line (`curl -u user:X`, `curl --user`/`--proxy-user`, `mysql -pX`, `sshpass -p X`), `Bearer` and `Basic` credentials, and passwords in database URLs. Only the value is replaced (`--token <redacted>`, `postgres://admin:<redacted>@db`), so Jev still sees what the command does.
 
 Values that are not secrets are left visible: code references (`os.environ[...]`, `settings.SECRET_KEY`), shell expansions (`$VAR`, `${VAR}`, `$(security find-generic-password ...)`), and placeholders (`your_api_key_here`, `<...>`). Hiding those would hide intent, such as a keychain read, from Jev.
 
-Known gaps: short passwords in forms such as `curl -u user:pass`, and keys added to the environment after startup (they become known secrets after a restart).
+Passwords in an unambiguous command-line position (`curl -u user:X`, `mysql -pX`, `sshpass -p X`, `--password=X`) are caught at any length; all-capitals words (`--password=VALUE`) count as documentation placeholders. Known gaps: a password flag followed by a space (`--password hunter2`) needs 8+ characters, because some tools take `--password` with no value and the next word is something else (`mysql --password appdb`); and keys added to the environment after startup become known secrets only after a restart.
 
 To disable (not recommended):
 ```toml
