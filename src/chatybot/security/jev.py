@@ -30,6 +30,8 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 
+from chatybot.payload_trace import print_request_payload, print_response_payload
+from chatybot.payload_trace import trace_enabled as _trace_enabled
 from chatybot.security import self_protect
 from chatybot.security.base import BasePolicyEngine
 from chatybot.security.jev_rubric import MODES, Rubric, stricter
@@ -116,9 +118,11 @@ class JevPolicyEngine(BasePolicyEngine):
         supports_output: bool | None = None,
         log_path: str = "",
         debug: bool = False,
+        trace_raw_payload: bool = False,
         http_post: Callable[[str, dict[str, Any], dict[str, str], float], dict[str, Any]] | None = None,
     ):
         self.debug = debug
+        self.trace_raw_payload = bool(trace_raw_payload)
         self.rubric_path = os.path.abspath(os.path.expanduser(rubric_path or DEFAULT_RUBRIC_PATH))
         self._seed_rubric()
         self.rubric = Rubric.load(self.rubric_path)
@@ -253,6 +257,9 @@ class JevPolicyEngine(BasePolicyEngine):
         body = {"state": self.rubric.build_state(tool, params, context), "model": self.model, "questions": self.questions}
         headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
 
+        if _trace_enabled(self.trace_raw_payload):
+            print_request_payload(self.url, body, api_key, label="JEV Security Request Payload:")
+
         t0 = time.perf_counter()
         try:
             resp = self._http_post(self.url, body, headers, self.timeout_seconds)
@@ -267,6 +274,9 @@ class JevPolicyEngine(BasePolicyEngine):
             self._log(request, params, None, decision, ms, source="error", error=str(e)[:300])
             return decision
         ms = (time.perf_counter() - t0) * 1000
+
+        if _trace_enabled(self.trace_raw_payload):
+            print_response_payload("ok", json.dumps(resp, ensure_ascii=False), label="JEV Security Response Payload:")
 
         rec = self.rubric.parse_answers(answers, self.mode)
         verdict, reasons = self.rubric.evaluate(rec, self.mode)
@@ -341,13 +351,16 @@ class JevPolicyEngine(BasePolicyEngine):
         body = {"state": state_text, "model": self.model, "questions": self.questions}
         headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
 
+        if _trace_enabled(self.trace_raw_payload):
+            print_request_payload(self.url, body, api_key, label="JEV Security Output Request Payload:")
+
         t0 = time.perf_counter()
         try:
             resp = self._http_post(self.url, body, headers, self.timeout_seconds)
             answers = resp.get("answers") if isinstance(resp, dict) else None
             if not isinstance(answers, dict) or not answers:
                 raise ValueError("response has no answers")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             ms = (time.perf_counter() - t0) * 1000
             if self.debug:
                 print(f"[Security Debug] [JEV] Output check failed after {ms:.0f} ms: {e}")
@@ -355,6 +368,9 @@ class JevPolicyEngine(BasePolicyEngine):
             self._log(request, request.parameters, None, decision, ms, source="error", error=str(e)[:300])
             return decision
         ms = (time.perf_counter() - t0) * 1000
+
+        if _trace_enabled(self.trace_raw_payload):
+            print_response_payload("ok", json.dumps(resp, ensure_ascii=False), label="JEV Security Output Response Payload:")
 
         rec = self.rubric.parse_answers(answers, self.mode)
         verdict, reasons = self.rubric.evaluate(rec, self.mode)
