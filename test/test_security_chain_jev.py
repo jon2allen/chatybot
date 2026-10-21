@@ -1018,3 +1018,24 @@ def test_loop_refusal_events_fail_closed_when_redaction_breaks(tmp_path, monkeyp
     text = log.read_text()
     assert "hunter2-secret" not in text
     assert "<omitted: redaction failed>" in text
+
+
+def test_outdated_user_rubric_prints_notice(tmp_path, capsys):
+    """A user rubric older than the bundled one is reported with the new rule ids; it is not modified."""
+    bundled = open(BUNDLED_RUBRIC).read()
+    old = tmp_path / "jev_security.toml"
+    text = bundled.replace('version = "1.2"', 'version = "1.1"')
+    # drop the persistence rule from the user's copy
+    start = text.index('[[rules]]\nid       = "persistence"')
+    end = text.index("[[rules]]", start + 10)
+    old.write_text(text[:start] + text[end:])
+    before = old.read_text()
+    JevPolicyEngine(rubric_path=str(old), http_post=lambda *a: {})
+    out = capsys.readouterr().out
+    assert "is version 1.1; the bundled rubric is version 1.2 (new rules: persistence)" in out
+    assert old.read_text() == before
+
+    current = tmp_path / "current.toml"
+    current.write_text(bundled)
+    JevPolicyEngine(rubric_path=str(current), http_post=lambda *a: {})
+    assert "[Security Notice]" not in capsys.readouterr().out
