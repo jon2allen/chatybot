@@ -4,6 +4,7 @@ All notable changes, release milestones, and version history for **Chatybot** ar
 
 Unreleased
 ----------
+- **Builtin output scanner reuse**: when builtin checks output itself (as a chain stage, or used directly), it now builds its default-rules `SecretScanner` once and reuses it instead of building one per tool call (rule compilation plus reading `.env` files each time).
 - **Command-line passwords in redaction and output screening**:
   - `curl -u user:password` (and `-uuser:pw`, `--user`, `--proxy-user`), `mysql`/`mysqldump`/`mariadb -pPASSWORD`, `sshpass -p PASSWORD` and `--password=PASSWORD` were not recognized at all (even long random passwords), so they were sent to the Jev API and written to the logs, and reading a script containing one did not prompt. They are now redacted (`curl -u admin:<redacted>`) and screened, with no minimum length since the position is unambiguous.
   - Shell expansions (`$API_PASS`, `${P}`), prompting forms (`curl -u admin`, `mysql -p`, `mysql --password db`), placeholders (`user:pass`, `--password=VALUE`) and look-alikes (`docker -u 1000:1000`, `sort -u`, `ps -u`, `mysql -P 3306`) are left alone.
