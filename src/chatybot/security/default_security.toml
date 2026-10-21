@@ -21,6 +21,9 @@ fail_safe = "deny"
 # Options: "deny" (safe default, fail-fast) | "allow"
 non_interactive_ask = "deny"
 
+# Maximum security refusals permitted within a single tool loop (0 disables limit):
+max_refusals_per_loop = 3
+
 
 # ------------------------------------------------------------------------------
 # Built-in Engine Configuration
