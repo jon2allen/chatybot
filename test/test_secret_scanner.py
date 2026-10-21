@@ -250,3 +250,25 @@ def test_cli_passwords_are_redacted_and_screened(scanner, text, secret, kept):
 def test_cli_password_lookalikes_unchanged(scanner, text):
     assert scanner.redact(text) == (text, 0)
     assert scanner.scan(text) is None
+
+
+def test_builtin_output_scanner_is_built_once(monkeypatch):
+    """Builtin's default-rules output scanner is created on first use and reused."""
+    from chatybot.security import builtin as builtin_mod
+    from chatybot.security.models import PolicyRequest
+
+    built = []
+    real = builtin_mod.SecretScanner
+
+    def counting(*a, **kw):
+        built.append(1)
+        return real(*a, **kw)
+
+    monkeypatch.setattr(builtin_mod, "SecretScanner", counting)
+    eng = builtin_mod.BuiltinPolicyEngine()
+    assert built == []  # nothing built until output is evaluated
+    for text in ("plain listing", "API_KEY=Zq8wE7rT6yU5iO4pA3sD", "more output"):
+        eng.evaluate_output(PolicyRequest(tool="run_command", parameters={}, output=text, phase="output"))
+    assert len(built) == 1
+    hit = eng.evaluate_output(PolicyRequest(tool="run_command", parameters={}, output="curl -u admin:hunter2 https://x", phase="output"))
+    assert hit.verdict.value == "ask"
