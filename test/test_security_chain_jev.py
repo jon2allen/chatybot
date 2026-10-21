@@ -870,5 +870,52 @@ def test_chain_output_evaluation_skips_unsupported_stage():
     assert legacy.calls == 0  # evaluate was NOT called!
 
 
+def test_jev_trace_raw_payload_prints_request_and_response(rubric_path, jev_key, capsys):
+    """trace_raw_payload=True prints the outgoing body and incoming response to the screen."""
+    fake = FakeJev(scores={"git_push": 0.94})
+    eng = make_jev(rubric_path, fake, trace_raw_payload=True)
+    eng.evaluate(cmd("git push origin main"))
+
+    out = capsys.readouterr().out
+    assert "JEV Security Request Payload" in out
+    assert "POST https://openrouter.ai/api/alpha/decisions" in out
+    # The body sent to the model is visible (state + questions + model).
+    assert '"model": "typesafe/jev-1.13"' in out
+    assert "JEV Security Response Payload" in out
+    assert "---- end of payload ---" in out
+    # API key is masked, never printed in full.
+    assert "sk-or-test-key-123456789" not in out
+
+
+def test_jev_trace_raw_payload_env_var(rubric_path, jev_key, monkeypatch, capsys):
+    """CHATYBOT_TRACE_RAW_PAYLOAD=1 enables tracing even without the constructor flag."""
+    monkeypatch.setenv("CHATYBOT_TRACE_RAW_PAYLOAD", "1")
+    eng = make_jev(rubric_path, FakeJev())  # trace_raw_payload defaults to False
+    eng.evaluate(cmd("git status"))
+    out = capsys.readouterr().out
+    assert "JEV Security Request Payload" in out
+    assert "JEV Security Response Payload" in out
+
+
+def test_jev_trace_raw_payload_off_by_default(rubric_path, jev_key, capsys):
+    """No payload is printed when tracing is disabled."""
+    eng = make_jev(rubric_path, FakeJev())
+    eng.evaluate(cmd("git status"))
+    out = capsys.readouterr().out
+    assert "JEV Security Request Payload" not in out
+
+
+def test_jev_trace_raw_payload_output_path(rubric_path, jev_key, capsys):
+    """Output evaluation also traces its payload when enabled."""
+    fake = FakeJev(scores={"secrets": 0.95})
+    eng = make_jev(rubric_path, fake, output_scan=True, trace_raw_payload=True)
+    req_out = PolicyRequest(tool="read_file", parameters={"path": "notes.txt"}, output="some output content", phase="output")
+    eng.evaluate_output(req_out)
+    out = capsys.readouterr().out
+    assert "JEV Security Output Request Payload" in out
+    assert "JEV Security Output Response Payload" in out
+
+
+
 
 
