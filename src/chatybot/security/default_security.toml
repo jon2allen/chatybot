@@ -214,6 +214,8 @@ args = ["--policy", "~/.config/chatybot/security.racf"]
 #                      "search_skills", "decide_choice", "decide_score", "decide_noul"]
 # output_scan       = false       # opt-in LLM output screening; deterministic SecretScanner floor handles secrets
 # log_path          = "~/.config/chatybot/logs/jev_security.jsonl"   # default; "" turns logging off
+# trace_raw_payload = false       # print the outgoing/incoming Jev JSON payload to the screen for each
+#                                 # request. Also enabled by `/trace rawpayload on` or CHATYBOT_TRACE_RAW_PAYLOAD=1.
 
 # ==============================================================================
 # Chain Engine (Used when engine = "chain")

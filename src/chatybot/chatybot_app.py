@@ -370,6 +370,7 @@ class ChatybotApp:
                 config_path=self.security_config_path,
                 enabled=not self.no_security,
                 debug=self.security_debug,
+                trace_raw_payload=getattr(self, "trace_raw_payload", False),
             )
         except Exception as e:
             init_err = str(e)

@@ -43,9 +43,10 @@ class SecurityManager:
         "change_dir",
     }
 
-    def __init__(self, config_path: str | None = None, enabled: bool = True, debug: bool = False):
+    def __init__(self, config_path: str | None = None, enabled: bool = True, debug: bool = False, trace_raw_payload: bool = False):
         self.enabled = enabled
         self.debug = debug
+        self.trace_raw_payload = trace_raw_payload
         self.config_path = os.path.abspath(
             os.path.expanduser(config_path or self.DEFAULT_CONFIG_PATH)
         )
@@ -208,6 +209,7 @@ class SecurityManager:
                 output_scan=bool(jev_cfg.get("output_scan", False)),
                 log_path=jev_cfg.get("log_path", self.DEFAULT_JEV_LOG),
                 debug=self.debug,
+                trace_raw_payload=bool(jev_cfg.get("trace_raw_payload", False)) or self.trace_raw_payload,
             )
 
         if engine_type == "chain":
