@@ -4,6 +4,27 @@ All notable changes, release milestones, and version history for **Chatybot** ar
 
 Unreleased
 ----------
+- **Security refusals in tool loops**:
+  - Refusals are final, not errors: a security DENY, a declined ASK, a non-interactive block and a refused output now return `Security refusal (final): <reason>. Do not retry this action or an equivalent one. Tell the user what you were trying to do and ask how to proceed.` instead of `Error: ...`, which weaker models treated as transient and retried. Script variables (`TOOL_DISPATCH_EXIT_CODE=1`, `TOOL_DISPATCH_ERROR`) are unchanged. Guidance string localized in all six languages.
+  - Refusal memory per tool loop: a refused call repeated with the same (normalized) arguments gets the stored refusal back without a new policy evaluation, Jev call or prompt, and without running the tool again when its output was refused. Only refusals are remembered, never approvals. Scripts and direct `/tool` dispatches are unaffected.
+  - Refusal limit: `max_refusals_per_loop` in `security.toml` (default 3, `0` disables). When reached, the loop ends and the user gets a summary of the refused calls and reasons; non-interactive runs set `TOOL_DISPATCH_EXIT_CODE=1`.
+  - Refusals are detected by a flag set in `dispatch_tool`, not by searching tool output, so a file or page that contains the refusal text is not counted.
+  - New `refusal_repeat` and `refusal_limit` events in `security_chain.jsonl` (chain engine) or `jev_security.jsonl` (jev engine), joined to the original decision by `request_id`; reasons and arguments are redacted and cut to 4,000 characters, and a value is omitted if redaction fails. `jev_eval.py --from-log` reports them per session. `TOOL_DISPATCH_REQUEST_ID` is a new protected script variable.
+- **Tool-loop guard**:
+  - Stops models that keep repeating the same tool call (reported with Cohere and dots free models). A repeat counts only when the arguments and the result are both identical, within the last `loop_guard_window` (8) executed calls, so A, B, A, B alternation is caught and state-changing sequences are not.
+  - When a call has returned the same result `loop_guard_repeats - 1` (2) times, the next request is not executed and the model is told to use the earlier result or change approach; if it asks again with nothing else run in between, the loop stops with an explanation. Withheld calls are marked `"loop_guard"` in `AGENTIC_LOOP` / `/tool history`.
+  - The guard only withholds calls: it never executes anything or skips a security check; security-refused calls are left to the refusal limit; `ask_user` is exempt.
+  - Settings: `loop_guard`, `loop_guard_repeats`, `loop_guard_window` in `tools_config.toml` `[config]`; `/tool loop_guard [on|off|repeats <n>|window <n>]`. Added `test/test_loop_guard.py`.
+- **Jev rubric v1.2**:
+  - New rule `shell_startup` (ask): reading, searching or sourcing `~/.zshrc`, `~/.zshenv`, `~/.zprofile`, `~/.bashrc`, `~/.bash_profile`, `~/.profile` or the fish config.
+  - New rule `persistence` (deny): writing to those files, crontab entries, launchd agents or daemons, systemd units, login items, and `git config --global` hooks or aliases.
+  - `secrets` now names `~/.netrc`, `~/.npmrc`, `~/.pypirc`, `~/.git-credentials`, `~/.docker/config.json` and `~/.kube/config`.
+  - Test set grown from 102 to 129 cases; 129/129 over 3 runs, harmless commands scored at most 0.45 and flagged ones at least 0.75 (`tools/jev-eval/baseline/run7-rubric-v1.2.jsonl`, history in `jev_proof_of_concept.md`).
+  - Startup notice when `~/.config/chatybot/jev_security.toml` is older than the bundled rubric, naming the new rules. The user's file is never modified; merge the changes or copy `src/chatybot/security/default_jev_security.toml`.
+- **Documentation**:
+  - `doc/jev_security_engine.md` updated to match the code: chain short-circuit rules, run-7 results, redaction, output security, log formats, what leaves the machine, and known limitations (including that the model sees Jev rule scores in refusals). Corrected an earlier claim that builtin asks for every shell command; it allows read-only git commands.
+  - `doc/chatdsl_guide_v1.md`: documented that `--script` and `--run` always exit 0 and how scripts detect failures through `RUN_EXIT_CODE`, `TOOL_DISPATCH_EXIT_CODE`, `TOOL_DISPATCH_ERROR` and `TOOL_DISPATCH_RESULT`.
+
 - **Jev payload redaction now uses SecretScanner (security fix)**:
   - Requests to the Jev API, Jev/chain logs and payload traces were redacted with an older pattern list that missed Groq (`gsk_`), Hugging Face (`hf_`), Google (`AIza`), JWTs, keys passed as command-line flags, and the user's own unprefixed keys. `jev.redact_text` now runs `SecretScanner.redact()` first: exact known secrets (`<redacted:KEY_NAME>`), whole private-key blocks, and every provider/assignment rule, replacing only the value so Jev still sees the command.
   - New `SecretScanner.redact()`; new rules for command-line flag credentials (`--api-key X`, `--token X`, `--password X`) and HTTP Basic credentials; database-URL passwords are now value-checked (placeholders like `user:password@` are ignored).
