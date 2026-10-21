@@ -53,6 +53,7 @@ class SecurityManager:
         self.config: dict[str, Any] = {}
         self.fail_safe = Verdict.DENY
         self.non_interactive_ask: str = "deny"
+        self.max_refusals_per_loop: int = 3
         self.engine: BasePolicyEngine | None = None
         from chatybot.security.secret_scanner import SecretScanner
         self.secret_scanner: SecretScanner = SecretScanner()
@@ -106,6 +107,16 @@ class SecurityManager:
             if self.debug:
                 print(warn_msg)
         self.non_interactive_ask = "allow" if raw_non_interactive == "allow" else "deny"
+
+        sec_section = self.config.get("security", {})
+        raw_max_refusals = self.config.get(
+            "max_refusals_per_loop",
+            sec_section.get("max_refusals_per_loop", 3) if isinstance(sec_section, dict) else 3,
+        )
+        try:
+            self.max_refusals_per_loop = max(0, int(raw_max_refusals))
+        except (ValueError, TypeError):
+            self.max_refusals_per_loop = 3
 
 
         output_cfg = self.config.get("output_security", {})

@@ -2368,14 +2368,149 @@ async def test_remember_refusals_within_tool_loop(tmp_path, monkeypatch):
     app.in_tool_loop = True
     app._loop_security_refusals = {"some_key": ("refusal", "error")}
     app._loop_output_refusals = {"some_key": ("refusal", "error")}
+    app._loop_refusals = [{"tool": "bash", "reason": "denied"}]
     # Simulate Ctrl+C branch in repl
     if app.in_tool_loop:
         app.in_tool_loop = False
         app._turn_skills_loaded = []
         app._loop_security_refusals = None
         app._loop_output_refusals = None
+        app._loop_refusals = []
     assert app._loop_security_refusals is None
     assert app._loop_output_refusals is None
+    assert app._loop_refusals == []
+
+
+@pytest.mark.anyio
+async def test_stage3_limit_refusals_per_loop(tmp_path, monkeypatch):
+    """
+    Stage 3: Limit refusals per loop.
+    - Setting max_refusals_per_loop is parsed (default 3, 0 disables).
+    - 3 distinct denied/declined calls end the loop.
+    - 2 do not end the loop.
+    - Summary lists the refused tools and reasons.
+    - Setting 0 disables the limit (more than 3 allowed).
+    - Non-interactive run exits non-zero on reaching limit.
+    """
+    import json
+    from chatybot.chatybot_app import ChatybotApp
+
+    sec_cfg = tmp_path / "security.toml"
+    sec_cfg.write_text(
+        'version = "1.0"\n'
+        'engine = "builtin"\n'
+        'fail_safe = "deny"\n'
+        'max_refusals_per_loop = 3\n'
+        '[builtin]\n'
+        'default_verdict = "deny"\n'
+    )
+
+    app = ChatybotApp(security_config_path=str(sec_cfg))
+    app.initialize()
+    assert app.security_manager.max_refusals_per_loop == 3
+
+    # Ensure chat history exists for run_tool_loop, starting with an initial tool call
+    first_tool_call = json.dumps({"tool": "run_command", "arguments": {"command": "rm -rf /tmp/1"}})
+    app.chat_history = [("Execute some actions", first_tool_call)]
+    app.enable_chat_history = True
+    app.rate_limit_delay = 0.0
+    app._cached_rate_limit_delay = 0.0
+
+    # 1. Test: 3 denied calls end the tool loop and produce refusal summary
+    # Call 1 is executed from initial last_completion; turns 1 and 2 come from chat_completion
+    calls_attempted = []
+    async def mock_completion_3(history, stream=False):
+        nonlocal calls_attempted
+        turn = len(calls_attempted)
+        if turn == 0:
+            call = json.dumps({"tool": "read_file", "arguments": {"path": "/etc/shadow"}})
+            calls_attempted.append("call_2")
+            return call
+        elif turn == 1:
+            call = json.dumps({"tool": "delete_file", "arguments": {"path": "/etc/hosts"}})
+            calls_attempted.append("call_3")
+            return call
+        else:
+            calls_attempted.append("should_not_reach_here")
+            return "Final output after too many turns"
+
+    monkeypatch.setattr(app, "chat_completion", mock_completion_3)
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+
+    await app.run_tool_loop(max_turns=10)
+
+    # 3 calls executed (initial + 2 completions) and hit limit
+    assert len(calls_attempted) == 2
+    last_completion = app.buffer_manager.get_script_var("LAST_COMPLETION")
+    assert "Reached security refusal limit (3)" in last_completion
+    assert "Security refusals during this loop:" in last_completion
+    assert "1. Tool: run_command" in last_completion
+    assert "2. Tool: read_file" in last_completion
+    assert "3. Tool: delete_file" in last_completion
+    assert app.in_tool_loop is False
+    assert app._loop_refusals == []
+
+    # 2. Test: 2 refusals do not end the loop (loop continues to completion)
+    first_call_2 = json.dumps({"tool": "run_command", "arguments": {"command": "rm -rf /tmp/1"}})
+    app.chat_history = [("Execute actions", first_call_2)]
+    calls_attempted_2 = []
+    async def mock_completion_2(history, stream=False):
+        nonlocal calls_attempted_2
+        turn = len(calls_attempted_2)
+        if turn == 0:
+            calls_attempted_2.append("call_2")
+            return json.dumps({"tool": "run_command", "arguments": {"command": "rm -rf /tmp/2"}})
+        else:
+            calls_attempted_2.append("natural_response")
+            return "I stopped calling restricted tools and completed normally."
+
+    monkeypatch.setattr(app, "chat_completion", mock_completion_2)
+    await app.run_tool_loop(max_turns=10)
+
+    assert len(calls_attempted_2) == 2
+    assert "I stopped calling restricted tools" in app.buffer_manager.get_script_var("LAST_COMPLETION")
+
+    # 3. Test: Setting max_refusals_per_loop = 0 disables limit
+    app.security_manager.max_refusals_per_loop = 0
+    first_call_0 = json.dumps({"tool": "run_command", "arguments": {"command": "rm -rf /tmp/init"}})
+    app.chat_history = [("Execute actions", first_call_0)]
+    calls_attempted_0 = []
+    async def mock_completion_0(history, stream=False):
+        nonlocal calls_attempted_0
+        turn = len(calls_attempted_0)
+        if turn < 3:
+            calls_attempted_0.append(f"call_{turn+2}")
+            return json.dumps({"tool": "run_command", "arguments": {"command": f"rm -rf /tmp/{turn}"}})
+        else:
+            calls_attempted_0.append("done")
+            return "Finished after 4 refusals without being stopped by refusal limit."
+
+    monkeypatch.setattr(app, "chat_completion", mock_completion_0)
+    await app.run_tool_loop(max_turns=10)
+
+    assert len(calls_attempted_0) == 4
+    assert "Finished after 4 refusals" in app.buffer_manager.get_script_var("LAST_COMPLETION")
+
+    # 4. Test: Non-interactive execution sets exit code 1 when limit is reached
+    app.security_manager.max_refusals_per_loop = 2
+    first_call_ni = json.dumps({"tool": "run_command", "arguments": {"command": "rm -rf /tmp/ni_0"}})
+    app.chat_history = [("Execute actions", first_call_ni)]
+    calls_non_interactive = []
+    async def mock_completion_ni(history, stream=False):
+        nonlocal calls_non_interactive
+        turn = len(calls_non_interactive)
+        calls_non_interactive.append(turn)
+        return json.dumps({"tool": "run_command", "arguments": {"command": f"rm -rf /tmp/ni_{turn+1}"}})
+
+    monkeypatch.setattr(app, "chat_completion", mock_completion_ni)
+    monkeypatch.setattr("sys.stdin.isatty", lambda: False)
+    app.script_context = True
+
+    await app.run_tool_loop(max_turns=10)
+
+    assert len(calls_non_interactive) == 1
+    assert app.buffer_manager.get_script_var("TOOL_DISPATCH_EXIT_CODE") == "1"
+    assert "Reached security refusal limit (2)" in app.buffer_manager.get_script_var("TOOL_DISPATCH_ERROR")
 
 
 
