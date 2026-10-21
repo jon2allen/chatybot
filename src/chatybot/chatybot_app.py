@@ -186,6 +186,11 @@ class ChatybotApp:
         self._tool_append_mode_user_set: bool = False
         self.max_turns: int = 25
         self.max_tool_calls_per_turn: int = 10
+        # Loop guard: stop repeated identical tool calls that return identical results
+        self.loop_guard_enabled: bool = True
+        self.loop_guard_repeats: int = 3
+        self.loop_guard_window: int = 8
+        self._loop_guard: Any = None
         self.agentic_instructions: str = ""
         self.live_agentic_instructions: str = ""
         self.live_tool_context: str = ""
@@ -357,6 +362,7 @@ class ChatybotApp:
             self.default_profile = config_section.get('default_profile')
             self.max_turns = config_section.get('max_turns', 25)
             self.max_tool_calls_per_turn = config_section.get('max_tool_calls_per_turn', 10)
+            self._apply_loop_guard_config(config_section)
             self.profile_dir = config_section.get('profile_dir', '~/.config/chatybot/profiles')
             self.enable_profile_edit = config_section.get('enable_profile_edit', True)
 
@@ -3741,6 +3747,23 @@ class ChatybotApp:
             return f"{raw_error.strip()}\n\n{guidance}"
         return guidance
 
+    def _apply_loop_guard_config(self, config_section: dict[str, Any]) -> None:
+        """Read loop_guard, loop_guard_repeats and loop_guard_window from [config]."""
+        if 'loop_guard' in config_section:
+            val = config_section.get('loop_guard')
+            if isinstance(val, bool):
+                self.loop_guard_enabled = val
+            elif str(val).lower() in ('true', '1', 'yes', 'on'):
+                self.loop_guard_enabled = True
+            elif str(val).lower() in ('false', '0', 'no', 'off'):
+                self.loop_guard_enabled = False
+        for key, attr in (('loop_guard_repeats', 'loop_guard_repeats'), ('loop_guard_window', 'loop_guard_window')):
+            if key in config_section and not isinstance(config_section.get(key), bool):
+                try:
+                    setattr(self, attr, max(2, int(config_section.get(key))))
+                except (ValueError, TypeError):
+                    pass
+
     def _is_security_refusal(self, text: str) -> bool:
         """Check whether a tool return string represents a final security refusal."""
         if not text or not isinstance(text, str):
@@ -5800,6 +5823,12 @@ class ChatybotApp:
         self._loop_security_refusals = {}  # Cache pre-execution security refusals in this loop
         self._loop_output_refusals = {}    # Cache output security refusals in this loop
         self._loop_refusals = []           # Track security refusals in this loop for limit enforcement
+        from .loop_guard import LoopGuard
+        self._loop_guard = LoopGuard(
+            repeats=self.loop_guard_repeats,
+            window=self.loop_guard_window,
+            enabled=self.loop_guard_enabled,
+        )
 
         # Preserve user-set rate limits across loop initializations
         if self._cached_rate_limit_delay is not None:
@@ -5866,6 +5895,10 @@ class ChatybotApp:
 
             results = []
             refusal_limit_hit = False
+            loop_guard_stop = False
+            guard = self._loop_guard
+            if guard is not None:
+                guard.start_turn()
             for tc in tool_calls:
                 tool_name = tc.get("tool")
                 tool_args = tc.get("arguments", {})
@@ -5875,14 +5908,40 @@ class ChatybotApp:
                     print(f"[Turn {turn_count+1}/{max_turns}] LLM requested tool: {tool_name}")
                     print(f"   Arguments: {safe_json_dumps(tool_args, ensure_ascii=False)}")
                 
+                # Loop guard: withhold repeats of a call that keeps returning the same result
+                from .loop_guard import RUN, STOP
+                guard_decision = guard.check(tool_name, tool_args) if guard is not None else None
+                if guard_decision is not None and guard_decision.action == STOP:
+                    print(f"\n[Loop Guard] {guard_decision.message}")
+                    final_natural_language_response = (
+                        f"{guard_decision.message}\n\nLast repeated call: {tool_name} "
+                        f"{safe_json_dumps(tool_args, ensure_ascii=False)}"
+                    )
+                    if self.logging_manager.logging_active:
+                        self.logging_manager.log_message(f"[Turn {turn_count+1}] {guard_decision.message}")
+                    if not (sys.stdin.isatty() and not getattr(self, "script_context", False) and not getattr(self, "single_run_mode", False)):
+                        self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
+                        self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', guard_decision.message)
+                    loop_guard_stop = True
+                    break
+                guard_withheld = guard_decision is not None and guard_decision.action != RUN
+
                 # Execute the tool and capture result
                 self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
                 self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '0')
                 _tool_t0 = time.perf_counter()
                 _tool_ts = datetime.now().isoformat()
                 try:
-                    # dispatch_tool writes result to TOOL_DISPATCH_RESULT and returns the stdout string
-                    result_str = await self.dispatch_tool(safe_json_dumps(tc, ensure_ascii=False))
+                    if guard_withheld:
+                        # Not executed and not evaluated: the model only gets the guard's message
+                        print(f"   [Loop Guard] {tool_name} not executed ({guard_decision.action}).")
+                        result_str = guard_decision.message
+                        self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
+                        self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', guard_decision.message)
+                        self.last_security_duration_ms = 0.0
+                    else:
+                        # dispatch_tool writes result to TOOL_DISPATCH_RESULT and returns the stdout string
+                        result_str = await self.dispatch_tool(safe_json_dumps(tc, ensure_ascii=False))
                 except Exception as e:
                     result_str = safe_json_dumps({"status": "error", "message": f"Dispatch execution error: {e!s}"}, ensure_ascii=False)
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', result_str)
@@ -5931,6 +5990,8 @@ class ChatybotApp:
                     "timestamp": _tool_ts,
                     "duration_ms": _tool_duration_ms,
                 }
+                if guard_withheld:
+                    tool_record["loop_guard"] = guard_decision.action
 
                 current_loop = self.buffer_manager.get_script_var('AGENTIC_LOOP') or []
                 if not isinstance(current_loop, list):
@@ -5951,6 +6012,8 @@ class ChatybotApp:
                 # flag only when it refused; tool output text is never inspected.
                 refusal = getattr(self, "_last_dispatch_refusal", None)
                 self._last_dispatch_refusal = None
+                if guard is not None and not guard_withheld and not refusal:
+                    guard.record(tool_name, tool_args, result_str)
                 if refusal:
                     self._loop_refusals.append({
                         "turn": turn_count + 1,
@@ -5998,7 +6061,7 @@ class ChatybotApp:
                         refusal_limit_hit = True
                         break
 
-            if refusal_limit_hit:
+            if refusal_limit_hit or loop_guard_stop:
                 break
             
             for tc in excess_calls:
@@ -6073,6 +6136,7 @@ class ChatybotApp:
         self._loop_security_refusals = None
         self._loop_output_refusals = None
         self._loop_refusals = []
+        self._loop_guard = None
 
         # If final_natural_language_response is not set, fallback
         if not final_natural_language_response:
@@ -6275,6 +6339,7 @@ class ChatybotApp:
                 self.max_tool_calls_per_turn = int(config_section.get('max_tool_calls_per_turn'))
             except (ValueError, TypeError):
                 pass
+        self._apply_loop_guard_config(config_section)
         if 'strip_thinking_from_filebanks' in config_section:
             val = config_section.get('strip_thinking_from_filebanks')
             if isinstance(val, bool):
@@ -7097,6 +7162,7 @@ class ChatybotApp:
                     self._loop_security_refusals = None
                     self._loop_output_refusals = None
                     self._loop_refusals = []
+                    self._loop_guard = None
                 
                 if self.control_c_count >= 2:
                     # Second Ctrl+C - exit program

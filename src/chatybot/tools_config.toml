@@ -2,6 +2,12 @@
 tool_timeout = 60
 rate_limit_delay = 2.0
 max_turns = 25
+# Loop guard: when a tool call has returned the same result (loop_guard_repeats - 1)
+# times within the last loop_guard_window calls, the next identical call is not run
+# and the model is told to change approach; if it keeps asking, the loop stops.
+loop_guard = true
+loop_guard_repeats = 3
+loop_guard_window = 8
 strip_thinking_from_filebanks = true
 shell = true
 default_profile = ""
