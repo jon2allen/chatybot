@@ -30,6 +30,8 @@ def isolated_home(tmp_path, monkeypatch):
     home = tmp_path / "home"
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))
+    # Jev's redaction scanner caches known secrets from the environment; rebuild per test.
+    monkeypatch.setattr("chatybot.security.jev._SCANNER", None)
     return home
 
 
@@ -919,3 +921,28 @@ def test_jev_trace_raw_payload_output_path(rubric_path, jev_key, capsys):
 
 
 
+
+
+
+def test_jev_request_redacts_provider_keys_and_known_secrets(rubric_path, jev_key, monkeypatch):
+    """Secrets in a command never reach the Jev API: provider formats via SecretScanner
+    patterns, and the user's own keys (from the environment) via known-secret matching."""
+    groq = "gsk_" + "aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789ABCDEFGHIJKLMN"
+    mine = "Xk9mQ2vR7tY4pL8w" + "N3zB6cJ1hF5dG0sA"
+    monkeypatch.setenv("MISTRAL_API_KEY", mine)
+    fake = FakeJev()
+    eng = make_jev(rubric_path, fake)
+    eng.evaluate(cmd(f"groq-cli --key {groq} && mistral chat --api-key {mine}"))
+    state = fake.calls[0]["body"]["state"]
+    assert groq not in state and mine not in state
+    assert "<redacted:MISTRAL_API_KEY>" in state
+    assert "groq-cli --key" in state  # the rest of the command is still visible to Jev
+
+
+def test_jev_request_keeps_shell_expansions_visible(rubric_path, jev_key):
+    """$(...) and ${VAR} are not secrets; hiding them would hide intent (keychain reads) from Jev."""
+    fake = FakeJev()
+    eng = make_jev(rubric_path, fake)
+    eng.evaluate(cmd("export OPENAI_API_KEY=$(security find-generic-password -s openai -w)"))
+    assert "find-generic-password -s openai -w)" in fake.calls[0]["body"]["state"]
+    assert "$(security" in fake.calls[0]["body"]["state"]
