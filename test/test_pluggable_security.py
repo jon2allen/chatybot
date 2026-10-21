@@ -2513,6 +2513,133 @@ async def test_stage3_limit_refusals_per_loop(tmp_path, monkeypatch):
     assert "Reached security refusal limit (2)" in app.buffer_manager.get_script_var("TOOL_DISPATCH_ERROR")
 
 
+@pytest.mark.anyio
+async def test_stage4_refusal_repeat_and_limit_audit_events(tmp_path, monkeypatch):
+    """Stage 4 Test: Verify refusal_repeat and refusal_limit audit events in log file, and verify log_path='' disables them."""
+    import json
+    from chatybot.chatybot_app import ChatybotApp
+    from chatybot.security.chain import ChainedPolicyEngine, ChainStage
+    from chatybot.security.builtin import BuiltinPolicyEngine
+    from chatybot.security.manager import SecurityManager
+
+    log_file = tmp_path / "security_chain.jsonl"
+    b_engine = BuiltinPolicyEngine(denied_paths=["/etc/shadow", "/root/secrets.txt"])
+    chain_engine = ChainedPolicyEngine(
+        stages=[ChainStage(name="builtin", engine=b_engine, mode="enforce")],
+        log_path=str(log_file),
+        redact_log=True,
+    )
+    sec_cfg = tmp_path / "security.toml"
+    sec_cfg.write_text('version = "1.0"\nengine = "builtin"\nmax_refusals_per_loop = 3\n')
+    mgr = SecurityManager(config_path=str(sec_cfg))
+    mgr.engine = chain_engine
+    mgr.max_refusals_per_loop = 3
+
+    app = ChatybotApp()
+    app.security_manager = mgr
+    app.active_session_id = "test-session-42"
+
+    # Step 1: Pre-execution refusal repeat event
+    app.in_tool_loop = True
+    app._loop_security_refusals = {}
+    app._loop_output_refusals = {}
+    app._loop_refusals = []
+
+    call_json = json.dumps({"tool": "read_file", "arguments": {"path": "/etc/shadow"}})
+    res1 = await app.dispatch_tool(call_json)
+    assert "Security refusal (final):" in res1
+
+    # First call emitted standard decision (final: deny)
+    lines_1 = [json.loads(line) for line in log_file.read_text().splitlines() if line.strip()]
+    assert len(lines_1) == 1
+    assert lines_1[0]["event"] == "decision"
+    orig_req_id = lines_1[0]["request_id"]
+
+    # Repeat call in same loop -> should hit cache and emit refusal_repeat
+    res2 = await app.dispatch_tool(call_json)
+    assert res2 == res1
+
+    lines_2 = [json.loads(line) for line in log_file.read_text().splitlines() if line.strip()]
+    assert len(lines_2) == 2
+    repeat_event = lines_2[1]
+    assert repeat_event["event"] == "refusal_repeat"
+    assert repeat_event["tool"] == "read_file"
+    assert repeat_event["session_id"] == "test-session-42"
+    assert repeat_event["request_id"] == orig_req_id
+    assert "parameters" in repeat_event
+    assert "reason" in repeat_event
+
+    # Step 2: Loop refusal limit event in run_tool_loop
+    # Reset loop cache
+    app._loop_security_refusals = None
+    app._loop_output_refusals = None
+    app._loop_refusals = []
+    app.in_tool_loop = False
+    app.rate_limit_delay = 0.0
+    app._cached_rate_limit_delay = 0.0
+
+    first_prompt_call = json.dumps({"tool": "read_file", "arguments": {"path": "/etc/shadow"}})
+    app.chat_history = [("Execute malicious operations", first_prompt_call)]
+
+    call_index = 0
+    async def mock_completion(history, stream=False):
+        nonlocal call_index
+        call_index += 1
+        return json.dumps({"tool": "read_file", "arguments": {"path": f"/root/secrets.txt"}})
+
+    monkeypatch.setattr(app, "chat_completion", mock_completion)
+    await app.run_tool_loop(max_turns=10)
+
+    lines_3 = [json.loads(line) for line in log_file.read_text().splitlines() if line.strip()]
+    limit_events = [e for e in lines_3 if e.get("event") == "refusal_limit"]
+    assert len(limit_events) == 1
+    lim = limit_events[0]
+    assert lim["event"] == "refusal_limit"
+    assert lim["session_id"] == "test-session-42"
+    assert lim["limit"] == 3
+    assert len(lim["request_ids"]) >= 1
+    assert len(lim["refused_calls"]) == 3
+    assert lim["refused_calls"][0]["tool"] == "read_file"
+
+    # Step 3: Test jev_eval --from-log parsing and reporting
+    import io
+    import sys
+    import argparse
+    import importlib.util
+    from pathlib import Path
+    from chatybot.security.jev import BUNDLED_RUBRIC, Rubric
+
+    harness_path = Path(__file__).resolve().parent.parent / "tools" / "jev-eval" / "jev_eval.py"
+    spec = importlib.util.spec_from_file_location("jev_eval", harness_path)
+    jev_eval = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(jev_eval)
+
+    captured_out = io.StringIO()
+    old_stdout = sys.stdout
+    sys.stdout = captured_out
+    try:
+        ns = argparse.Namespace(from_log=[str(log_file)], mode_given=None, export=None)
+        rub = Rubric.load(BUNDLED_RUBRIC)
+        rc = jev_eval.from_log(ns, rub)
+        assert rc == 0
+    finally:
+        sys.stdout = old_stdout
+
+    report = captured_out.getvalue()
+    assert "Loop Refusals:" in report
+    assert "repeat(s) served from cache" in report
+    assert "refusal limit(s) triggered" in report
+    assert "Session 'test-session-42': limit 3 reached" in report
+
+    # Step 4: Verify log_path = "" writes nothing
+    no_log_file = tmp_path / "should_not_exist.jsonl"
+    chain_engine.log_path = ""
+    mgr.record_refusal_repeat(request_id="test", tool="test_tool", parameters={}, reason="denied")
+    mgr.record_refusal_limit(limit=3, request_ids=["test"], refused_calls=[])
+    assert not no_log_file.exists()
+
+
+
 
 
 

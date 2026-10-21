@@ -486,5 +486,53 @@ class JevPolicyEngine(BasePolicyEngine):
             "detail": detail,
         })
 
+    def record_refusal_repeat(
+        self,
+        request_id: str,
+        tool: str,
+        parameters: dict[str, Any] | None = None,
+        reason: str = "",
+        session_id: str = "",
+    ) -> None:
+        """Log a repeat tool refusal served from the per-loop cache."""
+        if not self.log_path:
+            return
+        params = _prepare(parameters or {}, True, 4000, {"truncated": False})
+        self._write({
+            "event": "refusal_repeat",
+            "ts": datetime.now(UTC).isoformat(),
+            "session_id": session_id,
+            "request_id": request_id,
+            "tool": tool,
+            "parameters": params,
+            "reason": reason,
+        })
+
+    def record_refusal_limit(
+        self,
+        limit: int,
+        request_ids: list[str] | None = None,
+        refused_calls: list[dict[str, Any]] | None = None,
+        session_id: str = "",
+    ) -> None:
+        """Log a loop termination triggered by reaching the security refusal limit."""
+        if not self.log_path:
+            return
+        calls = refused_calls or []
+        redacted_calls = []
+        for call in calls:
+            c_copy = dict(call)
+            if "arguments" in c_copy and isinstance(c_copy["arguments"], dict):
+                c_copy["arguments"] = _prepare(c_copy["arguments"], True, 4000, {"truncated": False})
+            redacted_calls.append(c_copy)
+        self._write({
+            "event": "refusal_limit",
+            "ts": datetime.now(UTC).isoformat(),
+            "session_id": session_id,
+            "limit": limit,
+            "request_ids": request_ids or [],
+            "refused_calls": redacted_calls,
+        })
+
     def get_banner(self) -> str:
         return f"Jev ({self.model}, {len(self.rubric.rules)} rules, mode {self.mode})"

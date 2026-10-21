@@ -400,6 +400,43 @@ class SecurityManager:
         except Exception as exc:  # noqa: BLE001
             logger.warning("[Security Warning] Could not record outcome '%s': %s", outcome, exc)
 
+    def record_refusal_repeat(
+        self,
+        request_id: str,
+        tool: str,
+        parameters: dict[str, Any] | None = None,
+        reason: str = "",
+        session_id: str = "",
+    ) -> None:
+        """Record a repeat tool refusal served from cache to the engine's log. Never raises."""
+        if not self.enabled or self.engine is None:
+            return
+        fn = getattr(self.engine, "record_refusal_repeat", None)
+        if fn is None:
+            return
+        try:
+            fn(request_id, tool, parameters=parameters, reason=reason, session_id=session_id)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("[Security Warning] Could not record refusal_repeat for '%s': %s", tool, exc)
+
+    def record_refusal_limit(
+        self,
+        limit: int,
+        request_ids: list[str] | None = None,
+        refused_calls: list[dict[str, Any]] | None = None,
+        session_id: str = "",
+    ) -> None:
+        """Record a loop refusal limit halt to the engine's log. Never raises."""
+        if not self.enabled or self.engine is None:
+            return
+        fn = getattr(self.engine, "record_refusal_limit", None)
+        if fn is None:
+            return
+        try:
+            fn(limit, request_ids=request_ids, refused_calls=refused_calls, session_id=session_id)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("[Security Warning] Could not record refusal_limit: %s", exc)
+
     def get_banner(self) -> str:
         """Return a human-readable banner string describing the active security engine."""
         if not self.enabled:

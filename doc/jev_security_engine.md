@@ -864,6 +864,39 @@ When an ASK is answered, an outcome line is appended with the same `request_id`:
 
 Outcomes are `approved`, `declined`, `auto_approved_yes_flag`, `auto_approved_non_interactive` and `blocked_non_interactive`. Review both kinds of line with `tools/jev-eval/jev_eval.py --from-log` ([Section 16](#16-decision-logging)).
 
+When an agent in a tool loop retries a previously refused tool call with identical arguments, the call is intercepted and served immediately by the per-loop refusal cache without invoking the security engine again. This emits a `refusal_repeat` audit event referencing the original `request_id`:
+
+```json
+{
+  "event": "refusal_repeat",
+  "ts": "2026-10-21T20:15:00+00:00",
+  "session_id": "session-123",
+  "request_id": "6f1c2b7e-...",
+  "tool": "run_command",
+  "parameters": {"command": "cat /etc/shadow"},
+  "reason": "Security Policy Blocked: Access to /etc/shadow is forbidden"
+}
+```
+
+If an agent accumulates repeated security refusals within a single tool loop reaching `max_refusals_per_loop` (default: 3), the loop is terminated and a `refusal_limit` audit event is emitted:
+
+```json
+{
+  "event": "refusal_limit",
+  "ts": "2026-10-21T20:15:05+00:00",
+  "session_id": "session-123",
+  "limit": 3,
+  "request_ids": ["6f1c2b7e-...", "7a2d3e4f-..."],
+  "refused_calls": [
+    {"turn": 1, "tool": "run_command", "arguments": {"command": "cat /etc/shadow"}, "reason": "..."},
+    {"turn": 2, "tool": "run_command", "arguments": {"command": "cat /etc/shadow"}, "reason": "..."},
+    {"turn": 3, "tool": "read_file", "arguments": {"path": "/etc/shadow"}, "reason": "..."}
+  ]
+}
+```
+
+Both events are summarized by `tools/jev-eval/jev_eval.py --from-log`. If logging is disabled (`log_path = ""`), nothing is written to disk.
+
 ## 22. Fail-Closed Fault Tolerance
 
 A security system must never fail open during network outages or service disruptions. If the Jev API times out, returns an HTTP error, or outputs malformed JSON, the `on_error` setting controls the fallback:
@@ -908,7 +941,7 @@ To keep tool data on the machine entirely, use `engine = "builtin"` or `racf-gua
 
 ## 24. Known Limitations
 
-- **Each call is judged on its own.** Jev does not see earlier calls. In one session, a `grep_search` for `api_key` was correctly denied, and the agent then read `~/.zshrc`, which was allowed (`secrets` scored 0.22). The output floor ([Section 18](#18-output-security-screening)) now catches secrets in what was read, but the read itself was not stopped.
+- **Each call is judged on its own.** Jev does not see earlier calls. In one session, a `grep_search` for `api_key` was correctly denied, and the agent then read `~/.zshrc`, which was allowed (`secrets` scored 0.22). The output floor ([Section 18](#18-output-security-screening)) now catches secrets in what was read, but the read itself was not stopped. Loop refusal caching and tool-loop refusal limits prevent agents from repeatedly probing security boundaries or retrying refused calls in endless loops.
 - **The rubric does not name shell startup or persistence files.** Rubric v1.1 has no rule for reading `~/.zshrc`, `~/.bashrc`, `~/.profile` or `~/.netrc`, or for writing to them, to crontab or to `~/Library/LaunchAgents`. Such calls are judged as ordinary reads and writes.
 - **Script contents are not seen.** For `bash deploy.sh`, Jev sees the command, not what `deploy.sh` contains. Writing a script and running it in two separate calls is judged one call at a time.
 - **Injection through content is untested.** Injection inside the action is covered by the test set ([Section 4](#4-prompt-injection-resistance)); instructions planted in files or web pages the agent reads are not.
