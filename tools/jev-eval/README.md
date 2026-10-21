@@ -8,8 +8,9 @@ via OpenRouter) as a chatybot security engine. Nothing here is wired into
 
 - `rubric.toml` — the policy: one **noul** question per rule, each with the verdict
   it produces (`deny` or `ask`) plus the scoring thresholds.
-- `corpus.jsonl` — 99 labeled tool calls: benign, look-alikes, borderline,
-  policy violations, catastrophic/exfiltration, evasion, self-protection, and
+- `corpus.jsonl` — 129 labeled tool calls: benign, look-alikes, borderline,
+  policy violations (including shell startup files, credential config files and
+  persistence), catastrophic/exfiltration, evasion, self-protection, and
   prompt-injection cases.
 - `jev_eval.py` — sends each case as **one request with all rubric questions**,
   turns the probabilities into allow/ask/deny, and grades it.
@@ -92,7 +93,7 @@ log_path = "~/.config/chatybot/logs/security_chain.jsonl"
 Each line of the log has the final verdict, every stage's verdict, reason and
 latency, and `"disagreement": true` when the stages differ. Both logs are on by
 default (`~/.config/chatybot/logs/security_chain.jsonl` and `jev_security.jsonl`;
-set `log_path = ""` to turn one off). The Jev log has all nine rule scores for
+set `log_path = ""` to turn one off). The Jev log has every rule's score for
 every call and a `source` field (api, cache, self_protect, skip_tools, error).
 Both logs also get an `"event": "outcome"` line when you answer an ASK
 (approved, declined, auto-approved, blocked), with the decision's `request_id`. To let Jev decide,

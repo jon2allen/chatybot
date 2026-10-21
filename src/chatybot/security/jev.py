@@ -217,6 +217,7 @@ class JevPolicyEngine(BasePolicyEngine):
         self.rubric_path = os.path.abspath(os.path.expanduser(rubric_path or DEFAULT_RUBRIC_PATH))
         self._seed_rubric()
         self.rubric = Rubric.load(self.rubric_path)
+        self._warn_if_rubric_outdated()
         if mode not in MODES:
             raise ValueError(f"[jev] mode must be one of {MODES}, got {mode!r}")
         self.mode = mode
@@ -264,6 +265,32 @@ class JevPolicyEngine(BasePolicyEngine):
         except OSError as e:
             logger.warning("[Security Warning] Could not seed Jev rubric to '%s': %s. Using bundled default.", self.rubric_path, e)
             self.rubric_path = BUNDLED_RUBRIC
+
+    def _warn_if_rubric_outdated(self) -> None:
+        """A user's rubric is copied once and never updated automatically (it is
+        self-protected, so chatybot cannot edit it). Say so when the bundled one is newer."""
+        if os.path.abspath(self.rubric_path) == os.path.abspath(BUNDLED_RUBRIC):
+            return
+        try:
+            bundled = Rubric.load(BUNDLED_RUBRIC)
+        except Exception:  # noqa: BLE001
+            return
+
+        def _v(text: str) -> tuple[int, ...]:
+            try:
+                return tuple(int(x) for x in str(text).split("."))
+            except ValueError:
+                return ()
+
+        mine, latest = _v(self.rubric.version), _v(bundled.version)
+        if mine and latest and mine < latest:
+            new_ids = sorted({r.id for r in bundled.rules} - {r.id for r in self.rubric.rules})
+            added = f" (new rules: {', '.join(new_ids)})" if new_ids else ""
+            print(
+                f"[Security Notice] Your Jev rubric '{self.rubric_path}' is version {self.rubric.version}; "
+                f"the bundled rubric is version {bundled.version}{added}. Review the bundled file and merge "
+                f"the changes yourself: {BUNDLED_RUBRIC}"
+            )
 
     def _get_api_key(self) -> str:
         if self._api_key:
