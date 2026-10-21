@@ -115,6 +115,68 @@ def _prepare(value: Any, redact: bool, max_chars: int, state: dict[str, bool]) -
     return value
 
 
+LOG_MAX_CHARS = 4000
+_REDACTION_FAILED = "<omitted: redaction failed>"
+
+
+def prepare_for_log(value: Any, redact: bool = True, max_chars: int = LOG_MAX_CHARS) -> Any:
+    """Redact and cut a value before it is written to a decision log.
+
+    Fails closed: if redaction raises, a marker is logged instead of the raw value.
+    """
+    try:
+        return _prepare(value, redact, max_chars, {"truncated": False})
+    except Exception:  # noqa: BLE001
+        logger.warning("[Security Warning] Redaction failed; value omitted from log")
+        return _REDACTION_FAILED
+
+
+def refusal_repeat_entry(
+    request_id: str,
+    tool: str,
+    parameters: dict[str, Any] | None,
+    reason: str,
+    session_id: str,
+    redact: bool = True,
+) -> dict[str, Any]:
+    """Log line for a tool-loop refusal served from memory (shared by the jev and chain logs)."""
+    return {
+        "event": "refusal_repeat",
+        "ts": datetime.now(UTC).isoformat(),
+        "session_id": session_id,
+        "request_id": request_id,
+        "tool": tool,
+        "parameters": prepare_for_log(parameters or {}, redact),
+        "reason": prepare_for_log(reason or "", redact),
+    }
+
+
+def refusal_limit_entry(
+    limit: int,
+    request_ids: list[str] | None,
+    refused_calls: list[dict[str, Any]] | None,
+    session_id: str,
+    redact: bool = True,
+) -> dict[str, Any]:
+    """Log line for a tool loop ended by max_refusals_per_loop (shared by the jev and chain logs)."""
+    calls = []
+    for call in refused_calls or []:
+        c = dict(call)
+        if "arguments" in c:
+            c["arguments"] = prepare_for_log(c["arguments"], redact)
+        if "reason" in c:
+            c["reason"] = prepare_for_log(str(c["reason"]), redact)
+        calls.append(c)
+    return {
+        "event": "refusal_limit",
+        "ts": datetime.now(UTC).isoformat(),
+        "session_id": session_id,
+        "limit": limit,
+        "request_ids": list(request_ids or []),
+        "refused_calls": calls,
+    }
+
+
 def _urllib_post(url: str, body: dict[str, Any], headers: dict[str, str], timeout: float) -> dict[str, Any]:
     req = urllib.request.Request(url, data=json.dumps(body).encode("utf-8"), headers=headers, method="POST")
     try:
@@ -494,19 +556,10 @@ class JevPolicyEngine(BasePolicyEngine):
         reason: str = "",
         session_id: str = "",
     ) -> None:
-        """Log a repeat tool refusal served from the per-loop cache."""
+        """Log a repeat tool refusal served from the per-loop memory."""
         if not self.log_path:
             return
-        params = _prepare(parameters or {}, True, 4000, {"truncated": False})
-        self._write({
-            "event": "refusal_repeat",
-            "ts": datetime.now(UTC).isoformat(),
-            "session_id": session_id,
-            "request_id": request_id,
-            "tool": tool,
-            "parameters": params,
-            "reason": reason,
-        })
+        self._write(refusal_repeat_entry(request_id, tool, parameters, reason, session_id))
 
     def record_refusal_limit(
         self,
@@ -515,24 +568,10 @@ class JevPolicyEngine(BasePolicyEngine):
         refused_calls: list[dict[str, Any]] | None = None,
         session_id: str = "",
     ) -> None:
-        """Log a loop termination triggered by reaching the security refusal limit."""
+        """Log a loop ended by reaching the security refusal limit."""
         if not self.log_path:
             return
-        calls = refused_calls or []
-        redacted_calls = []
-        for call in calls:
-            c_copy = dict(call)
-            if "arguments" in c_copy and isinstance(c_copy["arguments"], dict):
-                c_copy["arguments"] = _prepare(c_copy["arguments"], True, 4000, {"truncated": False})
-            redacted_calls.append(c_copy)
-        self._write({
-            "event": "refusal_limit",
-            "ts": datetime.now(UTC).isoformat(),
-            "session_id": session_id,
-            "limit": limit,
-            "request_ids": request_ids or [],
-            "refused_calls": redacted_calls,
-        })
+        self._write(refusal_limit_entry(limit, request_ids, refused_calls, session_id))
 
     def get_banner(self) -> str:
         return f"Jev ({self.model}, {len(self.rubric.rules)} rules, mode {self.mode})"

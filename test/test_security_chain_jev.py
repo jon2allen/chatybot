@@ -946,3 +946,75 @@ def test_jev_request_keeps_shell_expansions_visible(rubric_path, jev_key):
     eng.evaluate(cmd("export OPENAI_API_KEY=$(security find-generic-password -s openai -w)"))
     assert "find-generic-password -s openai -w)" in fake.calls[0]["body"]["state"]
     assert "$(security" in fake.calls[0]["body"]["state"]
+
+
+# --------------------------------------------------------------------------- loop refusal events
+
+class RecordingStage(Fixed):
+    """A stage that would log loop refusal events itself, like the Jev engine."""
+
+    def __init__(self):
+        super().__init__(Verdict.ALLOW)
+        self.repeats, self.limits = [], []
+
+    def record_refusal_repeat(self, *a, **kw):
+        self.repeats.append((a, kw))
+
+    def record_refusal_limit(self, *a, **kw):
+        self.limits.append((a, kw))
+
+
+def _events(path):
+    return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+
+
+def test_chain_logs_loop_refusal_events_once(tmp_path):
+    """The chain writes loop refusal events to its own log only; stages are not asked to log them too."""
+    log = tmp_path / "chain.jsonl"
+    stage = RecordingStage()
+    chain = ChainedPolicyEngine([ChainStage("builtin", Fixed(Verdict.ALLOW)), ChainStage("jev", stage, mode="shadow")], log_path=str(log))
+    chain.record_refusal_repeat("rid-1", "run_command", parameters={"command": "ls"}, reason="denied", session_id="s1")
+    chain.record_refusal_limit(3, request_ids=["rid-1"], refused_calls=[{"turn": 1, "tool": "run_command", "arguments": {"command": "ls"}, "reason": "denied", "request_id": "rid-1"}], session_id="s1")
+    assert stage.repeats == [] and stage.limits == []
+    events = _events(log)
+    assert [e["event"] for e in events] == ["refusal_repeat", "refusal_limit"]
+    assert events[1]["refused_calls"][0]["request_id"] == "rid-1"
+
+
+def test_loop_refusal_events_redact_reasons_and_arguments(tmp_path, rubric_path, jev_key):
+    """Reasons and arguments are redacted and cut in both the chain and the jev log."""
+    secret = "sk-or-v1-" + "0123456789abcdef" * 4
+    long_reason = f"Output Withheld: token {secret} " + "x" * 9000
+    calls = [{"turn": 1, "tool": "read_file", "arguments": {"path": "a.env", "note": f"KEY={secret}"}, "reason": long_reason, "request_id": "r1"}]
+
+    chain_log = tmp_path / "chain.jsonl"
+    chain = ChainedPolicyEngine([ChainStage("a", Fixed(Verdict.ALLOW))], log_path=str(chain_log))
+    jev = make_jev(rubric_path, FakeJev())
+    jev.log_path = str(tmp_path / "jev.jsonl")
+    for eng in (chain, jev):
+        eng.record_refusal_repeat("r1", "read_file", parameters={"note": f"KEY={secret}"}, reason=long_reason, session_id="s")
+        eng.record_refusal_limit(3, request_ids=["r1"], refused_calls=calls, session_id="s")
+
+    for path in (chain_log, tmp_path / "jev.jsonl"):
+        text = path.read_text()
+        assert secret not in text
+        assert "TRUNCATED" in text
+        repeat, limit = _events(path)
+        assert len(repeat["reason"]) < 4200
+        assert len(limit["refused_calls"][0]["reason"]) < 4200
+    # caller's records are not modified in place
+    assert calls[0]["reason"] == long_reason
+
+
+def test_loop_refusal_events_fail_closed_when_redaction_breaks(tmp_path, monkeypatch):
+    def boom(*a, **kw):
+        raise RuntimeError("scanner broke")
+
+    monkeypatch.setattr("chatybot.security.jev._prepare", boom)
+    log = tmp_path / "chain.jsonl"
+    chain = ChainedPolicyEngine([ChainStage("a", Fixed(Verdict.ALLOW))], log_path=str(log))
+    chain.record_refusal_repeat("r1", "run_command", parameters={"command": "echo hunter2-secret"}, reason="hunter2-secret", session_id="s")
+    chain.evaluate(cmd("echo hunter2-secret"))
+    text = log.read_text()
+    assert "hunter2-secret" not in text
+    assert "<omitted: redaction failed>" in text
