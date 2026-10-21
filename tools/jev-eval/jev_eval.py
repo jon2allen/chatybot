@@ -335,7 +335,17 @@ def from_log(args, rubric: Rubric) -> int:
     chain_by_id = {e["request_id"]: e for e in chain if e.get("request_id")}
     jev_by_id = {e["request_id"]: e for e in jev if e.get("request_id")}
 
-    print(f"\nRead {len(events)} lines: {len(jev)} Jev decisions, {len(chain)} chain decisions, {len(outcomes)} ASK outcomes")
+    repeats = [e for e in events if e.get("event") == "refusal_repeat"]
+    limits = [e for e in events if e.get("event") == "refusal_limit"]
+
+    extra_parts = []
+    if repeats:
+        extra_parts.append(f"{len(repeats)} refusal repeats")
+    if limits:
+        extra_parts.append(f"{len(limits)} refusal limits")
+    extra_str = f", {', '.join(extra_parts)}" if extra_parts else ""
+
+    print(f"\nRead {len(events)} lines: {len(jev)} Jev decisions, {len(chain)} chain decisions, {len(outcomes)} ASK outcomes{extra_str}")
     print(f"Re-grading with: trigger >= {rubric.trigger} | ask >= {rubric.ask}"
           + (f" | mode {args.mode_given}" if args.mode_given else " | mode as logged"))
 
@@ -410,6 +420,27 @@ def from_log(args, rubric: Rubric) -> int:
                 print("  user outcome vs Jev verdict:")
                 for (o, v), n in sorted(vs.items()):
                     print(f"    {o:<30} Jev {v:<5} {n}")
+
+    # ---- loop refusals (repeats & limits)
+    refusal_repeats = [e for e in events if e.get("event") == "refusal_repeat"]
+    refusal_limits = [e for e in events if e.get("event") == "refusal_limit"]
+    if refusal_repeats or refusal_limits:
+        print(f"\nLoop Refusals: {len(refusal_repeats)} repeat(s) served from cache, {len(refusal_limits)} refusal limit(s) triggered")
+        if refusal_repeats:
+            repeat_by_tool: dict[str, int] = {}
+            for r in refusal_repeats:
+                t = r.get("tool", "unknown")
+                repeat_by_tool[t] = repeat_by_tool.get(t, 0) + 1
+            print("  Repeats by tool: " + ", ".join(f"{t}: {c}" for t, c in sorted(repeat_by_tool.items())))
+        if refusal_limits:
+            print("  Sessions hitting refusal limit:")
+            for lim in refusal_limits:
+                sid = lim.get("session_id") or "unknown"
+                l_val = lim.get("limit", "?")
+                r_calls = lim.get("refused_calls") or []
+                tools = [c.get("tool", "?") for c in r_calls]
+                tool_summary = ", ".join(tools) if tools else f"{len(lim.get('request_ids', []))} calls"
+                print(f"    - Session '{sid}': limit {l_val} reached ({tool_summary})")
 
     # ---- candidates to label
     cands: dict[str, dict[str, Any]] = {}
