@@ -2327,24 +2327,34 @@ async def test_remember_refusals_within_tool_loop(tmp_path, monkeypatch):
     assert not app._is_security_refusal(res_a2)
     assert prompt_count == 2  # Re-prompted!
 
-    # 4. Output security refusal cache within loop
+    # 4. Output security refusal within loop: the repeat is neither prompted nor executed
+    answers = iter(["y", "n"])  # approve the command, decline its output
     output_prompt_count = 0
-    async def mock_output_no(fn, *args, **kwargs):
+    async def mock_approve_then_decline(fn, *args, **kwargs):
         nonlocal output_prompt_count
         output_prompt_count += 1
-        return "n"
-    monkeypatch.setattr("asyncio.to_thread", mock_output_no)
+        return next(answers, "n")
+    monkeypatch.setattr("asyncio.to_thread", mock_approve_then_decline)
 
-    raw_secret = "Secret: ghp_1234567890abcdef1234567890abcdef"
-    out_res1 = await app._evaluate_output_security("read_file", {"path": "keys.txt"}, raw_secret, is_interactive=True)
+    counter = tmp_path / "runs.txt"
+    cmd = f"echo run >> {counter}; echo 'Secret: ghp_1234567890abcdef1234567890abcdef'"
+    call_bare = json.dumps({"tool": "run_command", "arguments": {"command": cmd}})
+    call_wrapped = json.dumps({"tool": "run_command", "arguments": {"parameters": {"command": cmd}}})
+
+    out_res1 = await app.dispatch_tool(call_bare)
     assert app._is_security_refusal(out_res1)
-    assert output_prompt_count == 1
+    assert output_prompt_count == 2
+    assert counter.read_text().count("run") == 1
+    assert "ghp_" not in out_res1
 
-    # Same output review repeated in loop with wrapped arguments -> cache hit, no re-prompt
-    out_res2 = await app._evaluate_output_security("read_file", {"parameters": {"path": "keys.txt"}}, raw_secret, is_interactive=True)
-    assert app._is_security_refusal(out_res2)
-    assert output_prompt_count == 1
-    assert out_res1 == out_res2
+    # Same call repeated in the loop (wrapped arguments) -> served from memory: no prompt, no execution
+    eval_calls.clear()
+    out_res2 = await app.dispatch_tool(call_wrapped)
+    assert out_res2 == out_res1
+    assert output_prompt_count == 2
+    assert counter.read_text().count("run") == 1
+    assert eval_calls == []
+    assert app._last_dispatch_refusal is not None
 
     # 5. Outside a tool loop (e.g. script context or direct dispatch): nothing is remembered
     app.in_tool_loop = False

@@ -3768,6 +3768,38 @@ class ChatybotApp:
         args_json = json.dumps(norm_args, sort_keys=True, default=str)
         return f"{tool_name}:{args_json}"
 
+    def _serve_loop_refusal(self, store: dict[str, tuple[str, str, str]] | None, tool_name: str, tool_args: Any, kind: str) -> str | None:
+        """Return a refusal remembered earlier in this tool loop, or None.
+
+        ``kind`` is "pre-execution" or "output". On a hit the tool is neither
+        evaluated nor executed: script variables and the refusal flag are set as
+        for the original refusal and a refusal_repeat event is logged.
+        """
+        if not getattr(self, "in_tool_loop", False) or store is None or not tool_name:
+            return None
+        key = self._build_security_refusal_key(tool_name, tool_args)
+        if key not in store:
+            return None
+        cached_res, cached_err, orig_req_id = store[key]
+        if getattr(self, "security_debug", False):
+            print(f"[Security Debug] [LOOP CACHE HIT] Returning stored {kind} refusal for '{tool_name}' without re-evaluating or executing.")
+        sec_mgr = getattr(self, "security_manager", None)
+        if sec_mgr is not None and hasattr(sec_mgr, "record_refusal_repeat"):
+            sec_mgr.record_refusal_repeat(
+                request_id=orig_req_id,
+                tool=tool_name,
+                parameters=tool_args if isinstance(tool_args, dict) else {},
+                reason=cached_err,
+                session_id=getattr(self, "active_session_id", None) or getattr(self, "session_id", ""),
+            )
+        if getattr(self, "buffer_manager", None) is not None:
+            self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
+            self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', cached_err)
+            self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
+            self.buffer_manager.set_script_var('TOOL_DISPATCH_REQUEST_ID', orig_req_id)
+        self._last_dispatch_refusal = {"reason": cached_err, "request_id": orig_req_id}
+        return cached_res
+
     def _format_refusal_limit_summary(self, refusal_records: list[dict[str, Any]]) -> str:
         """Format a concise summary of refused actions and reasons when loop limit is hit."""
         lines = ["Security refusals during this loop:"]
@@ -3795,29 +3827,11 @@ class ChatybotApp:
         if not raw_output:
             return raw_output
 
-        # Check per-loop output refusal cache
+        # Key for remembering an output refusal in this tool loop. Lookups happen in
+        # dispatch_tool before the tool runs, so a refused tool is not re-executed.
         output_cache_key = None
         if getattr(self, "in_tool_loop", False) and self._loop_output_refusals is not None:
             output_cache_key = self._build_security_refusal_key(tool_name, tool_args)
-            if output_cache_key in self._loop_output_refusals:
-                cached_res, cached_err, orig_req_id = self._loop_output_refusals[output_cache_key]
-                if self.security_debug:
-                    print(f"[Security Debug] [LOOP CACHE HIT] Returning stored output refusal for '{tool_name}' without re-evaluating.")
-                if sec_mgr is not None:
-                    sec_mgr.record_refusal_repeat(
-                        request_id=orig_req_id,
-                        tool=tool_name,
-                        parameters=tool_args if isinstance(tool_args, dict) else {},
-                        reason=cached_err,
-                        session_id=getattr(self, "active_session_id", None) or getattr(self, "session_id", ""),
-                    )
-                if hasattr(self, "buffer_manager") and self.buffer_manager is not None:
-                    self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
-                    self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', cached_err)
-                    self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
-                    self.buffer_manager.set_script_var('TOOL_DISPATCH_REQUEST_ID', orig_req_id)
-                self._last_dispatch_refusal = {"reason": cached_err, "request_id": orig_req_id}
-                return cached_res
 
         # Extract textual content from tool output JSON if possible
         content_to_check = raw_output
@@ -4037,29 +4051,15 @@ class ChatybotApp:
                         record(sec_decision, outcome, tool=tool_name)
                     except Exception:
                         pass
-            # Check per-loop pre-execution refusal cache
+            # Refusals remembered in this tool loop: no new evaluation, prompt or execution.
+            # Output refusals are checked too, so a tool whose output was refused is not run again.
             sec_cache_key = None
             if getattr(self, "in_tool_loop", False) and self._loop_security_refusals is not None and tool_name:
                 sec_cache_key = self._build_security_refusal_key(tool_name, tool_args)
-                if sec_cache_key in self._loop_security_refusals:
-                    cached_res, cached_err, orig_req_id = self._loop_security_refusals[sec_cache_key]
-                    if self.security_debug:
-                        print(f"[Security Debug] [LOOP CACHE HIT] Returning stored pre-execution refusal for '{tool_name}' without re-evaluating.")
-                    if sec_mgr is not None:
-                        sec_mgr.record_refusal_repeat(
-                            request_id=orig_req_id,
-                            tool=tool_name,
-                            parameters=tool_args if isinstance(tool_args, dict) else {},
-                            reason=cached_err,
-                            session_id=getattr(self, "active_session_id", None) or getattr(self, "session_id", ""),
-                        )
-                    if hasattr(self, "buffer_manager") and self.buffer_manager is not None:
-                        self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
-                        self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', cached_err)
-                        self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
-                        self.buffer_manager.set_script_var('TOOL_DISPATCH_REQUEST_ID', orig_req_id)
-                    self._last_dispatch_refusal = {"reason": cached_err, "request_id": orig_req_id}
-                    return cached_res
+            for _store, _kind in ((self._loop_security_refusals, "pre-execution"), (self._loop_output_refusals, "output")):
+                _cached = self._serve_loop_refusal(_store, tool_name, tool_args, _kind)
+                if _cached is not None:
+                    return _cached
 
             if sec_mgr is not None and tool_name:
                 from .security.models import Verdict
