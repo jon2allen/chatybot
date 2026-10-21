@@ -37,6 +37,7 @@ class ScriptVars(UserDict):
             'TOOL_DISPATCH_RESULT',
             'TOOL_DISPATCH_ERROR',
             'TOOL_DISPATCH_EXIT_CODE',
+            'TOOL_DISPATCH_REQUEST_ID',
             'RUN_COMPLETION',
             'RUN_ERROR',
             'RUN_EXIT_CODE',
