@@ -3734,6 +3734,22 @@ class ChatybotApp:
             return f"{raw_error.strip()}\n\n{guidance}"
         return guidance
 
+    def _is_security_refusal(self, text: str) -> bool:
+        """Check whether a tool return string represents a final security refusal."""
+        if not text or not isinstance(text, str):
+            return False
+        return "Security refusal (final):" in text or text.startswith("Security refusal (final):")
+
+    def _format_security_refusal(self, reason: str) -> str:
+        """Format final security refusal message with localized guidance for the LLM."""
+        guidance = "Do not retry this action or an equivalent one. Tell the user what you were trying to do and ask how to proceed."
+        if hasattr(self, "i18n") and hasattr(self.i18n, "get_ui_string"):
+            guidance = self.i18n.get_ui_string("security_refusal_final", guidance)
+        clean_reason = (reason or "").strip()
+        if clean_reason.endswith("."):
+            return f"Security refusal (final): {clean_reason} {guidance}"
+        return f"Security refusal (final): {clean_reason}. {guidance}"
+
     async def _evaluate_output_security(
         self,
         tool_name: str,
@@ -3808,7 +3824,7 @@ class ChatybotApp:
             self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
             self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', deny_msg)
             self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
-            return f"Error: {deny_msg}"
+            return self._format_security_refusal(deny_msg)
 
         elif post_decision.verdict == Verdict.ASK:
             def _record_post_outcome(outcome: str) -> None:
@@ -3848,7 +3864,7 @@ class ChatybotApp:
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', block_msg)
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
-                    return f"Error: {block_msg}"
+                    return self._format_security_refusal(block_msg)
 
             prompt_title = post_decision.prompt_details.title if post_decision.prompt_details else "Sensitive Output Review"
             prompt_msg = post_decision.prompt_details.message if post_decision.prompt_details else f"Output from '{tool_name}' contains potential sensitive material: {post_decision.reason}"
@@ -3881,7 +3897,7 @@ class ChatybotApp:
                 self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
                 self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', cancel_msg)
                 self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
-                return f"Error: {cancel_msg}"
+                return self._format_security_refusal(cancel_msg)
 
         return raw_output
 
@@ -3977,7 +3993,7 @@ class ChatybotApp:
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', deny_msg)
                     self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
-                    return f"Error: {deny_msg}"
+                    return self._format_security_refusal(deny_msg)
                 elif sec_decision.verdict == Verdict.ASK:
                     if getattr(self, "auto_approve", False):
                         _record_sec_outcome("auto_approved_yes_flag")
@@ -4010,7 +4026,7 @@ class ChatybotApp:
                             self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
                             self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', cancel_msg)
                             self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
-                            return f"Error: {cancel_msg}"
+                            return self._format_security_refusal(cancel_msg)
                     else:
                         risk = sec_decision.prompt_details.risk_level if sec_decision.prompt_details else "medium"
                         msg = sec_decision.prompt_details.message if sec_decision.prompt_details else f"Authorize '{tool_name}'?"
@@ -4042,7 +4058,7 @@ class ChatybotApp:
                             self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
                             self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', cancel_msg)
                             self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
-                            return f"Error: {cancel_msg}"
+                            return self._format_security_refusal(cancel_msg)
                         else:
                             _record_sec_outcome("approved")
                             if self.security_debug:
