@@ -318,7 +318,28 @@ Measured against the actual rubric, each noul rule costs about 314 bytes (~79 to
 
 ## 9. Enabling the Jev Engine
 
-The Jev engine is selected by setting `engine = "jev"` in `~/.config/chatybot/security.toml`:
+### Interactive Setup Wizard (Recommended)
+
+You can automatically configure Jev, seed the security files, verify your `OPENROUTER_API_KEY`, and run a healthcheck using the interactive setup assistant:
+
+```bash
+# Using the Chatybot CLI
+chatybot --setup-jev
+# or
+chatybot-setup-jev
+
+# Or via the setup script in tools/
+./tools/jev-eval/setup_jev.sh
+```
+
+The wizard guides you through selecting your deployment mode:
+1. **Recommended Trial (Chain: Builtin Enforce + Jev Shadow):** Keeps your local `builtin` rules in charge while logging Jev's evaluations in the background to `~/.config/chatybot/logs/security_chain.jsonl`.
+2. **Direct Jev Enforce (`engine = "jev"`):** TypeSafe Jev model acts as the primary tool policy guardrail.
+3. **Defense-in-Depth (`engine = "chain"` with both Enforcing):** Both Builtin rules and Jev evaluate every tool call; the strictest verdict wins.
+
+### Manual Configuration
+
+The Jev engine can also be selected manually by setting `engine = "jev"` in `~/.config/chatybot/security.toml`:
 
 ```toml
 engine = "jev"
