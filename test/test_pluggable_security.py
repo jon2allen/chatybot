@@ -2668,7 +2668,7 @@ async def test_stage4_refusal_repeat_and_limit_audit_events(tmp_path, monkeypatc
 
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_refusal_counting_ignores_tool_output_text(tmp_path, monkeypatch):
     """Tool output that merely contains the refusal marker must not count as a refusal."""
     import json
@@ -2718,7 +2718,7 @@ async def test_refusal_counting_ignores_tool_output_text(tmp_path, monkeypatch):
     assert app._last_dispatch_refusal is None
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_refusal_records_carry_clean_reason_and_own_request_id(tmp_path, monkeypatch):
     """Loop refusal records hold the original reason (no model guidance) and their own request_id."""
     import json

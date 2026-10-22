@@ -41,6 +41,7 @@ chatdsl_parse = "chatybot.chatdsl_parse:main"
 chatybot-config = "chatybot.config_tui:main"
 chatybot-migrate-sessions = "chatybot.migrate_sessions:main"
 chatybot-setup-keys = "chatybot.setup_keys:main"
+chatybot-setup-jev = "chatybot.setup_jev:main"
 
 [tool.setuptools.package-data]
 chatybot = [
