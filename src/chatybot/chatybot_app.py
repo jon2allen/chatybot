@@ -7285,12 +7285,22 @@ def run():
         action="store_true",
         help="Launch interactive wizard to configure and save API keys"
     )
+    parser.add_argument(
+        "--setup-jev", "--setup-security",
+        action="store_true",
+        dest="setup_jev",
+        help="Launch interactive wizard to configure TypeSafe Jev security policy engine"
+    )
     args, _unknown = parser.parse_known_args()
 
     if args.setup_keys:
         from .setup_keys import main as setup_keys_main
         setup_keys_main()
         sys.exit(0)
+
+    if args.setup_jev:
+        from .setup_jev import main as setup_jev_main
+        sys.exit(setup_jev_main())
 
     if args.config_edit:
         from .config_tui import main as tui_main

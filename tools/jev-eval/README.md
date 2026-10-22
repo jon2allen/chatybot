@@ -68,6 +68,18 @@ python3 jev_eval.py --rescore results/<combined-run>.jsonl --mode choice-rubric 
 
 See `jev_proof_of_concept.md` for the full write-up and test history; `baseline/` holds the rubric and raw results for each recorded run.
 
+## Quick Setup
+
+Run the automated one-shot setup script to configure Jev, verify your API key, and test connectivity:
+
+```bash
+./tools/jev-eval/setup_jev.sh
+# or from anywhere:
+chatybot --setup-jev
+```
+
+This seeds `~/.config/chatybot/jev_security.toml`, checks `OPENROUTER_API_KEY`, updates `security.toml` to your choice of mode (trial shadow chain, direct Jev enforce, or dual enforce), and runs an end-to-end verification check.
+
 ## Trying it inside chatybot
 
 The engine reads the same rubric format; its scoring code lives in

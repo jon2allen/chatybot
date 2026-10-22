@@ -1039,3 +1039,44 @@ def test_outdated_user_rubric_prints_notice(tmp_path, capsys):
     current.write_text(bundled)
     JevPolicyEngine(rubric_path=str(current), http_post=lambda *a: {})
     assert "[Security Notice]" not in capsys.readouterr().out
+
+
+def test_setup_jev_wizard(tmp_path, monkeypatch):
+    """Verify setup_jev configures security.toml and seeds files without crashing."""
+    import io
+    import sys
+    from chatybot import setup_jev
+
+    config_path = tmp_path / "config" / "security.toml"
+    rubric_path = tmp_path / "config" / "jev_security.toml"
+    env_path = tmp_path / "config" / ".env"
+
+    monkeypatch.setattr(setup_jev, "DEFAULT_CONFIG_PATH", config_path)
+    monkeypatch.setattr(setup_jev, "DEFAULT_RUBRIC_PATH", rubric_path)
+    monkeypatch.setattr(setup_jev, "GLOBAL_ENV_FILE", env_path)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+
+    # Simulate user answering: API key given, mode = 1 (shadow)
+    inputs = iter(["sk-test-openrouter-key", "1"])
+    monkeypatch.setattr("builtins.input", lambda *args: next(inputs))
+
+    captured = io.StringIO()
+    old_stdout = sys.stdout
+    sys.stdout = captured
+    try:
+        rc = setup_jev.main()
+        assert rc == 0
+    finally:
+        sys.stdout = old_stdout
+
+    # Verify files created
+    assert config_path.exists()
+    assert rubric_path.exists()
+    assert env_path.exists()
+    assert "sk-test-openrouter-key" in env_path.read_text()
+
+    # Verify security.toml content configured engine = "chain" with shadow
+    conf = config_path.read_text()
+    assert 'engine = "chain"' in conf
+    assert 'mode = "shadow"' in conf
+
