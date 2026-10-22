@@ -2,8 +2,11 @@
 
 All notable changes, release milestones, and version history for **Chatybot** are documented in this file.
 
-Unreleased
-----------
+October 21st, 2026 (v0.9.1)
+---------------------------
+- **Jev AI Policy Engine, Chaining, Output Security & Release v0.9.1**:
+  - Bumped version to 0.9.1 across `pyproject.toml`, `chatybot_app.py`, and package initialization.
+  - Added interactive Jev setup wizard (`chatybot --setup-jev`, `tools/jev-eval/setup_jev.sh`, and `chatybot-setup-jev` entry point).
 - **Builtin output scanner reuse**: when builtin checks output itself (as a chain stage, or used directly), it now builds its default-rules `SecretScanner` once and reuses it instead of building one per tool call (rule compilation plus reading `.env` files each time).
 - **Command-line passwords in redaction and output screening**:
   - `curl -u user:password` (and `-uuser:pw`, `--user`, `--proxy-user`), `mysql`/`mysqldump`/`mariadb -pPASSWORD`, `sshpass -p PASSWORD` and `--password=PASSWORD` were not recognized at all (even long random passwords), so they were sent to the Jev API and written to the logs, and reading a script containing one did not prompt. They are now redacted (`curl -u admin:<redacted>`) and screened, with no minimum length since the position is unambiguous.
