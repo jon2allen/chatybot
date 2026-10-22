@@ -1195,7 +1195,7 @@ chatybot -c ~/my_custom_config.toml
 
 Chatybot features a policy-driven security gateway that evaluates all agentic tool calls and shell operations before execution. Tool invocations are mapped to standard resource classes (`EXEC`, `FS_READ`, `FS_WRITE`, `NET`, `PROCESS`, `CONTENT`) and evaluated for an **`ALLOW`**, **`ASK`**, or **`DENY`** verdict.
 
-Detailed architecture, configuration schemas, IPC specifications, and policy examples are documented in [`doc/pluggable_security.md`](doc/pluggable_security.md).
+Detailed architecture, configuration schemas, IPC specifications, and policy examples are documented in [`doc/pluggable_security.md`](doc/pluggable_security.md). For dedicated Jev architecture and rubric specifications, see [`doc/jev_security_engine.md`](doc/jev_security_engine.md).
 
 ### **Policy Engines**
 
@@ -1211,7 +1211,13 @@ Detailed architecture, configuration schemas, IPC specifications, and policy exa
 
 ### **Enabling Jev Security (`engine = "jev"`)**
 
-Chatybot supports AI-based policy evaluation powered by TypeSafe Jev. Jev evaluates planned tool invocations against a declarative security rubric with calibrated probabilities.
+Chatybot supports AI-based policy evaluation powered by TypeSafe Jev. Jev evaluates planned tool invocations against a declarative security rubric with calibrated probabilities. Complete design details, benchmark separation data, and configuration parameters are documented in [`doc/jev_security_engine.md`](doc/jev_security_engine.md).
+
+Evaluation tooling, test harness, rubric benchmarks, and research notes are located in [`tools/jev-eval/`](tools/jev-eval/README.md):
+- **Evaluation Harness Guide**: [`tools/jev-eval/README.md`](tools/jev-eval/README.md)
+- **Proof-of-Concept & Benchmark Report**: [`tools/jev-eval/jev_proof_of_concept.md`](tools/jev-eval/jev_proof_of_concept.md)
+- **Pluggable Security Integration Design**: [`tools/jev-eval/jev_pluggable_security.md`](tools/jev-eval/jev_pluggable_security.md)
+- **Comparative Decision Research**: [`tools/jev-eval/give_choice_a_chance.md`](tools/jev-eval/give_choice_a_chance.md) & [`tools/jev-eval/noul_security_thoughts.md`](tools/jev-eval/noul_security_thoughts.md)
 
 #### **1. Automated Setup**
 Run the interactive setup wizard directly from Chatybot:
