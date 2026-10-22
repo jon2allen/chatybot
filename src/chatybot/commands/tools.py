@@ -505,6 +505,31 @@ async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandRes
             print(f"Current tool append mode: {cur_mode} (options: off | full | summary)")
         return CommandResult.ok()
 
+    elif subcmd in ("loop_guard", "loopguard"):
+        def _show_loop_guard() -> None:
+            state = "on" if app.loop_guard_enabled else "off"
+            print(f"Loop guard: {state} (repeats {app.loop_guard_repeats}, window {app.loop_guard_window})")
+
+        args = " ".join(str(p) for p in parts[2:]).lower().split()
+        if not args:
+            _show_loop_guard()
+        elif args[0] in ("on", "off") and len(args) == 1:
+            app.loop_guard_enabled = args[0] == "on"
+            _show_loop_guard()
+        elif args[0] in ("repeats", "window") and len(args) == 2:
+            try:
+                val = int(args[1])
+                if val < 2:
+                    raise ValueError
+            except ValueError:
+                print(f"Invalid value '{args[1]}': {args[0]} must be an integer of at least 2.")
+                return CommandResult.ok()
+            setattr(app, f"loop_guard_{args[0]}", val)
+            _show_loop_guard()
+        else:
+            print("Usage: /tool loop_guard [on|off|repeats <n>|window <n>]")
+        return CommandResult.ok()
+
     elif subcmd == "max_turns":
         if len(parts) > 2:
             try:
