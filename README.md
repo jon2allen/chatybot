@@ -85,7 +85,7 @@ chatybot is an interactive command-line tool that enables seamless communication
 - **Hugging Face Preset & `/env` Inspection** - Vendor preset for Hugging Face inference endpoints and dedicated `/env` environment inspection command
 - **Enhanced Session Filtering & Sorting** - `/session list` sorting by latest activity, model filtering (`model=...`), age filtering (`since=Nd/h/m`), and range pagination (`limit=...`, `range=start:end`)
 - **Non-Destructive Session Query & Turn Extraction** - Search past session turns, conversation history, notes, and scratchpads with boolean AND/OR matching, date constraints (`since=`, `until=`, `range=`), fast discovery (`ids`), and entire session byte size tracking (`/session query`, `session_search`). Extract turn prompts, responses, or reasoning traces read-only without switching sessions or polluting context (`/session get`, `session_get`).
-- **Pluggable Security Architecture & Policy Guardrails** - Pre-execution security interception for all agentic tool calls and shell operations via built-in Python Security DSL or high-performance external engines (e.g. `racf-guard`). Standardized resource classification (`EXEC`, `FS_READ`, `FS_WRITE`, `NET`, `PROCESS`, `CONTENT`), tri-state verdicts (`ALLOW`, `ASK`, `DENY`), unattended script auto-approval (`-y` / `--auto-approve`), verbose debug tracing (`--security`), and full multilingual localization.
+- **Pluggable Security Architecture & Policy Guardrails** - Pre-execution security interception for all agentic tool calls and shell operations via built-in Python Security DSL, TypeSafe Jev AI policy engine, multi-engine chaining (`engine = "chain"`), or high-performance external engines (e.g. `racf-guard`). Standardized resource classification (`EXEC`, `FS_READ`, `FS_WRITE`, `NET`, `PROCESS`, `CONTENT`), tri-state verdicts (`ALLOW`, `ASK`, `DENY`), post-execution output secret scanning and egress filtering, refusal memory with configurable loop refusal limits (`max_refusals_per_loop`), automated Jev setup wizard (`--setup-jev`), unattended script auto-approval (`-y` / `--auto-approve`), verbose debug tracing (`--security`), and full multilingual localization.
 
 ---
 
@@ -1202,9 +1202,44 @@ Detailed architecture, configuration schemas, IPC specifications, and policy exa
 | Engine | Description | Configuration |
 |---|---|---|
 | **Builtin** (Default) | In-process Python engine evaluating English-like Security DSL rules, path traversal boundaries, and dangerous command patterns. | `engine = "builtin"` in `~/.config/chatybot/security.toml` |
+| **Jev** | Cloud-based decision-model engine using TypeSafe Jev probabilities evaluated against a calibrated security rubric. | `engine = "jev"` in `~/.config/chatybot/security.toml` |
+| **Chain** | Multi-engine pipeline supporting enforcing stages (strictest verdict wins) and non-blocking shadow stages for comparison logging. | `engine = "chain"` in `~/.config/chatybot/security.toml` |
 | **Binary (`racf-guard`)** | External high-performance Rust engine evaluating enterprise IBM RACF-style security definitions (`.racf`). Runs via standard stdio JSON protocol. | `engine = "binary"` in `~/.config/chatybot/security.toml` |
+| **Allow** | Runs tools without policy checks (pre-v0.9.0 behavior) while maintaining self-protection for configuration files. | `engine = "allow"` in `~/.config/chatybot/security.toml` |
 
 ---
+
+### **Enabling Jev Security (`engine = "jev"`)**
+
+Chatybot supports AI-based policy evaluation powered by TypeSafe Jev. Jev evaluates planned tool invocations against a declarative security rubric with calibrated probabilities.
+
+#### **1. Automated Setup**
+Run the interactive setup wizard directly from Chatybot:
+```bash
+chatybot --setup-jev
+```
+Or run the bundled setup script:
+```bash
+./tools/jev-eval/setup_jev.sh
+```
+This wizard prompts for your Jev API key (or verifies `JEV_API_KEY` in `~/.config/chatybot/.env`), creates `~/.config/chatybot/jev_security.toml` from the bundled default rubric, tests the API connection, and updates `security.toml` to select `engine = "jev"`.
+
+#### **2. Manual Configuration in `~/.config/chatybot/security.toml`**
+```toml
+engine = "jev"
+fail_safe = "ask"
+max_refusals_per_loop = 3
+
+[jev]
+api_base = "https://api.typesafe.ai"
+model = "jev-1"
+rubric_path = "~/.config/chatybot/jev_security.toml"
+mode = "noul"                 # "noul" (individual rule probabilities) or "combined"
+log_path = "~/.config/chatybot/logs/jev_security.jsonl"
+```
+
+---
+
 
 ### **Enabling RACF-Guard (`engine = "binary"`)**
 

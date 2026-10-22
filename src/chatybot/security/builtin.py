@@ -114,6 +114,7 @@ class BuiltinPolicyEngine(BasePolicyEngine):
             self._output_scanner = SecretScanner(rules=self.output_rules, known_secrets={})
         else:
             self._output_scanner = None
+        self._default_output_scanner: SecretScanner | None = None
 
         raw_default = str(default_verdict or "ask").strip().lower()
         try:
@@ -430,8 +431,14 @@ class BuiltinPolicyEngine(BasePolicyEngine):
         if not output.strip():
             return PolicyDecision(verdict=Verdict.ALLOW, reason="Empty output.")
 
-        # If custom scanner is configured, use it; otherwise evaluate against shared default rules with SecretScanner
-        scanner = self._output_scanner if self._output_scanner is not None else SecretScanner()
+        # Custom rules use their own scanner; otherwise one default-rules scanner is built
+        # on first use and reused (it compiles the rules and loads known secrets from the
+        # environment and .env files, which used to happen on every call).
+        scanner = self._output_scanner
+        if scanner is None:
+            if self._default_output_scanner is None:
+                self._default_output_scanner = SecretScanner()
+            scanner = self._default_output_scanner
         match = scanner.scan(output)
         if match is not None:
             verdict, reason = match

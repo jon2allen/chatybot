@@ -621,13 +621,15 @@ async def test_dispatch_tool_async_security_confirmation_and_audit(monkeypatch, 
 
     monkeypatch.setattr("asyncio.to_thread", mock_input)
     res_deny = await app.dispatch_tool(json.dumps({"tool": "write_file", "arguments": {"path": "test.txt", "content": "hi"}}))
-    assert "Error: Security Authorization Denied" in res_deny
+    assert res_deny.startswith("Security refusal (final):")
+    assert "Security Authorization Denied" in res_deny
     assert any("[Security Audit] USER DECLINED tool 'write_file'" in m for m in logged_messages)
 
     # 2. Blocked Tier 0 tool creates BLOCKED audit log
     logged_messages.clear()
     res_tier0 = await app.dispatch_tool(json.dumps({"tool": "read_file", "arguments": {"path": "/etc/passwd"}}))
-    assert "Error: Security Policy Blocked" in res_tier0
+    assert res_tier0.startswith("Security refusal (final):")
+    assert "Security Policy Blocked" in res_tier0
     assert any("[Security Audit] BLOCKED tool 'read_file'" in m for m in logged_messages)
 
 
@@ -679,13 +681,15 @@ async def test_auto_approve_yes_flag(monkeypatch, tmp_path):
     # 2. Tier 0 DENY tool (read_file /etc/passwd) is STILL BLOCKED even with auto_approve=True!
     logged_messages.clear()
     res_deny = await app.dispatch_tool(json.dumps({"tool": "read_file", "arguments": {"path": "/etc/passwd"}}))
-    assert "Error: Security Policy Blocked" in res_deny
+    assert res_deny.startswith("Security refusal (final):")
+    assert "Security Policy Blocked" in res_deny
     assert any("[Security Audit] BLOCKED tool 'read_file'" in m for m in logged_messages)
 
     # 3. Spawning chatybot sub-process via run_command is strictly DENIED even with auto_approve=True!
     logged_messages.clear()
     res_cmd = await app.dispatch_tool(json.dumps({"tool": "run_command", "arguments": {"command": "chatybot --script escape.chatdsl -y"}}))
-    assert "Error: Security Policy Blocked" in res_cmd
+    assert res_cmd.startswith("Security refusal (final):")
+    assert "Security Policy Blocked" in res_cmd
     assert any("[Security Audit] BLOCKED tool 'run_command'" in m for m in logged_messages)
 
 
@@ -820,7 +824,8 @@ async def test_security_manager_init_failure_fails_closed(monkeypatch):
 
     # Any tool call must be strictly BLOCKED
     res = await app.dispatch_tool(json.dumps({"tool": "read_file", "arguments": {"path": "test.txt"}}))
-    assert "Error: Security Policy Blocked" in res
+    assert res.startswith("Security refusal (final):")
+    assert "Security Policy Blocked" in res
     assert "fail-closed" in res
 
 
@@ -1689,7 +1694,8 @@ async def test_chatybot_app_output_security_deny_blocks_and_hides_content(tmp_pa
         is_interactive=True,
     )
 
-    assert "Error: Output Withheld:" in scrubbed
+    assert scrubbed.startswith("Security refusal (final):")
+    assert "Output Withheld:" in scrubbed
     assert "private cryptographic key" in scrubbed.lower()
     # Confirm private key is NOT leaked
     assert "BEGIN RSA PRIVATE KEY" not in scrubbed
@@ -1740,7 +1746,8 @@ async def test_chatybot_app_output_security_ask_interactive_options(tmp_path, mo
         raw_output=raw_output,
         is_interactive=True,
     )
-    assert "Error: User declined LLM access to output" in res_declined
+    assert res_declined.startswith("Security refusal (final):")
+    assert "User declined LLM access to output" in res_declined
     assert token_secret not in res_declined
     assert app.buffer_manager.get_script_var("TOOL_DISPATCH_EXIT_CODE") == "1"
 
@@ -1779,7 +1786,8 @@ async def test_chatybot_app_output_security_non_interactive(tmp_path):
         raw_output=raw_output,
         is_interactive=False,
     )
-    assert "Error: Non-interactive session blocked output review" in res_blocked
+    assert res_blocked.startswith("Security refusal (final):")
+    assert "Non-interactive session blocked output review" in res_blocked
     assert token_secret not in res_blocked
 
 
@@ -1819,7 +1827,8 @@ async def test_chatybot_app_output_security_screens_errors_and_tracebacks(tmp_pa
         raw_output=error_raw,
         is_interactive=True,
     )
-    assert "Error: Output Withheld:" in res_err
+    assert res_err.startswith("Security refusal (final):")
+    assert "Output Withheld:" in res_err
     assert "BEGIN RSA PRIVATE KEY" not in res_err
 
     # 2. JSON output with stderr traceback containing private key -> blocked
@@ -1837,7 +1846,8 @@ async def test_chatybot_app_output_security_screens_errors_and_tracebacks(tmp_pa
         raw_output=json_stderr,
         is_interactive=True,
     )
-    assert "Error: Output Withheld:" in res_stderr
+    assert res_stderr.startswith("Security refusal (final):")
+    assert "Output Withheld:" in res_stderr
     assert "BEGIN EC PRIVATE KEY" not in res_stderr
 
 
@@ -1890,7 +1900,8 @@ tools = ["read_file", "run_command", "search_skills"]
             "tool": "search_skills",
             "arguments": {"query": "credentials"},
         }))
-        assert "Error: Output Withheld:" in res
+        assert res.startswith("Security refusal (final):")
+        assert "Output Withheld:" in res
         assert "BEGIN RSA PRIVATE KEY" not in res
     finally:
         skill_utils.search_skills = orig_search
@@ -1956,7 +1967,8 @@ async def test_dispatch_tool_nonzero_exit_and_exception_screened(tmp_path, monke
         "arguments": {"path": "invalid_file.txt"},
     }))
 
-    assert "Error: Output Withheld:" in res
+    assert res.startswith("Security refusal (final):")
+    assert "Output Withheld:" in res
     assert "BEGIN RSA PRIVATE KEY" not in res
 
 
@@ -2060,7 +2072,8 @@ async def test_output_security_ask_resolution_and_outcomes(tmp_path, monkeypatch
     monkeypatch.setattr(asyncio, "to_thread", mock_denial)
 
     res_denied = await app._evaluate_output_security("read_file", {"path": "keys.txt"}, output_with_secret, is_interactive=True)
-    assert "Error: User declined LLM access" in res_denied
+    assert res_denied.startswith("Security refusal (final):")
+    assert "User declined LLM access" in res_denied
     assert ("declined", "read_file") in recorded_outcomes
     assert any("USER DECLINED OUTPUT" in msg for msg in logged_messages)
 
@@ -2080,7 +2093,8 @@ async def test_output_security_ask_resolution_and_outcomes(tmp_path, monkeypatch
     # 5. Non-interactive with non_interactive_ask = "deny"
     app.security_manager.non_interactive_ask = "deny"
     res_non_int_deny = await app._evaluate_output_security("read_file", {"path": "keys.txt"}, output_with_secret, is_interactive=False)
-    assert "Error: Non-interactive session blocked output review" in res_non_int_deny
+    assert res_non_int_deny.startswith("Security refusal (final):")
+    assert "Non-interactive session blocked output review" in res_non_int_deny
     assert ("blocked_non_interactive", "read_file") in recorded_outcomes
 
 
@@ -2122,6 +2136,517 @@ def test_secret_scanner_literal_prefiltering():
     assert custom_scanner.scan("See CONFIDENTIAL-CODE-999") == (Verdict.ASK, "Secret scanner: Confidential code")
 
 
+@pytest.mark.anyio
+async def test_security_refusals_are_final(tmp_path, monkeypatch):
+    """Stage 1: Verify all 4 refusal paths return final security refusal with guidance.
+    Also verify TOOL_DISPATCH_EXIT_CODE=1 and TOOL_DISPATCH_ERROR are preserved."""
+    import json
+    from chatybot.chatybot_app import ChatybotApp
+
+    # Config with non_interactive_ask = "deny"
+    sec_cfg = tmp_path / "stage1_sec.toml"
+    sec_cfg.write_text(
+        'version = "1.0"\n'
+        'engine = "builtin"\n'
+        'fail_safe = "deny"\n'
+        'non_interactive_ask = "deny"\n'
+        '[builtin]\n'
+        'default_verdict = "ask"\n'
+    )
+
+    app = ChatybotApp(security_config_path=str(sec_cfg))
+    app.initialize()
+
+    guidance_en = "Do not retry this action or an equivalent one. Tell the user what you were trying to do and ask how to proceed."
+
+    # 1. Pre-execution DENY (Tier 0 protected path /etc/passwd)
+    res_deny = await app.dispatch_tool(json.dumps({"tool": "read_file", "arguments": {"path": "/etc/passwd"}}))
+    assert app._is_security_refusal(res_deny)
+    assert res_deny.startswith("Security refusal (final):")
+    assert guidance_en in res_deny
+    assert app.buffer_manager.get_script_var("TOOL_DISPATCH_EXIT_CODE") == "1"
+    assert "Security Policy Blocked:" in app.buffer_manager.get_script_var("TOOL_DISPATCH_ERROR")
+
+    # 2. Pre-execution Non-interactive block (non_interactive_ask = "deny")
+    app.script_context = True  # force non-interactive
+    res_non_int = await app.dispatch_tool(json.dumps({"tool": "write_file", "arguments": {"path": "test.txt", "content": "hi"}}))
+    assert app._is_security_refusal(res_non_int)
+    assert res_non_int.startswith("Security refusal (final):")
+    assert "rejected by non_interactive_ask policy" in res_non_int
+    assert guidance_en in res_non_int
+    assert app.buffer_manager.get_script_var("TOOL_DISPATCH_EXIT_CODE") == "1"
+    assert "rejected by non_interactive_ask policy" in app.buffer_manager.get_script_var("TOOL_DISPATCH_ERROR")
+    app.script_context = False
+
+    # 3. Pre-execution User-declined ASK
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+    async def mock_no(fn, *args, **kwargs):
+        return "n"
+    monkeypatch.setattr("asyncio.to_thread", mock_no)
+
+    res_user_declined = await app.dispatch_tool(json.dumps({"tool": "write_file", "arguments": {"path": "test.txt", "content": "hi"}}))
+    assert app._is_security_refusal(res_user_declined)
+    assert res_user_declined.startswith("Security refusal (final):")
+    assert "Security Authorization Denied: User declined execution" in res_user_declined
+    assert guidance_en in res_user_declined
+    assert app.buffer_manager.get_script_var("TOOL_DISPATCH_EXIT_CODE") == "1"
+    assert "User declined execution" in app.buffer_manager.get_script_var("TOOL_DISPATCH_ERROR")
+
+    # 4. Post-execution Output security decline
+    raw_secret_output = "Secret: ghp_1234567890abcdef1234567890abcdef"
+    res_output_declined = await app._evaluate_output_security(
+        tool_name="read_file",
+        tool_args={"path": "keys.txt"},
+        raw_output=raw_secret_output,
+        is_interactive=True,
+    )
+    assert app._is_security_refusal(res_output_declined)
+    assert res_output_declined.startswith("Security refusal (final):")
+    assert "User declined LLM access to output" in res_output_declined
+    assert guidance_en in res_output_declined
+    assert app.buffer_manager.get_script_var("TOOL_DISPATCH_EXIT_CODE") == "1"
+    assert "User declined LLM access to output" in app.buffer_manager.get_script_var("TOOL_DISPATCH_ERROR")
+
+    # Post-execution Output non-interactive block
+    res_output_non_int = await app._evaluate_output_security(
+        tool_name="read_file",
+        tool_args={"path": "keys.txt"},
+        raw_output=raw_secret_output,
+        is_interactive=False,
+    )
+    assert app._is_security_refusal(res_output_non_int)
+    assert res_output_non_int.startswith("Security refusal (final):")
+    assert "Non-interactive session blocked output review" in res_output_non_int
+    assert guidance_en in res_output_non_int
+    assert app.buffer_manager.get_script_var("TOOL_DISPATCH_EXIT_CODE") == "1"
+    assert "Non-interactive session blocked output review" in app.buffer_manager.get_script_var("TOOL_DISPATCH_ERROR")
+
+
+def test_security_refusal_localization_keys():
+    """Verify security_refusal_final exists in all 6 supported languages."""
+    from chatybot.localization import LocalizationManager
+    langs = ["en", "es", "fr", "zh", "it", "ar"]
+    for lang in langs:
+        loc = LocalizationManager(locale=lang)
+        guidance = loc.get_ui_string("security_refusal_final", "")
+        assert guidance, f"Missing security_refusal_final in language '{lang}'"
+
+
+@pytest.mark.anyio
+async def test_remember_refusals_within_tool_loop(tmp_path, monkeypatch):
+    """Stage 2: Verify that refusals are remembered within a tool loop, never approvals.
+    - Declined call repeated -> one prompt only
+    - Denied call repeated -> one evaluate only
+    - Approved call repeated -> prompted again
+    - Wrapped and bare arguments share the same refusal key
+    - Outside loop (script/direct dispatch) -> nothing remembered
+    - Refusal stores cleared between loops and on Ctrl+C
+    """
+    import json
+    from chatybot.chatybot_app import ChatybotApp
+    from chatybot.security.models import Verdict, PolicyDecision
+
+    sec_cfg = tmp_path / "stage2_sec.toml"
+    sec_cfg.write_text(
+        'version = "1.0"\n'
+        'engine = "builtin"\n'
+        'fail_safe = "deny"\n'
+        'non_interactive_ask = "deny"\n'
+        '[builtin]\n'
+        'default_verdict = "ask"\n'
+    )
+
+    app = ChatybotApp(security_config_path=str(sec_cfg))
+    app.initialize()
+
+    # Track how many times security evaluate is called
+    eval_calls = []
+    orig_eval = app.security_manager.evaluate
+    def tracking_eval(*args, **kwargs):
+        eval_calls.append((args, kwargs))
+        return orig_eval(*args, **kwargs)
+    monkeypatch.setattr(app.security_manager, "evaluate", tracking_eval)
+
+    # Track prompt answers
+    prompt_count = 0
+    async def mock_user_input(fn, *args, **kwargs):
+        nonlocal prompt_count
+        prompt_count += 1
+        return "n"
+    monkeypatch.setattr("asyncio.to_thread", mock_user_input)
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+
+    # 1. Inside a tool loop: declined ASK call repeated -> only prompted once
+    app.in_tool_loop = True
+    app._loop_security_refusals = {}
+    app._loop_output_refusals = {}
+
+    call_ask_bare = json.dumps({"tool": "write_file", "arguments": {"path": "test.txt", "content": "hello"}})
+    call_ask_wrapped = json.dumps({"tool": "write_file", "arguments": {"parameters": {"path": "test.txt", "content": "hello"}}})
+
+    res1 = await app.dispatch_tool(call_ask_bare)
+    assert app._is_security_refusal(res1)
+    assert prompt_count == 1
+    assert len(eval_calls) == 1
+
+    # Repeat with wrapped arguments -> cache hit! No new prompt, no new eval
+    res2 = await app.dispatch_tool(call_ask_wrapped)
+    assert app._is_security_refusal(res2)
+    assert prompt_count == 1
+    assert len(eval_calls) == 1
+    assert res1 == res2
+
+    # 2. Inside a tool loop: DENY call repeated -> only evaluated once
+    eval_calls.clear()
+    call_deny_1 = json.dumps({"tool": "read_file", "arguments": {"path": "/etc/passwd"}})
+    call_deny_2 = json.dumps({"tool": "read_file", "arguments": {"args": {"path": "/etc/passwd"}}})
+
+    res_d1 = await app.dispatch_tool(call_deny_1)
+    assert app._is_security_refusal(res_d1)
+    assert len(eval_calls) == 1
+
+    res_d2 = await app.dispatch_tool(call_deny_2)
+    assert app._is_security_refusal(res_d2)
+    assert len(eval_calls) == 1  # Cache hit, not evaluated again
+    assert res_d1 == res_d2
+
+    # 3. Approvals are NEVER remembered -> always re-checked and re-prompted
+    prompt_count = 0
+    async def mock_approve_input(fn, *args, **kwargs):
+        nonlocal prompt_count
+        prompt_count += 1
+        return "y"
+    monkeypatch.setattr("asyncio.to_thread", mock_approve_input)
+
+    call_approved = json.dumps({"tool": "write_file", "arguments": {"path": str(tmp_path / "approved.txt"), "content": "yes"}})
+    res_a1 = await app.dispatch_tool(call_approved)
+    assert not app._is_security_refusal(res_a1)
+    assert prompt_count == 1
+
+    res_a2 = await app.dispatch_tool(call_approved)
+    assert not app._is_security_refusal(res_a2)
+    assert prompt_count == 2  # Re-prompted!
+
+    # 4. Output security refusal within loop: the repeat is neither prompted nor executed
+    answers = iter(["y", "n"])  # approve the command, decline its output
+    output_prompt_count = 0
+    async def mock_approve_then_decline(fn, *args, **kwargs):
+        nonlocal output_prompt_count
+        output_prompt_count += 1
+        return next(answers, "n")
+    monkeypatch.setattr("asyncio.to_thread", mock_approve_then_decline)
+
+    counter = tmp_path / "runs.txt"
+    cmd = f"echo run >> {counter}; echo 'Secret: ghp_1234567890abcdef1234567890abcdef'"
+    call_bare = json.dumps({"tool": "run_command", "arguments": {"command": cmd}})
+    call_wrapped = json.dumps({"tool": "run_command", "arguments": {"parameters": {"command": cmd}}})
+
+    out_res1 = await app.dispatch_tool(call_bare)
+    assert app._is_security_refusal(out_res1)
+    assert output_prompt_count == 2
+    assert counter.read_text().count("run") == 1
+    assert "ghp_" not in out_res1
+
+    # Same call repeated in the loop (wrapped arguments) -> served from memory: no prompt, no execution
+    eval_calls.clear()
+    out_res2 = await app.dispatch_tool(call_wrapped)
+    assert out_res2 == out_res1
+    assert output_prompt_count == 2
+    assert counter.read_text().count("run") == 1
+    assert eval_calls == []
+    assert app._last_dispatch_refusal is not None
+
+    # 5. Outside a tool loop (e.g. script context or direct dispatch): nothing is remembered
+    app.in_tool_loop = False
+    app._loop_security_refusals = None
+    app._loop_output_refusals = None
+
+    prompt_count = 0
+    async def mock_outside_no(fn, *args, **kwargs):
+        nonlocal prompt_count
+        prompt_count += 1
+        return "n"
+    monkeypatch.setattr("asyncio.to_thread", mock_outside_no)
+
+    call_script = json.dumps({"tool": "write_file", "arguments": {"path": "script.txt", "content": "no"}})
+    res_s1 = await app.dispatch_tool(call_script)
+    assert prompt_count == 1
+    res_s2 = await app.dispatch_tool(call_script)
+    assert prompt_count == 2  # Prompted each time because no loop store active
+
+    # 6. Stores cleared when loop ends and on Ctrl+C
+    app.in_tool_loop = True
+    app._loop_security_refusals = {"some_key": ("refusal", "error")}
+    app._loop_output_refusals = {"some_key": ("refusal", "error")}
+    app._loop_refusals = [{"tool": "bash", "reason": "denied"}]
+    # Simulate Ctrl+C branch in repl
+    if app.in_tool_loop:
+        app.in_tool_loop = False
+        app._turn_skills_loaded = []
+        app._loop_security_refusals = None
+        app._loop_output_refusals = None
+        app._loop_refusals = []
+    assert app._loop_security_refusals is None
+    assert app._loop_output_refusals is None
+    assert app._loop_refusals == []
+
+
+@pytest.mark.anyio
+async def test_stage3_limit_refusals_per_loop(tmp_path, monkeypatch):
+    """
+    Stage 3: Limit refusals per loop.
+    - Setting max_refusals_per_loop is parsed (default 3, 0 disables).
+    - 3 distinct denied/declined calls end the loop.
+    - 2 do not end the loop.
+    - Summary lists the refused tools and reasons.
+    - Setting 0 disables the limit (more than 3 allowed).
+    - Non-interactive run exits non-zero on reaching limit.
+    """
+    import json
+    from chatybot.chatybot_app import ChatybotApp
+
+    sec_cfg = tmp_path / "security.toml"
+    sec_cfg.write_text(
+        'version = "1.0"\n'
+        'engine = "builtin"\n'
+        'fail_safe = "deny"\n'
+        'max_refusals_per_loop = 3\n'
+        '[builtin]\n'
+        'default_verdict = "deny"\n'
+    )
+
+    app = ChatybotApp(security_config_path=str(sec_cfg))
+    app.initialize()
+    assert app.security_manager.max_refusals_per_loop == 3
+
+    # Ensure chat history exists for run_tool_loop, starting with an initial tool call
+    first_tool_call = json.dumps({"tool": "run_command", "arguments": {"command": "rm -rf /tmp/1"}})
+    app.chat_history = [("Execute some actions", first_tool_call)]
+    app.enable_chat_history = True
+    app.rate_limit_delay = 0.0
+    app._cached_rate_limit_delay = 0.0
+
+    # 1. Test: 3 denied calls end the tool loop and produce refusal summary
+    # Call 1 is executed from initial last_completion; turns 1 and 2 come from chat_completion
+    calls_attempted = []
+    async def mock_completion_3(history, stream=False):
+        nonlocal calls_attempted
+        turn = len(calls_attempted)
+        if turn == 0:
+            call = json.dumps({"tool": "read_file", "arguments": {"path": "/etc/shadow"}})
+            calls_attempted.append("call_2")
+            return call
+        elif turn == 1:
+            call = json.dumps({"tool": "delete_file", "arguments": {"path": "/etc/hosts"}})
+            calls_attempted.append("call_3")
+            return call
+        else:
+            calls_attempted.append("should_not_reach_here")
+            return "Final output after too many turns"
+
+    monkeypatch.setattr(app, "chat_completion", mock_completion_3)
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+
+    await app.run_tool_loop(max_turns=10)
+
+    # 3 calls executed (initial + 2 completions) and hit limit
+    assert len(calls_attempted) == 2
+    last_completion = app.buffer_manager.get_script_var("LAST_COMPLETION")
+    assert "Reached security refusal limit (3)" in last_completion
+    assert "Security refusals during this loop:" in last_completion
+    assert "1. Tool: run_command" in last_completion
+    assert "2. Tool: read_file" in last_completion
+    assert "3. Tool: delete_file" in last_completion
+    assert app.in_tool_loop is False
+    assert app._loop_refusals == []
+
+    # 2. Test: 2 refusals do not end the loop (loop continues to completion)
+    first_call_2 = json.dumps({"tool": "run_command", "arguments": {"command": "rm -rf /tmp/1"}})
+    app.chat_history = [("Execute actions", first_call_2)]
+    calls_attempted_2 = []
+    async def mock_completion_2(history, stream=False):
+        nonlocal calls_attempted_2
+        turn = len(calls_attempted_2)
+        if turn == 0:
+            calls_attempted_2.append("call_2")
+            return json.dumps({"tool": "run_command", "arguments": {"command": "rm -rf /tmp/2"}})
+        else:
+            calls_attempted_2.append("natural_response")
+            return "I stopped calling restricted tools and completed normally."
+
+    monkeypatch.setattr(app, "chat_completion", mock_completion_2)
+    await app.run_tool_loop(max_turns=10)
+
+    assert len(calls_attempted_2) == 2
+    assert "I stopped calling restricted tools" in app.buffer_manager.get_script_var("LAST_COMPLETION")
+
+    # 3. Test: Setting max_refusals_per_loop = 0 disables limit
+    app.security_manager.max_refusals_per_loop = 0
+    first_call_0 = json.dumps({"tool": "run_command", "arguments": {"command": "rm -rf /tmp/init"}})
+    app.chat_history = [("Execute actions", first_call_0)]
+    calls_attempted_0 = []
+    async def mock_completion_0(history, stream=False):
+        nonlocal calls_attempted_0
+        turn = len(calls_attempted_0)
+        if turn < 3:
+            calls_attempted_0.append(f"call_{turn+2}")
+            return json.dumps({"tool": "run_command", "arguments": {"command": f"rm -rf /tmp/{turn}"}})
+        else:
+            calls_attempted_0.append("done")
+            return "Finished after 4 refusals without being stopped by refusal limit."
+
+    monkeypatch.setattr(app, "chat_completion", mock_completion_0)
+    await app.run_tool_loop(max_turns=10)
+
+    assert len(calls_attempted_0) == 4
+    assert "Finished after 4 refusals" in app.buffer_manager.get_script_var("LAST_COMPLETION")
+
+    # 4. Test: Non-interactive execution sets exit code 1 when limit is reached
+    app.security_manager.max_refusals_per_loop = 2
+    first_call_ni = json.dumps({"tool": "run_command", "arguments": {"command": "rm -rf /tmp/ni_0"}})
+    app.chat_history = [("Execute actions", first_call_ni)]
+    calls_non_interactive = []
+    async def mock_completion_ni(history, stream=False):
+        nonlocal calls_non_interactive
+        turn = len(calls_non_interactive)
+        calls_non_interactive.append(turn)
+        return json.dumps({"tool": "run_command", "arguments": {"command": f"rm -rf /tmp/ni_{turn+1}"}})
+
+    monkeypatch.setattr(app, "chat_completion", mock_completion_ni)
+    monkeypatch.setattr("sys.stdin.isatty", lambda: False)
+    app.script_context = True
+
+    await app.run_tool_loop(max_turns=10)
+
+    assert len(calls_non_interactive) == 1
+    assert app.buffer_manager.get_script_var("TOOL_DISPATCH_EXIT_CODE") == "1"
+    assert "Reached security refusal limit (2)" in app.buffer_manager.get_script_var("TOOL_DISPATCH_ERROR")
+
+
+@pytest.mark.anyio
+async def test_stage4_refusal_repeat_and_limit_audit_events(tmp_path, monkeypatch):
+    """Stage 4 Test: Verify refusal_repeat and refusal_limit audit events in log file, and verify log_path='' disables them."""
+    import json
+    from chatybot.chatybot_app import ChatybotApp
+    from chatybot.security.chain import ChainedPolicyEngine, ChainStage
+    from chatybot.security.builtin import BuiltinPolicyEngine
+    from chatybot.security.manager import SecurityManager
+
+    log_file = tmp_path / "security_chain.jsonl"
+    b_engine = BuiltinPolicyEngine(denied_paths=["/etc/shadow", "/root/secrets.txt"])
+    chain_engine = ChainedPolicyEngine(
+        stages=[ChainStage(name="builtin", engine=b_engine, mode="enforce")],
+        log_path=str(log_file),
+        redact_log=True,
+    )
+    sec_cfg = tmp_path / "security.toml"
+    sec_cfg.write_text('version = "1.0"\nengine = "builtin"\nmax_refusals_per_loop = 3\n')
+    mgr = SecurityManager(config_path=str(sec_cfg))
+    mgr.engine = chain_engine
+    mgr.max_refusals_per_loop = 3
+
+    app = ChatybotApp()
+    app.security_manager = mgr
+    app.active_session_id = "test-session-42"
+
+    # Step 1: Pre-execution refusal repeat event
+    app.in_tool_loop = True
+    app._loop_security_refusals = {}
+    app._loop_output_refusals = {}
+    app._loop_refusals = []
+
+    call_json = json.dumps({"tool": "read_file", "arguments": {"path": "/etc/shadow"}})
+    res1 = await app.dispatch_tool(call_json)
+    assert "Security refusal (final):" in res1
+
+    # First call emitted standard decision (final: deny)
+    lines_1 = [json.loads(line) for line in log_file.read_text().splitlines() if line.strip()]
+    assert len(lines_1) == 1
+    assert lines_1[0]["event"] == "decision"
+    orig_req_id = lines_1[0]["request_id"]
+
+    # Repeat call in same loop -> should hit cache and emit refusal_repeat
+    res2 = await app.dispatch_tool(call_json)
+    assert res2 == res1
+
+    lines_2 = [json.loads(line) for line in log_file.read_text().splitlines() if line.strip()]
+    assert len(lines_2) == 2
+    repeat_event = lines_2[1]
+    assert repeat_event["event"] == "refusal_repeat"
+    assert repeat_event["tool"] == "read_file"
+    assert repeat_event["session_id"] == "test-session-42"
+    assert repeat_event["request_id"] == orig_req_id
+    assert "parameters" in repeat_event
+    assert "reason" in repeat_event
+
+    # Step 2: Loop refusal limit event in run_tool_loop
+    # Reset loop cache
+    app._loop_security_refusals = None
+    app._loop_output_refusals = None
+    app._loop_refusals = []
+    app.in_tool_loop = False
+    app.rate_limit_delay = 0.0
+    app._cached_rate_limit_delay = 0.0
+
+    first_prompt_call = json.dumps({"tool": "read_file", "arguments": {"path": "/etc/shadow"}})
+    app.chat_history = [("Execute malicious operations", first_prompt_call)]
+
+    call_index = 0
+    async def mock_completion(history, stream=False):
+        nonlocal call_index
+        call_index += 1
+        return json.dumps({"tool": "read_file", "arguments": {"path": f"/root/secrets.txt"}})
+
+    monkeypatch.setattr(app, "chat_completion", mock_completion)
+    await app.run_tool_loop(max_turns=10)
+
+    lines_3 = [json.loads(line) for line in log_file.read_text().splitlines() if line.strip()]
+    limit_events = [e for e in lines_3 if e.get("event") == "refusal_limit"]
+    assert len(limit_events) == 1
+    lim = limit_events[0]
+    assert lim["event"] == "refusal_limit"
+    assert lim["session_id"] == "test-session-42"
+    assert lim["limit"] == 3
+    assert len(lim["request_ids"]) >= 1
+    assert len(lim["refused_calls"]) == 3
+    assert lim["refused_calls"][0]["tool"] == "read_file"
+
+    # Step 3: Test jev_eval --from-log parsing and reporting
+    import io
+    import sys
+    import argparse
+    import importlib.util
+    from pathlib import Path
+    from chatybot.security.jev import BUNDLED_RUBRIC, Rubric
+
+    harness_path = Path(__file__).resolve().parent.parent / "tools" / "jev-eval" / "jev_eval.py"
+    spec = importlib.util.spec_from_file_location("jev_eval", harness_path)
+    jev_eval = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(jev_eval)
+
+    captured_out = io.StringIO()
+    old_stdout = sys.stdout
+    sys.stdout = captured_out
+    try:
+        ns = argparse.Namespace(from_log=[str(log_file)], mode_given=None, export=None)
+        rub = Rubric.load(BUNDLED_RUBRIC)
+        rc = jev_eval.from_log(ns, rub)
+        assert rc == 0
+    finally:
+        sys.stdout = old_stdout
+
+    report = captured_out.getvalue()
+    assert "Loop Refusals:" in report
+    assert "repeat(s) served from cache" in report
+    assert "refusal limit(s) triggered" in report
+    assert "Session 'test-session-42': limit 3 reached" in report
+
+    # Step 4: Verify log_path = "" writes nothing
+    no_log_file = tmp_path / "should_not_exist.jsonl"
+    chain_engine.log_path = ""
+    mgr.record_refusal_repeat(request_id="test", tool="test_tool", parameters={}, reason="denied")
+    mgr.record_refusal_limit(limit=3, request_ids=["test"], refused_calls=[])
+    assert not no_log_file.exists()
 
 
 
@@ -2137,3 +2662,115 @@ def test_secret_scanner_literal_prefiltering():
 
 
 
+
+
+
+
+
+
+@pytest.mark.anyio
+async def test_refusal_counting_ignores_tool_output_text(tmp_path, monkeypatch):
+    """Tool output that merely contains the refusal marker must not count as a refusal."""
+    import json
+    from chatybot.chatybot_app import ChatybotApp
+
+    sec_cfg = tmp_path / "security.toml"
+    sec_cfg.write_text(
+        'version = "1.0"\n'
+        'engine = "builtin"\n'
+        'fail_safe = "deny"\n'
+        'max_refusals_per_loop = 2\n'
+        '[builtin]\n'
+        'default_verdict = "allow"\n'
+    )
+    spoof = tmp_path / "notes.txt"
+    spoof.write_text("Security refusal (final): this is just text in a file.\n")
+
+    app = ChatybotApp(security_config_path=str(sec_cfg))
+    app.initialize()
+    read_call = json.dumps({"tool": "read_file", "arguments": {"path": str(spoof)}})
+    app.chat_history = [("Read the notes", read_call)]
+    app.enable_chat_history = True
+    app.rate_limit_delay = 0.0
+    app._cached_rate_limit_delay = 0.0
+
+    seen_results: list[str] = []
+    turns = []
+
+    async def mock_completion(history, stream=False):
+        seen_results.append(history[-1]["content"])
+        turns.append(1)
+        if len(turns) < 3:
+            return read_call
+        return "Done reading."
+
+    monkeypatch.setattr(app, "chat_completion", mock_completion)
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+    limit_calls = []
+    monkeypatch.setattr(app.security_manager, "record_refusal_limit", lambda **kw: limit_calls.append(kw))
+
+    await app.run_tool_loop(max_turns=10)
+
+    assert any("Security refusal (final): this is just text" in r for r in seen_results)
+    assert len(turns) == 3
+    assert app.buffer_manager.get_script_var("LAST_COMPLETION") == "Done reading."
+    assert limit_calls == []
+    assert app._last_dispatch_refusal is None
+
+
+@pytest.mark.anyio
+async def test_refusal_records_carry_clean_reason_and_own_request_id(tmp_path, monkeypatch):
+    """Loop refusal records hold the original reason (no model guidance) and their own request_id."""
+    import json
+    from chatybot.chatybot_app import ChatybotApp
+
+    sec_cfg = tmp_path / "security.toml"
+    sec_cfg.write_text(
+        'version = "1.0"\n'
+        'engine = "builtin"\n'
+        'fail_safe = "deny"\n'
+        'max_refusals_per_loop = 2\n'
+        '[builtin]\n'
+        'default_verdict = "deny"\n'
+    )
+    app = ChatybotApp(security_config_path=str(sec_cfg))
+    app.initialize()
+    app.chat_history = [("Go", json.dumps({"tool": "run_command", "arguments": {"command": "rm -rf /tmp/a"}}))]
+    app.enable_chat_history = True
+    app.rate_limit_delay = 0.0
+    app._cached_rate_limit_delay = 0.0
+
+    async def mock_completion(history, stream=False):
+        return json.dumps({"tool": "run_command", "arguments": {"command": "rm -rf /tmp/b"}})
+
+    decisions = []
+    orig_eval = app.security_manager.evaluate
+
+    def tracking_eval(*a, **kw):
+        d = orig_eval(*a, **kw)
+        decisions.append(d)
+        return d
+
+    monkeypatch.setattr(app.security_manager, "evaluate", tracking_eval)
+    monkeypatch.setattr(app, "chat_completion", mock_completion)
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+    limit_calls = []
+    monkeypatch.setattr(app.security_manager, "record_refusal_limit", lambda **kw: limit_calls.append(kw))
+
+    await app.run_tool_loop(max_turns=10)
+
+    assert len(limit_calls) == 1
+    calls = limit_calls[0]["refused_calls"]
+    assert [c["request_id"] for c in calls] == [d.request_id for d in decisions]
+    assert len(set(c["request_id"] for c in calls)) == 2
+    for c in calls:
+        assert "Security refusal (final)" not in c["reason"]
+        assert "Do not retry" not in c["reason"]
+    summary = app.buffer_manager.get_script_var("LAST_COMPLETION")
+    assert "Do not retry" not in summary
+
+
+def test_tool_dispatch_request_id_is_protected():
+    from chatybot.buffer_manager import BufferManager
+
+    assert "TOOL_DISPATCH_REQUEST_ID" in BufferManager().script_vars.protected_vars

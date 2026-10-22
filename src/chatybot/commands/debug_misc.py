@@ -36,6 +36,13 @@ async def cmd_trace(ctx: CommandContext, parts: list, command: str) -> CommandRe
         is_on = state == "on"
         if subcmd == "rawpayload":
             app.trace_raw_payload = is_on
+            # Propagate in-process so the Jev security engine (which checks
+            # CHATYBOT_TRACE_RAW_PAYLOAD at request time) also dumps its
+            # outgoing/incoming payloads to the screen.
+            if is_on:
+                os.environ["CHATYBOT_TRACE_RAW_PAYLOAD"] = "1"
+            else:
+                os.environ.pop("CHATYBOT_TRACE_RAW_PAYLOAD", None)
             print(f"Trace rawpayload set to {is_on}")
         elif subcmd == "tps":
             app.trace_tps = is_on

@@ -146,7 +146,9 @@
       "security_blocked_header": "[Security Block]",
       "security_blocked_msg": "Security Policy Blocked: {reason}",
       "security_blocked_non_interactive": "Security Policy Blocked: Non-interactive execution of '{tool}' rejected by non_interactive_ask policy (Reason: {reason}).",
-      "security_declined_msg": "Security Authorization Denied: User declined execution of '{tool}'."
+      "security_declined_msg": "Security Authorization Denied: User declined execution of '{tool}'.",
+      "security_refusal_final": "Do not retry this action or an equivalent one. Tell the user what you were trying to do and ask how to proceed.",
+      "security_refusal_limit_reached": "Reached security refusal limit ({limit}) in tool loop. Terminating loop."
     },
     "help": {
       "headers": {
@@ -481,7 +483,9 @@
       "security_blocked_header": "[Bloqueo de Seguridad]",
       "security_blocked_msg": "Política de Seguridad Bloqueada: {reason}",
       "security_blocked_non_interactive": "Política de Seguridad Bloqueada: Ejecución no interactiva de '{tool}' rechazada por la política non_interactive_ask (Motivo: {reason}).",
-      "security_declined_msg": "Autorización de Seguridad Denegada: El usuario rechazó la ejecución de '{tool}'."
+      "security_declined_msg": "Autorización de Seguridad Denegada: El usuario rechazó la ejecución de '{tool}'.",
+      "security_refusal_final": "No reintente esta acción ni una equivalente. Informe al usuario de lo que intentaba hacer y pregunte cómo proceder.",
+      "security_refusal_limit_reached": "Se alcanzó el límite de rechazos de seguridad ({limit}) en el bucle de herramientas. Finalizando bucle."
     },
     "help": {
       "headers": {
@@ -1043,7 +1047,9 @@
       "security_blocked_header": "[Blocage de Sécurité]",
       "security_blocked_msg": "Politique de Sécurité Bloquée : {reason}",
       "security_blocked_non_interactive": "Politique de Sécurité Bloquée : Exécution non interactive de '{tool}' rejetée par la politique non_interactive_ask (Raison : {reason}).",
-      "security_declined_msg": "Autorisation de Sécurité Refusée : L'utilisateur a refusé l'exécution de '{tool}'."
+      "security_declined_msg": "Autorisation de Sécurité Refusée : L'utilisateur a refusé l'exécution de '{tool}'.",
+      "security_refusal_final": "Ne réessayez pas cette action ni une action équivalente. Expliquez à l'utilisateur ce que vous tentiez de faire et demandez comment procéder.",
+      "security_refusal_limit_reached": "Limite de refus de sécurité atteinte ({limit}) dans la boucle d'outils. Fin de la boucle."
     },
     "help": {
       "headers": {
@@ -1600,7 +1606,9 @@
       "security_blocked_header": "[安全拦截]",
       "security_blocked_msg": "安全策略拦截: {reason}",
       "security_blocked_non_interactive": "安全策略拦截: '{tool}' 的非交互式执行已被 non_interactive_ask 策略拒绝 (原因: {reason})。",
-      "security_declined_msg": "安全授权拒绝: 用户拒绝执行 '{tool}'。"
+      "security_declined_msg": "安全授权拒绝: 用户拒绝执行 '{tool}'。",
+      "security_refusal_final": "请勿重试此操作或等效操作。请告知用户您尝试执行的操作，并询问如何继续。",
+      "security_refusal_limit_reached": "工具调用循环已达安全拒绝上限 ({limit})。正在终止循环。"
     },
     "help": {
       "headers": {
@@ -2149,7 +2157,9 @@
       "security_blocked_header": "[Blocco di Sicurezza]",
       "security_blocked_msg": "Criterio di Sicurezza Bloccato: {reason}",
       "security_blocked_non_interactive": "Criterio di Sicurezza Bloccato: Esecuzione non interattiva di '{tool}' respinta dal criterio non_interactive_ask (Motivo: {reason}).",
-      "security_declined_msg": "Autorizzazione di Sicurezza Negata: L'utente ha rifiutato l'esecuzione di '{tool}'."
+      "security_declined_msg": "Autorizzazione di Sicurezza Negata: L'utente ha rifiutato l'esecuzione di '{tool}'.",
+      "security_refusal_final": "Non ritentare questa azione né un'azione equivalente. Spiega all'utente cosa stavi cercando di fare e chiedi come procedere.",
+      "security_refusal_limit_reached": "Raggiunto il limite di rifiuti di sicurezza ({limit}) nel ciclo degli strumenti. Chiusura del ciclo."
     },
     "help": {
       "headers": {
@@ -2707,7 +2717,9 @@
       "security_blocked_header": "[حظر أمني]",
       "security_blocked_msg": "تم الحظر بموجب سياسة الأمان: {reason}",
       "security_blocked_non_interactive": "تم الحظر بموجب سياسة الأمان: تم رفض التنفيذ غير التفاعلي للأداة '{tool}' بموجب سياسة non_interactive_ask (السبب: {reason}).",
-      "security_declined_msg": "تم رفض تفويض الأمان: رفض المستخدم تنفيذ '{tool}'."
+      "security_declined_msg": "تم رفض تفويض الأمان: رفض المستخدم تنفيذ '{tool}'.",
+      "security_refusal_final": "لا تعد محاولة هذا الإجراء أو أي إجراء مماثل. أخبر المستخدم بما كنت تحاول فعله واسأله عن كيفية المتابعة.",
+      "security_refusal_limit_reached": "تم الوصول إلى الحد الأقصى لرفض الأمان ({limit}) في حلقة الأدوات. يتم إنهاء الحلقة."
     },
     "help": {
       "headers": {
