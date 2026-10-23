@@ -691,6 +691,27 @@ async def cmd_thoughtstyle(ctx: CommandContext, parts: list, command: str) -> Co
     return CommandResult.ok()
 
 
+@command(
+    "/reasoning_history",
+    help="Control how past reasoning is sent in chat history",
+    args="[strip|keep|field|auto]",
+    category="models",
+)
+async def cmd_reasoning_history(ctx: CommandContext, parts: list, command: str) -> CommandResult:
+    app = ctx.app
+    valid_modes = ["strip", "keep", "field", "auto"]
+    if len(parts) > 1:
+        mode = parts[1].lower()
+        if mode in valid_modes:
+            app.reasoning_history_mode = mode
+            print(f"Reasoning history mode set to: {mode}")
+        else:
+            print(f"Invalid mode. Use: {' | '.join(valid_modes)}")
+    else:
+        print(f"Reasoning history mode: {app.reasoning_history_mode}")
+    return CommandResult.ok()
+
+
 @command("/seed", help="Set or view the random seed", args="[<int>|time|random <min>,<max>|clear]", category="models")
 async def cmd_seed(ctx: CommandContext, parts: list, command: str) -> CommandResult:
     app = ctx.app

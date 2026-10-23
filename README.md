@@ -328,6 +328,7 @@ chatybot --no-tools
 | `/effort <low\|medium\|high\|xhigh\|none>` | Set reasoning effort / strength for OpenAI (o1, o3), Mistral, GLM (GLM-5.2), and Meta Muse Glimmer | `/effort high` |
 | `/thinking <on\|off>` | Toggle `<think>` and `<thought>` visibility | `/thinking off` |
 | `/thoughtstyle <none\|gemma4\|nanbeige\|nanbeige_code>` | Set prompting format for negative prompt to disable reasoning - auto | `/thoughtstyle nanbeige_code` |
+| `/reasoning_history <strip\|keep\|field\|auto>` | Control how past reasoning is sent in chat history (auto retries with `allow_missing_thinking` on strict-template 400) | `/reasoning_history auto` |
 | `/seed <value>` | Set PRNG Seed | `/seed time` |
 | `/stream` | Toggle streaming | `/stream` |
 | `/trace <cmd> <state>`| Trace tokens/payload | `/trace rawpayload on` |
