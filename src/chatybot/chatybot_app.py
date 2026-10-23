@@ -106,7 +106,7 @@ class ChatybotApp:
                 "listimages", "showimage", "imagedir", "imagine", "saveimage", "imagesize", "imagequality",
                 "model", "listmodels", "logging", "save", "codeonly", "codeoff", "multiline",
                 "system", "temp", "maxtokens", "max_tokens", "top_p", "top_k", "freq_penalty", "pres_penalty",
-                "reasoning", "effort", "thinking", "thoughtstyle", "seed", "echo", "def",
+                "reasoning", "effort", "thinking", "thoughtstyle", "reasoning_history", "seed", "echo", "def",
                 "reloadmacros", "listmacros", "calc", "stream", "script", "source", "profile", "quit", "exit",
                 "setdb", "dblist", "searchdb", "dblog", "dbprint", "documents", "rerank",
                 "loadvar", "savevar", "setvar", "notemode", "mem", "dump", "trace", "debug",
@@ -155,6 +155,13 @@ class ChatybotApp:
         self.should_exit: bool = False
         self.script_context: bool = False
         self.thoughtstyle: str = "none"
+        # How past assistant reasoning is transmitted in chat history:
+        #   "auto"   - strip thinking tags; retry with allow_missing_thinking=true
+        #             on the specific "missing reasoning" 400 from strict templates
+        #   "strip"  - strip thinking tags (today's default, no auto-retry)
+        #   "keep"   - keep raw <think> tags inside assistant content
+        #   "field"  - pass reasoning via reasoning_content on assistant messages
+        self.reasoning_history_mode: str = "auto"
         self.default_profile: str | None = None
         self._openai_clients: dict[str, Any] = {}
         
@@ -1371,6 +1378,37 @@ class ChatybotApp:
         self._openai_clients[client_key] = client
         return client
 
+    @staticmethod
+    def _is_missing_reasoning_error(e: Exception) -> bool:
+        """Detect the strict-template 400 that demands reasoning in past turns."""
+        msg = str(e).lower()
+        return (
+            "missing" in msg
+            and "reasoning" in msg
+            and ("allow_missing_thinking" in msg or "reasoning_content" in msg)
+        )
+
+    async def _create_with_reasoning_retry(self, client, kwargs: dict):
+        """Call create(); if the server rejects stripped reasoning and
+        reasoning_history_mode is 'auto', retry once with
+        allow_missing_thinking=true in chat_template_kwargs."""
+        try:
+            return await client.chat.completions.create(**kwargs)
+        except Exception as e:
+            if (
+                self.reasoning_history_mode == "auto"
+                and self._is_missing_reasoning_error(e)
+            ):
+                print(
+                    "[Reasoning history: server requires thinking in past turns. "
+                    "Retrying with allow_missing_thinking=true...]"
+                )
+                kwargs.setdefault("extra_body", {}).setdefault(
+                    "chat_template_kwargs", {}
+                )["allow_missing_thinking"] = True
+                return await client.chat.completions.create(**kwargs)
+            raise
+
     async def chat_completion(self, prompt: str, stream: bool = False) -> str:
         """
         Send a prompt to the OpenAI API and return the response.
@@ -1437,13 +1475,22 @@ class ChatybotApp:
             # Prepare messages for chat completion including past chat history
             messages = []
             if self.enable_chat_history and self.chat_history:
+                mode = self.reasoning_history_mode
                 for past_p, past_r in self.chat_history:
                     messages.append({"role": "user", "content": past_p})
-                    # Strip thinking tags from past assistant responses for token efficiency
-                    clean_r = re.sub(r"<(?:think|thought|thinking)>.*?</(?:think|thought|thinking)>\s*", "", past_r, flags=re.DOTALL | re.IGNORECASE).strip()
+                    if mode == "keep":
+                        # Preserve raw thinking tags inside assistant content
+                        messages.append({"role": "assistant", "content": past_r})
+                        continue
+                    # Extract thinking content using the robust extractor that
+                    # handles unclosed blocks (interrupted streams), then strip.
+                    thinking_text, clean_r = self._extract_thinking_tokens(past_r)
                     if not clean_r and past_r:
                         clean_r = past_r
-                    messages.append({"role": "assistant", "content": clean_r})
+                    asst_msg: dict = {"role": "assistant", "content": clean_r}
+                    if mode == "field" and thinking_text:
+                        asst_msg["reasoning_content"] = thinking_text
+                    messages.append(asst_msg)
 
             # For multimodal (vision) models, use content array with text + images
             if image_list:
@@ -1774,7 +1821,7 @@ class ChatybotApp:
 
             if stream:
                 kwargs["stream"] = True
-                response = await client.chat.completions.create(**kwargs)
+                response = await self._create_with_reasoning_retry(client, kwargs)
                 
                 # Reset debug response flags in streaming mode (not supported for streams)
                 if self.debug_response_mode or self.debug_response_raw:
@@ -2038,7 +2085,7 @@ class ChatybotApp:
                 max_retries = 3
                 retry_count = 0
                 while retry_count < max_retries:
-                    response = await client.chat.completions.create(**kwargs)
+                    response = await self._create_with_reasoning_retry(client, kwargs)
                     if not getattr(response, "choices", None):
                         is_transient = False
                         code = None
