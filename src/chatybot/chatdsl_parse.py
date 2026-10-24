@@ -167,20 +167,20 @@ class TParser:
     VALID_ESCAPE_COMMANDS: ClassVar[set[str]] = {
         "help", "prompt", "file", "showfile", "clearfile", "filebank",
         "model", "listmodels", "logging", "save", "codeonly", "codeoff",
-        "system", "temp", "maxtokens", "top_p", "top_k", "freq_penalty",
-        "pres_penalty", "reasoning", "effort", "reasoning_history", "seed", "stream", "script", "quit", "exit",
+        "system", "temp", "maxtokens", "max_tokens", "top_p", "top_k", "freq_penalty",
+        "pres_penalty", "reasoning", "effort", "reasoning_history", "seed", "stream", "script", "source", "quit", "exit",
         "setdb", "dblist", "searchdb", "dblog", "dbprint", "loadvar",
         "savevar", "setvar", "calc", "notemode", "mem", "dump", "trace", "thinking",
         "filebank1", "filebank2", "filebank3", "filebank4", "filebank5",
         "imagebank", "imagebank1", "imagebank2", "imagebank3", "imagebank4", "imagebank5",
         # Phase 2: Image generation commands
         "imagine", "imagesize", "imagequality", "saveimage", "imagedir",
-        "listimages", "showimage", "loadimage",
+        "listimages", "showimage", "loadimage", "loadimage1", "loadimage2", "loadimage3", "loadimage4", "loadimage5",
         "multiline", "echo", "thoughtstyle", "def",
         # Semantic reranking commands
         "documents", "rerank",
-        # Shell execution commands
-        "run", "run_safe", "run_unsafe", "tool", "profile", "chatdsl",
+        # Shell execution commands & Agentic tools
+        "run", "run_safe", "run_unsafe", "tool", "ask", "continue", "profile", "chatdsl",
         # Procedures & Local Scoping
         "proc", "defproc", "endproc", "local",
         # Multiline Foreach Loop
@@ -192,6 +192,8 @@ class TParser:
         # Context budgeting, replay & diagnostics
         "context", "context_limit", "auto_truncate", "ctx", "session", "replay",
         "env", "str_search", "debug", "config", "setup_keys", "migrate_sessions",
+        # Documentation viewer
+        "docs", "doc",
         # Skills & Decision engine
         "skill", "decide"
     }

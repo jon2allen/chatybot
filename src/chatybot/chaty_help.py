@@ -172,6 +172,34 @@ class HelpSystem:
             examples=["/imagedir ./images", "/imagedir"]
         ))
         
+        self.register_command(CommandHelp(
+            name="/listimages",
+            category="image",
+            short_desc="List images in the active image directory",
+            usage="/listimages [dir]",
+            long_desc="List generated and saved images in the default or specified image directory.",
+            examples=["/listimages", "/listimages ./photos"]
+        ))
+        
+        self.register_command(CommandHelp(
+            name="/showimage",
+            category="image",
+            short_desc="Display an image or imagebank entry",
+            usage="/showimage [path|1-5]",
+            long_desc="Display an image file using the terminal viewer or show metadata for an image bank (1-5).",
+            examples=["/showimage output.png", "/showimage 1"]
+        ))
+        
+        self.register_command(CommandHelp(
+            name="/loadimage",
+            category="image",
+            short_desc="Load an image into an image bank",
+            usage="/loadimage <1-5> <file>",
+            long_desc="Load an image file into one of the 5 available image banks for vision model prompting.",
+            examples=["/loadimage 1 photo.png", "/loadimage 2 diagram.jpg"],
+            aliases=["/loadimage1", "/loadimage2", "/loadimage3", "/loadimage4", "/loadimage5"]
+        ))
+        
         # Model commands
         self.register_command(CommandHelp(
             name="/model",
@@ -593,6 +621,37 @@ class HelpSystem:
                 long_desc=long_desc,
                 examples=examples
             ))
+        
+        # Semantic reranking commands
+        self.register_command(CommandHelp(
+            name="/documents",
+            category="database",
+            short_desc="Set the document source for semantic reranking",
+            usage='/documents db=<name> | var=<name> | var=file | filebank=<1-5> | dir="<path>"',
+            long_desc="Configure the active document corpus source used by /rerank. Can point to a TinyDB database, script variable, live chat history, file buffer, file bank (1-5), or directory.",
+            examples=[
+                "/documents db=research",
+                "/documents var=CHAT_HISTORY",
+                "/documents var=file",
+                "/documents filebank=1",
+                '/documents dir="./notes"'
+            ],
+            see_also=["/rerank", "/setdb"]
+        ))
+        
+        self.register_command(CommandHelp(
+            name="/rerank",
+            category="database",
+            short_desc="Execute semantic search and reranking on configured documents",
+            usage='/rerank "<query>" [top_k=<n>] [model=<name>] [var=<varname>]',
+            long_desc="Perform semantic search and cross-encoder reranking over the active document source set via /documents. Supports top_k filtering and saving ranked results to a script variable.",
+            examples=[
+                '/rerank "memory management in linux"',
+                '/rerank "error handling" top_k=5',
+                '/rerank "performance tuning" top_k=3 var=best_chunks'
+            ],
+            see_also=["/documents"]
+        ))
         
         # Variable commands
         self.register_command(CommandHelp(
