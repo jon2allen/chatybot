@@ -1,0 +1,27 @@
+# Recipe 4.4 — Reasoning History Integrity with Strict Models
+# Run: /script doc/cookbook/04_4_reasoning_history.chatdsl
+#
+# Some reasoning models (e.g. reflection/Beam-1.0-501B-A23B or DeepSeek R1)
+# enforce chain-of-thought integrity across multi-turn sessions. If earlier
+# assistant reasoning is dropped, their chat templates raise a 400 Bad Request error.
+#
+# This recipe demonstrates configuring /reasoning_history mode ('auto' or 'field')
+# to ensure smooth multi-turn execution and tool loops without crashing.
+
+/model hf1_beam
+/reasoning on
+/reasoning_history auto
+
+# Turn 1: Initial query triggering reasoning
+What are 3 distinct architectural advantages of NVMe-oF compared to traditional iSCSI?
+/save 04_4_turn1.txt
+
+# Turn 2: Follow-up question leveraging prior turn context
+/multiline
+Based on your answer in turn 1, provide a concrete Linux storage configuration example
+illustrating the first advantage you identified.
+;;
+/multiline
+/save 04_4_turn2.txt
+
+/echo "Multi-turn reasoning conversation successfully completed!"
