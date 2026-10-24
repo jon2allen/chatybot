@@ -6,14 +6,100 @@ October 23rd, 2026
 ------------------
 - **Reasoning History Integrity & Strict Chat Template Compatibility (`/reasoning_history`)**:
   - Added `/reasoning_history` command with four modes: `auto` (default), `strip`, `keep`, and `field` to govern how reasoning tokens are formatted in multi-turn history.
-  - Resolved 400 Bad Request errors on models with strict Jinja chat templates (e.g. `reflection/Beam-1.0-501B-A23B`, DeepSeek R1, vLLM/TGI serving with `allow_missing_thinking=false`).
+  - Resolved 400 Bad Request errors on models with strict Jinja chat templates (e.g. `reflection/Beam-1.0-501B-A23B` on Hugging Face / Baseten, DeepSeek R1, vLLM/TGI serving with `allow_missing_thinking=false`).
+  - **Provider Nuances (Baseten vs. OpenRouter)**: Documented that strict reasoning enforcement is specific to dedicated Hugging Face / Baseten deployments (and raw vLLM instances). OpenRouter's Beam endpoint (`reflection/beam-1.0-501b-a23b`) does not enforce strict thinking checks as of October 2026. Mode `auto` adapts dynamically to both.
   - **Tool Loop & History Sanitization**: Added universal pre-send assistant message sanitization in `chat_completion` ensuring all assistant turns (including intermediate agentic tool-loop turns in `temp_history`) populate `reasoning_content` to satisfy strict Jinja template validators (`not (message.thinking or message.reasoning_content or message.reasoning)`).
   - **Self-Healing `auto` Mode**: In `auto` mode, when a 400 "missing reasoning" error is detected, Chatybot automatically sets `allow_missing_thinking=true` in `chat_template_kwargs` and backfills `reasoning_content` across prior assistant turns before retrying.
+  - **Reasoning Loop Hardening & Multimodal Safety**:
+    - Excluded `keep` mode from setting `reasoning_content` in message cleaning loop, preventing duplicate reasoning in both content and field.
+    - Added string type guards to `_extract_thinking_tokens` and cleaning loops to protect against `TypeError` crashes on list-typed multimodal/vision content.
+    - Deep-copied `kwargs` in `_create_with_reasoning_retry` so retry modifications do not mutate caller arguments across transient outer loop retries.
   - **Stream Interruption Safety**: Uses `_extract_thinking_tokens` to robustly parse both closed and unclosed thinking tags from interrupted streams.
-  - Documented configuration and model-specific options in `doc/reasoning_history.md`.
+  - **Help, Localization & Cookbook**:
+    - Registered `/reasoning_history` in `chaty_help.py` and localized command aliases/descriptions across all 5 non-English languages (`es`, `fr`, `zh`, `it`, `ar`) in `translations.json`.
+    - Added Chapter 4 Recipe 4.4 and runnable script `cookbook/04_4_reasoning_history.chatdsl`.
+    - Documented configuration and model-specific options in `doc/reasoning_history.md`.
+- **Command Registration & ChatDSL Synchronization**:
+  - Synchronized `TParser.VALID_ESCAPE_COMMANDS` in `chatdsl_parse.py` to support `/reasoning_history`, `/docs`, `/doc`, `/ask`, `/continue`, `/source`, `/max_tokens`, and `/loadimage1`–`/loadimage5`.
+  - Registered missing `/documents` and `/rerank` commands under category `database` in `chaty_help.py`.
+  - Registered `/listimages`, `/showimage`, and `/loadimage` under category `image` in `chaty_help.py`.
 
-Unreleased
-----------
+October 21st, 2026 (v0.9.1)
+---------------------------
+- **Jev AI Policy Engine, Chaining, Output Security & Release v0.9.1**:
+  - Bumped version to 0.9.1 across `pyproject.toml`, `chatybot_app.py`, and package initialization.
+  - Added interactive Jev setup wizard (`chatybot --setup-jev`, `tools/jev-eval/setup_jev.sh`, and `chatybot-setup-jev` entry point).
+- **Builtin output scanner reuse**: when builtin checks output itself (as a chain stage, or used directly), it now builds its default-rules `SecretScanner` once and reuses it instead of building one per tool call (rule compilation plus reading `.env` files each time).
+- **Command-line passwords in redaction and output screening**:
+  - `curl -u user:password` (and `-uuser:pw`, `--user`, `--proxy-user`), `mysql`/`mysqldump`/`mariadb -pPASSWORD`, `sshpass -p PASSWORD` and `--password=PASSWORD` were not recognized at all (even long random passwords), so they were sent to the Jev API and written to the logs, and reading a script containing one did not prompt. They are now redacted (`curl -u admin:<redacted>`) and screened, with no minimum length since the position is unambiguous.
+  - Shell expansions (`$API_PASS`, `${P}`), prompting forms (`curl -u admin`, `mysql -p`, `mysql --password db`), placeholders (`user:pass`, `--password=VALUE`) and look-alikes (`docker -u 1000:1000`, `sort -u`, `ps -u`, `mysql -P 3306`) are left alone.
+  - New validators `cli_password` and `flag_credential` for custom `[output_security]` rules.
+- **Security refusals in tool loops**:
+  - Refusals are final, not errors: a security DENY, a declined ASK, a non-interactive block and a refused output now return `Security refusal (final): <reason>. Do not retry this action or an equivalent one. Tell the user what you were trying to do and ask how to proceed.` instead of `Error: ...`, which weaker models treated as transient and retried. Script variables (`TOOL_DISPATCH_EXIT_CODE=1`, `TOOL_DISPATCH_ERROR`) are unchanged. Guidance string localized in all six languages.
+  - Refusal memory per tool loop: a refused call repeated with the same (normalized) arguments gets the stored refusal back without a new policy evaluation, Jev call or prompt, and without running the tool again when its output was refused. Only refusals are remembered, never approvals. Scripts and direct `/tool` dispatches are unaffected.
+  - Refusal limit: `max_refusals_per_loop` in `security.toml` (default 3, `0` disables). When reached, the loop ends and the user gets a summary of the refused calls and reasons; non-interactive runs set `TOOL_DISPATCH_EXIT_CODE=1`.
+  - Refusals are detected by a flag set in `dispatch_tool`, not by searching tool output, so a file or page that contains the refusal text is not counted.
+  - New `refusal_repeat` and `refusal_limit` events in `security_chain.jsonl` (chain engine) or `jev_security.jsonl` (jev engine), joined to the original decision by `request_id`; reasons and arguments are redacted and cut to 4,000 characters, and a value is omitted if redaction fails. `jev_eval.py --from-log` reports them per session. `TOOL_DISPATCH_REQUEST_ID` is a new protected script variable.
+- **Tool-loop guard**:
+  - Stops models that keep repeating the same tool call (reported with Cohere and dots free models). A repeat counts only when the arguments and the result are both identical, within the last `loop_guard_window` (8) executed calls, so A, B, A, B alternation is caught and state-changing sequences are not.
+  - When a call has returned the same result `loop_guard_repeats - 1` (2) times, the next request is not executed and the model is told to use the earlier result or change approach; if it asks again with nothing else run in between, the loop stops with an explanation. Withheld calls are marked `"loop_guard"` in `AGENTIC_LOOP` / `/tool history`.
+  - The guard only withholds calls: it never executes anything or skips a security check; security-refused calls are left to the refusal limit; `ask_user` is exempt.
+  - Settings: `loop_guard`, `loop_guard_repeats`, `loop_guard_window` in `tools_config.toml` `[config]`; `/tool loop_guard [on|off|repeats <n>|window <n>]`. Added `test/test_loop_guard.py`.
+- **Jev rubric v1.2**:
+  - New rule `shell_startup` (ask): reading, searching or sourcing `~/.zshrc`, `~/.zshenv`, `~/.zprofile`, `~/.bashrc`, `~/.bash_profile`, `~/.profile` or the fish config.
+  - New rule `persistence` (deny): writing to those files, crontab entries, launchd agents or daemons, systemd units, login items, and `git config --global` hooks or aliases.
+  - `secrets` now names `~/.netrc`, `~/.npmrc`, `~/.pypirc`, `~/.git-credentials`, `~/.docker/config.json` and `~/.kube/config`.
+  - Test set grown from 102 to 129 cases; 129/129 over 3 runs, harmless commands scored at most 0.45 and flagged ones at least 0.75 (`tools/jev-eval/baseline/run7-rubric-v1.2.jsonl`, history in `jev_proof_of_concept.md`).
+  - Startup notice when `~/.config/chatybot/jev_security.toml` is older than the bundled rubric, naming the new rules. The user's file is never modified; merge the changes or copy `src/chatybot/security/default_jev_security.toml`.
+- **Documentation**:
+  - `doc/jev_security_engine.md` updated to match the code: chain short-circuit rules, run-7 results, redaction, output security, log formats, what leaves the machine, and known limitations (including that the model sees Jev rule scores in refusals). Corrected an earlier claim that builtin asks for every shell command; it allows read-only git commands.
+  - `doc/chatdsl_guide_v1.md`: documented that `--script` and `--run` always exit 0 and how scripts detect failures through `RUN_EXIT_CODE`, `TOOL_DISPATCH_EXIT_CODE`, `TOOL_DISPATCH_ERROR` and `TOOL_DISPATCH_RESULT`.
+
+- **Jev payload redaction now uses SecretScanner (security fix)**:
+  - Requests to the Jev API, Jev/chain logs and payload traces were redacted with an older pattern list that missed Groq (`gsk_`), Hugging Face (`hf_`), Google (`AIza`), JWTs, keys passed as command-line flags, and the user's own unprefixed keys. `jev.redact_text` now runs `SecretScanner.redact()` first: exact known secrets (`<redacted:KEY_NAME>`), whole private-key blocks, and every provider/assignment rule, replacing only the value so Jev still sees the command.
+  - New `SecretScanner.redact()`; new rules for command-line flag credentials (`--api-key X`, `--token X`, `--password X`) and HTTP Basic credentials; database-URL passwords are now value-checked (placeholders like `user:password@` are ignored).
+  - Shell expansions (`$VAR`, `${VAR}`, `$(cmd)`) and `Bearer`/`Basic` scheme words are no longer redacted, so Jev can see intent such as keychain reads.
+
+- **Output secret scanner precision**:
+  - The generic credential rules now treat their regex match as a candidate and check the value: code that only references a credential (`os.environ[...]`, `getpass()`, `settings.SECRET_KEY`, `$(...)`, `${{ }}`), placeholders (`your_`, `<...>`, `example`, `fake`), paths, URLs and short or low-randomness values no longer prompt. Repo files that would prompt on read dropped from 32 to 5 (all test fixtures with fake keys).
+  - Passwords: 8+ characters; a bare word without digits is a value in env-style (`DB_PASSWORD=x`), YAML/prose (`password: x`) and `.netrc` lines, and a variable name in code-style assignments (`password = x`, `password=password`).
+  - New `.netrc` rule (`login <user> password <value>`); JSON (`"api_key": "..."`) and `:=` assignments are now covered.
+  - Output rules accept an optional `validator` (`token_value`, `password_value`, `credential_value`); see `[output_security]` in the default `security.toml`.
+  - Added `test/test_secret_scanner.py`, including a guard that no `src/` file or doc prompts on read.
+
+- **Post-Execution Output Security (Egress Filtering & Secret Protection)**:
+  - Added post-execution output screening in `SecurityManager` and policy engines (`builtin`, `jev`, `chain`, `allow_all`, `stdio_binary`) to evaluate tool output (`read_file`, `run_command`, `str_search`, `read_url`) before it enters LLM context.
+  - Implemented clean tri-state access control (ALLOW / ASK / DENY) avoiding fragile token redaction:
+    - **ALLOW**: Untouched raw tool output enters LLM context.
+    - **ASK**: Prompts user interactively to authorize LLM viewing sensitive data. If approved (`y`), raw output is passed completely intact; if declined (`n`), output is withheld. Respects `-y`/auto-approve and `non_interactive_ask` ("deny" blocks, "allow" permits).
+    - **DENY**: Hard blocks disclosure, erases raw output from context, sets `TOOL_DISPATCH_EXIT_CODE = '1'`, and returns a clear policy violation error.
+  - Added built-in regex rules detecting private cryptographic keys (DENY), GitHub tokens (ASK), AWS keys (ASK), API keys (ASK), and bearer tokens/passwords (ASK).
+  - Added `[output_security]` configuration section in `default_security.toml` with `enabled`, `tools`, and customizable `rules`.
+  - Added output security evaluation latency measurement (`last_security_duration_ms`) and debug trace logging.
+  - Added comprehensive test coverage across `test/test_pluggable_security.py` and `test/test_security_chain_jev.py`.
+- **Jev Security Engine, Chaining & Allow Mode** (branch `jev_security`):
+
+  - **`engine = "allow"`**: runs tools without policy checks, like chatybot before v0.9.0. Persistent in `security.toml` (unlike `--no-security`), prints a startup warning, and by default still protects `security.toml`, `jev_security.toml`, `*.racf` and `~/.config/chatybot/.env` (`[allow] protect_security_config`).
+  - **`engine = "chain"`**: runs several engines per tool call. `enforce` stages decide (strictest verdict wins; later enforcers are skipped after a DENY); `shadow` stages are pass-through, evaluated and logged only. Optional JSONL comparison log with per-stage verdicts, latency and a disagreement flag; secrets are redacted in the log.
+  - **`engine = "jev"`**: TypeSafe Jev decision-model engine driven by a rubric (`~/.config/chatybot/jev_security.toml`, seeded from `security/default_jev_security.toml`). Self-protection floor before any API call, secret redaction, head+tail truncation that forces at least ASK, per-session cache, `on_error` fail-safe (ASK interactive / DENY non-interactive), optional JSONL log, `noul` or `combined` mode.
+  - Rubric scoring shared between the engine and the `tools/jev-eval` harness (`security/jev_rubric.py`).
+  - Added `test/test_security_chain_jev.py` (Jev HTTP stubbed).
+- **Pluggable Security Evaluation Instrumentation**:
+  - Measured execution duration (`duration_ms`) inside `SecurityManager.evaluate()` using `time.perf_counter()`, stamped onto `PolicyDecision`.
+  - Exposed evaluation duration in `--security` debug trace lines (`[Security Debug] [TIME] Security evaluation for '{tool}' completed in {ms} ms ({verdict})`).
+  - Recorded security evaluation time in the agentic loop output alongside tool duration: `Tool time: X.X ms (security: Y.Y ms)` (or `<0.1 ms` for sub-0.1ms checks).
+  - Saved `SECURITY_EVAL_TIME_MS` script buffer variable in `dispatch_tool` for scripts and inspection.
+- **Tool argument envelopes (security fix)**:
+  - Models sometimes wrap tool arguments as `{"parameters": {...}}`, `{"args": {...}}` or `{"arguments": {...}}`. Previously the security check judged the wrapped form while execution unwrapped it, so builtin path/command checks and self-protection could be bypassed (e.g. a wrapped `read_file /etc/passwd` was allowed).
+  - One rule now lives in `chatybot/tool_args.py` (`unwrap_tool_args`): unwrap only a lone envelope key, repeatedly. `dispatch_tool` normalizes once before the security check, and `SecurityManager.evaluate`, the tool-call normalizer, `dispatcher.py` and the in-app tools (`ask_user`, `decide_*`, `call_skill`, `search_skills`) all use the same arguments, so a decoy envelope beside real arguments can no longer be judged in their place.
+- **Jev / chain observability and hardening**:
+  - Jev and chain logs are on by default (`~/.config/chatybot/logs/jev_security.jsonl`, `security_chain.jsonl`); `log_path = ""` turns them off.
+  - The Jev log records every call with a `source` (api, cache, self_protect, skip_tools, error); cached decisions keep their scores and are returned as copies.
+  - ASK outcomes (approved, declined, auto-approved via `-y` or `non_interactive_ask`, blocked non-interactive) are logged with the decision's `request_id` via `SecurityManager.record_outcome`, called from tool dispatch. Decisions now carry `request_id` (not part of the engine wire protocol).
+  - Malformed Jev probabilities (NaN, ±inf, outside 0–1, choice distributions that do not sum to 1) are treated as missing and give ASK instead of ALLOW.
+  - Test that fails if `default_jev_security.toml` and `tools/jev-eval/rubric.toml` drift apart.
+  - `tools/jev-eval/jev_eval.py --from-log`: summarise live logs, re-grade saved Jev scores with new thresholds, and `--export` cases worth labelling as draft corpus entries.
+
 - **TinyDB Persistence & Dispatcher Performance**:
   - **Snapshot-on-Write Optimization**: Moved TinyDB rolling snapshot backups from database activation (`/setdb`) to the first write (`/dblog`) per session, completely eliminating backup churn and rotation on read-only operations and model tools (`db_search`, `db_get`).
   - **Dispatcher Startup Optimization**: Removed unused `chatydb` import and `log_to_database` hook from `dispatcher.py` (saves ~2–3 ms per tool call).

@@ -361,6 +361,10 @@ chatybot --no-tools
 | `/trace rerank <state>`| Enable/disable debugging output for the reranking processor | `/trace rerank on` |
 | `/imagebank{1-5} <file>` | Load image into bank for vision analysis | `/imagebank1 cat.jpg` |
 | `/imagebank{1-5} clear` | Clear an image bank | `/imagebank1 clear` |
+| `/loadimage <1-5> <file>` | Load an image file into specified image bank | `/loadimage 1 photo.png` |
+| `/showimage [path\|1-5]` | View image or inspect imagebank entry | `/showimage 1` |
+| `/listimages [dir]` | List generated/saved images in active image directory | `/listimages` |
+| `/docs [filename\|search]` | Browse bundled guides/recipes or search across documentation | `/docs search chatdsl` |
 | `/session [subcommand]` | Manage multi-turn session persistence, note annotations, exports, merging, compression, and pruning | `/session start my_project` (or `/session new`) |
 | `/session query [terms] [options]` | Search turns, notes, and scratchpads with boolean logic, date filters, and whole session byte sizes | `/session query "error" since=7d ids` |
 | `/session get <sid|active> [turn=N] [part]` | Extract turn prompts, responses, or thoughts read-only without switching sessions | `/session get sess_1 turn=1 both var=turn_data` |
