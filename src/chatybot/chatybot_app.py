@@ -915,6 +915,8 @@ class ChatybotApp:
 
     def _extract_thinking_tokens(self, response_text: str) -> tuple[str | None, str]:
         """Extract reasoning traces from response text. Handles closed and unclosed thinking blocks."""
+        if not isinstance(response_text, str):
+            return None, response_text
         # Match closed thinking blocks for content extraction
         closed_matches = re.findall(
             r"<(?:think|thought|thinking)>(.*?)</(?:think|thought|thinking)>",
@@ -1403,30 +1405,32 @@ class ChatybotApp:
                     "[Reasoning history: server requires thinking in past turns. "
                     "Retrying with allow_missing_thinking=true and reasoning_content fallback...]"
                 )
+                import copy
+                retry_kwargs = copy.deepcopy(kwargs)
                 # Pass both top-level and extra_body chat_template_kwargs for broad engine compatibility
-                kwargs.setdefault("extra_body", {}).setdefault(
+                retry_kwargs.setdefault("extra_body", {}).setdefault(
                     "chat_template_kwargs", {}
                 )["allow_missing_thinking"] = True
                 
-                # Also ensure all historical assistant turns in kwargs['messages'] have reasoning_content
+                # Also ensure all historical assistant turns in retry_kwargs['messages'] have reasoning_content
                 # populated (Beam/vLLM template check: message.reasoning_content or message.thinking)
-                if "messages" in kwargs and isinstance(kwargs["messages"], list):
-                    for msg in kwargs["messages"]:
+                if "messages" in retry_kwargs and isinstance(retry_kwargs["messages"], list):
+                    for msg in retry_kwargs["messages"]:
                         if isinstance(msg, dict) and msg.get("role") == "assistant":
                             if not (msg.get("reasoning_content") or msg.get("thinking") or msg.get("reasoning")):
                                 thinking_text, clean_c = self._extract_thinking_tokens(msg.get("content", ""))
                                 msg["reasoning_content"] = thinking_text if thinking_text else " "
 
                 try:
-                    return await client.chat.completions.create(**kwargs)
+                    return await client.chat.completions.create(**retry_kwargs)
                 except Exception as inner_e:
                     # If still rejected, try with dummy reasoning_content on all assistant messages
                     if self._is_missing_reasoning_error(inner_e):
-                        for msg in kwargs.get("messages", []):
+                        for msg in retry_kwargs.get("messages", []):
                             if isinstance(msg, dict) and msg.get("role") == "assistant":
                                 if not (msg.get("reasoning_content") or msg.get("thinking") or msg.get("reasoning")):
                                     msg["reasoning_content"] = " "
-                        return await client.chat.completions.create(**kwargs)
+                        return await client.chat.completions.create(**retry_kwargs)
                     raise
             raise
 
@@ -1836,21 +1840,22 @@ class ChatybotApp:
                     clean_content = content
                     thinking_text = msg.get("reasoning_content") or msg.get("thinking") or msg.get("reasoning")
                     
-                    if not thinking_text and ("<think>" in content or "<thought>" in content or "<thinking>" in content):
-                        extracted_think, stripped_content = self._extract_thinking_tokens(content)
-                        if extracted_think:
-                            thinking_text = extracted_think
-                            if mode != "keep":
-                                clean_content = stripped_content
+                    if isinstance(content, str):
+                        if not thinking_text and ("<think>" in content or "<thought>" in content or "<thinking>" in content):
+                            extracted_think, stripped_content = self._extract_thinking_tokens(content)
+                            if extracted_think:
+                                thinking_text = extracted_think
+                                if mode != "keep":
+                                    clean_content = stripped_content
 
-                    if not clean_content.strip() and not msg.get("tool_calls"):
-                        clean_content = "[No response content]"
+                        if not clean_content.strip() and not msg.get("tool_calls"):
+                            clean_content = "[No response content]"
                     
                     updated_msg = dict(msg)
                     updated_msg["content"] = clean_content
                     if mode == "field":
                         updated_msg["reasoning_content"] = thinking_text if thinking_text else " "
-                    elif thinking_text and mode != "strip":
+                    elif thinking_text and mode not in ("strip", "keep"):
                         updated_msg["reasoning_content"] = thinking_text
                     cleaned_messages.append(updated_msg)
                 else:
