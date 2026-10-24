@@ -6,11 +6,23 @@ October 23rd, 2026
 ------------------
 - **Reasoning History Integrity & Strict Chat Template Compatibility (`/reasoning_history`)**:
   - Added `/reasoning_history` command with four modes: `auto` (default), `strip`, `keep`, and `field` to govern how reasoning tokens are formatted in multi-turn history.
-  - Resolved 400 Bad Request errors on models with strict Jinja chat templates (e.g. `reflection/Beam-1.0-501B-A23B`, DeepSeek R1, vLLM/TGI serving with `allow_missing_thinking=false`).
+  - Resolved 400 Bad Request errors on models with strict Jinja chat templates (e.g. `reflection/Beam-1.0-501B-A23B` on Hugging Face / Baseten, DeepSeek R1, vLLM/TGI serving with `allow_missing_thinking=false`).
+  - **Provider Nuances (Baseten vs. OpenRouter)**: Documented that strict reasoning enforcement is specific to dedicated Hugging Face / Baseten deployments (and raw vLLM instances). OpenRouter's Beam endpoint (`reflection/beam-1.0-501b-a23b`) does not enforce strict thinking checks as of October 2026. Mode `auto` adapts dynamically to both.
   - **Tool Loop & History Sanitization**: Added universal pre-send assistant message sanitization in `chat_completion` ensuring all assistant turns (including intermediate agentic tool-loop turns in `temp_history`) populate `reasoning_content` to satisfy strict Jinja template validators (`not (message.thinking or message.reasoning_content or message.reasoning)`).
   - **Self-Healing `auto` Mode**: In `auto` mode, when a 400 "missing reasoning" error is detected, Chatybot automatically sets `allow_missing_thinking=true` in `chat_template_kwargs` and backfills `reasoning_content` across prior assistant turns before retrying.
+  - **Reasoning Loop Hardening & Multimodal Safety**:
+    - Excluded `keep` mode from setting `reasoning_content` in message cleaning loop, preventing duplicate reasoning in both content and field.
+    - Added string type guards to `_extract_thinking_tokens` and cleaning loops to protect against `TypeError` crashes on list-typed multimodal/vision content.
+    - Deep-copied `kwargs` in `_create_with_reasoning_retry` so retry modifications do not mutate caller arguments across transient outer loop retries.
   - **Stream Interruption Safety**: Uses `_extract_thinking_tokens` to robustly parse both closed and unclosed thinking tags from interrupted streams.
-  - Documented configuration and model-specific options in `doc/reasoning_history.md`.
+  - **Help, Localization & Cookbook**:
+    - Registered `/reasoning_history` in `chaty_help.py` and localized command aliases/descriptions across all 5 non-English languages (`es`, `fr`, `zh`, `it`, `ar`) in `translations.json`.
+    - Added Chapter 4 Recipe 4.4 and runnable script `cookbook/04_4_reasoning_history.chatdsl`.
+    - Documented configuration and model-specific options in `doc/reasoning_history.md`.
+- **Command Registration & ChatDSL Synchronization**:
+  - Synchronized `TParser.VALID_ESCAPE_COMMANDS` in `chatdsl_parse.py` to support `/reasoning_history`, `/docs`, `/doc`, `/ask`, `/continue`, `/source`, `/max_tokens`, and `/loadimage1`–`/loadimage5`.
+  - Registered missing `/documents` and `/rerank` commands under category `database` in `chaty_help.py`.
+  - Registered `/listimages`, `/showimage`, and `/loadimage` under category `image` in `chaty_help.py`.
 
 October 21st, 2026 (v0.9.1)
 ---------------------------
