@@ -37,8 +37,8 @@ A new command controls how past assistant reasoning is transmitted in chat histo
 
 1. Past assistant turns are built with thinking tags stripped (same as today).
 2. The request is sent to the server.
-3. If the server returns a 400 with a message containing "missing", "reasoning", and "allow_missing_thinking" or "reasoning_content", Chatybot retries the same request with `extra_body.chat_template_kwargs.allow_missing_thinking = true`.
-4. The retry succeeds because the server explicitly suggested this flag in its error message.
+3. If the server returns a 400 indicating missing reasoning in prior turns, Chatybot retries with `allow_missing_thinking = true` and backfills `reasoning_content` across all prior assistant messages.
+4. The retry succeeds because both `allow_missing_thinking=true` and `reasoning_content` satisfy strict Jinja template validators (e.g. Beam, DeepSeek).
 
 This approach avoids hardcoding model name lists (e.g. `"beam" in model_name`). Any strict-template model that follows the same error convention is handled automatically.
 

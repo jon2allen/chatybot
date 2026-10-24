@@ -1390,8 +1390,8 @@ class ChatybotApp:
 
     async def _create_with_reasoning_retry(self, client, kwargs: dict):
         """Call create(); if the server rejects stripped reasoning and
-        reasoning_history_mode is 'auto', retry once with
-        allow_missing_thinking=true in chat_template_kwargs."""
+        reasoning_history_mode is 'auto', retry with allow_missing_thinking=true
+        and backfilled reasoning_content on prior assistant messages."""
         try:
             return await client.chat.completions.create(**kwargs)
         except Exception as e:
@@ -1401,12 +1401,33 @@ class ChatybotApp:
             ):
                 print(
                     "[Reasoning history: server requires thinking in past turns. "
-                    "Retrying with allow_missing_thinking=true...]"
+                    "Retrying with allow_missing_thinking=true and reasoning_content fallback...]"
                 )
+                # Pass both top-level and extra_body chat_template_kwargs for broad engine compatibility
                 kwargs.setdefault("extra_body", {}).setdefault(
                     "chat_template_kwargs", {}
                 )["allow_missing_thinking"] = True
-                return await client.chat.completions.create(**kwargs)
+                
+                # Also ensure all historical assistant turns in kwargs['messages'] have reasoning_content
+                # populated (Beam/vLLM template check: message.reasoning_content or message.thinking)
+                if "messages" in kwargs and isinstance(kwargs["messages"], list):
+                    for msg in kwargs["messages"]:
+                        if isinstance(msg, dict) and msg.get("role") == "assistant":
+                            if not (msg.get("reasoning_content") or msg.get("thinking") or msg.get("reasoning")):
+                                thinking_text, clean_c = self._extract_thinking_tokens(msg.get("content", ""))
+                                msg["reasoning_content"] = thinking_text if thinking_text else " "
+
+                try:
+                    return await client.chat.completions.create(**kwargs)
+                except Exception as inner_e:
+                    # If still rejected, try with dummy reasoning_content on all assistant messages
+                    if self._is_missing_reasoning_error(inner_e):
+                        for msg in kwargs.get("messages", []):
+                            if isinstance(msg, dict) and msg.get("role") == "assistant":
+                                if not (msg.get("reasoning_content") or msg.get("thinking") or msg.get("reasoning")):
+                                    msg["reasoning_content"] = " "
+                        return await client.chat.completions.create(**kwargs)
+                    raise
             raise
 
     async def chat_completion(self, prompt: str, stream: bool = False) -> str:
@@ -1488,8 +1509,8 @@ class ChatybotApp:
                     if not clean_r and past_r:
                         clean_r = past_r
                     asst_msg: dict = {"role": "assistant", "content": clean_r}
-                    if mode == "field" and thinking_text:
-                        asst_msg["reasoning_content"] = thinking_text
+                    if mode == "field":
+                        asst_msg["reasoning_content"] = thinking_text if thinking_text else " "
                     messages.append(asst_msg)
 
             # For multimodal (vision) models, use content array with text + images
@@ -1806,11 +1827,32 @@ class ChatybotApp:
                             pass
                         self.debug_payload_mode = False
 
-            # Clean assistant messages to ensure they are not empty (which causes API 400 error)
+            # Clean assistant messages to ensure they are not empty and handle reasoning fields
             cleaned_messages = []
+            mode = getattr(self, "reasoning_history_mode", "auto")
             for msg in kwargs.get("messages", []):
-                if msg.get("role") == "assistant" and not (msg.get("content") or "").strip() and not msg.get("tool_calls"):
-                    cleaned_messages.append({"role": "assistant", "content": "[No response content]"})
+                if isinstance(msg, dict) and msg.get("role") == "assistant":
+                    content = msg.get("content") or ""
+                    clean_content = content
+                    thinking_text = msg.get("reasoning_content") or msg.get("thinking") or msg.get("reasoning")
+                    
+                    if not thinking_text and ("<think>" in content or "<thought>" in content or "<thinking>" in content):
+                        extracted_think, stripped_content = self._extract_thinking_tokens(content)
+                        if extracted_think:
+                            thinking_text = extracted_think
+                            if mode != "keep":
+                                clean_content = stripped_content
+
+                    if not clean_content.strip() and not msg.get("tool_calls"):
+                        clean_content = "[No response content]"
+                    
+                    updated_msg = dict(msg)
+                    updated_msg["content"] = clean_content
+                    if mode == "field":
+                        updated_msg["reasoning_content"] = thinking_text if thinking_text else " "
+                    elif thinking_text and mode != "strip":
+                        updated_msg["reasoning_content"] = thinking_text
+                    cleaned_messages.append(updated_msg)
                 else:
                     cleaned_messages.append(msg)
             kwargs["messages"] = cleaned_messages

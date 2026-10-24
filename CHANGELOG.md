@@ -2,6 +2,16 @@
 
 All notable changes, release milestones, and version history for **Chatybot** are documented in this file.
 
+October 23rd, 2026
+------------------
+- **Reasoning History Integrity & Strict Chat Template Compatibility (`/reasoning_history`)**:
+  - Added `/reasoning_history` command with four modes: `auto` (default), `strip`, `keep`, and `field` to govern how reasoning tokens are formatted in multi-turn history.
+  - Resolved 400 Bad Request errors on models with strict Jinja chat templates (e.g. `reflection/Beam-1.0-501B-A23B`, DeepSeek R1, vLLM/TGI serving with `allow_missing_thinking=false`).
+  - **Tool Loop & History Sanitization**: Added universal pre-send assistant message sanitization in `chat_completion` ensuring all assistant turns (including intermediate agentic tool-loop turns in `temp_history`) populate `reasoning_content` to satisfy strict Jinja template validators (`not (message.thinking or message.reasoning_content or message.reasoning)`).
+  - **Self-Healing `auto` Mode**: In `auto` mode, when a 400 "missing reasoning" error is detected, Chatybot automatically sets `allow_missing_thinking=true` in `chat_template_kwargs` and backfills `reasoning_content` across prior assistant turns before retrying.
+  - **Stream Interruption Safety**: Uses `_extract_thinking_tokens` to robustly parse both closed and unclosed thinking tags from interrupted streams.
+  - Documented configuration and model-specific options in `doc/reasoning_history.md`.
+
 October 21st, 2026 (v0.9.1)
 ---------------------------
 - **Jev AI Policy Engine, Chaining, Output Security & Release v0.9.1**:
