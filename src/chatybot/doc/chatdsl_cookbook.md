@@ -622,6 +622,37 @@ Compare {filebank1} (effort=low) and {filebank2} (effort=high). Which design is 
 
 **Variations:** add `/thinking on` to expose the reasoning trace in the saved output.
 
+### 4.4 Reasoning history integrity with strict models
+- **Goal:** Manage multi-turn conversations and agentic loops on reasoning models with strict chat templates (e.g., `reflection/Beam-1.0-501B-A23B` or DeepSeek R1).
+- **Commands:** `/reasoning_history`, `/reasoning`, `/model`, `/save`.
+- **Script:** `cookbook/04_4_reasoning_history.chatdsl`
+- **Run:** `/script doc/cookbook/04_4_reasoning_history.chatdsl`
+
+```dsl
+/model hf1_beam
+/reasoning on
+/reasoning_history auto
+
+# Turn 1: Initial query triggering reasoning
+What are 3 distinct architectural advantages of NVMe-oF compared to traditional iSCSI?
+/save 04_4_turn1.txt
+
+# Turn 2: Follow-up question leveraging prior turn context
+/multiline
+Based on your answer in turn 1, provide a concrete Linux storage configuration example
+illustrating the first advantage you identified.
+;;
+/multiline
+/save 04_4_turn2.txt
+
+/echo "Multi-turn reasoning conversation successfully completed!"
+```
+
+**Walkthrough**
+1. Strict Jinja chat templates (like Beam or vLLM deployments with `allow_missing_thinking=false`) validate that prior assistant turns include reasoning blocks (`message.reasoning_content` or `message.thinking`).
+2. `/reasoning_history auto` (default) optimistically strips thinking tokens to preserve prompt context budget, but self-heals by retrying with `allow_missing_thinking=true` and backfilling `reasoning_content` if the server returns a 400 rejection.
+3. Switch to `/reasoning_history field` to explicitly preserve and pass reasoning in the OpenAI-compatible `reasoning_content` field on every historical turn.
+
 ---
 
 ## Chapter 5 — Rerank & Retrieval
@@ -2273,6 +2304,7 @@ if "${TOOL_DISPATCH_EXIT_CODE}" == "0" then /echo Permitted workspace write conf
 | 4.1 | Comparison pattern | `/model` `/filebank1-3` judge | dufu/logic_problems |
 | 4.2 | Reusable comparison template | params `x/y/z` | new |
 | 4.3 | Reasoning-effort A/B | `/effort` `/reasoning` | new |
+| 4.4 | Reasoning history integrity | `/reasoning_history` `/reasoning` | new |
 | 5.1 | rerank basics | `/rerank` `top_n` `split` `return` | new |
 | 5.2 | Rerank a filebank | `/documents filebank=` | generate_and_rerank_menu |
 | 5.3 | Rerank a directory | `/documents dir=` `limit_*` | BATCH_N_WALKTHROUGH |

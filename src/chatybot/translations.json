@@ -228,6 +228,7 @@
       "/esfuerzo": "/effort",
       "/pensamiento": "/thinking",
       "/estilo_pens": "/thoughtstyle",
+      "/hist_razonamiento": "/reasoning_history",
       "/banco_arch1": "/filebank1",
       "/banco_arch2": "/filebank2",
       "/banco_arch3": "/filebank3",
@@ -639,6 +640,9 @@
         "/thoughtstyle": {
           "short_desc": "Establece el formato de prompt para desactivar razonamiento"
         },
+        "/reasoning_history": {
+          "short_desc": "Controla el envío de razonamiento en el historial (auto|strip|field|keep)"
+        },
         "/seed": {
           "short_desc": "Establece la semilla aleatoria para resultados reproducibles"
         },
@@ -790,6 +794,7 @@
       "/effort": "/effort",
       "/reflexion": "/thinking",
       "/style_reflexion": "/thoughtstyle",
+      "/hist_raisonnement": "/reasoning_history",
       "/banque_fich1": "/filebank1",
       "/banque_fich2": "/filebank2",
       "/banque_fich3": "/filebank3",
@@ -1203,6 +1208,9 @@
         "/thoughtstyle": {
           "short_desc": "Définit le format de prompt pour désactiver le raisonnement"
         },
+        "/reasoning_history": {
+          "short_desc": "Contrôle la transmission du raisonnement dans l'historique (auto|strip|field|keep)"
+        },
         "/seed": {
           "short_desc": "Définit la graine de génération aléatoire"
         },
@@ -1355,6 +1363,7 @@
       "/推理强度": "/effort",
       "/显示思考": "/thinking",
       "/思考样式": "/thoughtstyle",
+      "/推理历史": "/reasoning_history",
       "/文件库1": "/filebank1",
       "/文件库2": "/filebank2",
       "/文件库3": "/filebank3",
@@ -1762,6 +1771,9 @@
         "/thoughtstyle": {
           "short_desc": "配置自动关闭推理的提示词模版格式"
         },
+        "/reasoning_history": {
+          "short_desc": "控制历史对话中推理内容的传递模式 (auto|strip|field|keep)"
+        },
         "/seed": {
           "short_desc": "设置随机种子以获取可重复结果"
         },
@@ -1914,6 +1926,7 @@
       "/sforzo": "/effort",
       "/pensiero": "/thinking",
       "/stile_pensiero": "/thoughtstyle",
+      "/cronologia_ragionamento": "/reasoning_history",
       "/archivio_file1": "/filebank1",
       "/archivio_file2": "/filebank2",
       "/archivio_file3": "/filebank3",
@@ -2313,6 +2326,9 @@
         "/thoughtstyle": {
           "short_desc": "Imposta il prompt per disattivare il ragionamento"
         },
+        "/reasoning_history": {
+          "short_desc": "Controlla la trasmissione del ragionamento nella cronologia (auto|strip|field|keep)"
+        },
         "/seed": {
           "short_desc": "Imposta il seed di generazione casuale"
         },
@@ -2465,6 +2481,7 @@
       "/جهد": "/effort",
       "/عرض_التفكير": "/thinking",
       "/نمط_التفكير": "/thoughtstyle",
+      "/تاريخ_التفكير": "/reasoning_history",
       "/مخزن_الملفات1": "/filebank1",
       "/مخزن_الملفات2": "/filebank2",
       "/مخزن_الملفات3": "/filebank3",
@@ -2872,6 +2889,9 @@
         },
         "/thoughtstyle": {
           "short_desc": "بيحدد نمط موجه تعطيل التفكير"
+        },
+        "/reasoning_history": {
+          "short_desc": "بيتحكم في إرسال التفكير السابق في سجل المحادثة (auto|strip|field|keep)"
         },
         "/seed": {
           "short_desc": "بيحدد البذرة العشوائية للتوليد"

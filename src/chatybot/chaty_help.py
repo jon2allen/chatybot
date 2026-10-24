@@ -297,6 +297,16 @@ class HelpSystem:
             parameters={"style": "none, gemma4, nanbeige, nanbeige_code"}
         ))
         
+        self.register_command(CommandHelp(
+            name="/reasoning_history",
+            category="model",
+            short_desc="Control transmission of reasoning in history",
+            usage="/reasoning_history <auto|strip|field|keep>",
+            long_desc="Configure how past assistant reasoning tokens are handled in multi-turn chat history. Modes: auto (strip with self-healing retry), strip (strip only), field (pass in reasoning_content), keep (keep raw thinking tags in content).",
+            examples=["/reasoning_history auto", "/reasoning_history field", "/reasoning_history keep"],
+            parameters={"mode": "auto, strip, field, or keep"}
+        ))
+        
         # Seed command
         self.register_command(CommandHelp(
             name="/seed",
