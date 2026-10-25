@@ -141,11 +141,11 @@ async def cmd_source(ctx: CommandContext, parts: list, command: str) -> CommandR
     return CommandResult.ok()
 
 
-@command("/script", help="Execute a script with parameters", args='<file> [key="value"]...', category="proc_macros")
+@command("/script", help="Execute a script with parameters", args='<file> [key="value"]... [interactive|--interactive|-i]', category="proc_macros")
 async def cmd_script(ctx: CommandContext, parts: list, command: str) -> CommandResult:
     app = ctx.app
     if len(parts) < 2:
-        print('Usage: /script <file> [key="value"]...')
+        print('Usage: /script <file> [key="value"]... [interactive|--interactive|-i]')
         return CommandResult.ok()
 
     script_path = parts[1]
@@ -162,6 +162,13 @@ async def cmd_script(ctx: CommandContext, parts: list, command: str) -> CommandR
         actual_script_path = script_path
         params_string = ""
 
+    # Interactive flag: run confirmation prompts (skill tool config, security
+    # ASK verdicts) against the terminal instead of treating the run as
+    # non-interactive. Accepted as a standalone token only.
+    interactive_flag = re.compile(r'(?:^|\s)(interactive|--interactive|-i)(?=\s|$)', re.IGNORECASE)
+    interactive = bool(interactive_flag.search(params_string))
+    params_string = interactive_flag.sub(' ', params_string).strip()
+
     params = {}
     for match in re.finditer(param_pattern, params_string):
         var_name = match.group(2)
@@ -174,7 +181,9 @@ async def cmd_script(ctx: CommandContext, parts: list, command: str) -> CommandR
             app.buffer_manager.set_script_var(var_name, var_value)
 
     print("command /script with ", actual_script_path)
-    await app.execute_script(actual_script_path)
+    if interactive:
+        print("Script running in interactive mode: confirmation prompts enabled")
+    await app.execute_script(actual_script_path, interactive=interactive)
     return CommandResult.ok()
 
 
