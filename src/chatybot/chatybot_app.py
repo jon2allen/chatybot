@@ -5291,26 +5291,26 @@ class ChatybotApp:
                         xml_calls.append(call_obj)
             return xml_calls
 
-        def extract_kv_tool_calls(s: str) -> list[dict[str, Any]]:
-            primary_tool_params = {
-                "read_file": "path",
-                "list_directory": "path",
-                "file_info": "path",
-                "delete_file": "path",
-                "make_directory": "path",
-                "remove_directory": "path",
-                "run_command": "command",
-                "read_url": "url",
-                "ask_user": "prompt",
-                "find_files": "path",
-                "write_file": "path",
-                "session_get": "session_id",
-                "session_search": "query",
-                "search_skills": "query",
-                "call_skill": "skill_name",
-                "extract_code": "text",
-            }
+        primary_tool_params = {
+            "read_file": "path",
+            "list_directory": "path",
+            "file_info": "path",
+            "delete_file": "path",
+            "make_directory": "path",
+            "remove_directory": "path",
+            "run_command": "command",
+            "read_url": "url",
+            "ask_user": "prompt",
+            "find_files": "path",
+            "write_file": "path",
+            "session_get": "session_id",
+            "session_search": "query",
+            "search_skills": "query",
+            "call_skill": "skill_name",
+            "extract_code": "text",
+        }
 
+        def extract_kv_tool_calls(s: str) -> list[dict[str, Any]]:
             def is_known_tool(name: str) -> bool:
                 return name in known_tools or name.startswith("mcp__") or name in primary_tool_params
 
@@ -5535,7 +5535,7 @@ class ChatybotApp:
             """
             calls = []
             dots_pattern = re.compile(
-                r'<dots_function_call[^>]*>(.*?)</dots_function_call>',
+                r'<dots_function_call[^>]*>(.*?)(?:</dots_function_call>|$)',
                 re.IGNORECASE | re.DOTALL
             )
             for m in dots_pattern.finditer(s):
@@ -5575,6 +5575,26 @@ class ChatybotApp:
                         tool_name = cand_split
                     elif tool_name.startswith(("functions.", "tools.", "default_api.", "api.")):
                         tool_name = tool_name.split(".", 1)[1]
+
+                # Truncated-block fallback: the tool name may be the single key of a
+                # bare JSON body, e.g. <dots_function_call>{"search_skills": "query"}
+                bare_json_args = None
+                if not tool_name:
+                    json_m = re.search(r'\{.*\}', block, re.DOTALL)
+                    if json_m:
+                        parsed_body = parse_json_or_dict(json_m.group(0))
+                        if isinstance(parsed_body, dict) and len(parsed_body) == 1:
+                            body_key, body_val = next(iter(parsed_body.items()))
+                            if str(body_key) in known_tools or str(body_key).startswith("mcp__"):
+                                tool_name = str(body_key)
+                                if "." in tool_name and tool_name.split(".")[-1].lower() not in reserved_tool_tags:
+                                    tool_name = tool_name.split(".")[-1]
+                                if isinstance(body_val, dict):
+                                    bare_json_args = body_val
+                                elif body_val is not None and not isinstance(body_val, (dict, list)):
+                                    param_name = primary_tool_params.get(tool_name)
+                                    if param_name:
+                                        bare_json_args = {param_name: body_val}
 
                 if not tool_name or tool_name.lower() in reserved_tool_tags:
                     continue
@@ -5636,6 +5656,9 @@ class ChatybotApp:
                                 p_name = sc_m.group(1).strip()
                                 raw_val = sc_m.group(2)
                                 args[p_name] = parse_xml_param_value(raw_val)
+
+                if not args and bare_json_args is not None:
+                    args = bare_json_args
 
                 call_obj = {"tool": tool_name, "arguments": args}
                 if call_obj not in calls:
