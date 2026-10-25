@@ -3925,9 +3925,18 @@ class ChatybotApp:
 
     def _build_security_refusal_key(self, tool_name: str, tool_args: Any) -> str:
         """Build normalised key for loop security refusal caching."""
-        norm_args = unwrap_tool_args(tool_args if isinstance(tool_args, dict) else {})
-        args_json = json.dumps(norm_args, sort_keys=True, default=str)
-        return f"{tool_name}:{args_json}"
+        if isinstance(tool_args, str):
+            try:
+                parsed = json.loads(tool_args)
+                if isinstance(parsed, dict):
+                    tool_args = parsed
+            except Exception:
+                pass
+        if isinstance(tool_args, dict):
+            norm_args = unwrap_tool_args(tool_args)
+            args_json = json.dumps(norm_args, sort_keys=True, default=str)
+            return f"{tool_name}:{args_json}"
+        return f"{tool_name}:{tool_args}"
 
     def _serve_loop_refusal(self, store: dict[str, tuple[str, str, str]] | None, tool_name: str, tool_args: Any, kind: str) -> str | None:
         """Return a refusal remembered earlier in this tool loop, or None.
