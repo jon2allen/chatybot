@@ -61,6 +61,9 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
         if getattr(app, "active_skill", None):
             print(f"Cleared active skill lock: '{app.active_skill}'.")
             app.active_skill = None
+        # Revert tool configuration applied by the cleared skill's tool_config
+        if getattr(app, "_tool_state_snapshot", None) and app._restore_tool_state_snapshot():
+            print("Restored tool configuration from before the skill.")
         now = datetime.now()
         model_alias = getattr(app.config_manager, "active_model_alias", None) or "default"
         app.session_model_alias = model_alias
