@@ -9,6 +9,7 @@ from __future__ import annotations
 import math
 import os
 import re
+import time
 from pathlib import Path
 from typing import Any
 from chatybot.security.models import Verdict
@@ -362,15 +363,19 @@ class SecretScanner:
         if self._custom_known_secrets is not None:
             combined = dict(self._custom_known_secrets)
         else:
+            self._cached_file_secrets = self._load_file_secrets(self._config_env_path)
             combined = dict(self._cached_file_secrets)
             env_secrets = self.extract_secrets_from_dict(dict(os.environ))
             combined.update(env_secrets)
         self._cached_known_secrets = dict(sorted(combined.items(), key=lambda item: len(item[0]), reverse=True))
+        self._last_refresh_time = time.monotonic()
         return self._cached_known_secrets
 
     def get_known_secrets(self) -> dict[str, str]:
-        """Return cached known secrets sorted by length descending."""
-        if not self._cached_known_secrets:
+        """Return cached known secrets sorted by length descending, auto-refreshing periodically."""
+        now = time.monotonic()
+        last_refresh = getattr(self, "_last_refresh_time", 0.0)
+        if not self._cached_known_secrets or (now - last_refresh > 5.0):
             return self.refresh_known_secrets()
         return self._cached_known_secrets
 
