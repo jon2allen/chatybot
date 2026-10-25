@@ -58,12 +58,17 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
         app.session_turns.clear()
         app.session_activity.clear()
         # Release the sticky skill lock so the new session re-scans triggers
-        if getattr(app, "active_skill", None):
-            print(f"Cleared active skill lock: '{app.active_skill}'.")
+        active_skill_locked = getattr(app, "active_skill", None)
+        if active_skill_locked:
+            print(f"Cleared active skill lock: '{active_skill_locked}'.")
             app.active_skill = None
-        # Revert tool configuration applied by the cleared skill's tool_config
-        if getattr(app, "_tool_state_snapshot", None) and app._restore_tool_state_snapshot():
-            print("Restored tool configuration from before the skill.")
+            # Revert tool configuration applied by the cleared skill's tool_config
+            if getattr(app, "_tool_state_snapshot", None) and app._restore_tool_state_snapshot():
+                print("Restored tool configuration from before the skill.")
+        else:
+            # If no skill was active, discard any leftover snapshot so manual tool changes are preserved
+            if hasattr(app, "_tool_state_snapshot"):
+                app._tool_state_snapshot = None
         now = datetime.now()
         model_alias = getattr(app.config_manager, "active_model_alias", None) or "default"
         app.session_model_alias = model_alias
