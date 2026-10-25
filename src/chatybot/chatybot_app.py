@@ -20,6 +20,7 @@ except ImportError:
     readline = None
 import atexit
 import copy
+from functools import lru_cache
 import json
 import random
 import re
@@ -914,10 +915,22 @@ class ChatybotApp:
             counter += 1
         return candidate
 
-    def _extract_thinking_tokens(self, response_text: str) -> tuple[str | None, str]:
-        """Extract reasoning traces from response text. Handles closed and unclosed thinking blocks."""
-        if not isinstance(response_text, str):
+    @staticmethod
+    @lru_cache(maxsize=2048)
+    def _extract_thinking_tokens(response_text: str) -> tuple[str | None, str]:
+        """Extract reasoning traces from response text. Handles closed and unclosed thinking blocks.
+        
+        Optimized with fast-path detection and LRU caching to eliminate O(N^2) rescan
+        costs across long chat histories and tool loops.
+        """
+        if not isinstance(response_text, str) or not response_text:
             return None, response_text
+
+        # Fast-path: skip expensive regex passes if no opening thinking/thought tag is present
+        lower_text = response_text.lower()
+        if "<think" not in lower_text and "<thought" not in lower_text:
+            return None, response_text
+
         # Match closed thinking blocks for content extraction
         closed_matches = re.findall(
             r"<(?:think|thought|thinking)>(.*?)</(?:think|thought|thinking)>",
