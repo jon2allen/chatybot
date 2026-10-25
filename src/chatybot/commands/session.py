@@ -64,6 +64,8 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
             app.active_skill = None
             if hasattr(app, "_declined_skill_tool_configs"):
                 app._declined_skill_tool_configs.clear()
+            if hasattr(app, "_applied_skill_tool_configs"):
+                app._applied_skill_tool_configs.clear()
             # Revert tool configuration applied by the cleared skill's tool_config
             if getattr(app, "_tool_state_snapshot", None) and app._restore_tool_state_snapshot():
                 print("Restored tool configuration from before the skill.")

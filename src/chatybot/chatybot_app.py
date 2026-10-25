@@ -6834,8 +6834,13 @@ class ChatybotApp:
         """
         if not hasattr(self, "_declined_skill_tool_configs"):
             self._declined_skill_tool_configs = set()
+        if not hasattr(self, "_applied_skill_tool_configs"):
+            self._applied_skill_tool_configs = set()
+
         if skill_name in self._declined_skill_tool_configs:
             return False
+        if skill_name in self._applied_skill_tool_configs:
+            return True
 
         # Build a human-readable summary of what will change
         changes = []
@@ -6843,16 +6848,29 @@ class ChatybotApp:
             changes.append("Enable tool mode (ON)")
         if config.get("mode") == "off" and self.tool_mode:
             changes.append("Disable tool mode (OFF)")
-        if config.get("enable_tools"):
-            changes.append(f"Enable tools: {', '.join(config['enable_tools'])}")
-        if config.get("disable_tools"):
-            changes.append(f"Disable tools: {', '.join(config['disable_tools'])}")
+
+        # Only list tool overrides that differ from current state
+        enable_diffs = [
+            t for t in config.get("enable_tools", [])
+            if not self.tool_overrides.get(t, False)
+        ]
+        if enable_diffs:
+            changes.append(f"Enable tools: {', '.join(enable_diffs)}")
+
+        disable_diffs = [
+            t for t in config.get("disable_tools", [])
+            if self.tool_overrides.get(t, True)
+        ]
+        if disable_diffs:
+            changes.append(f"Disable tools: {', '.join(disable_diffs)}")
+
         if config.get("auto_loop") and not self.tool_auto:
             changes.append(f"Enable auto-loop (max_turns={config.get('max_turns', self.max_turns)})")
         if config.get("max_turns") and config["max_turns"] != self.max_turns:
             changes.append(f"Set max_turns to {config['max_turns']}")
 
         if not changes:
+            self._applied_skill_tool_configs.add(skill_name)
             return True
 
         # Prompt the user
@@ -6908,6 +6926,7 @@ class ChatybotApp:
         if config.get("max_turns"):
             self.max_turns = config["max_turns"]
 
+        self._applied_skill_tool_configs.add(skill_name)
         print("[skill] Tool configuration applied.")
         return True
 
