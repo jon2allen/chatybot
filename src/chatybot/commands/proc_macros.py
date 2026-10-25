@@ -162,19 +162,24 @@ async def cmd_script(ctx: CommandContext, parts: list, command: str) -> CommandR
         actual_script_path = script_path
         params_string = ""
 
-    # Interactive flag: run confirmation prompts (skill tool config, security
-    # ASK verdicts) against the terminal instead of treating the run as
-    # non-interactive. Accepted as a standalone token only.
-    interactive_flag = re.compile(r'(?:^|\s)(interactive|--interactive|-i)(?=\s|$)', re.IGNORECASE)
-    interactive = bool(interactive_flag.search(params_string))
-    params_string = interactive_flag.sub(' ', params_string).strip()
-
+    # Extract key=value params first so quoted values containing tokens like
+    # 'interactive' or '-i' are preserved and not misinterpreted as flags.
     params = {}
-    for match in re.finditer(param_pattern, params_string):
+    param_matches = list(re.finditer(param_pattern, params_string))
+    for match in param_matches:
         var_name = match.group(2)
         var_value = match.group(3).strip('"\'')
         params[var_name] = var_value
         print(f"Setting parameter {var_name} = {var_value}")
+
+    # Remove matched params from params_string to isolate standalone flags
+    remaining_tokens = re.sub(param_pattern, ' ', params_string).strip()
+
+    # Interactive flag: run confirmation prompts (skill tool config, security
+    # ASK verdicts) against the terminal instead of treating the run as
+    # non-interactive. Accepted as a standalone token only.
+    interactive_flag = re.compile(r'(?:^|\s)(interactive|--interactive|-i)(?=\s|$)', re.IGNORECASE)
+    interactive = bool(interactive_flag.search(remaining_tokens))
 
     with app.buffer_manager.script_vars.user_write():
         for var_name, var_value in params.items():
