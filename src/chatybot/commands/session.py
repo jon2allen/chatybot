@@ -57,6 +57,10 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
         app.chat_history.clear()
         app.session_turns.clear()
         app.session_activity.clear()
+        # Release the sticky skill lock so the new session re-scans triggers
+        if getattr(app, "active_skill", None):
+            print(f"Cleared active skill lock: '{app.active_skill}'.")
+            app.active_skill = None
         now = datetime.now()
         model_alias = getattr(app.config_manager, "active_model_alias", None) or "default"
         app.session_model_alias = model_alias
