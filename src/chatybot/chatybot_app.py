@@ -6832,6 +6832,11 @@ class ChatybotApp:
         with /tool off, /tool disable, /tool auto off.
         A snapshot of the previous state is saved for /skill restore.
         """
+        if not hasattr(self, "_declined_skill_tool_configs"):
+            self._declined_skill_tool_configs = set()
+        if skill_name in self._declined_skill_tool_configs:
+            return False
+
         # Build a human-readable summary of what will change
         changes = []
         if config.get("mode") == "on" and not self.tool_mode:
@@ -6860,16 +6865,19 @@ class ChatybotApp:
         if not self._can_prompt():
             print("\n[skill] Tool changes skipped (non-interactive mode).")
             print("[skill] Skill guidance will be injected without tool configuration.")
+            self._declined_skill_tool_configs.add(skill_name)
             return False
 
         try:
             confirm = input("\nApply these tool changes? (Y/n): ").strip().lower()
         except (EOFError, KeyboardInterrupt, OSError):
             print("\n[skill] Tool changes skipped (non-interactive or interrupted).")
+            self._declined_skill_tool_configs.add(skill_name)
             return False
 
         if confirm in ("n", "no"):
             print("[skill] Tool changes declined. Skill guidance will be injected without tool configuration.")
+            self._declined_skill_tool_configs.add(skill_name)
             return False
 
         # Save snapshot for /skill restore
