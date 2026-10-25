@@ -154,6 +154,7 @@ class ChatybotApp:
         self.auto_exit_pending: bool = False
         self.should_exit: bool = False
         self.script_context: bool = False
+        self.script_interactive: bool = False
         self.thoughtstyle: str = "none"
         # How past assistant reasoning is transmitted in chat history:
         #   "auto"   - strip thinking tags; retry with allow_missing_thinking=true
@@ -3558,13 +3559,18 @@ class ChatybotApp:
         finally:
             self.script_context = old_script_context
 
-    async def execute_script(self, script_path: str) -> None:
+    async def execute_script(self, script_path: str, interactive: bool = False) -> None:
         """
         Execute a script file containing multiple commands.
 
         Args:
             script_path: Path to the script file
+            interactive: When True, confirmation prompts (skill tool config,
+                security ASK verdicts) may read from the user during the run;
+                otherwise the run is treated as non-interactive
         """
+        old_script_interactive = self.script_interactive
+        self.script_interactive = interactive
         try:
             print("Loading script: ", script_path)
             
@@ -3662,6 +3668,24 @@ class ChatybotApp:
             print(f"Error executing script: {e!s}")
         finally:
             self.script_context = False
+            self.script_interactive = old_script_interactive
+
+    def _can_prompt(self) -> bool:
+        """Whether interactive confirmation prompts may read from the user now.
+
+        Prompts are allowed on a real terminal, except during non-interactive
+        script runs (script_context without script_interactive) and
+        single-run mode. All confirmation sites (skill tool config, security
+        ASK verdicts, loop guard) must consult this so they stay in sync.
+        """
+        if getattr(self, "single_run_mode", False):
+            return False
+        if getattr(self, "script_context", False) and not getattr(self, "script_interactive", False):
+            return False
+        try:
+            return sys.stdin.isatty()
+        except Exception:
+            return False
 
     # =========== RUN COMMAND METHODS ===========
 
@@ -4146,11 +4170,7 @@ class ChatybotApp:
             tool_call["arguments"] = tool_args
             invocation_json = json.dumps(tool_call)
 
-            is_interactive = (
-                sys.stdin.isatty()
-                and not getattr(self, "script_context", False)
-                and not getattr(self, "single_run_mode", False)
-            )
+            is_interactive = self._can_prompt()
 
             async def _finalize_tool_return(res_str: str) -> str:
                 return await self._evaluate_output_security(tool_name, tool_args, res_str, is_interactive)
@@ -6036,7 +6056,7 @@ class ChatybotApp:
                     )
                     if self.logging_manager.logging_active:
                         self.logging_manager.log_message(f"[Turn {turn_count+1}] {guard_decision.message}")
-                    if not (sys.stdin.isatty() and not getattr(self, "script_context", False) and not getattr(self, "single_run_mode", False)):
+                    if not self._can_prompt():
                         self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
                         self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', guard_decision.message)
                     loop_guard_stop = True
@@ -6166,11 +6186,7 @@ class ChatybotApp:
                         print(f"\n{summary_text}\n")
                         final_natural_language_response = f"{limit_msg}\n\n{summary_text}"
 
-                        is_interactive = (
-                            sys.stdin.isatty()
-                            and not getattr(self, "script_context", False)
-                            and not getattr(self, "single_run_mode", False)
-                        )
+                        is_interactive = self._can_prompt()
                         if not is_interactive:
                             self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
                             self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', limit_msg)
@@ -6741,6 +6757,11 @@ class ChatybotApp:
             print(f"  - {change}")
         print("  These changes persist for this session.")
         print("  You can revert with /tool off, /tool disable, /tool auto off, or /skill restore.")
+
+        if not self._can_prompt():
+            print("\n[skill] Tool changes skipped (non-interactive mode).")
+            print("[skill] Skill guidance will be injected without tool configuration.")
+            return False
 
         try:
             confirm = input("\nApply these tool changes? (Y/n): ").strip().lower()

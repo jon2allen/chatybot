@@ -542,9 +542,9 @@ class HelpSystem:
             name="/script",
             category="script",
             short_desc="Execute a script file with optional parameters",
-            usage="/script <file> [x=value y=value ...]",
-            long_desc="Execute a script file containing multiple commands. Optionally pass parameters that can be referenced in the script.",
-            examples=["/script workflow.chatdsl", "/script generate.chatdsl x=5 y=10"],
+            usage="/script <file> [x=value y=value ...] [interactive|--interactive|-i]",
+            long_desc="Execute a script file containing multiple commands. Optionally pass parameters that can be referenced in the script. By default script runs are non-interactive: confirmation prompts (skill tool config, security ASK verdicts) are skipped or denied. Pass the interactive flag to allow prompts to read from the terminal during the run.",
+            examples=["/script workflow.chatdsl", "/script generate.chatdsl x=5 y=10", "/script skill_lock_repro.chatdsl --interactive"],
             see_also=["set", "if", "wait", "/chatdsl"]
         ))
 
