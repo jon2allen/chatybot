@@ -214,14 +214,17 @@ class TestCallSkillToolConfig:
         )
 
         app = _FakeApp()
+        app.tool_overrides["other_tool"] = True
         res = call_skill("test-agentic", app=app)
         assert res["status"] == "success"
         assert "tool_state" in res
         assert res["tool_state"]["changed"] is True
         assert "enabled: read_file, grep_search" in res["tool_state"]["changes"]
-        assert "disabled: write_file" in res["tool_state"]["changes"]
+        assert "disabled: other_tool, write_file" in res["tool_state"]["changes"]
         assert app.tool_overrides.get("read_file") is True
+        assert app.tool_overrides.get("grep_search") is True
         assert app.tool_overrides.get("write_file") is False
+        assert app.tool_overrides.get("other_tool") is False
         assert app.max_turns == 15
         assert app.tool_auto is True
         assert app.tool_mode is True
