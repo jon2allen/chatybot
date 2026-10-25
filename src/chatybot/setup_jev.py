@@ -45,8 +45,9 @@ def _check_and_prompt_api_key() -> str | None:
 
     if entered:
         _ensure_dir(GLOBAL_ENV_FILE)
+        sanitized_key = entered.replace('"', '\\"')
         with open(GLOBAL_ENV_FILE, "a", encoding="utf-8") as f:
-            f.write(f'\n# Jev Security Policy Engine Key\nOPENROUTER_API_KEY="{entered}"\n')
+            f.write(f'\n# Jev Security Policy Engine Key\nOPENROUTER_API_KEY="{sanitized_key}"\n')
         os.environ["OPENROUTER_API_KEY"] = entered
         print(f"✓ Saved OPENROUTER_API_KEY to {GLOBAL_ENV_FILE}")
         return entered
@@ -90,19 +91,25 @@ def _configure_security_toml(mode: str) -> None:
 
     # 1. Update engine = "..."
     engine_val = "chain" if mode in ("shadow", "dual_enforce") else "jev"
-    content = re.sub(r'^engine\s*=\s*"[^"]*"', f'engine = "{engine_val}"', content, count=1, flags=re.MULTILINE)
+    if re.search(r'^\s*engine\s*=', content, flags=re.MULTILINE):
+        content = re.sub(r'^\s*engine\s*=\s*"[^"]*"', f'engine = "{engine_val}"', content, count=1, flags=re.MULTILINE)
+    elif re.search(r'^\s*#\s*engine\s*=', content, flags=re.MULTILINE):
+        content = re.sub(r'^\s*#\s*engine\s*=\s*"[^"]*"', f'engine = "{engine_val}"', content, count=1, flags=re.MULTILINE)
+    else:
+        content = f'engine = "{engine_val}"\n' + content
 
     # 2. Ensure [jev] section is active (uncomment or add)
     jev_section_active = re.search(r'^\s*\[jev\]', content, flags=re.MULTILINE)
     if not jev_section_active:
         # Check if commented [jev] exists
         if "# [jev]" in content:
-            # Uncomment the [jev] block
-            pattern = re.compile(r'#\s*\[jev\]\n(?:#\s*[^\n]*\n)+', re.MULTILINE)
+            # Uncomment the [jev] block, allowing for blank lines or varied comments until next section
+            pattern = re.compile(r'#\s*\[jev\][\s\S]*?(?=\n\s*\[|\n\s*#\s*\[|\Z)', re.MULTILINE)
             m = pattern.search(content)
             if m:
                 uncommented = "\n".join(
-                    re.sub(r'^#\s?', '', line) for line in m.group(0).splitlines()
+                    re.sub(r'^#\s?', '', line) if line.strip().startswith('#') else line
+                    for line in m.group(0).splitlines()
                 ) + "\n"
                 content = content[:m.start()] + uncommented + content[m.end():]
         else:
@@ -144,7 +151,7 @@ redact_log     = true
         else:
             # Check for commented # [chain]
             if "# [chain]" in content:
-                pattern = re.compile(r'#\s*\[chain\]\n(?:#\s*[^\n]*\n)+', re.MULTILINE)
+                pattern = re.compile(r'#\s*\[chain\][\s\S]*?(?=\n\s*\[|\n\s*#\s*\[|\Z)', re.MULTILINE)
                 m = pattern.search(content)
                 if m:
                     chain_block = f"""[chain]
