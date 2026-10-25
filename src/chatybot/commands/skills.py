@@ -592,6 +592,8 @@ def _handle_exit(ctx: CommandContext) -> CommandResult:
     if active:
         print(f"Released active skill lock: '{active}'.")
         app.active_skill = None
+        if hasattr(app, "_tool_state_snapshot"):
+            app._tool_state_snapshot = None
     else:
         print("No active skill lock to release.")
     return CommandResult.ok()
