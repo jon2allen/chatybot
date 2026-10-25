@@ -6849,7 +6849,29 @@ class ChatybotApp:
         if config.get("mode") == "off" and self.tool_mode:
             changes.append("Disable tool mode (OFF)")
 
-        # Only list tool overrides that differ from current state
+        # When enable_tools is specified, default behavior is to disable all other
+        # available tools first, then enable the ones specified by the skill.
+        specified_enables = set(config.get("enable_tools", []))
+        all_available_tools: set[str] = set()
+        if specified_enables:
+            try:
+                cfg = self._load_tools_config()
+                if cfg and "tools" in cfg:
+                    all_available_tools.update(cfg["tools"].keys())
+            except Exception:
+                pass
+            if getattr(self, "mcp_manager", None) and isinstance(getattr(self.mcp_manager, "cached_schemas", None), dict):
+                for server, tlist in self.mcp_manager.cached_schemas.items():
+                    for t in tlist:
+                        all_available_tools.add(f"mcp__{server}__{t.name}")
+            if hasattr(self, "tool_overrides"):
+                all_available_tools.update(self.tool_overrides.keys())
+
+        # Determine tools to disable and enable
+        tools_to_disable = set(config.get("disable_tools", []))
+        if specified_enables:
+            tools_to_disable.update(all_available_tools - specified_enables)
+
         enable_diffs = [
             t for t in config.get("enable_tools", [])
             if not self.tool_overrides.get(t, False)
@@ -6857,12 +6879,15 @@ class ChatybotApp:
         if enable_diffs:
             changes.append(f"Enable tools: {', '.join(enable_diffs)}")
 
-        disable_diffs = [
-            t for t in config.get("disable_tools", [])
+        disable_diffs = sorted([
+            t for t in tools_to_disable
             if self.tool_overrides.get(t, True)
-        ]
+        ])
         if disable_diffs:
-            changes.append(f"Disable tools: {', '.join(disable_diffs)}")
+            if specified_enables and len(disable_diffs) > 5:
+                changes.append(f"Disable all other tools ({len(disable_diffs)} tools: {', '.join(disable_diffs[:5])}...)")
+            else:
+                changes.append(f"Disable tools: {', '.join(disable_diffs)}")
 
         if config.get("auto_loop") and not self.tool_auto:
             changes.append(f"Enable auto-loop (max_turns={config.get('max_turns', self.max_turns)})")
@@ -6912,10 +6937,12 @@ class ChatybotApp:
             self.tool_context = ""
             self.buffer_manager.set_script_var('TOOL_CONTEXT', '')
 
+        # Disable tools first (all other tools when enable_tools is specified, plus explicit disable_tools)
+        for tool_name in tools_to_disable:
+            self.tool_overrides[tool_name] = False
+        # Then enable the ones specified by the skill
         for tool_name in config.get("enable_tools", []):
             self.tool_overrides[tool_name] = True
-        for tool_name in config.get("disable_tools", []):
-            self.tool_overrides[tool_name] = False
 
         if self.tool_mode:
             context = self.generate_tool_context()

@@ -187,6 +187,29 @@ def _apply_tool_config_silent(app: Any, config: dict, skill_name: str) -> dict[s
 
     The previous tool state is snapshotted for /skill restore.
     """
+    # When enable_tools is specified, default behavior is to disable all other
+    # available tools first, then enable the ones specified by the skill.
+    specified_enables = set(config.get("enable_tools", []))
+    all_available_tools: set[str] = set()
+    if specified_enables:
+        if hasattr(app, "_load_tools_config"):
+            try:
+                cfg = app._load_tools_config()
+                if cfg and "tools" in cfg:
+                    all_available_tools.update(cfg["tools"].keys())
+            except Exception:
+                pass
+        if getattr(app, "mcp_manager", None) and isinstance(getattr(app.mcp_manager, "cached_schemas", None), dict):
+            for server, tlist in app.mcp_manager.cached_schemas.items():
+                for t in tlist:
+                    all_available_tools.add(f"mcp__{server}__{t.name}")
+        if hasattr(app, "tool_overrides"):
+            all_available_tools.update(app.tool_overrides.keys())
+
+    tools_to_disable = set(config.get("disable_tools", []))
+    if specified_enables:
+        tools_to_disable.update(all_available_tools - specified_enables)
+
     changes: list[str] = []
     if config.get("mode") == "on" and not app.tool_mode:
         changes.append("tool_mode: on")
@@ -194,8 +217,11 @@ def _apply_tool_config_silent(app: Any, config: dict, skill_name: str) -> dict[s
         changes.append("tool_mode: off")
     if config.get("enable_tools"):
         changes.append(f"enabled: {', '.join(config['enable_tools'])}")
-    if config.get("disable_tools"):
-        changes.append(f"disabled: {', '.join(config['disable_tools'])}")
+    if tools_to_disable:
+        if specified_enables and len(tools_to_disable) > 5:
+            changes.append(f"disabled all other tools ({len(tools_to_disable)} tools)")
+        else:
+            changes.append(f"disabled: {', '.join(sorted(tools_to_disable))}")
     if config.get("max_turns") and config["max_turns"] != app.max_turns:
         changes.append(f"max_turns: {config['max_turns']}")
 
@@ -215,10 +241,12 @@ def _apply_tool_config_silent(app: Any, config: dict, skill_name: str) -> dict[s
     elif config.get("mode") == "off" and app.tool_mode:
         app.tool_mode = False
 
+    # Disable other tools first
+    for tool_name in tools_to_disable:
+        app.tool_overrides[tool_name] = False
+    # Then enable specified tools
     for tool_name in config.get("enable_tools", []):
         app.tool_overrides[tool_name] = True
-    for tool_name in config.get("disable_tools", []):
-        app.tool_overrides[tool_name] = False
 
     if app.tool_mode:
         app.generate_tool_context()
