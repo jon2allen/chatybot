@@ -41,8 +41,17 @@ EXEMPT_TOOLS = frozenset({"ask_user"})
 
 
 def call_signature(tool: str, arguments: Any) -> str:
-    norm = unwrap_tool_args(arguments if isinstance(arguments, dict) else {})
-    return f"{tool}:{json.dumps(norm, sort_keys=True, default=str)}"
+    if isinstance(arguments, str):
+        try:
+            parsed = json.loads(arguments)
+            if isinstance(parsed, dict):
+                arguments = parsed
+        except Exception:
+            pass
+    if isinstance(arguments, dict):
+        norm = unwrap_tool_args(arguments)
+        return f"{tool}:{json.dumps(norm, sort_keys=True, default=str)}"
+    return f"{tool}:{arguments}"
 
 
 def result_digest(result: Any) -> str:
