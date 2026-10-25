@@ -1438,13 +1438,20 @@ class ChatybotApp:
                 try:
                     return await client.chat.completions.create(**retry_kwargs)
                 except Exception as inner_e:
-                    # If still rejected, try with dummy reasoning_content on all assistant messages
+                    # If still rejected, check if server strictly demands reasoning_content
+                    # (some servers require reasoning_content specifically rather than thinking/reasoning)
                     if self._is_missing_reasoning_error(inner_e):
+                        changed = False
                         for msg in retry_kwargs.get("messages", []):
                             if isinstance(msg, dict) and msg.get("role") == "assistant":
-                                if not (msg.get("reasoning_content") or msg.get("thinking") or msg.get("reasoning")):
-                                    msg["reasoning_content"] = " "
-                        return await client.chat.completions.create(**retry_kwargs)
+                                if not msg.get("reasoning_content"):
+                                    # Map alternate field or backfill single space
+                                    msg["reasoning_content"] = (
+                                        msg.get("thinking") or msg.get("reasoning") or " "
+                                    )
+                                    changed = True
+                        if changed:
+                            return await client.chat.completions.create(**retry_kwargs)
                     raise
             raise
 
