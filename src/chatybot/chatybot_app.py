@@ -5567,15 +5567,17 @@ class ChatybotApp:
             <invoke_parameters> JSON, premature/orphaned </invoke> or </parameter> tags).
             """
             calls = []
-            dots_pattern = re.compile(
-                r'<dots_function_call[^>]*>(.*?)(?:</dots_function_call>|$)',
-                re.IGNORECASE | re.DOTALL
-            )
-            for m in dots_pattern.finditer(s):
-                block = m.group(1).strip()
-                if not block:
-                    continue
+            # Isolate each dots_function_call block cleanly without allowing an unclosed
+            # block to absorb subsequent blocks across the stream.
+            raw_blocks = []
+            tag_splits = re.split(r'<dots_function_call[^>]*>', s, flags=re.IGNORECASE)
+            for chunk in tag_splits[1:]:
+                # Extract up to closing tag if present, else take remainder of chunk
+                block_content = re.split(r'</dots_function_call>', chunk, maxsplit=1, flags=re.IGNORECASE)[0]
+                if block_content.strip():
+                    raw_blocks.append(block_content.strip())
 
+            for block in raw_blocks:
                 tool_name = None
                 # Check for <invoke_name">, <invoke_name>, <tool_name>, <invoke="name">, <invoke name="name">, etc.
                 tool_match = re.search(r'<(?:invoke_name|tool_name|function_name)["\'\s]*>\s*([a-zA-Z0-9_\-\.]+)', block, re.IGNORECASE)
@@ -5613,21 +5615,89 @@ class ChatybotApp:
                 # bare JSON body, e.g. <dots_function_call>{"search_skills": "query"}
                 bare_json_args = None
                 if not tool_name:
-                    json_m = re.search(r'\{.*\}', block, re.DOTALL)
-                    if json_m:
-                        parsed_body = parse_json_or_dict(json_m.group(0))
-                        if isinstance(parsed_body, dict) and len(parsed_body) == 1:
-                            body_key, body_val = next(iter(parsed_body.items()))
-                            if str(body_key) in known_tools or str(body_key).startswith("mcp__"):
-                                tool_name = str(body_key)
-                                if "." in tool_name and tool_name.split(".")[-1].lower() not in reserved_tool_tags:
-                                    tool_name = tool_name.split(".")[-1]
-                                if isinstance(body_val, dict):
-                                    bare_json_args = body_val
-                                elif body_val is not None and not isinstance(body_val, (dict, list)):
-                                    param_name = primary_tool_params.get(tool_name)
-                                    if param_name:
-                                        bare_json_args = {param_name: body_val}
+                    parsed_body = None
+                    json_start = block.find('{')
+                    if json_start != -1:
+                        # Scan balanced braces respecting quotes
+                        d = 0
+                        in_s = False
+                        esc = False
+                        qc = None
+                        balanced_end = None
+                        for idx in range(json_start, len(block)):
+                            ch = block[idx]
+                            if in_s:
+                                if esc:
+                                    esc = False
+                                elif ch == '\\':
+                                    esc = True
+                                elif ch == qc:
+                                    in_s = False
+                            else:
+                                if ch in ('"', "'"):
+                                    in_s = True
+                                    qc = ch
+                                elif ch == '{':
+                                    d += 1
+                                elif ch == '}':
+                                    d -= 1
+                                    if d == 0:
+                                        balanced_end = idx + 1
+                                        break
+                        if balanced_end is not None:
+                            parsed_body = parse_json_or_dict(block[json_start:balanced_end])
+                        else:
+                            # Truncated stream repair: close open strings and unclosed braces
+                            def repair_and_parse(raw_snippet: str):
+                                cand = raw_snippet.strip()
+                                in_q = False
+                                esc_q = False
+                                cur_qc = None
+                                depth_q = 0
+                                for c in cand:
+                                    if in_q:
+                                        if esc_q:
+                                            esc_q = False
+                                        elif c == '\\':
+                                            esc_q = True
+                                        elif c == cur_qc:
+                                            in_q = False
+                                    else:
+                                        if c in ('"', "'"):
+                                            in_q = True
+                                            cur_qc = c
+                                        elif c == '{':
+                                            depth_q += 1
+                                        elif c == '}':
+                                            depth_q -= 1
+                                if in_q and cur_qc:
+                                    cand += cur_qc
+                                if depth_q > 0:
+                                    cand += ('}' * depth_q)
+                                res = parse_json_or_dict(cand)
+                                return res if isinstance(res, dict) else None
+
+                            candidate_str = block[json_start:]
+                            parsed_body = repair_and_parse(candidate_str)
+                            if not parsed_body and "\n" in candidate_str:
+                                # Progressively strip trailing stream lines that may contain prose
+                                trim_cand = candidate_str
+                                while not parsed_body and "\n" in trim_cand:
+                                    trim_cand = trim_cand.rsplit("\n", 1)[0].strip()
+                                    parsed_body = repair_and_parse(trim_cand)
+
+                    if isinstance(parsed_body, dict) and len(parsed_body) == 1:
+                        body_key, body_val = next(iter(parsed_body.items()))
+                        if str(body_key) in known_tools or str(body_key).startswith("mcp__"):
+                            tool_name = str(body_key)
+                            if "." in tool_name and tool_name.split(".")[-1].lower() not in reserved_tool_tags:
+                                tool_name = tool_name.split(".")[-1]
+                            if isinstance(body_val, dict):
+                                bare_json_args = body_val
+                            elif body_val is not None and not isinstance(body_val, (dict, list)):
+                                param_name = primary_tool_params.get(tool_name)
+                                if param_name:
+                                    bare_json_args = {param_name: body_val}
 
                 if not tool_name or tool_name.lower() in reserved_tool_tags:
                     continue
