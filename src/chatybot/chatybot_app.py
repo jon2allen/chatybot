@@ -80,6 +80,8 @@ class ChatybotApp:
         auto_approve: bool = False,
         no_security: bool = False,
         security_config_path: str | None = None,
+        allow_chatybot_subprocess: bool | None = None,
+        chatybot_exec_policy: str | None = None,
     ):
         """Initialize the Chatybot application."""
         self.no_tools: bool = no_tools
@@ -87,6 +89,8 @@ class ChatybotApp:
         self.auto_approve: bool = auto_approve
         self.no_security: bool = no_security
         self.security_config_path: str | None = security_config_path
+        self.allow_chatybot_subprocess: bool | None = allow_chatybot_subprocess
+        self.chatybot_exec_policy: str | None = chatybot_exec_policy
         self.last_security_duration_ms: float = 0.0
         self.single_run_mode: bool = False
         # Initialize managers
@@ -393,6 +397,8 @@ class ChatybotApp:
                 enabled=not self.no_security,
                 debug=self.security_debug,
                 trace_raw_payload=getattr(self, "trace_raw_payload", False),
+                chatybot_exec_policy=self.chatybot_exec_policy,
+                allow_chatybot_subprocess=self.allow_chatybot_subprocess,
             )
         except Exception as e:
             init_err = str(e)
@@ -7582,7 +7588,39 @@ def run():
         dest="setup_jev",
         help="Launch interactive wizard to configure TypeSafe Jev security policy engine"
     )
+    parser.add_argument(
+        "--allow-chatybot-subprocess",
+        action="store_true",
+        help="Permit execution of Chatybot child sub-processes in run_command (for testing/development)"
+    )
+    parser.add_argument(
+        "--chatybot-exec-policy",
+        choices=["deny", "ask", "allow"],
+        default=None,
+        help="Sub-process execution policy for Chatybot (deny, ask, allow)"
+    )
+    parser.add_argument(
+        "--dev",
+        action="store_true",
+        help="Developer mode: enables security debug diagnostics and permits Chatybot child sub-processes"
+    )
     args, _unknown = parser.parse_known_args()
+
+    # Child process recursion depth enforcement
+    MAX_CHATYBOT_DEPTH = 2
+    try:
+        current_depth = int(os.environ.get("CHATYBOT_RECURSION_DEPTH", "0"))
+    except (ValueError, TypeError):
+        current_depth = 0
+    if current_depth > MAX_CHATYBOT_DEPTH:
+        print(
+            f"[Security Fatal] Maximum Chatybot sub-process recursion depth ({MAX_CHATYBOT_DEPTH}) exceeded.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    if current_depth > 0 and (args.security or args.dev):
+        parent_pid = os.environ.get("CHATYBOT_PARENT_PID", "unknown")
+        print(f"[Security Debug] Chatybot sub-process active (depth={current_depth}, parent_pid={parent_pid})")
 
     if args.setup_keys:
         from .setup_keys import main as setup_keys_main
@@ -7629,13 +7667,18 @@ def run():
         ))
 
     global app
+    allow_subprocess = True if (args.allow_chatybot_subprocess or args.dev) else None
+    sec_debug = bool(args.security or args.dev)
+
     app = ChatybotApp(
         config_path=args.config,
         lang=args.lang,
         no_tools=args.no_tools,
-        security_debug=args.security,
+        security_debug=sec_debug,
         auto_approve=args.auto_approve,
         no_security=args.no_security,
+        allow_chatybot_subprocess=allow_subprocess,
+        chatybot_exec_policy=args.chatybot_exec_policy,
     )
 
     # Also set the module-level app variable

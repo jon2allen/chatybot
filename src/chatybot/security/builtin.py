@@ -33,12 +33,12 @@ class BuiltinPolicyEngine(BasePolicyEngine):
         r"(?:(?:exec|env|nohup|sudo|xargs|nice|timeout|ionice|taskset|time|strace|ltrace|chroot|"
         r"(?:ba|z|k|c)?sh\s+-c)\b(?:\s+-[^\s;&|`\n\r]+|\s+[0-9]+|\s+[^\s;&|`\n\r\'\"]+)*\s*['\"]?\s*)*"
     )
-    _CHATYBOT_BIN = r"(?:[^\s;&|`\n\r\'\"]*/)?chatybot(?:\.py)?(?:\s+|['\"`;&|]|$)"
+    _CHATYBOT_BIN = r"(?:[^\s;&|`\n\r\'\"()]*[\\/])?chatybot(?:\.py)?(?:\s+|['\"`;&|)]|$)"
     _PYTHON_MODULE = (
-        r"python[0-9.]*\s+(?:-m\s+chatybot(?:\s+|$)|[^\s;&|`\n\r]*/chatybot\.py(?:\s+|$)|"
+        r"python[0-9.]*\s+(?:-m\s+chatybot(?:\s+|['\"`;&|)]|$)|[^\s;&|`\n\r]*/chatybot\.py(?:\s+|['\"`;&|)]|$)|"
         r"-c\s+['\"][^'\"]*\bchatybot\b)"
     )
-    _PREFIX = r"(?:^|[;&|`\n\r]|\$\()\s*" + _ENV_PREFIX + _WRAPPER_PREFIX
+    _PREFIX = r"(?:^|[;&|`\n\r]|\$\()[\s(]*" + _ENV_PREFIX + _WRAPPER_PREFIX
 
     CHATYBOT_EXEC_PATTERN = re.compile(
         f"{_PREFIX}(?:{_CHATYBOT_BIN}|{_PYTHON_MODULE})",
@@ -100,9 +100,23 @@ class BuiltinPolicyEngine(BasePolicyEngine):
         denied_paths: list[str] | None = None,
         denied_command_patterns: list[str] | None = None,
         output_rules: list[dict[str, str]] | None = None,
+        chatybot_exec_policy: str = "deny",
+        allow_chatybot_subprocess: bool | None = None,
+        allow_env_override: bool = True,
         debug: bool = False,
     ):
         self.debug = debug
+        resolved_policy = str(chatybot_exec_policy or "deny").strip().lower()
+        if allow_chatybot_subprocess is not None:
+            resolved_policy = "allow" if allow_chatybot_subprocess else "deny"
+        if resolved_policy not in ("deny", "ask", "allow"):
+            resolved_policy = "deny"
+        self.chatybot_exec_policy = resolved_policy
+        if isinstance(allow_env_override, bool):
+            self.allow_env_override = allow_env_override
+        else:
+            self.allow_env_override = str(allow_env_override).strip().lower() not in ("false", "0", "no", "off")
+
         self.rules = {k.lower(): str(v).lower() for k, v in self.DEFAULT_TOOL_RULES.items()}
         if rules:
             self.rules.update({k.lower(): str(v).lower() for k, v in rules.items()})
@@ -373,13 +387,41 @@ class BuiltinPolicyEngine(BasePolicyEngine):
         if tool == "run_command":
             # Tier 0: Direct check against Chatybot sub-process execution
             if self.CHATYBOT_EXEC_PATTERN.search(cmd):
-                decision = PolicyDecision(
-                    verdict=Verdict.DENY,
-                    reason="Execution of Chatybot sub-process is strictly denied by policy to prevent recursive privilege escalation.",
-                )
-                if self.debug:
-                    print(f"[Security Debug] [SPECIAL DENY] Tier 0 Chatybot Execution: '{cmd}' -> {decision.reason}")
-                return decision
+                effective_policy = self.chatybot_exec_policy
+                if self.allow_env_override:
+                    env_val = os.environ.get("CHATYBOT_ALLOW_SUBPROCESS", "").strip().lower()
+                    if env_val in ("1", "true", "yes", "allow"):
+                        effective_policy = "allow"
+                    elif env_val == "ask":
+                        effective_policy = "ask"
+                    elif env_val in ("0", "false", "no", "deny"):
+                        effective_policy = "deny"
+
+                if effective_policy == "deny":
+                    decision = PolicyDecision(
+                        verdict=Verdict.DENY,
+                        reason="Execution of Chatybot sub-process is strictly denied by policy to prevent recursive privilege escalation.",
+                    )
+                    if self.debug:
+                        print(f"[Security Debug] [SPECIAL DENY] Tier 0 Chatybot Execution: '{cmd}' -> {decision.reason}")
+                    return decision
+                elif effective_policy == "ask":
+                    prompt_details = PolicyPromptDetails(
+                        message="The assistant requested to execute a Chatybot sub-process. Running sub-processes of Chatybot can cause recursive loops. Allow execution?",
+                        risk_level="high",
+                    )
+                    decision = PolicyDecision(
+                        verdict=Verdict.ASK,
+                        reason="Execution of Chatybot sub-process requires confirmation to prevent recursive privilege escalation or loops.",
+                        prompt_details=prompt_details,
+                    )
+                    if self.debug:
+                        print(f"[Security Debug] [CHATYBOT SUBPROCESS ASK] Tier 0: '{cmd}' -> {decision.reason}")
+                    return decision
+                else:
+                    # effective_policy == "allow": Developer override active, bypass Tier 0 denial
+                    if self.debug:
+                        print(f"[Security Debug] [CHATYBOT SUBPROCESS ALLOWED] Tier 0 Chatybot Execution permitted by policy: '{cmd}'")
 
             cmd_lower = cmd.lower()
             cmd_collapsed = re.sub(r"\s+", " ", cmd_lower).strip()

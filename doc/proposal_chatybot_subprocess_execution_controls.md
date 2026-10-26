@@ -2,7 +2,7 @@
 
 **Document Version:** 1.0  
 **Date:** October 25, 2026  
-**Status:** Proposed / Under Review  
+**Status:** Implemented (October 26, 2026)
 **Applies To:** Builtin Policy Engine (`BuiltinPolicyEngine`, `SecurityManager`), CLI flags, Environment Controls, and RACF Guard (`racf-guard`)  
 
 ---

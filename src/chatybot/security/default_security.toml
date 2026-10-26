@@ -32,6 +32,16 @@ max_refusals_per_loop = 3
 # Fallback verdict for unrecognized tools not governed by rules: "ask" | "deny" | "allow"
 default_verdict = "ask"
 
+# Policy for executing Chatybot child sub-processes in run_command:
+# Options:
+#   "deny"  (default) - Block all chatybot sub-process executions in Tier 0 to prevent recursive loops.
+#   "ask"   - Require explicit interactive user confirmation before running child chatybot.
+#   "allow" - Unconditionally permit running chatybot sub-processes (recommended for test runners/dogfooding).
+chatybot_exec_policy = "deny"
+
+# Allow environment variable CHATYBOT_ALLOW_SUBPROCESS=1 to override policy at runtime (set to false for production lockdown)
+allow_env_override = true
+
 # ------------------------------------------------------------------------------
 # Security DSL Rules (Evaluated deny-overrides by tier: deny > ask > allow > baseline. Within a tier, first match wins.)
 # Syntax: <Action> <ToolTarget> <Condition> [because "<Reason>"]

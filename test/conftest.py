@@ -1,6 +1,12 @@
+import os
 import sys
 import importlib
 import importlib.machinery
+
+# Ensure chatybot imports always resolve to the workspace's src/ directory
+repo_src = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
+if repo_src not in sys.path:
+    sys.path.insert(0, repo_src)
 
 class SrcRedirectLoader:
     def __init__(self, real_name):
