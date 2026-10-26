@@ -395,14 +395,8 @@ fn main() {
 
     // If --check mode is requested
     if args.check {
-        let mut req = PolicyRequest {
-            tool: args.tool,
-            parameters: Default::default(),
-            context: Default::default(),
-            version: Some("1.0".to_string()),
-            request_id: None,
-            timestamp: None,
-        };
+        let mut req = PolicyRequest::new(args.tool);
+        req.version = Some("1.0".to_string());
         if let Some(u) = args.user {
             req.context.insert("user".to_string(), serde_json::Value::String(u));
         }

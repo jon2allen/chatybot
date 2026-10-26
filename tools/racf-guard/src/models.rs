@@ -26,7 +26,7 @@ pub struct PolicyPromptDetails {
     pub risk_level: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Default)]
 pub struct PolicyRequest {
     pub tool: String,
     #[serde(default)]
@@ -34,11 +34,24 @@ pub struct PolicyRequest {
     #[serde(default)]
     pub context: HashMap<String, serde_json::Value>,
     #[serde(default)]
+    pub output: Option<String>,
+    #[serde(default)]
+    pub phase: Option<String>,
+    #[serde(default)]
     pub version: Option<String>,
     #[serde(default)]
     pub request_id: Option<String>,
     #[serde(default)]
     pub timestamp: Option<String>,
+}
+
+impl PolicyRequest {
+    pub fn new(tool: impl Into<String>) -> Self {
+        Self {
+            tool: tool.into(),
+            ..Default::default()
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]

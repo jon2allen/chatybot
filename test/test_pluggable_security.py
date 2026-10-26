@@ -2774,3 +2774,252 @@ def test_tool_dispatch_request_id_is_protected():
     from chatybot.buffer_manager import BufferManager
 
     assert "TOOL_DISPATCH_REQUEST_ID" in BufferManager().script_vars.protected_vars
+
+
+def test_dsl_line_by_line_write_rules():
+    """Verify line-by-line DSL scanning on write tools and payload fields."""
+    from chatybot.security.builtin import BuiltinPolicyEngine
+    from chatybot.security.models import PolicyRequest, Verdict
+
+    engine = BuiltinPolicyEngine(
+        dsl_rules=[
+            "deny write file where line starts with 'rm -rf '",
+            "deny write file where first line starts with '#!'",
+            "deny write file where any line contains 'SUPER_SECRET_KEY'",
+            "allow *",
+        ],
+    )
+
+    # 1. Shebang header in first line -> DENIED
+    shebang_req = PolicyRequest(
+        tool="write_file",
+        parameters={"path": "script.sh", "content": "#!/usr/bin/env python3\nprint('hello')\n"},
+    )
+    dec = engine.evaluate(shebang_req)
+    assert dec.verdict == Verdict.DENY
+    assert "Matched security DSL rule" in dec.reason
+
+    # 2. Benign file without shebang -> ALLOWED
+    safe_req = PolicyRequest(
+        tool="write_file",
+        parameters={"path": "script.py", "content": "print('hello world')\n"},
+    )
+    assert engine.evaluate(safe_req).verdict == Verdict.ALLOW
+
+    # 3. Indented 'rm -rf ' on line 2 -> DENIED
+    indented_rm_req = PolicyRequest(
+        tool="write_file",
+        parameters={
+            "path": "cleanup.sh",
+            "content": "def cleanup():\n    rm -rf /var/tmp/cache\n",
+        },
+    )
+    dec_rm = engine.evaluate(indented_rm_req)
+    assert dec_rm.verdict == Verdict.DENY
+    assert "Matched security DSL rule" in dec_rm.reason
+
+    # 4. replace_file_content with SUPER_SECRET_KEY in replacement_content -> DENIED
+    replace_req = PolicyRequest(
+        tool="replace_file_content",
+        parameters={
+            "path": "settings.py",
+            "replacement_content": "DEBUG = False\nKEY = 'SUPER_SECRET_KEY_123'\n",
+        },
+    )
+    assert engine.evaluate(replace_req).verdict == Verdict.DENY
+
+    # 5. multi_replace_file_content with nested chunk containing 'rm -rf ' -> DENIED
+    multi_req = PolicyRequest(
+        tool="multi_replace_file_content",
+        parameters={
+            "path": "deploy.sh",
+            "replacement_chunks": [
+                {"replacement_content": "echo step1"},
+                {"replacement_content": "  rm -rf /tmp/build\n"},
+            ],
+        },
+    )
+    assert engine.evaluate(multi_req).verdict == Verdict.DENY
+
+
+def test_dsl_line_by_line_read_output_rules():
+    """Verify line-by-line DSL evaluation on read output payloads."""
+    from chatybot.security.builtin import BuiltinPolicyEngine
+    from chatybot.security.models import PolicyRequest, Verdict
+
+    engine = BuiltinPolicyEngine(
+        dsl_rules=[
+            "deny read file where any line contains 'RESTRICTED_DATA'",
+            "deny read file where line starts with 'CONFIDENTIAL:'",
+            "allow *",
+        ],
+    )
+
+    # 1. Output containing matching line -> DENIED
+    leak_output = "Header\nStatus: OK\nCONFIDENTIAL: Project Manhattan\nFooter\n"
+    req_leak = PolicyRequest(tool="read_file", output=leak_output, phase="output")
+    dec_leak = engine.evaluate_output(req_leak)
+    assert dec_leak.verdict == Verdict.DENY
+    assert "CONFIDENTIAL:" in dec_leak.reason
+
+    # 2. Benign output -> ALLOWED
+    req_safe = PolicyRequest(
+        tool="read_file",
+        output="Header\nStatus: OK\nPublic information\nFooter\n",
+        phase="output",
+    )
+    assert engine.evaluate_output(req_safe).verdict == Verdict.ALLOW
+
+
+def test_mcp_line_by_line_write_and_read_rules():
+    """Verify line-by-line DSL rules correctly screen MCP tools (write & read)."""
+    from chatybot.security.builtin import BuiltinPolicyEngine
+    from chatybot.security.models import PolicyRequest, Verdict
+
+    engine = BuiltinPolicyEngine(
+        dsl_rules=[
+            "deny write file where any line starts with 'DROP TABLE'",
+            "deny read file where any line contains 'CUSTOMER_SSN'",
+            "deny mcp* where any line starts with 'rm -rf'",
+            "allow *",
+        ],
+    )
+
+    # 1. MCP write tool with nested parameters arguments.content
+    mcp_write_req = PolicyRequest(
+        tool="mcp__filesystem__write_file",
+        parameters={
+            "arguments": {
+                "path": "/tmp/test.sh",
+                "content": "function run() {\n    rm -rf /data\n}",
+            }
+        },
+    )
+    dec_mcp_write = engine.evaluate(mcp_write_req)
+    assert dec_mcp_write.verdict == Verdict.DENY
+
+    # 2. MCP database write query tool with nested params.query
+    mcp_db_req = PolicyRequest(
+        tool="mcp__postgres__execute_write",
+        parameters={
+            "params": {
+                "query": "  DROP TABLE users CASCADE;\n",
+            }
+        },
+    )
+    assert engine.evaluate(mcp_db_req).verdict == Verdict.DENY
+
+    # 3. MCP query output containing sensitive SSN
+    mcp_read_output_req = PolicyRequest(
+        tool="mcp__postgres__read_query",
+        output="id,name,data\n1,Alice,CUSTOMER_SSN: 000-11-2222\n",
+        phase="output",
+    )
+    dec_mcp_out = engine.evaluate_output(mcp_read_output_req)
+    assert dec_mcp_out.verdict == Verdict.DENY
+
+
+def test_security_manager_line_by_line_full_lifecycle(tmp_path):
+    """Verify SecurityManager applies line-by-line rules pre-execution and post-execution."""
+    from chatybot.security.manager import SecurityManager
+    from chatybot.security.models import Verdict
+
+    cfg = tmp_path / "security.toml"
+    cfg.write_text("""
+version = "1.0"
+engine = "builtin"
+
+[builtin]
+dsl_rules = [
+    "deny write file where first line starts with '#!'",
+    "deny write file where line starts with 'sudo '",
+    "deny read file where any line contains 'TOP_SECRET'",
+    "allow *",
+]
+
+[output_security]
+enabled = true
+tools = ["read_file", "mcp__fs__read"]
+""")
+
+    mgr = SecurityManager(config_path=str(cfg), debug=False)
+
+    # 1. Pre-execution write with shebang -> DENY
+    dec_pre = mgr.evaluate(
+        tool="write_file",
+        parameters={"path": "run.sh", "content": "#!/bin/bash\necho 123\n"},
+    )
+    assert dec_pre.verdict == Verdict.DENY
+
+    # 2. Pre-execution write with indented sudo -> DENY
+    dec_sudo = mgr.evaluate(
+        tool="write_file",
+        parameters={"path": "setup.sh", "content": "step() {\n  sudo systemctl restart nginx\n}"},
+    )
+    assert dec_sudo.verdict == Verdict.DENY
+
+    # 3. Post-execution read with TOP_SECRET -> DENY
+    dec_post = mgr.evaluate_output(
+        tool="read_file",
+        output="Log start...\nStatus: TOP_SECRET_LOG_ITEM\nLog end\n",
+        parameters={"path": "server.log"},
+    )
+    assert dec_post.verdict == Verdict.DENY
+
+    # 4. Post-execution read of safe content -> ALLOW
+    dec_post_safe = mgr.evaluate_output(
+        tool="read_file",
+        output="Log start...\nStatus: NORMAL\nLog end\n",
+        parameters={"path": "server.log"},
+    )
+    assert dec_post_safe.verdict == Verdict.ALLOW
+
+
+def test_mcp_hardened_workdir_paths_and_stdin():
+    """Verify hardening: workdir protection, path array extraction, and stdin screening."""
+    from chatybot.security.builtin import BuiltinPolicyEngine
+    from chatybot.security.models import PolicyRequest, Verdict
+
+    engine = BuiltinPolicyEngine(
+        dsl_rules=[
+            "deny mcp* where stdin contains 'SECRET_PASSWORD'",
+            "allow *",
+        ],
+        denied_paths=["/etc", "/private/etc"],
+    )
+
+    # 1. workdir inside protected path -> Tier 0 DENIED
+    req_workdir = PolicyRequest(
+        tool="mcp__terminal__exec",
+        parameters={"arguments": {"command": "ls -la", "workdir": "/etc/systemd"}},
+    )
+    dec_wd = engine.evaluate(req_workdir)
+    assert dec_wd.verdict == Verdict.DENY
+    assert "protected path" in dec_wd.reason.lower()
+
+    # 2. array of paths containing denied path -> Tier 0 DENIED
+    req_paths = PolicyRequest(
+        tool="mcp__filesystem__read_multiple",
+        parameters={
+            "arguments": {
+                "paths": ["/tmp/app.log", "/etc/shadow"],
+            }
+        },
+    )
+    dec_paths = engine.evaluate(req_paths)
+    assert dec_paths.verdict == Verdict.DENY
+    assert "protected path" in dec_paths.reason.lower()
+
+    # 3. stdin field screened by DSL -> DENIED
+    req_stdin = PolicyRequest(
+        tool="mcp__terminal__exec",
+        parameters={
+            "arguments": {
+                "command": "sudo -S id",
+                "stdin": "my_SECRET_PASSWORD_123\n",
+            }
+        },
+    )
+    dec_stdin = engine.evaluate(req_stdin)
+    assert dec_stdin.verdict == Verdict.DENY
+    assert "SECRET_PASSWORD" in dec_stdin.reason

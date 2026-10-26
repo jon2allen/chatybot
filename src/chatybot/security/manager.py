@@ -364,9 +364,6 @@ class SecurityManager:
                     print(f"[Security Debug] [OUTPUT FLOOR] '{tool}' matched {floor_reason} -> {floor_verdict.value.upper()}")
             elif hasattr(self.engine, "supports_output_evaluation") and not self.engine.supports_output_evaluation():
                 decision = PolicyDecision(verdict=Verdict.ALLOW, reason="Engine does not inspect output.")
-            elif isinstance(self.engine, BuiltinPolicyEngine) and not getattr(self.engine, "_custom_output_rules", False):
-                # Built-in engine uses default rules already screened by the floor scanner above
-                decision = PolicyDecision(verdict=Verdict.ALLOW, reason="No sensitive content detected in output.")
             elif hasattr(self.engine, "evaluate_output"):
                 decision = self.engine.evaluate_output(req)
             else:
