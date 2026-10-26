@@ -44,6 +44,7 @@ class SecurityRuleAST:
     operator: str              # 'contains', 'endswith', 'startswith', 'equals', 'matches'
     value: str                 # Pattern or string value
     reason: str | None = None  # Optional explicit explanation
+    line_scope: str | None = None  # None (whole-value), 'any_line' (line-by-line), 'first_line' (header/shebang)
     compiled_regex: re.Pattern | None = None
 
     def __post_init__(self):
@@ -56,7 +57,8 @@ class SecurityRuleAST:
     def format_definition(self) -> str:
         """Format parsed AST details into a readable string representation."""
         action_name = self.action.value.upper()
-        match_desc = f"{self.param_name} {self.operator} '{self.value}'" if self.operator != "always" else "always"
+        scope_desc = f"{self.line_scope} " if self.line_scope else ""
+        match_desc = f"{scope_desc}{self.param_name} {self.operator} '{self.value}'" if self.operator != "always" else "always"
         reason_desc = f", reason='{self.reason}'" if self.reason else ""
         return f"action={action_name}, tool={self.tool or '*'}, match=({match_desc}){reason_desc}"
 
@@ -64,14 +66,29 @@ class SecurityRuleAST:
         req_tool = (request.tool or "").strip().lower()
         rule_tool = (self.tool or "").strip().lower()
 
-        # 1. Match tool (case-insensitive, with glob and base tool suffix support)
+        WRITE_TOOL_GROUP = {
+            "write_file", "replace_file_content", "patch_file", "multi_replace_file_content"
+        }
+        READ_TOOL_GROUP = {
+            "read_file", "file_info", "grep_search", "read_url"
+        }
+
+        # 1. Match tool (case-insensitive, with glob, tool groups, and base tool suffix support)
         if rule_tool and rule_tool not in ("any", "*", "all"):
-            if req_tool != rule_tool:
-                # Glob pattern (e.g. mcp__* or *postgres* or mcp__slack__*)
-                if not fnmatch.fnmatch(req_tool, rule_tool):
-                    # Suffix / base name matching (e.g. rule is "create_issue" and req_tool is "mcp__github__create_issue")
-                    if not (req_tool.endswith("__" + rule_tool) or req_tool.endswith(":" + rule_tool) or req_tool.endswith("." + rule_tool)):
-                        return False
+            matched_tool = False
+            if req_tool == rule_tool:
+                matched_tool = True
+            elif rule_tool == "write_file" and (req_tool in WRITE_TOOL_GROUP or any(req_tool.endswith("__" + w) for w in WRITE_TOOL_GROUP) or fnmatch.fnmatch(req_tool, "*write*")):
+                matched_tool = True
+            elif rule_tool == "read_file" and (req_tool in READ_TOOL_GROUP or any(req_tool.endswith("__" + r) for r in READ_TOOL_GROUP) or fnmatch.fnmatch(req_tool, "*read*")):
+                matched_tool = True
+            elif fnmatch.fnmatch(req_tool, rule_tool):
+                matched_tool = True
+            elif req_tool.endswith("__" + rule_tool) or req_tool.endswith(":" + rule_tool) or req_tool.endswith("." + rule_tool):
+                matched_tool = True
+
+            if not matched_tool:
+                return False
 
         if self.operator == "always":
             return True
@@ -83,12 +100,13 @@ class SecurityRuleAST:
             "path", "file", "target", "dir", "directory",
             "filename", "filepath", "targetpath", "targetfile",
             "source", "destination", "dest", "sourcefile", "destfile",
-            "sourcepath", "destpath", "cwd",
+            "sourcepath", "destpath", "cwd", "workdir", "workingdir", "paths",
         }
         content_synonyms = {
             "content", "contents", "body", "text", "data", "code",
             "codecontent", "replacementcontent", "targetcontent", "patch", "diff",
-            "payload",
+            "payload", "output", "result", "stdout", "response", "query",
+            "sql", "statement", "document", "message", "filecontent", "stdin",
         }
         command_synonyms = {
             "command", "cmd", "commandline", "script",
@@ -108,12 +126,15 @@ class SecurityRuleAST:
                         is_match = True
                     elif k_clean == target_clean:
                         is_match = True
-                    elif target_clean in ("content", "contents", "body", "text", "payload"):
+                    elif target_clean in content_synonyms:
                         if (
                             k_clean in content_synonyms
                             or k_clean.endswith("content")
                             or k_clean.endswith("text")
                             or k_clean.endswith("payload")
+                            or k_clean.endswith("code")
+                            or k_clean.endswith("data")
+                            or k_clean.endswith("body")
                         ):
                             is_match = True
                     elif target_clean in ("path", "file", "dir", "directory"):
@@ -150,6 +171,12 @@ class SecurityRuleAST:
             return results
 
         candidate_values = extract_values(params, self.param_name)
+        # If output is present (e.g. read_file output or post-execution tool egress), include it
+        if request.output:
+            target_clean = self.param_name.lower().replace("_", "").replace("-", "")
+            if target_clean in ("*", "any", "output") or target_clean in content_synonyms:
+                candidate_values.append(str(request.output))
+
         if not candidate_values:
             return False
 
@@ -157,11 +184,70 @@ class SecurityRuleAST:
         pat_lower = pat.lower()
         pat_collapsed = re.sub(r"\s+", " ", pat_lower).strip()
 
-        # 3. Match operator (all case-insensitive) across all candidate values
+        # Helper to evaluate an individual line
+        def match_single_line(line_str: str) -> bool:
+            line_clean = line_str.strip()
+            line_lower = line_clean.lower()
+            line_collapsed = re.sub(r"\s+", " ", line_lower).strip()
+
+            if self.operator == "contains":
+                return (pat_lower in line_lower) or (bool(pat_collapsed) and pat_collapsed in line_collapsed)
+            elif self.operator == "startswith":
+                if line_lower.startswith(pat_lower) or (bool(pat_collapsed) and line_collapsed.startswith(pat_collapsed)):
+                    return True
+                if pat_collapsed == "rm -rf":
+                    if re.search(
+                        r"^\s*rm\s+(?:-[a-zA-Z]*r[a-zA-Z]*f\b|-[a-zA-Z]*f[a-zA-Z]*r\b|-[a-zA-Z]*r\s+-[a-zA-Z]*f\b|-[a-zA-Z]*f\s+-[a-zA-Z]*r\b)",
+                        line_collapsed,
+                    ):
+                        return True
+                return False
+            elif self.operator == "endswith":
+                return line_lower.endswith(pat_lower) or (bool(pat_collapsed) and line_collapsed.endswith(pat_collapsed))
+            elif self.operator == "equals":
+                return line_lower == pat_lower or line_collapsed == pat_collapsed
+            elif self.operator == "matches":
+                if self.compiled_regex is not None:
+                    return bool(self.compiled_regex.search(line_str))
+                else:
+                    try:
+                        return bool(re.search(self.value, line_str, re.IGNORECASE))
+                    except re.error:
+                        return False
+            return False
+
+        # 3. Match operator across all candidate values
         for val_str in candidate_values:
             val_lower = val_str.lower()
             val_collapsed = re.sub(r"\s+", " ", val_lower).strip()
 
+            # 3A. First-line inspection (header / shebang check)
+            if self.line_scope == "first_line":
+                first_line = None
+                for raw_l in val_str.splitlines():
+                    s_l = raw_l.strip()
+                    if s_l:
+                        first_line = s_l
+                        break
+                if first_line and match_single_line(first_line):
+                    return True
+                continue
+
+            # 3B. Any-line inspection (line-by-line scanning)
+            if self.line_scope == "any_line":
+                # Fast-path check: if simple substring not in the whole text at all, skip line splitting
+                if self.operator in ("contains", "startswith", "endswith", "equals") and pat_lower:
+                    if pat_lower not in val_lower and (not pat_collapsed or pat_collapsed not in val_collapsed) and pat_collapsed != "rm -rf":
+                        continue
+
+                for raw_l in val_str.splitlines():
+                    if not raw_l.strip():
+                        continue
+                    if match_single_line(raw_l):
+                        return True
+                continue
+
+            # 3C. Whole-string matching (default when line_scope is None)
             if self.operator == "contains":
                 if pat_lower in val_lower or (pat_collapsed and pat_collapsed in val_collapsed):
                     return True
@@ -311,18 +397,56 @@ class SecurityDSLParser:
         operator = "contains"
         val = ""
         param_name = default_param
+        line_scope = None
 
+        # Check line-scoped qualifier:
+        # e.g.: "where line starts with 'rm '", "where any line contains 'abc'",
+        # "where first line starts with '#!'", "where header contains 'RESTRICTED'",
+        # "where line in content starts with 'rm '", "with line containing 'foo'"
+        m_line_scoped = re.match(
+            r'^(?:where|with|if|that|which)?\s*'
+            r'(any\s+line|first\s+line|header|line)\s+'
+            r'(?:in\s+([a-zA-Z0-9_\.\-]+)\s+)?'
+            r'(contains|containing|ends\s+with|ending\s+with|starts\s+with|starting\s+with|equals|is|matches|matching)\s+'
+            r'(?:["\']([^"\']+)["\']|(\S+))',
+            rest,
+            re.IGNORECASE,
+        )
+        if m_line_scoped:
+            scope_raw = m_line_scoped.group(1).lower()
+            line_scope = "first_line" if ("first" in scope_raw or "header" in scope_raw) else "any_line"
+            in_field = m_line_scoped.group(2)
+            param_name = in_field.lower() if in_field else ("content" if default_param in ("*", "path") else default_param)
+            op_raw = m_line_scoped.group(3).lower()
+            val = (m_line_scoped.group(4) or m_line_scoped.group(5)).strip()
+            if "starts" in op_raw or "starting" in op_raw:
+                operator = "startswith"
+            elif "ends" in op_raw or "ending" in op_raw:
+                operator = "endswith"
+            elif "matches" in op_raw or "matching" in op_raw:
+                operator = "matches"
+            elif op_raw in ("equals", "is"):
+                operator = "equals"
+            else:
+                operator = "contains"
         # Check explicit parameter name:
         # - where <param> contains ..., where any field contains ..., where * contains ...
-        m_param_explicit = re.match(
+        elif re.match(
             r'^(?:where|with|if|that|which)?\s*(?:(?:the\s+)?(?:field|parameter|param|arg|argument)\s+)?'
             r'(any\s+(?:field|parameter|param|arg|argument)|\*|(?!that\b|which\b|where\b|with\b|if\b|the\b|field\b|param\b|parameter\b|arg\b|argument\b|contains\b|containing\b|ends\b|ending\b|starts\b|starting\b|equals\b|matches\b|is\b)[a-zA-Z0-9_\.\-]+)\s+'
             r'(contains|ends with|ending with|starts with|starting with|equals|is|matches)\s+'
             r'(?:["\']([^"\']+)["\']|(\S+))',
             rest,
             re.IGNORECASE,
-        )
-        if m_param_explicit:
+        ):
+            m_param_explicit = re.match(
+                r'^(?:where|with|if|that|which)?\s*(?:(?:the\s+)?(?:field|parameter|param|arg|argument)\s+)?'
+                r'(any\s+(?:field|parameter|param|arg|argument)|\*|(?!that\b|which\b|where\b|with\b|if\b|the\b|field\b|param\b|parameter\b|arg\b|argument\b|contains\b|containing\b|ends\b|ending\b|starts\b|starting\b|equals\b|matches\b|is\b)[a-zA-Z0-9_\.\-]+)\s+'
+                r'(contains|ends with|ending with|starts with|starting with|equals|is|matches)\s+'
+                r'(?:["\']([^"\']+)["\']|(\S+))',
+                rest,
+                re.IGNORECASE,
+            )
             raw_param = m_param_explicit.group(1).lower()
             if raw_param.startswith("any") or raw_param == "*":
                 param_name = "*"
@@ -414,4 +538,5 @@ class SecurityDSLParser:
             operator=operator,
             value=val,
             reason=reason,
+            line_scope=line_scope,
         )

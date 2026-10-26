@@ -224,23 +224,48 @@ class BuiltinPolicyEngine(BasePolicyEngine):
             "replace_file_content",
             "patch_file",
             "find_files",
-        ):
+        ) or tool.startswith("mcp__"):
             candidate_paths: list[str] = []
             path_keys = {
                 "path", "file", "target", "dir", "directory",
                 "filename", "filepath", "targetpath", "targetfile",
                 "source", "destination", "dest", "sourcefile", "destfile",
-                "sourcepath", "destpath",
+                "sourcepath", "destpath", "cwd", "workdir", "workingdir", "paths",
             }
-            for k, v in params.items():
-                k_clean = k.lower().replace("_", "").replace("-", "")
-                if (
-                    k_clean in path_keys
-                    or k_clean.endswith("path")
-                    or k_clean.endswith("file")
-                    or k_clean.endswith("dir")
-                ) and isinstance(v, str):
-                    candidate_paths.append(v)
+            def extract_paths_recursive(data: Any, depth: int = 0):
+                if depth > 10:
+                    return
+                if isinstance(data, dict):
+                    for k, v in data.items():
+                        k_clean = k.lower().replace("_", "").replace("-", "")
+                        is_path_field = (
+                            k_clean in path_keys
+                            or k_clean.endswith("path")
+                            or k_clean.endswith("file")
+                            or k_clean.endswith("dir")
+                            or k_clean.endswith("workdir")
+                        )
+                        if is_path_field:
+                            if isinstance(v, str):
+                                candidate_paths.append(v)
+                            elif isinstance(v, list):
+                                for item in v:
+                                    if isinstance(item, str):
+                                        candidate_paths.append(item)
+                                    elif isinstance(item, (dict, list)):
+                                        extract_paths_recursive(item, depth + 1)
+                            elif isinstance(v, dict):
+                                extract_paths_recursive(v, depth + 1)
+                        elif isinstance(v, (dict, list)):
+                            extract_paths_recursive(v, depth + 1)
+                elif isinstance(data, list):
+                    for item in data:
+                        if isinstance(item, str):
+                            candidate_paths.append(item)
+                        elif isinstance(item, (dict, list)):
+                            extract_paths_recursive(item, depth + 1)
+
+            extract_paths_recursive(params)
 
             for target_path in candidate_paths:
                 abs_path = os.path.abspath(os.path.expanduser(target_path))
@@ -291,6 +316,59 @@ class BuiltinPolicyEngine(BasePolicyEngine):
                             if self.debug:
                                 print(f"[Security Debug] [SPECIAL DENY] Tier 0 Protected Path: '{target_path}' -> {decision.reason}")
                             return decision
+
+            # Tier 0: Pre-write secret scanner floor check on file-modifying tools
+            is_write_tool = (
+                tool in ("write_file", "replace_file_content", "patch_file", "multi_replace_file_content")
+                or any(w in tool for w in ("write", "replace", "patch", "create_file", "update_file"))
+            )
+            if is_write_tool and params:
+                candidate_contents: list[str] = []
+                content_keys = {
+                    "content", "contents", "text", "body", "code", "codecontent",
+                    "replacementcontent", "targetcontent", "patch", "diff", "payload",
+                    "data", "document", "filecontent",
+                }
+                def extract_write_contents(data: Any, depth: int = 0):
+                    if depth > 10:
+                        return
+                    if isinstance(data, dict):
+                        for k, v in data.items():
+                            k_clean = k.lower().replace("_", "").replace("-", "")
+                            if (
+                                k_clean in content_keys
+                                or k_clean.endswith("content")
+                                or k_clean.endswith("text")
+                                or k_clean.endswith("code")
+                                or k_clean.endswith("payload")
+                            ) and isinstance(v, (str, int, float)):
+                                candidate_contents.append(str(v))
+                            elif isinstance(v, (dict, list)):
+                                extract_write_contents(v, depth + 1)
+                    elif isinstance(data, list):
+                        for item in data:
+                            extract_write_contents(item, depth + 1)
+
+                extract_write_contents(params)
+                scanner = self._output_scanner or self._default_output_scanner
+                if scanner is None:
+                    self._default_output_scanner = SecretScanner()
+                    scanner = self._default_output_scanner
+                for c_val in candidate_contents:
+                    match = scanner.scan(c_val)
+                    if match:
+                        verdict, reason = match
+                        prompt_details = None
+                        if verdict == Verdict.ASK:
+                            prompt_details = PolicyPromptDetails(
+                                title=f"Sensitive Data in {tool_raw}",
+                                message=f"Pre-write inspection detected potential sensitive data: {reason}. Allow file write?",
+                                risk_level="high",
+                            )
+                        decision = PolicyDecision(verdict=verdict, reason=f"Pre-write inspection: {reason}", prompt_details=prompt_details)
+                        if self.debug:
+                            print(f"[Security Debug] [PRE-WRITE FLOOR] '{tool_raw}' matched {reason} -> {verdict.value.upper()}")
+                        return decision
 
         if tool == "run_command":
             # Tier 0: Direct check against Chatybot sub-process execution
@@ -456,6 +534,33 @@ class BuiltinPolicyEngine(BasePolicyEngine):
                 reason=f"Builtin output rule: {reason}",
                 prompt_details=details,
             )
+
+        # 2. Evaluate output DSL rules against the output request
+        for dsl_rule in self.deny_dsl_rules:
+            if dsl_rule.matches(request):
+                reason = dsl_rule.reason or f"Matched output security DSL rule: '{dsl_rule.raw_text}'"
+                if self.debug:
+                    print(f"[Security Debug] [OUTPUT DENY] '{request.tool}' -> {reason}")
+                return PolicyDecision(verdict=Verdict.DENY, reason=reason)
+
+        for dsl_rule in self.ask_dsl_rules:
+            if dsl_rule.matches(request):
+                reason = dsl_rule.reason or f"Matched output security DSL rule: '{dsl_rule.raw_text}'"
+                if self.debug:
+                    print(f"[Security Debug] [OUTPUT ASK] '{request.tool}' -> {reason}")
+                details = PolicyPromptDetails(
+                    title=f"Security Policy: {dsl_rule.action.value.upper()}",
+                    message=f"Output from '{request.tool}' matched rule: '{dsl_rule.raw_text}'",
+                    risk_level="high",
+                )
+                return PolicyDecision(verdict=Verdict.ASK, reason=reason, prompt_details=details)
+
+        for dsl_rule in self.allow_dsl_rules:
+            if dsl_rule.matches(request):
+                reason = dsl_rule.reason or f"Matched output security DSL rule: '{dsl_rule.raw_text}'"
+                if self.debug:
+                    print(f"[Security Debug] [OUTPUT ALLOW] '{request.tool}' -> {reason}")
+                return PolicyDecision(verdict=Verdict.ALLOW, reason=reason)
 
         return PolicyDecision(verdict=Verdict.ALLOW, reason="No sensitive content detected in output.")
 

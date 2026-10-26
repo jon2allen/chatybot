@@ -116,6 +116,185 @@ pub fn canonicalize_path_if_exists(path: &str) -> Vec<String> {
     results
 }
 
+pub fn extract_content_from_map(map: &HashMap<String, serde_json::Value>, out: &mut Vec<String>) {
+    extract_content_from_map_depth(map, out, 0);
+}
+
+fn extract_content_from_map_depth(map: &HashMap<String, serde_json::Value>, out: &mut Vec<String>, depth: usize) {
+    if depth > 15 {
+        return;
+    }
+    for (k, v) in map {
+        let k_clean = k.to_lowercase().replace('_', "").replace('-', "");
+        let is_content_key = [
+            "content", "contents", "text", "codecontent", "replacementcontent",
+            "targetcontent", "data", "body", "payload", "patch", "diff",
+            "query", "sql", "statement", "document", "message", "output", "result", "stdin",
+        ]
+        .iter()
+        .any(|ck| ck.replace('_', "") == k_clean)
+            || k_clean.ends_with("content")
+            || k_clean.ends_with("text")
+            || k_clean.ends_with("payload")
+            || k_clean.ends_with("stdin");
+
+        if is_content_key {
+            if let Some(s) = v.as_str() {
+                out.push(s.to_string());
+            } else {
+                extract_content_from_json_depth(v, out, depth + 1);
+            }
+        } else {
+            extract_content_from_json_depth(v, out, depth + 1);
+        }
+    }
+}
+
+pub fn extract_content_from_json(val: &serde_json::Value, out: &mut Vec<String>) {
+    extract_content_from_json_depth(val, out, 0);
+}
+
+fn extract_content_from_json_depth(val: &serde_json::Value, out: &mut Vec<String>, depth: usize) {
+    if depth > 15 {
+        return;
+    }
+    match val {
+        serde_json::Value::String(_) => {}
+        serde_json::Value::Array(arr) => {
+            for item in arr {
+                if let Some(s) = item.as_str() {
+                    out.push(s.to_string());
+                } else {
+                    extract_content_from_json_depth(item, out, depth + 1);
+                }
+            }
+        }
+        serde_json::Value::Object(map) => {
+            for (k, v) in map {
+                let k_clean = k.to_lowercase().replace('_', "").replace('-', "");
+                let is_content_key = [
+                    "content", "contents", "text", "codecontent", "replacementcontent",
+                    "targetcontent", "data", "body", "payload", "patch", "diff",
+                    "query", "sql", "statement", "document", "message", "output", "result", "stdin",
+                ]
+                .iter()
+                .any(|ck| ck.replace('_', "") == k_clean)
+                    || k_clean.ends_with("content")
+                    || k_clean.ends_with("text")
+                    || k_clean.ends_with("payload")
+                    || k_clean.ends_with("stdin");
+
+                if is_content_key {
+                    if let Some(s) = v.as_str() {
+                        out.push(s.to_string());
+                    } else {
+                        extract_content_from_json_depth(v, out, depth + 1);
+                    }
+                } else {
+                    extract_content_from_json_depth(v, out, depth + 1);
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+pub fn extract_paths_from_map(map: &HashMap<String, serde_json::Value>, out: &mut Vec<String>) {
+    extract_paths_from_map_depth(map, out, 0);
+}
+
+fn extract_paths_from_map_depth(map: &HashMap<String, serde_json::Value>, out: &mut Vec<String>, depth: usize) {
+    if depth > 15 {
+        return;
+    }
+    for (k, v) in map {
+        let k_clean = k.to_lowercase().replace('_', "").replace('-', "");
+        let is_path_key = [
+            "path", "filepath", "target", "cwd", "workdir", "workingdir",
+            "directory", "dir", "filename", "destination", "source",
+            "sourcefile", "destfile", "sourcepath", "destpath", "file",
+        ]
+        .iter()
+        .any(|pk| pk.replace('_', "") == k_clean)
+            || k_clean.ends_with("path")
+            || k_clean.ends_with("file")
+            || k_clean.ends_with("dir")
+            || k_clean.ends_with("target")
+            || k_clean.ends_with("workdir");
+
+        if is_path_key {
+            if let Some(s) = v.as_str() {
+                out.push(s.to_string());
+            } else if let Some(arr) = v.as_array() {
+                for item in arr {
+                    if let Some(s) = item.as_str() {
+                        out.push(s.to_string());
+                    } else {
+                        extract_paths_from_json_depth(item, out, depth + 1);
+                    }
+                }
+            } else {
+                extract_paths_from_json_depth(v, out, depth + 1);
+            }
+        } else {
+            extract_paths_from_json_depth(v, out, depth + 1);
+        }
+    }
+}
+
+fn extract_paths_from_json_depth(val: &serde_json::Value, out: &mut Vec<String>, depth: usize) {
+    if depth > 15 {
+        return;
+    }
+    match val {
+        serde_json::Value::Array(arr) => {
+            for item in arr {
+                if let Some(s) = item.as_str() {
+                    out.push(s.to_string());
+                } else {
+                    extract_paths_from_json_depth(item, out, depth + 1);
+                }
+            }
+        }
+        serde_json::Value::Object(map) => {
+            for (k, v) in map {
+                let k_clean = k.to_lowercase().replace('_', "").replace('-', "");
+                let is_path_key = [
+                    "path", "filepath", "target", "cwd", "workdir", "workingdir",
+                    "directory", "dir", "filename", "destination", "source",
+                    "sourcefile", "destfile", "sourcepath", "destpath", "file",
+                ]
+                .iter()
+                .any(|pk| pk.replace('_', "") == k_clean)
+                    || k_clean.ends_with("path")
+                    || k_clean.ends_with("file")
+                    || k_clean.ends_with("dir")
+                    || k_clean.ends_with("target")
+                    || k_clean.ends_with("workdir");
+
+                if is_path_key {
+                    if let Some(s) = v.as_str() {
+                        out.push(s.to_string());
+                    } else if let Some(arr) = v.as_array() {
+                        for item in arr {
+                            if let Some(s) = item.as_str() {
+                                out.push(s.to_string());
+                            } else {
+                                extract_paths_from_json_depth(item, out, depth + 1);
+                            }
+                        }
+                    } else {
+                        extract_paths_from_json_depth(v, out, depth + 1);
+                    }
+                } else {
+                    extract_paths_from_json_depth(v, out, depth + 1);
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Profile {
     pub class: ResourceClass,
@@ -194,8 +373,23 @@ impl Profile {
                 if glob_match(&normalized_pattern, &res_lower) {
                     return true;
                 }
+                // Fast-path: if pattern has a literal substring (>= 3 chars), check if it exists in res_lower
+                let literal_parts: Vec<&str> = pat_lower
+                    .split(|c| c == '*' || c == '?')
+                    .map(|s| s.trim())
+                    .filter(|s| s.len() >= 3)
+                    .collect();
+                if let Some(longest_needle) = literal_parts.iter().max_by_key(|s| s.len()) {
+                    if !res_lower.contains(*longest_needle) {
+                        return false;
+                    }
+                }
                 for line in res_lower.lines() {
-                    if glob_match(&pat_lower, line) {
+                    let trimmed = line.trim();
+                    if trimmed.is_empty() {
+                        continue;
+                    }
+                    if glob_match(&normalized_pattern, trimmed) || glob_match(&normalized_pattern, line) {
                         return true;
                     }
                 }
@@ -671,51 +865,27 @@ impl RacfEngine {
         ));
 
         // 2. Evaluate DIR class if path-related parameters are present
-        let path_keys = [
-            "path",
-            "filepath",
-            "file_path",
-            "target",
-            "cwd",
-            "directory",
-            "dir",
-            "filename",
-            "destination",
-            "source",
-            "sourcefile",
-            "destfile",
-            "sourcepath",
-            "destpath",
-            "file",
-        ];
-        let mut sorted_param_keys: Vec<&String> = request.parameters.keys().collect();
-        sorted_param_keys.sort();
-        for key in sorted_param_keys {
-            let key_lower = key.to_lowercase();
-            let is_path_key = path_keys.contains(&key_lower.as_str())
-                || key_lower.ends_with("path")
-                || key_lower.ends_with("file")
-                || key_lower.ends_with("dir")
-                || key_lower.ends_with("target");
-            if is_path_key {
-                if let Some(val_str) = request.parameters.get(key).and_then(|v| v.as_str()) {
-                    let mut candidate_paths = vec![val_str.to_string()];
-                    for canon in canonicalize_path_if_exists(val_str) {
-                        if !candidate_paths.contains(&canon) {
-                            candidate_paths.push(canon);
-                        }
-                    }
-                    for path_to_eval in candidate_paths {
-                        let (dir_acc, dir_reason) =
-                            self.evaluate_resource_trace(&user, &ResourceClass::Dir, &path_to_eval, &mut t_opt);
-                        evaluations.push((
-                            ResourceClass::Dir,
-                            path_to_eval,
-                            dir_acc,
-                            dir_reason,
-                        ));
-                    }
+        let mut raw_paths = Vec::new();
+        extract_paths_from_map(&request.parameters, &mut raw_paths);
+        raw_paths.sort();
+        raw_paths.dedup();
+
+        for val_str in raw_paths {
+            let mut candidate_paths = vec![val_str.clone()];
+            for canon in canonicalize_path_if_exists(&val_str) {
+                if !candidate_paths.contains(&canon) {
+                    candidate_paths.push(canon);
                 }
+            }
+            for path_to_eval in candidate_paths {
+                let (dir_acc, dir_reason) =
+                    self.evaluate_resource_trace(&user, &ResourceClass::Dir, &path_to_eval, &mut t_opt);
+                evaluations.push((
+                    ResourceClass::Dir,
+                    path_to_eval,
+                    dir_acc,
+                    dir_reason,
+                ));
             }
         }
 
@@ -747,51 +917,12 @@ impl RacfEngine {
 
         // 4. Evaluate CONTENT class (LLM Security Innovation: Payload & Content Inspection)
         if self.profiles.contains_key(&ResourceClass::Content) {
-            let content_keys = [
-                "content",
-                "contents",
-                "text",
-                "codecontent",
-                "code_content",
-                "replacementcontent",
-                "replacement_content",
-                "targetcontent",
-                "target_content",
-                "data",
-                "body",
-                "payload",
-                "patch",
-                "diff",
-            ];
             let mut candidate_contents: Vec<String> = Vec::new();
-            for (key, val) in &request.parameters {
-                let key_clean = key.to_lowercase().replace('_', "").replace('-', "");
-                let is_content_key = content_keys
-                    .iter()
-                    .any(|ck| ck.replace('_', "") == key_clean)
-                    || key_clean.ends_with("content")
-                    || key_clean.ends_with("text")
-                    || key_clean.ends_with("payload");
+            extract_content_from_map(&request.parameters, &mut candidate_contents);
 
-                if is_content_key {
-                    if let Some(s) = val.as_str() {
-                        candidate_contents.push(s.to_string());
-                    }
-                } else if key_clean == "replacementchunks" {
-                    if let Some(arr) = val.as_array() {
-                        for item in arr {
-                            if let Some(obj) = item.as_object() {
-                                for (chunk_k, chunk_v) in obj {
-                                    let chunk_k_clean = chunk_k.to_lowercase().replace('_', "");
-                                    if chunk_k_clean.contains("content") {
-                                        if let Some(s) = chunk_v.as_str() {
-                                            candidate_contents.push(s.to_string());
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
+            if let Some(out_str) = &request.output {
+                if !out_str.trim().is_empty() {
+                    candidate_contents.push(out_str.clone());
                 }
             }
 
@@ -999,14 +1130,7 @@ mod tests {
         let mut engine = RacfEngine::new();
         engine.load_statements(stmts);
 
-        let mut req = PolicyRequest {
-            tool: "run_command".to_string(),
-            parameters: HashMap::new(),
-            context: HashMap::new(),
-            version: None,
-            request_id: None,
-            timestamp: None,
-        };
+        let mut req = PolicyRequest::new("run_command");
         req.parameters.insert(
             "command".to_string(),
             serde_json::Value::String("git status".to_string()),
@@ -1115,28 +1239,14 @@ mod tests {
         engine.load_statements(stmts);
 
         // 1. Safe write passes
-        let mut req_safe = PolicyRequest {
-            tool: "write_file".to_string(),
-            parameters: HashMap::new(),
-            context: HashMap::new(),
-            version: None,
-            request_id: None,
-            timestamp: None,
-        };
+        let mut req_safe = PolicyRequest::new("write_file");
         req_safe.parameters.insert("path".to_string(), serde_json::Value::String("hello.txt".to_string()));
         req_safe.parameters.insert("content".to_string(), serde_json::Value::String("Hello world from unit test".to_string()));
         let dec_safe = engine.evaluate_request(&req_safe);
         assert_eq!(dec_safe.status, "allow");
 
         // 2. Writing content with api_key is blocked
-        let mut req_leak = PolicyRequest {
-            tool: "write_file".to_string(),
-            parameters: HashMap::new(),
-            context: HashMap::new(),
-            version: None,
-            request_id: None,
-            timestamp: None,
-        };
+        let mut req_leak = PolicyRequest::new("write_file");
         req_leak.parameters.insert("path".to_string(), serde_json::Value::String("app.env".to_string()));
         req_leak.parameters.insert("content".to_string(), serde_json::Value::String("export my_api_key=sk-123456789".to_string()));
         let dec_leak = engine.evaluate_request(&req_leak);
@@ -1144,14 +1254,7 @@ mod tests {
         assert!(dec_leak.reason.contains("CONTENT"));
 
         // 3. Multi-line content with private key header is blocked
-        let mut req_key = PolicyRequest {
-            tool: "write_file".to_string(),
-            parameters: HashMap::new(),
-            context: HashMap::new(),
-            version: None,
-            request_id: None,
-            timestamp: None,
-        };
+        let mut req_key = PolicyRequest::new("write_file");
         req_key.parameters.insert("path".to_string(), serde_json::Value::String("id_rsa".to_string()));
         req_key.parameters.insert("content".to_string(), serde_json::Value::String("-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQ...\n-----END RSA PRIVATE KEY-----".to_string()));
         let dec_key = engine.evaluate_request(&req_key);
@@ -1195,14 +1298,7 @@ mod tests {
         let mut engine = RacfEngine::new();
         engine.load_statements(stmts);
 
-        let mut req = PolicyRequest {
-            tool: "write_file".to_string(),
-            parameters: HashMap::new(),
-            context: HashMap::new(),
-            version: None,
-            request_id: None,
-            timestamp: None,
-        };
+        let mut req = PolicyRequest::new("write_file");
         req.context.insert("user".to_string(), serde_json::Value::String("alice".to_string()));
 
         // 1. Outside approved areas -> DENY
@@ -1281,14 +1377,7 @@ mod tests {
         let mut engine = RacfEngine::new();
         engine.load_statements(stmts);
 
-        let mut req = PolicyRequest {
-            tool: "write_file".to_string(),
-            parameters: HashMap::new(),
-            context: HashMap::new(),
-            version: None,
-            request_id: None,
-            timestamp: None,
-        };
+        let mut req = PolicyRequest::new("write_file");
         req.context.insert("user".to_string(), serde_json::Value::String("alice".to_string()));
 
         let home = dirs_home().unwrap_or_else(|| "/Users/alice".to_string());
@@ -1344,14 +1433,7 @@ mod tests {
         engine.load_statements(stmts);
 
         // 1. Worker task allowed
-        let mut req = PolicyRequest {
-            tool: "manage_task".to_string(),
-            parameters: HashMap::new(),
-            context: HashMap::new(),
-            version: None,
-            request_id: None,
-            timestamp: None,
-        };
+        let mut req = PolicyRequest::new("manage_task");
         req.context.insert("user".to_string(), serde_json::Value::String("alice".to_string()));
         req.parameters.insert("task_id".to_string(), serde_json::Value::String("worker_job1".to_string()));
         assert_eq!(engine.evaluate_request(&req).status, "allow");
@@ -1361,14 +1443,7 @@ mod tests {
         assert_eq!(engine.evaluate_request(&req).status, "deny");
 
         // 3. Process PID 1 via command kill -9 1 denied
-        let mut req_cmd = PolicyRequest {
-            tool: "run_command".to_string(),
-            parameters: HashMap::new(),
-            context: HashMap::new(),
-            version: None,
-            request_id: None,
-            timestamp: None,
-        };
+        let mut req_cmd = PolicyRequest::new("run_command");
         req_cmd.context.insert("user".to_string(), serde_json::Value::String("alice".to_string()));
         req_cmd.parameters.insert("command".to_string(), serde_json::Value::String("kill -9 1".to_string()));
         assert_eq!(engine.evaluate_request(&req_cmd).status, "deny");
@@ -1376,6 +1451,82 @@ mod tests {
         // 4. Allowed PID 12345
         req_cmd.parameters.insert("command".to_string(), serde_json::Value::String("kill -15 12345".to_string()));
         assert_eq!(engine.evaluate_request(&req_cmd).status, "allow");
+    }
+
+    #[test]
+    fn test_racf_line_by_line_and_mcp_content_scan() {
+        let mut engine = RacfEngine::new();
+        let policy = r#"
+            RDEFINE FACILITY * UACC(ALLOW)
+            RDEFINE DIR ** UACC(ALLOW)
+            RDEFINE DIR ./** UACC(ALLOW)
+            RDEFINE CONTENT * UACC(ALLOW)
+            RDEFINE CONTENT 'rm *' UACC(DENY)
+            RDEFINE CONTENT '#!*' UACC(DENY)
+            RDEFINE CONTENT '*DROP TABLE*' UACC(DENY)
+            RDEFINE CONTENT '*CONFIDENTIAL_DATA*' UACC(DENY)
+        "#;
+        let stmts = parse_racf_script(policy).unwrap();
+        engine.load_statements(stmts);
+
+        // 1. Indented line with 'rm -rf /' matches 'rm *' via trimmed line match -> DENY
+        let mut req_write = PolicyRequest::new("write_file");
+        req_write.parameters.insert("path".to_string(), serde_json::Value::String("script.sh".to_string()));
+        req_write.parameters.insert("content".to_string(), serde_json::Value::String("function cleanup() {\n    rm -rf /tmp/test\n}".to_string()));
+        let dec = engine.evaluate_request(&req_write);
+        assert_eq!(dec.status, "deny");
+        assert!(dec.reason.contains("CONTENT"));
+
+        // 2. Shebang header line matches '#!*' -> DENY
+        let mut req_shebang = PolicyRequest::new("write_file");
+        req_shebang.parameters.insert("path".to_string(), serde_json::Value::String("run.sh".to_string()));
+        req_shebang.parameters.insert("content".to_string(), serde_json::Value::String("#!/bin/bash\necho hello world\n".to_string()));
+        assert_eq!(engine.evaluate_request(&req_shebang).status, "deny");
+
+        // 3. MCP tool with nested payload -> DENY
+        let mut req_mcp = PolicyRequest::new("mcp__postgres__execute");
+        let mut mcp_args = serde_json::Map::new();
+        mcp_args.insert("query".to_string(), serde_json::Value::String("DROP TABLE users;".to_string()));
+        req_mcp.parameters.insert("arguments".to_string(), serde_json::Value::Object(mcp_args));
+        assert_eq!(engine.evaluate_request(&req_mcp).status, "deny");
+
+        // 4. Output evaluation (read output post-execution) -> DENY
+        let mut req_out = PolicyRequest::new("read_file");
+        req_out.parameters.insert("path".to_string(), serde_json::Value::String("doc.txt".to_string()));
+        req_out.output = Some("Here is your report:\nCONFIDENTIAL_DATA: 998877\nEnd.".to_string());
+        req_out.phase = Some("output".to_string());
+        let dec_out = engine.evaluate_request(&req_out);
+        assert_eq!(dec_out.status, "deny");
+        assert!(dec_out.reason.contains("CONTENT"));
+
+        // 5. Hardened DIR check: MCP nested workdir in denied path -> DENY
+        let policy_dir = r#"
+            RDEFINE FACILITY * UACC(ALLOW)
+            RDEFINE DIR /** UACC(DENY)
+            RDEFINE DIR /tmp/** UACC(ALLOW)
+        "#;
+        let mut engine_dir = RacfEngine::new();
+        engine_dir.load_statements(parse_racf_script(policy_dir).unwrap());
+
+        let mut req_workdir = PolicyRequest::new("mcp__terminal__exec");
+        let mut wd_args = serde_json::Map::new();
+        wd_args.insert("workdir".to_string(), serde_json::Value::String("/etc/cron.d".to_string()));
+        req_workdir.parameters.insert("arguments".to_string(), serde_json::Value::Object(wd_args));
+        let dec_wd = engine_dir.evaluate_request(&req_workdir);
+        assert_eq!(dec_wd.status, "deny");
+        assert!(dec_wd.reason.contains("DIR"));
+
+        // 6. Hardened DIR check: MCP array of paths containing denied path -> DENY
+        let mut req_paths = PolicyRequest::new("mcp__filesystem__read_multiple");
+        let mut paths_args = serde_json::Map::new();
+        paths_args.insert("paths".to_string(), serde_json::Value::Array(vec![
+            serde_json::Value::String("/tmp/safe.txt".to_string()),
+            serde_json::Value::String("/var/secret.txt".to_string()),
+        ]));
+        req_paths.parameters.insert("arguments".to_string(), serde_json::Value::Object(paths_args));
+        let dec_paths = engine_dir.evaluate_request(&req_paths);
+        assert_eq!(dec_paths.status, "deny");
+        assert!(dec_paths.reason.contains("DIR"));
     }
 }
 
