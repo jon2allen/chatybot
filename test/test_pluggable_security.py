@@ -3023,3 +3023,167 @@ def test_mcp_hardened_workdir_paths_and_stdin():
     dec_stdin = engine.evaluate(req_stdin)
     assert dec_stdin.verdict == Verdict.DENY
     assert "SECRET_PASSWORD" in dec_stdin.reason
+
+
+def test_chatybot_subprocess_default_deny(monkeypatch):
+    """Verify that Chatybot subprocess execution is DENIED by default in BuiltinPolicyEngine."""
+    monkeypatch.delenv("CHATYBOT_ALLOW_SUBPROCESS", raising=False)
+    engine = BuiltinPolicyEngine()
+    req = PolicyRequest(
+        tool="run_command",
+        parameters={"command": "chatybot --help"},
+    )
+    dec = engine.evaluate(req)
+    assert dec.verdict == Verdict.DENY
+    assert "strictly denied by policy" in dec.reason
+
+    # Python module execution
+    req_py = PolicyRequest(
+        tool="run_command",
+        parameters={"command": "python -m chatybot --version"},
+    )
+    dec_py = engine.evaluate(req_py)
+    assert dec_py.verdict == Verdict.DENY
+
+    # Bare subshell invocation (chatybot ...)
+    req_subshell = PolicyRequest(
+        tool="run_command",
+        parameters={"command": "(chatybot --version)"},
+    )
+    dec_subshell = engine.evaluate(req_subshell)
+    assert dec_subshell.verdict == Verdict.DENY
+    assert "strictly denied by policy" in dec_subshell.reason
+
+    # Nested subshell invocations ((chatybot)) and (((chatybot --version)))
+    for nested_cmd in ["((chatybot))", "(((chatybot --version)))", "( ( chatybot ) )"]:
+        req_nested = PolicyRequest(tool="run_command", parameters={"command": nested_cmd})
+        dec_nested = engine.evaluate(req_nested)
+        assert dec_nested.verdict == Verdict.DENY, f"Failed to deny nested subshell: {nested_cmd}"
+        assert "strictly denied by policy" in dec_nested.reason
+
+
+def test_chatybot_subprocess_allow_and_ask_policies(monkeypatch):
+    """Verify that chatybot_exec_policy='allow' and 'ask' operate as expected."""
+    monkeypatch.delenv("CHATYBOT_ALLOW_SUBPROCESS", raising=False)
+    # 1. ALLOW policy
+    engine_allow = BuiltinPolicyEngine(chatybot_exec_policy="allow")
+    req = PolicyRequest(
+        tool="run_command",
+        parameters={"command": "chatybot --version"},
+    )
+    dec = engine_allow.evaluate(req)
+    # Default tool rule for run_command is "ask", but Tier 0 chatybot check passed through!
+    # Let's verify it didn't get blocked with "strictly denied by policy"
+    assert dec.verdict != Verdict.DENY
+    assert "strictly denied by policy" not in dec.reason
+
+    # 2. ASK policy
+    engine_ask = BuiltinPolicyEngine(chatybot_exec_policy="ask")
+    dec_ask = engine_ask.evaluate(req)
+    assert dec_ask.verdict == Verdict.ASK
+    assert "recursive privilege escalation or loops" in dec_ask.reason
+    assert dec_ask.prompt_details is not None
+    assert "Chatybot sub-process" in dec_ask.prompt_details.message
+    assert dec_ask.prompt_details.risk_level == "high"
+
+    # 3. allow_chatybot_subprocess boolean alias maps to ALLOW (not ask)
+    engine_alias = BuiltinPolicyEngine(allow_chatybot_subprocess=True)
+    dec_alias = engine_alias.evaluate(req)
+    assert dec_alias.verdict != Verdict.DENY
+    assert engine_alias.chatybot_exec_policy == "allow"
+
+    # 4. allow_chatybot_subprocess=False maps to DENY
+    engine_alias_deny = BuiltinPolicyEngine(allow_chatybot_subprocess=False)
+    dec_alias_deny = engine_alias_deny.evaluate(req)
+    assert dec_alias_deny.verdict == Verdict.DENY
+
+
+def test_chatybot_subprocess_env_override(monkeypatch):
+    """Verify that CHATYBOT_ALLOW_SUBPROCESS env var overrides policy unless allow_env_override=False."""
+    engine = BuiltinPolicyEngine(chatybot_exec_policy="deny")
+    req = PolicyRequest(
+        tool="run_command",
+        parameters={"command": "chatybot --version"},
+    )
+
+    # 1. Env override to allow
+    monkeypatch.setenv("CHATYBOT_ALLOW_SUBPROCESS", "1")
+    dec = engine.evaluate(req)
+    assert dec.verdict != Verdict.DENY
+
+    # 2. Env override to ask
+    monkeypatch.setenv("CHATYBOT_ALLOW_SUBPROCESS", "ask")
+    dec_ask = engine.evaluate(req)
+    assert dec_ask.verdict == Verdict.ASK
+    assert "recursive privilege escalation or loops" in dec_ask.reason
+
+    # 3. allow_env_override = False locks out env override
+    engine_locked = BuiltinPolicyEngine(chatybot_exec_policy="deny", allow_env_override=False)
+    monkeypatch.setenv("CHATYBOT_ALLOW_SUBPROCESS", "1")
+    dec_locked = engine_locked.evaluate(req)
+    assert dec_locked.verdict == Verdict.DENY
+    assert "strictly denied by policy" in dec_locked.reason
+
+
+def test_chatybot_subprocess_security_manager_integration(tmp_path, monkeypatch):
+    """Verify SecurityManager and ChatybotApp preserve chatybot_exec_policy from security.toml."""
+    monkeypatch.delenv("CHATYBOT_ALLOW_SUBPROCESS", raising=False)
+    cfg_file = tmp_path / "security.toml"
+    cfg_file.write_text("""
+[builtin]
+chatybot_exec_policy = "ask"
+allow_env_override = false
+""")
+    mgr = SecurityManager(config_path=str(cfg_file))
+    dec = mgr.evaluate("run_command", {"command": "chatybot --version"})
+    assert dec.verdict == Verdict.ASK
+    assert "recursive privilege escalation or loops" in dec.reason
+
+    # Test ChatybotApp default initialization honors config policy
+    from chatybot.chatybot_app import ChatybotApp
+    app = ChatybotApp(security_config_path=str(cfg_file), no_tools=True)
+    app.initialize()
+    dec_app = app.security_manager.evaluate("run_command", {"command": "chatybot --version"})
+    assert dec_app.verdict == Verdict.ASK
+
+    # Constructor override
+    mgr_override = SecurityManager(
+        config_path=str(cfg_file),
+        chatybot_exec_policy="deny",
+    )
+    dec_denied = mgr_override.evaluate("run_command", {"command": "chatybot --version"})
+    assert dec_denied.verdict == Verdict.DENY
+
+
+def test_run_command_depth_propagation():
+    """Verify run_command propagates incremented CHATYBOT_RECURSION_DEPTH and CHATYBOT_PARENT_PID."""
+    from chatybot.tools.file_utils import run_command
+    out = run_command("python3 -c \"import os; print(os.environ.get('CHATYBOT_RECURSION_DEPTH'), os.environ.get('CHATYBOT_PARENT_PID'))\"")
+    parts = out.strip().split()
+    assert len(parts) >= 2
+    depth = int(parts[0])
+    pid = int(parts[1])
+    assert depth >= 1
+    assert pid == os.getpid()
+
+
+def test_chatybot_subprocess_live_dev_smoke(monkeypatch):
+    """Smoke test: verify Chatybot sub-process can be executed when override is allowed."""
+    monkeypatch.delenv("CHATYBOT_ALLOW_SUBPROCESS", raising=False)
+    monkeypatch.delenv("CHATYBOT_RECURSION_DEPTH", raising=False)
+    from chatybot.security.builtin import BuiltinPolicyEngine
+    from chatybot.tools.file_utils import run_command
+
+    cmd = f"{sys.executable} -m chatybot.main --help"
+    engine = BuiltinPolicyEngine(chatybot_exec_policy="allow")
+    req = PolicyRequest(
+        tool="run_command",
+        parameters={"command": cmd},
+    )
+    dec = engine.evaluate(req)
+    assert dec.verdict != Verdict.DENY
+
+    # Execute via run_command
+    result = run_command(cmd)
+    assert "Chatybot CLI" in result
+    assert "--dev" in result

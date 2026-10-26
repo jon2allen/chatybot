@@ -318,12 +318,28 @@ def run_command(command: str, shell: bool = True) -> str:
             if re.search(pattern, command):
                 return f"Blocked: Dangerous command pattern detected ({desc})"
 
+        # Track and propagate recursion depth for Chatybot sub-processes
+        sub_env = os.environ.copy()
+        try:
+            current_depth = int(sub_env.get("CHATYBOT_RECURSION_DEPTH", "0"))
+        except (ValueError, TypeError):
+            current_depth = 0
+        sub_env["CHATYBOT_RECURSION_DEPTH"] = str(current_depth + 1)
+        sub_env["CHATYBOT_PARENT_PID"] = str(os.getpid())
+
+        # Ensure child Python subprocesses resolve to workspace src
+        repo_src = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+        existing_py_path = sub_env.get("PYTHONPATH", "")
+        if repo_src not in existing_py_path.split(os.pathsep):
+            sub_env["PYTHONPATH"] = f"{repo_src}{os.pathsep}{existing_py_path}" if existing_py_path else repo_src
+
         if shell:
             result = subprocess.run(
                 command,
                 shell=True,
                 capture_output=True,
                 text=True,
+                env=sub_env,
                 timeout=30
             )
         else:
@@ -332,6 +348,7 @@ def run_command(command: str, shell: bool = True) -> str:
                 shell=False,
                 capture_output=True,
                 text=True,
+                env=sub_env,
                 timeout=30
             )
         if result.returncode != 0:

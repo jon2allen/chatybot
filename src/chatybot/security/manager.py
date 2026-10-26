@@ -43,10 +43,20 @@ class SecurityManager:
         "change_dir",
     }
 
-    def __init__(self, config_path: str | None = None, enabled: bool = True, debug: bool = False, trace_raw_payload: bool = False):
+    def __init__(
+        self,
+        config_path: str | None = None,
+        enabled: bool = True,
+        debug: bool = False,
+        trace_raw_payload: bool = False,
+        chatybot_exec_policy: str | None = None,
+        allow_chatybot_subprocess: bool | None = None,
+    ):
         self.enabled = enabled
         self.debug = debug
         self.trace_raw_payload = trace_raw_payload
+        self.chatybot_exec_policy_override = chatybot_exec_policy
+        self.allow_chatybot_subprocess_override = allow_chatybot_subprocess
         self.config_path = os.path.abspath(
             os.path.expanduser(config_path or self.DEFAULT_CONFIG_PATH)
         )
@@ -255,7 +265,21 @@ class SecurityManager:
 
         # Default: builtin
         builtin_cfg = self.config.get("builtin", {})
+        sec_cfg = self.config.get("security", {})
         output_rules = self.config.get("output_security", {}).get("rules") or builtin_cfg.get("output_rules")
+
+        chatybot_exec_policy = (
+            self.chatybot_exec_policy_override
+            if self.chatybot_exec_policy_override is not None
+            else builtin_cfg.get("chatybot_exec_policy", sec_cfg.get("chatybot_exec_policy", "deny"))
+        )
+        allow_chatybot_subprocess = (
+            self.allow_chatybot_subprocess_override
+            if self.allow_chatybot_subprocess_override is not None
+            else builtin_cfg.get("allow_chatybot_subprocess", sec_cfg.get("allow_chatybot_subprocess", None))
+        )
+        allow_env_override = builtin_cfg.get("allow_env_override", sec_cfg.get("allow_env_override", True))
+
         return BuiltinPolicyEngine(
             rules=builtin_cfg.get("rules"),
             dsl_rules=builtin_cfg.get("dsl_rules") or builtin_cfg.get("rules_dsl"),
@@ -263,6 +287,9 @@ class SecurityManager:
             denied_paths=builtin_cfg.get("path_restrictions", {}).get("denied_paths"),
             denied_command_patterns=builtin_cfg.get("command_rules", {}).get("denied_patterns"),
             output_rules=output_rules,
+            chatybot_exec_policy=chatybot_exec_policy,
+            allow_chatybot_subprocess=allow_chatybot_subprocess,
+            allow_env_override=allow_env_override,
             debug=self.debug,
         )
 
