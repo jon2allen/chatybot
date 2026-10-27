@@ -1570,6 +1570,74 @@ class ChatybotApp:
                 self._apply_anthropic_breakpoints(kwargs)
         # OpenAI / DeepSeek / vLLM / Gemini: no payload changes needed.
 
+    # Default cache multipliers (read_multiplier, write_multiplier) relative to
+    # base input cost per mtok. Read multiplier is the fraction paid for cached
+    # tokens (e.g. 0.10 means 90% discount); write multiplier is the factor paid
+    # for cache creation (e.g. 1.25 means a 25% surcharge).
+    _CACHE_RATE_DEFAULTS: dict[str, tuple[float, float]] = {
+        "mistral":   (0.10, 1.00),
+        "anthropic": (0.10, 1.25),   # 5-min ephemeral TTL
+        "deepseek":  (0.10, 1.00),
+        "openai":    (0.50, 1.00),   # conservative baseline for <= GPT-5.5
+        "gemini":    (0.25, 1.00),   # implicit caching
+    }
+    _CACHE_RATE_FALLBACK: tuple[float, float] = (0.50, 1.00)
+
+    def _resolve_cache_multipliers(self, model_config: dict[str, Any]) -> tuple[float, float]:
+        """Resolve (read_multiplier, write_multiplier) for prompt caching.
+
+        Explicit model_config fields override vendor defaults. For OpenRouter,
+        the upstream provider prefix from the model name (e.g. 'mistralai/...',
+        'anthropic/...') is resolved so upstream cache rates apply.
+        """
+        def _parse_float(val: Any) -> float | None:
+            if val is None:
+                return None
+            try:
+                f = float(val)
+                return f if f >= 0 else None
+            except (ValueError, TypeError):
+                return None
+
+        cfg_read = _parse_float(model_config.get("cache_read_multiplier"))
+        cfg_write = _parse_float(model_config.get("cache_write_multiplier"))
+
+        vendor = (model_config.get("vendor") or "").lower()
+        base_url = (model_config.get("base_url") or "").lower()
+        model_name = (model_config.get("name") or "").lower()
+
+        target_vendor = vendor
+        if "mistral" in base_url or vendor == "mistral":
+            target_vendor = "mistral"
+        elif "anthropic" in base_url or vendor == "anthropic":
+            target_vendor = "anthropic"
+        elif "deepseek" in base_url or vendor == "deepseek":
+            target_vendor = "deepseek"
+        elif "openai" in base_url or vendor == "openai":
+            target_vendor = "openai"
+        elif "googleapis" in base_url or "google" in base_url or vendor in ("gemini", "google"):
+            target_vendor = "gemini"
+        elif "openrouter" in base_url or vendor == "openrouter":
+            # For OpenRouter, detect the upstream provider from the model name prefix
+            prefix = model_name.split("/", 1)[0] if "/" in model_name else model_name
+            if "mistral" in prefix:
+                target_vendor = "mistral"
+            elif "anthropic" in prefix:
+                target_vendor = "anthropic"
+            elif "deepseek" in prefix:
+                target_vendor = "deepseek"
+            elif "openai" in prefix:
+                target_vendor = "openai"
+            elif "google" in prefix:
+                target_vendor = "gemini"
+
+        default_read, default_write = self._CACHE_RATE_DEFAULTS.get(
+            target_vendor, self._CACHE_RATE_FALLBACK
+        )
+        resolved_read = cfg_read if cfg_read is not None else default_read
+        resolved_write = cfg_write if cfg_write is not None else default_write
+        return resolved_read, resolved_write
+
     def _compute_cache_net_savings(
         self, model_config: dict[str, Any], cached_tokens: int, cache_write_tokens: int
     ) -> float | None:
@@ -1586,11 +1654,11 @@ class ChatybotApp:
             return None
         if not cost_per_mtok or cost_per_mtok <= 0:
             return None
-        cached_rate = 0.5 * cost_per_mtok   # 50% discount (OpenAI standard; conservative elsewhere)
-        write_rate = 1.25 * cost_per_mtok   # 1.25x warm-up surcharge (OpenAI/Anthropic standard tier)
-        gross_savings = cached_tokens * (cost_per_mtok - cached_rate) / 1_000_000
-        write_surcharge = cache_write_tokens * (write_rate - cost_per_mtok) / 1_000_000
-        return gross_savings - write_surcharge
+
+        read_mult, write_mult = self._resolve_cache_multipliers(model_config)
+        saved_on_reads = cached_tokens * cost_per_mtok * (1.0 - read_mult) / 1_000_000
+        paid_for_writes = cache_write_tokens * cost_per_mtok * max(0.0, write_mult - 1.0) / 1_000_000
+        return saved_on_reads - paid_for_writes
 
     def _loop_cache_call_metrics(self) -> dict[str, Any]:
         """Per-API-call cache telemetry snapshot for agentic loop records.

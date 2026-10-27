@@ -89,6 +89,14 @@ class BaseModelConfig(BaseModel):
     """Base input price in USD per million tokens. Optional; enables net
     prompt-cache savings figures in /cachekey status and /trace cache output."""
 
+    cache_read_multiplier: float | None = None
+    """Multiplier against input_cost_per_mtok for cached prompt tokens (e.g. 0.10 for Mistral).
+    When omitted, per-vendor defaults are used."""
+
+    cache_write_multiplier: float | None = None
+    """Multiplier against input_cost_per_mtok for cache creation tokens (e.g. 1.25 for Anthropic 5m TTL).
+    When omitted, per-vendor defaults are used."""
+
     temperature: float | None = None
     """Sampling temperature. None means 'use provider default'."""
 
