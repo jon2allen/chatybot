@@ -85,18 +85,19 @@ def _seed_files() -> None:
 
 def _upsert_section(content: str, section_name: str, block: str) -> str:
     """Insert or replace a TOML section, handling active or commented headers."""
-    section_pattern = re.compile(rf'^\s*\[{section_name}\]', re.MULTILINE)
+    esc_sec = re.escape(section_name)
+    section_pattern = re.compile(rf'^\s*\[{esc_sec}\]', re.MULTILINE)
     clean_block = block.strip() + "\n"
     if section_pattern.search(content):
         return re.sub(
-            rf'^\s*\[{section_name}\][\s\S]*?(?=\n\s*\[|\Z)',
+            rf'^\s*\[{esc_sec}\][\s\S]*?(?=\n\s*\[|\Z)',
             clean_block,
             content,
             count=1,
             flags=re.MULTILINE,
         )
     if f"# [{section_name}]" in content:
-        pattern = re.compile(rf'^[ \t]*#[ \t]*\[{section_name}\][\s\S]*?(?=\n\s*\[|\n\s*#\s*\[|\Z)', re.MULTILINE)
+        pattern = re.compile(rf'^[ \t]*#[ \t]*\[{esc_sec}\][\s\S]*?(?=\n\s*\[|\n\s*#\s*\[|\Z)', re.MULTILINE)
         m = pattern.search(content)
         if m:
             return content[:m.start()] + clean_block + content[m.end():]

@@ -1080,3 +1080,47 @@ def test_setup_jev_wizard(tmp_path, monkeypatch):
     assert 'engine = "chain"' in conf
     assert 'mode = "shadow"' in conf
 
+
+def test_setup_jev_upsert_preserves_comments_matching_sections():
+    """Verify that comments containing section names (e.g. # see [jev] for info)
+    are not accidentally overwritten or treated as real section headers."""
+    import tomllib
+    from chatybot.setup_jev import _upsert_section
+
+    content = """# Chatybot Security Configuration
+# For information on jev integration, see [jev] in docs
+# Also check [chain] configuration options
+
+engine = "builtin"
+
+[security]
+default_action = "allow"
+"""
+    jev_block = """[jev]
+mode = "shadow"
+timeout_ms = 2000
+"""
+    updated = _upsert_section(content, "jev", jev_block)
+
+    # Comments must still be present
+    assert "# For information on jev integration, see [jev] in docs" in updated
+    assert "# Also check [chain] configuration options" in updated
+
+    # Top-level engine = "builtin" must not have been clobbered
+    parsed = tomllib.loads(updated)
+    assert parsed["engine"] == "builtin"
+    assert parsed["security"]["default_action"] == "allow"
+    assert parsed["jev"]["mode"] == "shadow"
+
+    # Second upsert modifying jev section should update the [jev] section, not the comment
+    jev_block_v2 = """[jev]
+mode = "enforce"
+timeout_ms = 5000
+"""
+    updated_v2 = _upsert_section(updated, "jev", jev_block_v2)
+    assert "# For information on jev integration, see [jev] in docs" in updated_v2
+    parsed_v2 = tomllib.loads(updated_v2)
+    assert parsed_v2["engine"] == "builtin"
+    assert parsed_v2["jev"]["mode"] == "enforce"
+    assert parsed_v2["jev"]["timeout_ms"] == 5000
+
