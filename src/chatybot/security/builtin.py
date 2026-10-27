@@ -246,7 +246,7 @@ class BuiltinPolicyEngine(BasePolicyEngine):
                 "source", "destination", "dest", "sourcefile", "destfile",
                 "sourcepath", "destpath", "cwd", "workdir", "workingdir", "paths",
             }
-            def extract_paths_recursive(data: Any, depth: int = 0):
+            def extract_paths_recursive(data: Any, depth: int = 0, is_path_context: bool = False):
                 if depth > 10:
                     return
                 if isinstance(data, dict):
@@ -267,17 +267,18 @@ class BuiltinPolicyEngine(BasePolicyEngine):
                                     if isinstance(item, str):
                                         candidate_paths.append(item)
                                     elif isinstance(item, (dict, list)):
-                                        extract_paths_recursive(item, depth + 1)
+                                        extract_paths_recursive(item, depth + 1, is_path_context=True)
                             elif isinstance(v, dict):
-                                extract_paths_recursive(v, depth + 1)
+                                extract_paths_recursive(v, depth + 1, is_path_context=True)
                         elif isinstance(v, (dict, list)):
-                            extract_paths_recursive(v, depth + 1)
+                            extract_paths_recursive(v, depth + 1, is_path_context=False)
                 elif isinstance(data, list):
                     for item in data:
                         if isinstance(item, str):
-                            candidate_paths.append(item)
+                            if is_path_context:
+                                candidate_paths.append(item)
                         elif isinstance(item, (dict, list)):
-                            extract_paths_recursive(item, depth + 1)
+                            extract_paths_recursive(item, depth + 1, is_path_context=is_path_context)
 
             extract_paths_recursive(params)
 
@@ -343,25 +344,38 @@ class BuiltinPolicyEngine(BasePolicyEngine):
                     "replacementcontent", "targetcontent", "patch", "diff", "payload",
                     "data", "document", "filecontent",
                 }
-                def extract_write_contents(data: Any, depth: int = 0):
+                def extract_write_contents(data: Any, depth: int = 0, is_content_context: bool = False):
                     if depth > 10:
                         return
                     if isinstance(data, dict):
                         for k, v in data.items():
                             k_clean = k.lower().replace("_", "").replace("-", "")
-                            if (
+                            is_content_field = (
                                 k_clean in content_keys
                                 or k_clean.endswith("content")
                                 or k_clean.endswith("text")
                                 or k_clean.endswith("code")
                                 or k_clean.endswith("payload")
-                            ) and isinstance(v, (str, int, float)):
+                            )
+                            if is_content_field and isinstance(v, (str, int, float)):
                                 candidate_contents.append(str(v))
+                            elif is_content_field and isinstance(v, list):
+                                for item in v:
+                                    if isinstance(item, (str, int, float)):
+                                        candidate_contents.append(str(item))
+                                    elif isinstance(item, (dict, list)):
+                                        extract_write_contents(item, depth + 1, is_content_context=True)
+                            elif is_content_field and isinstance(v, dict):
+                                extract_write_contents(v, depth + 1, is_content_context=True)
                             elif isinstance(v, (dict, list)):
-                                extract_write_contents(v, depth + 1)
+                                extract_write_contents(v, depth + 1, is_content_context=False)
                     elif isinstance(data, list):
                         for item in data:
-                            extract_write_contents(item, depth + 1)
+                            if isinstance(item, (str, int, float)):
+                                if is_content_context:
+                                    candidate_contents.append(str(item))
+                            elif isinstance(item, (dict, list)):
+                                extract_write_contents(item, depth + 1, is_content_context=is_content_context)
 
                 extract_write_contents(params)
                 scanner = self._output_scanner or self._shared_secret_scanner or self._default_output_scanner

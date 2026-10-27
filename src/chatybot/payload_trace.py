@@ -34,7 +34,7 @@ def _mask_key(api_key: str | None) -> str:
         return "None"
     if len(api_key) > 15:
         return f"{api_key[:10]}...{api_key[-5:]}"
-    return "None"
+    return "***"
 
 
 def _size_info(text: str) -> str:

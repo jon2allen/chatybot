@@ -42,11 +42,15 @@ def _scoped_corpus_manager(
             yield None, f"Database '{name}' not found.", name
             return
 
+        scoped_mgr = None
         try:
             scoped_mgr = CorpusManager(db_path)
             # Force storage read to validate JSON structure without redundant pre-parse
             scoped_mgr.db.tables()
         except Exception as err:
+            if scoped_mgr is not None:
+                with suppress(Exception):
+                    scoped_mgr.close()
             yield None, f"Failed to open database '{name}': {err}", name
             return
 
@@ -104,7 +108,7 @@ def db_search(
         if not effective_query or effective_query in ("*", "all"):
             results = list(all_items)
         else:
-            q = query.lower()
+            q = effective_query.lower()
             results = []
             for item in all_items:
                 name = str(item.get("name") or "")

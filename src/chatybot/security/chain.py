@@ -149,10 +149,17 @@ class ChainedPolicyEngine(BasePolicyEngine):
             prompt_details=final.prompt_details,
             modified_parameters=final.modified_parameters if final.verdict != Verdict.DENY else None,
         )
-        self._log(request, out, final_stage, results)
+        self._log(request, out, final_stage, results, phase="output" if output_phase else "input")
         return out
 
-    def _log(self, request: PolicyRequest, final: PolicyDecision, decided_by: str, results: list[dict[str, Any]]) -> None:
+    def _log(
+        self,
+        request: PolicyRequest,
+        final: PolicyDecision,
+        decided_by: str,
+        results: list[dict[str, Any]],
+        phase: str = "input",
+    ) -> None:
         if not self.log_path:
             return
         verdicts = {r["verdict"] for r in results if "verdict" in r}
@@ -163,6 +170,7 @@ class ChainedPolicyEngine(BasePolicyEngine):
             params = prepare_for_log(request.parameters or {})
         entry = {
             "event": "decision",
+            "phase": phase,
             "ts": datetime.now(UTC).isoformat(),
             "request_id": request.request_id,
             "tool": request.tool,
