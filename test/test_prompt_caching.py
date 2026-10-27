@@ -382,6 +382,64 @@ class TestDblogMetadata:
         assert md["prompt_cache_key"] == "chatybot-ses_1"
 
 
+class TestLoopCacheMetrics:
+    def test_call_metrics_snapshot(self, app):
+        app.last_prompt_tokens = 4820
+        app.last_cached_tokens = 4200
+        app.last_cache_write_tokens = 100
+        m = app._loop_cache_call_metrics()
+        assert m == {"prompt_tokens": 4820, "cached_tokens": 4200,
+                     "cache_write_tokens": 100, "hit_pct": 87.1}
+
+    def test_call_metrics_zero_without_usage(self, app):
+        m = app._loop_cache_call_metrics()
+        assert m["prompt_tokens"] == 0
+        assert m["hit_pct"] is None
+
+    def test_accumulate_totals(self, app):
+        totals = {"api_calls": 0, "prompt_tokens": 0, "cached_tokens": 0, "cache_write_tokens": 0}
+        app.last_prompt_tokens, app.last_cached_tokens, app.last_cache_write_tokens = 100, 50, 0
+        app._accumulate_loop_cache(totals)
+        app.last_prompt_tokens, app.last_cached_tokens, app.last_cache_write_tokens = 200, 150, 25
+        app._accumulate_loop_cache(totals)
+        assert totals == {"api_calls": 2, "prompt_tokens": 300,
+                          "cached_tokens": 200, "cache_write_tokens": 25}
+
+    def test_attach_stores_cache_stats_on_turn(self, app):
+        app.session_mode = "on"
+        app.session_turns = [{"turn_id": 1, "prompt": "p", "response": "r"}]
+        app.save_active_session = lambda: None
+        stats = {"api_calls": 3, "prompt_tokens": 900, "cached_tokens": 210,
+                 "cache_write_tokens": 128}
+        app.attach_agentic_loop_to_current_turn(
+            [{"turn": 1, "tool": "run_command", "cache": {"prompt_tokens": 300,
+              "cached_tokens": 100, "cache_write_tokens": 0, "hit_pct": 33.3}}],
+            final_response="done", cache_stats=stats,
+        )
+        assert app.session_turns[-1]["cache_stats"] == stats
+        assert app.session_turns[-1]["agentic_loop"][0]["cache"]["hit_pct"] == 33.3
+
+
+    def test_session_stats_reset_on_new_session(self, app):
+        app.session_cached_tokens = 3584
+        app.session_cache_write_tokens = 100
+        app.session_prompt_tokens = 27750
+        app._reset_session_cache_stats()
+        assert app.session_cached_tokens == 0
+        assert app.session_cache_write_tokens == 0
+        assert app.session_prompt_tokens == 0
+
+    def test_ensure_active_session_resets_counters(self, app):
+        app.session_mode = "on"
+        app.active_session_id = None
+        app.session_cached_tokens = 3584
+        app.session_prompt_tokens = 27750
+        app._ensure_active_session("hello")
+        assert app.session_cached_tokens == 0
+        assert app.session_prompt_tokens == 0
+        assert app.active_session_id  # a session was created
+
+
 class TestConfigManager:
     def test_default_prompt_caching_true(self, tmp_path):
         from src.chatybot.config_manager import ConfigManager

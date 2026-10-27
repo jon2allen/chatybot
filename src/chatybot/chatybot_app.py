@@ -1000,6 +1000,10 @@ class ChatybotApp:
             self.session_model_alias = model_alias
             self.active_session_id = self._generate_session_id(model_alias)
             self.session_created_at = now.isoformat()
+            # Cache telemetry counters are session-scoped: a fresh session
+            # starts from zero rather than inheriting the previous session's
+            # totals in the process-lifetime accumulators.
+            self._reset_session_cache_stats()
             if initial_prompt:
                 self.session_first_prompt_slug = self._slugify_text(initial_prompt)
             try:
@@ -1159,7 +1163,12 @@ class ChatybotApp:
             print(f"Warning: Could not write turn to disk session ({e}). Session continues in memory.")
         self.buffer_manager.set_script_var('SESSION_NAME', self.active_session_name or self.active_session_id, allow_protected=True)
 
-    def attach_agentic_loop_to_current_turn(self, agentic_trace: list[dict[str, Any]], final_response: str | None = None) -> None:
+    def attach_agentic_loop_to_current_turn(
+        self,
+        agentic_trace: list[dict[str, Any]],
+        final_response: str | None = None,
+        cache_stats: dict[str, Any] | None = None,
+    ) -> None:
         """Attach or update agentic loop execution trace and final response on the latest active session turn."""
         if self.session_mode == "off" or not self.session_turns:
             return
@@ -1168,6 +1177,8 @@ class ChatybotApp:
             self.session_turns[-1]["response"] = final_response
         if agentic_trace:
             self.session_turns[-1]["agentic_loop"] = agentic_trace
+        if cache_stats is not None:
+            self.session_turns[-1]["cache_stats"] = cache_stats
         self.save_active_session()
 
     def append_session_decision(
@@ -1579,6 +1590,41 @@ class ChatybotApp:
         gross_savings = cached_tokens * (cost_per_mtok - cached_rate) / 1_000_000
         write_surcharge = cache_write_tokens * (write_rate - cost_per_mtok) / 1_000_000
         return gross_savings - write_surcharge
+
+    def _loop_cache_call_metrics(self) -> dict[str, Any]:
+        """Per-API-call cache telemetry snapshot for agentic loop records.
+
+        Reads the telemetry captured by the most recent completion. In
+        streaming mode the provider usage is not parsed, so all counters
+        degrade to 0.
+        """
+        prompt_tokens = int(getattr(self, "last_prompt_tokens", 0) or 0)
+        cached = int(getattr(self, "last_cached_tokens", 0) or 0)
+        written = int(getattr(self, "last_cache_write_tokens", 0) or 0)
+        return {
+            "prompt_tokens": prompt_tokens,
+            "cached_tokens": cached,
+            "cache_write_tokens": written,
+            "hit_pct": round(cached / prompt_tokens * 100, 1) if prompt_tokens else None,
+        }
+
+    def _accumulate_loop_cache(self, totals: dict[str, Any]) -> None:
+        """Fold the most recent completion's cache metrics into loop totals."""
+        metrics = self._loop_cache_call_metrics()
+        totals["api_calls"] += 1
+        for key in ("prompt_tokens", "cached_tokens", "cache_write_tokens"):
+            totals[key] += metrics[key]
+
+    def _reset_session_cache_stats(self) -> None:
+        """Reset the session-scoped cache hit-rate accumulators.
+
+        Called whenever the active session changes (creation, /session start|
+        new|use) so 'Session Hit Rate' in /cachekey status describes the
+        active session only, never a mix of sessions from this process.
+        """
+        self.session_cached_tokens = 0
+        self.session_cache_write_tokens = 0
+        self.session_prompt_tokens = 0
 
     @staticmethod
     def _is_missing_reasoning_error(e: Exception) -> bool:
@@ -6344,6 +6390,15 @@ class ChatybotApp:
         turn_count = 0
         final_natural_language_response = ""
         previous_loop_size = 0
+        # Per-API-call prompt-cache telemetry accumulated across the loop
+        # (the pre-loop calls, every in-loop completion, and the final
+        # summary completion). Attached to the session turn as cache_stats.
+        loop_cache_stats: dict[str, Any] = {
+            "api_calls": 0,
+            "prompt_tokens": 0,
+            "cached_tokens": 0,
+            "cache_write_tokens": 0,
+        }
 
         if initial_tool_results:
             print(f"Continuing agentic tool loop with tool results (max turns: {max_turns})...")
@@ -6351,10 +6406,12 @@ class ChatybotApp:
             temp_history.append({"role": "user", "content": f"Tool execution results:\n{initial_tool_results}"})
             await self._apply_rate_limit_delay()
             current_response = await self.chat_completion(temp_history, stream=self.streaming_enabled)
+            self._accumulate_loop_cache(loop_cache_stats)
         elif not self.extract_tool_call(current_response):
             print("Last completion was not a tool call. Requesting initial tool call from LLM...")
             await self._apply_rate_limit_delay()
             current_response = await self.chat_completion(temp_history, stream=self.streaming_enabled)
+            self._accumulate_loop_cache(loop_cache_stats)
         
         print(f"Starting agentic tool loop (max turns: {max_turns})...")
         
@@ -6478,6 +6535,10 @@ class ChatybotApp:
                     "status": "success" if exit_code_val == 0 else "error",
                     "timestamp": _tool_ts,
                     "duration_ms": _tool_duration_ms,
+                    # Cache telemetry of the completion that requested this
+                    # tool call (0s in streaming mode, where usage is not
+                    # parsed).
+                    "cache": self._loop_cache_call_metrics(),
                 }
                 if guard_withheld:
                     tool_record["loop_guard"] = guard_decision.action
@@ -6566,6 +6627,7 @@ class ChatybotApp:
                     "status": "error",
                     "timestamp": datetime.now().isoformat(),
                     "duration_ms": 0,
+                    "cache": self._loop_cache_call_metrics(),
                 }
                 current_loop = self.buffer_manager.get_script_var('AGENTIC_LOOP') or []
                 if not isinstance(current_loop, list):
@@ -6601,6 +6663,7 @@ class ChatybotApp:
                     )
                 })
                 final_natural_language_response = await self.chat_completion(temp_history, stream=self.streaming_enabled)
+                self._accumulate_loop_cache(loop_cache_stats)
                 break
             # Request next completion from LLM using the temporary history context
             current_loop = self.buffer_manager.get_script_var('AGENTIC_LOOP') or []
@@ -6614,6 +6677,7 @@ class ChatybotApp:
             print(f"[Turn {turn_count+1}/{max_turns}] Requesting next completion... (AGENTIC_LOOP size: {current_size_kb:.2f} KB{growth_str})")
             previous_loop_size = current_size_bytes
             current_response = await self.chat_completion(temp_history, stream=self.streaming_enabled)
+            self._accumulate_loop_cache(loop_cache_stats)
             
         # Clean up loop state
         self.in_tool_loop = False
@@ -6675,7 +6739,11 @@ class ChatybotApp:
         # Update active session turn record with agentic loop outcome
         if self.session_mode != "off" and self.session_turns:
             agentic_trace = self.buffer_manager.script_vars.get('AGENTIC_LOOP', [])
-            self.attach_agentic_loop_to_current_turn(agentic_trace, final_response=final_natural_language_response)
+            self.attach_agentic_loop_to_current_turn(
+                agentic_trace,
+                final_response=final_natural_language_response,
+                cache_stats=loop_cache_stats,
+            )
         
         # Log final response from inside the tool loop if logging is active
         if self.logging_manager.logging_active:
@@ -6734,6 +6802,17 @@ class ChatybotApp:
                 except (ValueError, TypeError):
                     duration_str = f" ({duration_ms}ms)"
             print(f"[{i}] Step {step} · {tool_name} — {status_label}{duration_str}")
+
+            cache = rec.get("cache")
+            if isinstance(cache, dict) and cache.get("prompt_tokens"):
+                cached = cache.get("cached_tokens", 0)
+                written = cache.get("cache_write_tokens", 0)
+                hit_pct = cache.get("hit_pct")
+                hit_str = f", {hit_pct:.0f}% hit" if isinstance(hit_pct, (int, float)) else ""
+                print(
+                    f"      cache: {cache['prompt_tokens']} in "
+                    f"({cached} read{hit_str}, {written} write)"
+                )
 
             ts = rec.get("timestamp")
             if ts:
