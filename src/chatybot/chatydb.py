@@ -69,7 +69,7 @@ def _backup_db(db_path: str, db_name: str, max_backups: int = MAX_DB_BACKUPS) ->
         backup_dir = os.path.join(db_dir, ".backups", db_name)
         os.makedirs(backup_dir, exist_ok=True)
 
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
         backup_filename = f"{db_name}.{timestamp}.bak.json"
         backup_path = os.path.join(backup_dir, backup_filename)
 
@@ -88,10 +88,9 @@ def _backup_db(db_path: str, db_name: str, max_backups: int = MAX_DB_BACKUPS) ->
             for f in os.listdir(backup_dir)
             if f.startswith(f"{db_name}.") and f.endswith(".bak.json")
         ]
-        # Sort backups: sort primarily by ctime (creation/change time) and filename
-        # Note: shutil.copy2 preserves source mtime, so sorting by mtime can cause all
-        # copies from the same source file to share the exact same timestamp.
-        existing_backups.sort(key=lambda p: (os.path.getctime(p), os.path.basename(p)))
+        # Sort backups: sort primarily by creation timestamp parsed/encoded in filename,
+        # with ctime as fallback.
+        existing_backups.sort(key=lambda p: (os.path.basename(p), os.path.getctime(p)))
 
         while len(existing_backups) > max_backups:
             oldest = existing_backups.pop(0)

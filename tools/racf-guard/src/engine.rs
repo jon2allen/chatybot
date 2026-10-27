@@ -128,9 +128,9 @@ static CONTENT_KEYS: &[&str] = &[
 ];
 
 static PATH_KEYS: &[&str] = &[
-    "path", "filepath", "target", "cwd", "workdir", "workingdir",
+    "path", "paths", "filepath", "target", "cwd", "workdir", "workingdir",
     "directory", "dir", "filename", "destination", "source",
-    "sourcefile", "destfile", "sourcepath", "destpath", "file",
+    "sourcefile", "destfile", "sourcepath", "destpath", "file", "files",
 ];
 
 #[inline]
@@ -166,30 +166,36 @@ fn extract_content_from_map_depth(map: &HashMap<String, serde_json::Value>, out:
             if let Some(s) = v.as_str() {
                 out.push(s.to_string());
             } else {
-                extract_content_from_json_depth(v, out, depth + 1);
+                extract_content_from_json_depth(v, out, depth + 1, true);
             }
         } else {
-            extract_content_from_json_depth(v, out, depth + 1);
+            extract_content_from_json_depth(v, out, depth + 1, false);
         }
     }
 }
 
 pub fn extract_content_from_json(val: &serde_json::Value, out: &mut Vec<String>) {
-    extract_content_from_json_depth(val, out, 0);
+    extract_content_from_json_depth(val, out, 0, false);
 }
 
-fn extract_content_from_json_depth(val: &serde_json::Value, out: &mut Vec<String>, depth: usize) {
+fn extract_content_from_json_depth(val: &serde_json::Value, out: &mut Vec<String>, depth: usize, is_content_context: bool) {
     if depth > 15 {
         return;
     }
     match val {
-        serde_json::Value::String(_) => {}
+        serde_json::Value::String(s) => {
+            if is_content_context {
+                out.push(s.clone());
+            }
+        }
         serde_json::Value::Array(arr) => {
             for item in arr {
                 if let Some(s) = item.as_str() {
-                    out.push(s.to_string());
+                    if is_content_context {
+                        out.push(s.to_string());
+                    }
                 } else {
-                    extract_content_from_json_depth(item, out, depth + 1);
+                    extract_content_from_json_depth(item, out, depth + 1, is_content_context);
                 }
             }
         }
@@ -200,10 +206,10 @@ fn extract_content_from_json_depth(val: &serde_json::Value, out: &mut Vec<String
                     if let Some(s) = v.as_str() {
                         out.push(s.to_string());
                     } else {
-                        extract_content_from_json_depth(v, out, depth + 1);
+                        extract_content_from_json_depth(v, out, depth + 1, true);
                     }
                 } else {
-                    extract_content_from_json_depth(v, out, depth + 1);
+                    extract_content_from_json_depth(v, out, depth + 1, false);
                 }
             }
         }
@@ -229,29 +235,36 @@ fn extract_paths_from_map_depth(map: &HashMap<String, serde_json::Value>, out: &
                     if let Some(s) = item.as_str() {
                         out.push(s.to_string());
                     } else {
-                        extract_paths_from_json_depth(item, out, depth + 1);
+                        extract_paths_from_json_depth(item, out, depth + 1, true);
                     }
                 }
             } else {
-                extract_paths_from_json_depth(v, out, depth + 1);
+                extract_paths_from_json_depth(v, out, depth + 1, true);
             }
         } else {
-            extract_paths_from_json_depth(v, out, depth + 1);
+            extract_paths_from_json_depth(v, out, depth + 1, false);
         }
     }
 }
 
-fn extract_paths_from_json_depth(val: &serde_json::Value, out: &mut Vec<String>, depth: usize) {
+fn extract_paths_from_json_depth(val: &serde_json::Value, out: &mut Vec<String>, depth: usize, is_path_context: bool) {
     if depth > 15 {
         return;
     }
     match val {
+        serde_json::Value::String(s) => {
+            if is_path_context {
+                out.push(s.clone());
+            }
+        }
         serde_json::Value::Array(arr) => {
             for item in arr {
                 if let Some(s) = item.as_str() {
-                    out.push(s.to_string());
+                    if is_path_context {
+                        out.push(s.to_string());
+                    }
                 } else {
-                    extract_paths_from_json_depth(item, out, depth + 1);
+                    extract_paths_from_json_depth(item, out, depth + 1, is_path_context);
                 }
             }
         }
@@ -266,14 +279,14 @@ fn extract_paths_from_json_depth(val: &serde_json::Value, out: &mut Vec<String>,
                             if let Some(s) = item.as_str() {
                                 out.push(s.to_string());
                             } else {
-                                extract_paths_from_json_depth(item, out, depth + 1);
+                                extract_paths_from_json_depth(item, out, depth + 1, true);
                             }
                         }
                     } else {
-                        extract_paths_from_json_depth(v, out, depth + 1);
+                        extract_paths_from_json_depth(v, out, depth + 1, true);
                     }
                 } else {
-                    extract_paths_from_json_depth(v, out, depth + 1);
+                    extract_paths_from_json_depth(v, out, depth + 1, false);
                 }
             }
         }

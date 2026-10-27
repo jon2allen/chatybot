@@ -47,11 +47,13 @@ def _is_protected_path(raw: str) -> bool:
         pass
     cfg_dir = config_dir()
     secrets_file = os.path.join(cfg_dir, ".env")
+    protected_exact = {os.path.normcase(secrets_file), os.path.normcase(cfg_dir)}
+    protected_folded = {secrets_file.casefold(), cfg_dir.casefold()}
     for p in candidates:
         base = os.path.basename(p).lower()
         if "security.toml" in base or base.endswith(".racf"):
             return True
-        if os.path.normcase(p) in {os.path.normcase(secrets_file), os.path.normcase(cfg_dir)}:
+        if os.path.normcase(p) in protected_exact or p.casefold() in protected_folded:
             return True
     return False
 

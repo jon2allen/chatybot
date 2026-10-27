@@ -42,7 +42,12 @@ async def cmd_cachekey(ctx: CommandContext, parts: list, command: str) -> Comman
 
     if sub in ("status", ""):
         model_config = app.config_manager.get_model_config(app.config_manager.active_model_alias)
-        if app.prompt_caching_disabled:
+        config_disabled = (
+            getattr(app, "prompt_caching_disabled", False)
+            or model_config.get("prompt_caching") is False
+            or getattr(app.config_manager, "prompt_caching_default", None) is False
+        )
+        if config_disabled:
             status_label = i18n.get_ui_string("ui.cache_status_disabled", "Disabled")
         elif getattr(app, "custom_cache_key", None):
             status_label = i18n.get_ui_string("ui.cache_status_custom", "Custom Key")
