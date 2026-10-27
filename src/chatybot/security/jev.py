@@ -246,6 +246,7 @@ class JevPolicyEngine(BasePolicyEngine):
                 pass
         self._http_post = http_post or _urllib_post
         self._api_key: str | None = None
+        self._api_key_resolved: bool = False
 
         if self.debug:
             print(f"[Security Debug] [JEV] Rubric '{self.rubric_path}': {len(self.rubric.rules)} rules, "
@@ -295,6 +296,12 @@ class JevPolicyEngine(BasePolicyEngine):
     def _get_api_key(self) -> str:
         if self._api_key:
             return self._api_key
+        if self._api_key_resolved:
+            # Check if environment variable was set in the meantime
+            key = os.environ.get(self.api_key_env, "")
+            if key:
+                self._api_key = key
+            return self._api_key or ""
         key = os.environ.get(self.api_key_env, "")
         if not key:
             try:
@@ -305,6 +312,7 @@ class JevPolicyEngine(BasePolicyEngine):
             except Exception as e:  # noqa: BLE001
                 logger.warning("[Security Warning] Jev API key resolution failed: %s", e)
         self._api_key = key or None
+        self._api_key_resolved = True
         return key
 
     # ------------------------------------------------------------------ evaluate
@@ -324,15 +332,18 @@ class JevPolicyEngine(BasePolicyEngine):
 
     def evaluate(self, request: PolicyRequest) -> PolicyDecision:
         tool = (request.tool or "").strip()
-        trunc_state = {"truncated": False}
-        params = _prepare(request.parameters or {}, self.redact_secrets, self.max_content_chars, trunc_state)
-
         blocked = self_protect.check(request)
         if blocked is not None:
             if self.debug:
                 print(f"[Security Debug] [JEV] [SPECIAL DENY] {blocked.reason}")
+            trunc_state = {"truncated": False}
+            params = _prepare(request.parameters or {}, self.redact_secrets, self.max_content_chars, trunc_state)
             self._log(request, params, None, blocked, 0.0, source="self_protect")
             return blocked
+
+        trunc_state = {"truncated": False}
+        params = _prepare(request.parameters or {}, self.redact_secrets, self.max_content_chars, trunc_state)
+
         if tool.lower() in self.skip_tools:
             skipped = PolicyDecision(verdict=Verdict.ALLOW, reason=f"Jev: '{tool}' is not checked (skip_tools).")
             self._log(request, params, None, skipped, 0.0, source="skip_tools")

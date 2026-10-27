@@ -34,6 +34,13 @@ from chatybot.security.models import PolicyDecision, PolicyPromptDetails, Policy
 
 logger = logging.getLogger(__name__)
 
+WRITE_TOOL_GROUP = frozenset({
+    "write_file", "replace_file_content", "patch_file", "multi_replace_file_content"
+})
+READ_TOOL_GROUP = frozenset({
+    "read_file", "file_info", "grep_search", "read_url"
+})
+
 
 @dataclass
 class SecurityRuleAST:
@@ -65,13 +72,6 @@ class SecurityRuleAST:
     def matches(self, request: PolicyRequest) -> bool:
         req_tool = (request.tool or "").strip().lower()
         rule_tool = (self.tool or "").strip().lower()
-
-        WRITE_TOOL_GROUP = {
-            "write_file", "replace_file_content", "patch_file", "multi_replace_file_content"
-        }
-        READ_TOOL_GROUP = {
-            "read_file", "file_info", "grep_search", "read_url"
-        }
 
         # 1. Match tool (case-insensitive, with glob, tool groups, and base tool suffix support)
         if rule_tool and rule_tool not in ("any", "*", "all"):

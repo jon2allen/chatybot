@@ -6,6 +6,7 @@ Enabled via /tool enable db_search, db_list or tools_config.toml.
 
 import json
 import os
+import re
 from collections.abc import Iterator
 from contextlib import contextmanager, suppress
 from typing import Any
@@ -230,13 +231,29 @@ def db_list(app: Any = None) -> dict[str, Any]:
         size_kb = round(os.path.getsize(db_path) / 1024, 2)
 
         try:
-            with open(db_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            entries = (
-                len(data.get("items", {}))
-                if "items" in data
-                else len(data.get("_default", {}))
-            )
+            if os.path.getsize(db_path) == 0:
+                entries = 0
+            else:
+                with open(db_path, "r", encoding="utf-8", errors="ignore") as f:
+                    text = f.read()
+                # Fast count of top-level document entries in TinyDB without parsing all document contents
+                m_table = re.search(r'"(?:items|_default)"\s*:\s*\{', text)
+                if not m_table:
+                    entries = 0
+                else:
+                    m = re.findall(r'"(\d+)"\s*:\s*\{', text)
+                    if m:
+                        entries = len(m)
+                    elif re.search(r'"(?:items|_default)"\s*:\s*\{\s*\}', text):
+                        entries = 0
+                    else:
+                        # Fallback for non-numeric keys
+                        data = json.loads(text)
+                        entries = (
+                            len(data.get("items", {}))
+                            if "items" in data
+                            else len(data.get("_default", {}))
+                        )
         except Exception:
             entries = -1
 

@@ -116,6 +116,42 @@ pub fn canonicalize_path_if_exists(path: &str) -> Vec<String> {
     results
 }
 
+#[inline]
+fn normalize_param_key(k: &str) -> String {
+    k.chars().filter(|c| *c != '_' && *c != '-').flat_map(|c| c.to_lowercase()).collect()
+}
+
+static CONTENT_KEYS: &[&str] = &[
+    "content", "contents", "text", "codecontent", "replacementcontent",
+    "targetcontent", "data", "body", "payload", "patch", "diff",
+    "query", "sql", "statement", "document", "message", "output", "result", "stdin",
+];
+
+static PATH_KEYS: &[&str] = &[
+    "path", "filepath", "target", "cwd", "workdir", "workingdir",
+    "directory", "dir", "filename", "destination", "source",
+    "sourcefile", "destfile", "sourcepath", "destpath", "file",
+];
+
+#[inline]
+fn is_content_key_clean(k_clean: &str) -> bool {
+    CONTENT_KEYS.contains(&k_clean)
+        || k_clean.ends_with("content")
+        || k_clean.ends_with("text")
+        || k_clean.ends_with("payload")
+        || k_clean.ends_with("stdin")
+}
+
+#[inline]
+fn is_path_key_clean(k_clean: &str) -> bool {
+    PATH_KEYS.contains(&k_clean)
+        || k_clean.ends_with("path")
+        || k_clean.ends_with("file")
+        || k_clean.ends_with("dir")
+        || k_clean.ends_with("target")
+        || k_clean.ends_with("workdir")
+}
+
 pub fn extract_content_from_map(map: &HashMap<String, serde_json::Value>, out: &mut Vec<String>) {
     extract_content_from_map_depth(map, out, 0);
 }
@@ -125,20 +161,8 @@ fn extract_content_from_map_depth(map: &HashMap<String, serde_json::Value>, out:
         return;
     }
     for (k, v) in map {
-        let k_clean = k.to_lowercase().replace('_', "").replace('-', "");
-        let is_content_key = [
-            "content", "contents", "text", "codecontent", "replacementcontent",
-            "targetcontent", "data", "body", "payload", "patch", "diff",
-            "query", "sql", "statement", "document", "message", "output", "result", "stdin",
-        ]
-        .iter()
-        .any(|ck| ck.replace('_', "") == k_clean)
-            || k_clean.ends_with("content")
-            || k_clean.ends_with("text")
-            || k_clean.ends_with("payload")
-            || k_clean.ends_with("stdin");
-
-        if is_content_key {
+        let k_clean = normalize_param_key(k);
+        if is_content_key_clean(&k_clean) {
             if let Some(s) = v.as_str() {
                 out.push(s.to_string());
             } else {
@@ -171,20 +195,8 @@ fn extract_content_from_json_depth(val: &serde_json::Value, out: &mut Vec<String
         }
         serde_json::Value::Object(map) => {
             for (k, v) in map {
-                let k_clean = k.to_lowercase().replace('_', "").replace('-', "");
-                let is_content_key = [
-                    "content", "contents", "text", "codecontent", "replacementcontent",
-                    "targetcontent", "data", "body", "payload", "patch", "diff",
-                    "query", "sql", "statement", "document", "message", "output", "result", "stdin",
-                ]
-                .iter()
-                .any(|ck| ck.replace('_', "") == k_clean)
-                    || k_clean.ends_with("content")
-                    || k_clean.ends_with("text")
-                    || k_clean.ends_with("payload")
-                    || k_clean.ends_with("stdin");
-
-                if is_content_key {
+                let k_clean = normalize_param_key(k);
+                if is_content_key_clean(&k_clean) {
                     if let Some(s) = v.as_str() {
                         out.push(s.to_string());
                     } else {
@@ -208,21 +220,8 @@ fn extract_paths_from_map_depth(map: &HashMap<String, serde_json::Value>, out: &
         return;
     }
     for (k, v) in map {
-        let k_clean = k.to_lowercase().replace('_', "").replace('-', "");
-        let is_path_key = [
-            "path", "filepath", "target", "cwd", "workdir", "workingdir",
-            "directory", "dir", "filename", "destination", "source",
-            "sourcefile", "destfile", "sourcepath", "destpath", "file",
-        ]
-        .iter()
-        .any(|pk| pk.replace('_', "") == k_clean)
-            || k_clean.ends_with("path")
-            || k_clean.ends_with("file")
-            || k_clean.ends_with("dir")
-            || k_clean.ends_with("target")
-            || k_clean.ends_with("workdir");
-
-        if is_path_key {
+        let k_clean = normalize_param_key(k);
+        if is_path_key_clean(&k_clean) {
             if let Some(s) = v.as_str() {
                 out.push(s.to_string());
             } else if let Some(arr) = v.as_array() {
@@ -258,21 +257,8 @@ fn extract_paths_from_json_depth(val: &serde_json::Value, out: &mut Vec<String>,
         }
         serde_json::Value::Object(map) => {
             for (k, v) in map {
-                let k_clean = k.to_lowercase().replace('_', "").replace('-', "");
-                let is_path_key = [
-                    "path", "filepath", "target", "cwd", "workdir", "workingdir",
-                    "directory", "dir", "filename", "destination", "source",
-                    "sourcefile", "destfile", "sourcepath", "destpath", "file",
-                ]
-                .iter()
-                .any(|pk| pk.replace('_', "") == k_clean)
-                    || k_clean.ends_with("path")
-                    || k_clean.ends_with("file")
-                    || k_clean.ends_with("dir")
-                    || k_clean.ends_with("target")
-                    || k_clean.ends_with("workdir");
-
-                if is_path_key {
+                let k_clean = normalize_param_key(k);
+                if is_path_key_clean(&k_clean) {
                     if let Some(s) = v.as_str() {
                         out.push(s.to_string());
                     } else if let Some(arr) = v.as_array() {
@@ -966,21 +952,17 @@ impl RacfEngine {
             let ps_keys = [
                 "process",
                 "processname",
-                "process_name",
                 "proc",
                 "pid",
                 "targetpid",
-                "target_pid",
                 "taskid",
-                "task_id",
                 "jobid",
-                "job_id",
             ];
 
             let mut candidate_ps: Vec<String> = Vec::new();
             for (key, val) in &request.parameters {
-                let key_clean = key.to_lowercase().replace('_', "").replace('-', "");
-                let is_ps_param = ps_keys.iter().any(|pk| pk.replace('_', "") == key_clean)
+                let key_clean = normalize_param_key(key);
+                let is_ps_param = ps_keys.contains(&key_clean.as_str())
                     || key_clean.ends_with("pid")
                     || key_clean.ends_with("process")
                     || key_clean.ends_with("taskid");
