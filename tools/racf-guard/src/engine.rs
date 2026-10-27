@@ -373,15 +373,23 @@ impl Profile {
                 if glob_match(&normalized_pattern, &res_lower) {
                     return true;
                 }
-                // Fast-path: if pattern has a literal substring (>= 3 chars), check if it exists in res_lower
-                let literal_parts: Vec<&str> = pat_lower
-                    .split(|c| c == '*' || c == '?')
-                    .map(|s| s.trim())
-                    .filter(|s| s.len() >= 3)
-                    .collect();
-                if let Some(longest_needle) = literal_parts.iter().max_by_key(|s| s.len()) {
-                    if !res_lower.contains(*longest_needle) {
-                        return false;
+                // Fast-path: if pattern has a literal substring (>= 3 chars), check if it exists in res_lower.
+                // Skip the literal fast path for patterns with [..], {..} or escapes since glob-match supports them.
+                let has_complex_syntax = pat_lower.contains('[')
+                    || pat_lower.contains(']')
+                    || pat_lower.contains('{')
+                    || pat_lower.contains('}')
+                    || pat_lower.contains('\\');
+                if !has_complex_syntax {
+                    let literal_parts: Vec<&str> = pat_lower
+                        .split(|c| c == '*' || c == '?')
+                        .map(|s| s.trim())
+                        .filter(|s| s.len() >= 3)
+                        .collect();
+                    if let Some(longest_needle) = literal_parts.iter().max_by_key(|s| s.len()) {
+                        if !res_lower.contains(*longest_needle) {
+                            return false;
+                        }
                     }
                 }
                 for line in res_lower.lines() {

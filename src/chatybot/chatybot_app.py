@@ -2114,7 +2114,7 @@ class ChatybotApp:
                     updated_msg["content"] = clean_content
                     if mode == "field":
                         updated_msg["reasoning_content"] = thinking_text if thinking_text else " "
-                    elif thinking_text and mode not in ("strip", "keep"):
+                    elif thinking_text and mode not in ("auto", "strip", "keep"):
                         updated_msg["reasoning_content"] = thinking_text
                     cleaned_messages.append(updated_msg)
                 else:
@@ -2532,8 +2532,13 @@ class ChatybotApp:
             self.last_cache_write_tokens = 0
             self.last_prompt_tokens = 0
             if hasattr(response, "usage") and response.usage:
+                def _as_int(value: Any) -> int:
+                    # Only accept real numbers: getattr on loosely-typed
+                    # response objects can return arbitrary objects.
+                    return int(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else 0
+
                 out_tokens = response.usage.completion_tokens
-                prompt_tokens = response.usage.prompt_tokens
+                prompt_tokens = _as_int(response.usage.prompt_tokens)
 
                 # Extract cached-read and cache-write token counts.
                 # Standard OpenAI / OpenRouter / DeepSeek schema:
@@ -2542,11 +2547,6 @@ class ChatybotApp:
                 #   usage.cache_read_input_tokens / cache_creation_input_tokens
                 cached_tokens = 0
                 cache_write_tokens = 0
-
-                def _as_int(value: Any) -> int:
-                    # Only accept real numbers: getattr on loosely-typed
-                    # response objects can return arbitrary objects.
-                    return int(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else 0
 
                 try:
                     p_details = getattr(response.usage, "prompt_tokens_details", None)
@@ -4314,17 +4314,7 @@ class ChatybotApp:
                         if isinstance(inner, str):
                             content_to_check = inner
                         elif isinstance(inner, dict):
-                            parts = []
-                            if "stdout" in inner and inner["stdout"]:
-                                parts.append(str(inner["stdout"]))
-                            if "stderr" in inner and inner["stderr"]:
-                                parts.append(str(inner["stderr"]))
-                            if "content" in inner and inner["content"]:
-                                parts.append(str(inner["content"]))
-                            if parts:
-                                content_to_check = "\n".join(parts)
-                            else:
-                                content_to_check = json.dumps(inner, ensure_ascii=False)
+                            content_to_check = json.dumps(inner, ensure_ascii=False)
                     elif "error" in parsed:
                         content_to_check = str(parsed["error"])
             except (json.JSONDecodeError, TypeError):
@@ -4949,30 +4939,33 @@ class ChatybotApp:
                         except Exception as e:
                             print(f"Warning: Failed to update main process CWD to {path}: {e}")
 
-                # Automatically populate script_vars if tool call requested target_variable and tool succeeded
-                try:
-                    res_json = json.loads(result.stdout)
-                    if isinstance(res_json, dict) and res_json.get("status") == "success":
-                        inner_res = res_json.get("result", {})
-                        target_var = None
-                        val = None
-                        if isinstance(inner_res, dict):
-                            target_var = inner_res.get("target_variable")
-                            val = inner_res.get("result")
-                        if not target_var and tool_call and isinstance(tool_call, dict):
-                            target_var = tool_call.get("arguments", {}).get("target_variable")
-                        if target_var and val is not None:
-                            var_name = str(target_var).strip().lstrip("$")
-                            self.buffer_manager.set_script_var(var_name, val, allow_protected=True)
-                            if isinstance(inner_res, dict):
-                                if "confidence" in inner_res:
-                                    self.buffer_manager.set_script_var(f"{var_name}_conf", f"{float(inner_res['confidence']):.2f}", allow_protected=True)
-                                if "top_probability" in inner_res:
-                                    self.buffer_manager.set_script_var(f"{var_name}_prob", f"{float(inner_res['top_probability']):.2f}", allow_protected=True)
-                except (json.JSONDecodeError, TypeError):
-                    pass
+                final_output = await _finalize_tool_return(result.stdout)
 
-                return await _finalize_tool_return(result.stdout)
+                # Automatically populate script_vars if tool call requested target_variable and tool succeeded and output was allowed
+                if final_output == result.stdout:
+                    try:
+                        res_json = json.loads(result.stdout)
+                        if isinstance(res_json, dict) and res_json.get("status") == "success":
+                            inner_res = res_json.get("result", {})
+                            target_var = None
+                            val = None
+                            if isinstance(inner_res, dict):
+                                target_var = inner_res.get("target_variable")
+                                val = inner_res.get("result")
+                            if not target_var and tool_call and isinstance(tool_call, dict):
+                                target_var = tool_call.get("arguments", {}).get("target_variable")
+                            if target_var and val is not None:
+                                var_name = str(target_var).strip().lstrip("$")
+                                self.buffer_manager.set_script_var(var_name, val, allow_protected=True)
+                                if isinstance(inner_res, dict):
+                                    if "confidence" in inner_res:
+                                        self.buffer_manager.set_script_var(f"{var_name}_conf", f"{float(inner_res['confidence']):.2f}", allow_protected=True)
+                                    if "top_probability" in inner_res:
+                                        self.buffer_manager.set_script_var(f"{var_name}_prob", f"{float(inner_res['top_probability']):.2f}", allow_protected=True)
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+
+                return final_output
 
             
         except (json.JSONDecodeError, TypeError) as e:
@@ -7313,6 +7306,10 @@ class ChatybotApp:
         else:
             self.buffer_manager.set_script_var('TOOL_CONTEXT', '')
         self._tool_state_snapshot = None
+        if hasattr(self, "_declined_skill_tool_configs"):
+            self._declined_skill_tool_configs.clear()
+        if hasattr(self, "_applied_skill_tool_configs"):
+            self._applied_skill_tool_configs.clear()
         return True
 
     def _adapt_command_result(self, result: CommandResult) -> bool | str:

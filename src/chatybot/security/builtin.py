@@ -577,16 +577,22 @@ class BuiltinPolicyEngine(BasePolicyEngine):
                 prompt_details=details,
             )
 
-        # 2. Evaluate output DSL rules against the output request
+        # 2. Evaluate output DSL rules against the output request.
+        # In output-phase matching, ignore rules whose field is a parameter (e.g. command, path),
+        # requiring an explicit output/result/content field or wildcard.
+        def _is_output_rule(rule: SecurityRuleAST) -> bool:
+            clean = (rule.param_name or "").lower().replace("_", "").replace("-", "")
+            return clean in ("output", "result", "stdout", "content", "contents", "body", "text", "response", "*", "any")
+
         for dsl_rule in self.deny_dsl_rules:
-            if dsl_rule.matches(request):
+            if _is_output_rule(dsl_rule) and dsl_rule.matches(request):
                 reason = dsl_rule.reason or f"Matched output security DSL rule: '{dsl_rule.raw_text}'"
                 if self.debug:
                     print(f"[Security Debug] [OUTPUT DENY] '{request.tool}' -> {reason}")
                 return PolicyDecision(verdict=Verdict.DENY, reason=reason)
 
         for dsl_rule in self.ask_dsl_rules:
-            if dsl_rule.matches(request):
+            if _is_output_rule(dsl_rule) and dsl_rule.matches(request):
                 reason = dsl_rule.reason or f"Matched output security DSL rule: '{dsl_rule.raw_text}'"
                 if self.debug:
                     print(f"[Security Debug] [OUTPUT ASK] '{request.tool}' -> {reason}")
@@ -598,7 +604,7 @@ class BuiltinPolicyEngine(BasePolicyEngine):
                 return PolicyDecision(verdict=Verdict.ASK, reason=reason, prompt_details=details)
 
         for dsl_rule in self.allow_dsl_rules:
-            if dsl_rule.matches(request):
+            if _is_output_rule(dsl_rule) and dsl_rule.matches(request):
                 reason = dsl_rule.reason or f"Matched output security DSL rule: '{dsl_rule.raw_text}'"
                 if self.debug:
                     print(f"[Security Debug] [OUTPUT ALLOW] '{request.tool}' -> {reason}")

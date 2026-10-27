@@ -11,6 +11,11 @@ from pathlib import Path
 
 from .env_utils import load_env_file
 
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib  # type: ignore
+
 DEFAULT_CONFIG_PATH = Path("~/.config/chatybot/security.toml").expanduser()
 DEFAULT_RUBRIC_PATH = Path("~/.config/chatybot/jev_security.toml").expanduser()
 BUNDLED_SECURITY_TOML = Path(__file__).resolve().parent / "security" / "default_security.toml"
@@ -98,23 +103,8 @@ def _configure_security_toml(mode: str) -> None:
     else:
         content = f'engine = "{engine_val}"\n' + content
 
-    # 2. Ensure [jev] section is active (uncomment or add)
-    jev_section_active = re.search(r'^\s*\[jev\]', content, flags=re.MULTILINE)
-    if not jev_section_active:
-        # Check if commented [jev] exists
-        if "# [jev]" in content:
-            # Uncomment the [jev] block, allowing for blank lines or varied comments until next section
-            pattern = re.compile(r'#\s*\[jev\][\s\S]*?(?=\n\s*\[|\n\s*#\s*\[|\Z)', re.MULTILINE)
-            m = pattern.search(content)
-            if m:
-                uncommented = "\n".join(
-                    re.sub(r'^#\s?', '', line) if line.strip().startswith('#') else line
-                    for line in m.group(0).splitlines()
-                ) + "\n"
-                content = content[:m.start()] + uncommented + content[m.end():]
-        else:
-            jev_block = f"""
-[jev]
+    # 2. Ensure [jev] section is active (replace or add)
+    jev_block = f"""[jev]
 rubric_path       = "{DEFAULT_RUBRIC_PATH}"
 model             = "typesafe/jev-1.13"
 timeout_seconds   = 2.5
@@ -124,19 +114,25 @@ cache             = true
 redact_secrets    = true
 log_path          = "~/.config/chatybot/logs/jev_security.jsonl"
 """
-            content += jev_block
+    jev_section_active = re.search(r'^\s*\[jev\]', content, flags=re.MULTILINE)
+    if jev_section_active:
+        content = re.sub(r'\[jev\][\s\S]*?(?=\n\[|\Z)', jev_block.strip() + "\n", content, count=1)
+    else:
+        # Check if commented [jev] exists
+        if "# [jev]" in content:
+            pattern = re.compile(r'#\s*\[jev\][\s\S]*?(?=\n\s*\[|\n\s*#\s*\[|\Z)', re.MULTILINE)
+            m = pattern.search(content)
+            if m:
+                content = content[:m.start()] + jev_block.strip() + "\n" + content[m.end():]
+            else:
+                content += "\n" + jev_block
+        else:
+            content += "\n" + jev_block
 
     # 3. Configure [chain] section if requested
     if mode in ("shadow", "dual_enforce"):
         jev_stage_mode = "shadow" if mode == "shadow" else "enforce"
-        chain_section_active = re.search(r'^\s*\[chain\]', content, flags=re.MULTILINE)
-        if chain_section_active:
-            # Replace existing [chain] block. Relies on the next [section]
-            # header or EOF to terminate the block; safe for the bundled
-            # default config and typical user edits.
-            content = re.sub(
-                r'\[chain\][\s\S]*?(?=\n\[|\Z)',
-                f"""[chain]
+        chain_block = f"""[chain]
 stages = [
   {{ engine = "builtin", mode = "enforce" }},
   {{ engine = "jev",     mode = "{jev_stage_mode}"  }},
@@ -144,7 +140,12 @@ stages = [
 shadow_on_deny = true
 log_path       = "~/.config/chatybot/logs/security_chain.jsonl"
 redact_log     = true
-""",
+"""
+        chain_section_active = re.search(r'^\s*\[chain\]', content, flags=re.MULTILINE)
+        if chain_section_active:
+            content = re.sub(
+                r'\[chain\][\s\S]*?(?=\n\[|\Z)',
+                chain_block.strip() + "\n",
                 content,
                 count=1,
             )
@@ -154,27 +155,14 @@ redact_log     = true
                 pattern = re.compile(r'#\s*\[chain\][\s\S]*?(?=\n\s*\[|\n\s*#\s*\[|\Z)', re.MULTILINE)
                 m = pattern.search(content)
                 if m:
-                    chain_block = f"""[chain]
-stages = [
-  {{ engine = "builtin", mode = "enforce" }},
-  {{ engine = "jev",     mode = "{jev_stage_mode}"  }},
-]
-shadow_on_deny = true
-log_path       = "~/.config/chatybot/logs/security_chain.jsonl"
-redact_log     = true
-"""
-                    content = content[:m.start()] + chain_block + content[m.end():]
+                    content = content[:m.start()] + chain_block.strip() + "\n" + content[m.end():]
+                else:
+                    content += "\n" + chain_block
             else:
-                content += f"""
-[chain]
-stages = [
-  {{ engine = "builtin", mode = "enforce" }},
-  {{ engine = "jev",     mode = "{jev_stage_mode}"  }},
-]
-shadow_on_deny = true
-log_path       = "~/.config/chatybot/logs/security_chain.jsonl"
-redact_log     = true
-"""
+                content += "\n" + chain_block
+
+    # Validate generated TOML
+    tomllib.loads(content)
 
     with open(DEFAULT_CONFIG_PATH, "w", encoding="utf-8") as f:
         f.write(content)

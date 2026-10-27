@@ -97,8 +97,7 @@ class SecurityManager:
                     config_to_load,
                     e,
                 )
-                if self.debug:
-                    print(f"[Security Warning] Failed to parse security policy file '{config_to_load}': {e}. Falling back to defaults.")
+                print(f"[Security Warning] Failed to parse security policy file '{config_to_load}': {e}. Falling back to defaults.")
                 self.config = {}
 
         raw_fail_safe = str(self.config.get("fail_safe", "deny")).strip().lower()

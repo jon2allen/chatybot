@@ -589,6 +589,10 @@ def _handle_exit(ctx: CommandContext) -> CommandResult:
     """
     app = ctx.app
     active = getattr(app, "active_skill", None)
+    if hasattr(app, "_declined_skill_tool_configs"):
+        app._declined_skill_tool_configs.clear()
+    if hasattr(app, "_applied_skill_tool_configs"):
+        app._applied_skill_tool_configs.clear()
     if active:
         print(f"Released active skill lock: '{active}'.")
         app.active_skill = None
@@ -698,6 +702,10 @@ def _handle_on_off(ctx: CommandContext, enable: bool) -> CommandResult:
 
 def _handle_restore(ctx: CommandContext) -> CommandResult:
     app = ctx.app
+    if hasattr(app, "_declined_skill_tool_configs"):
+        app._declined_skill_tool_configs.clear()
+    if hasattr(app, "_applied_skill_tool_configs"):
+        app._applied_skill_tool_configs.clear()
     if not hasattr(app, "_restore_tool_state_snapshot") or not callable(app._restore_tool_state_snapshot):
         print("No tool state snapshot available to restore.")
         return CommandResult.ok()

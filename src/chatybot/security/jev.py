@@ -434,6 +434,8 @@ class JevPolicyEngine(BasePolicyEngine):
         trunc_state = {"truncated": False}
         max_chars = min(self.max_content_chars, 4000)
         output_preview = _prepare(output, self.redact_secrets, max_chars, trunc_state)
+        params_trunc_state = {"truncated": False}
+        params = _prepare(request.parameters or {}, self.redact_secrets, self.max_content_chars, params_trunc_state)
 
         context = {
             "phase": "output_inspection",
@@ -449,19 +451,19 @@ class JevPolicyEngine(BasePolicyEngine):
             cached, cached_rec = self._cache[cache_key]
             if self.debug:
                 print(f"[Security Debug] [JEV] Output cache hit for '{tool}': {cached.verdict.value}")
-            self._log(request, request.parameters, cached_rec, cached, 0.0, source="cache")
+            self._log(request, params, cached_rec, cached, 0.0, source="cache")
             return dataclasses.replace(cached)
 
         api_key = self._get_api_key()
         if not api_key:
             decision = self._error_decision(request, f"API key '{self.api_key_env}' is not set")
-            self._log(request, request.parameters, None, decision, 0.0, source="error", error="missing API key")
+            self._log(request, params, None, decision, 0.0, source="error", error="missing API key")
             return decision
 
         state_action = {
             "phase": "output_inspection",
             "tool": tool,
-            "parameters": request.parameters or {},
+            "parameters": params,
             "context": context,
             "output_preview": output_preview,
         }
@@ -483,7 +485,7 @@ class JevPolicyEngine(BasePolicyEngine):
             if self.debug:
                 print(f"[Security Debug] [JEV] Output check failed after {ms:.0f} ms: {e}")
             decision = self._error_decision(request, f"{type(e).__name__}: {str(e)[:200]}")
-            self._log(request, request.parameters, None, decision, ms, source="error", error=str(e)[:300])
+            self._log(request, params, None, decision, ms, source="error", error=str(e)[:300])
             return decision
         ms = (time.perf_counter() - t0) * 1000
 
@@ -501,7 +503,7 @@ class JevPolicyEngine(BasePolicyEngine):
         decision = self._decision(tool, verdict, reasons)
         if self.debug:
             print(f"[Security Debug] [JEV] Output of '{tool}' -> {verdict.upper()} in {ms:.0f} ms: {decision.reason}")
-        self._log(request, request.parameters, rec, decision, ms, source="api", usage=resp.get("usage"))
+        self._log(request, params, rec, decision, ms, source="api", usage=resp.get("usage"))
         if self.cache_enabled:
             self._cache[cache_key] = (decision, rec)
             if len(self._cache) > self.cache_size:
