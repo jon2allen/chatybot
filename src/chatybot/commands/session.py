@@ -82,6 +82,7 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
         app.session_first_prompt_slug = None
         app.session_notes = None
         app.session_mode = "on" if app.session_mode == "off" else app.session_mode
+        app._reset_session_cache_stats()
         app._acquire_session_lock(app.active_session_id)
         store = app._get_session_store()
         try:
@@ -315,6 +316,7 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
         app.session_model_alias = sdata.get("model_alias")
         app.session_created_at = sdata.get("created_at")
         app.session_first_prompt_slug = sdata.get("first_prompt_slug")
+        app._reset_session_cache_stats()
         # Separate LLM turns from command action verb events
         llm_turns = [t for t in turns if t.get("type") != "command" and "prompt" in t]
         app.session_turns = llm_turns

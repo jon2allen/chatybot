@@ -634,3 +634,14 @@ The §5.6 mockup shows `NetSavings=+$0.0126` on the trace line. As built, the
 line carries `Key | In | Read (hit %) | Write`; the savings figure appears in
 `/cachekey status` (and the completion summary) only when model pricing is
 configured (see 8.6).
+
+### 8.11 Per-API-call cache metrics in agentic loop records (addition)
+Beyond the proposal, each agentic-loop tool record persisted in the session
+store (`turns.jsonl`, `agentic_loop` entries) now carries a `cache` object —
+`prompt_tokens`, `cached_tokens`, `cache_write_tokens`, `hit_pct` — reflecting
+the completion that *requested* that tool call. The turn record also carries
+loop-level totals under `cache_stats` (`api_calls`, summed tokens). This
+exists because only the last completion's telemetry was previously visible:
+cumulative `/cachekey status` numbers could not be decomposed after the fact.
+Counters degrade to 0 in streaming mode, where per-call usage is not parsed.
+The same per-call cache object is printed by `/trace agentic_loop`.
