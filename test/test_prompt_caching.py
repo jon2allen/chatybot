@@ -247,10 +247,70 @@ class TestCacheTelemetry:
         assert "agentic_loop, or cache" in out
 
     def test_net_savings_computed_with_price(self, app):
+        # Fallback rate: read 0.50, write 1.00 (no write surcharge)
         savings = app._compute_cache_net_savings({"input_cost_per_mtok": 2.5}, 1000, 200)
-        # gross: 1000 * (2.5 - 1.25) / 1e6 ; write: 200 * (3.125 - 2.5) / 1e6
-        expected = 1000 * 1.25 / 1e6 - 200 * 0.625 / 1e6
+        expected = 1000 * 2.5 * (1.0 - 0.50) / 1e6
         assert savings == pytest.approx(expected)
+
+    def test_net_savings_mistral(self, app):
+        # Mistral rate: read 0.10 (90% off), write 1.00 (no write surcharge)
+        savings = app._compute_cache_net_savings(
+            {"input_cost_per_mtok": 2.5, "vendor": "mistral"}, 1000, 200
+        )
+        expected = 1000 * 2.5 * 0.90 / 1e6
+        assert savings == pytest.approx(expected)
+
+    def test_net_savings_anthropic_with_write_penalty(self, app):
+        # Anthropic rate: read 0.10 (90% off), write 1.25 (25% warm-up surcharge)
+        savings = app._compute_cache_net_savings(
+            {"input_cost_per_mtok": 2.5, "vendor": "anthropic"}, 1000, 200
+        )
+        saved_on_reads = 1000 * 2.5 * (1.0 - 0.10) / 1e6
+        paid_for_writes = 200 * 2.5 * (1.25 - 1.0) / 1e6
+        assert savings == pytest.approx(saved_on_reads - paid_for_writes)
+
+    def test_net_savings_openrouter_upstream_resolution(self, app):
+        # OpenRouter model with mistralai/ prefix resolves Mistral defaults
+        savings = app._compute_cache_net_savings(
+            {
+                "input_cost_per_mtok": 2.0,
+                "vendor": "openrouter",
+                "name": "mistralai/mistral-large-2411",
+            },
+            1000,
+            200,
+        )
+        expected = 1000 * 2.0 * 0.90 / 1e6
+        assert savings == pytest.approx(expected)
+
+        # OpenRouter model with anthropic/ prefix resolves Anthropic defaults
+        savings_claude = app._compute_cache_net_savings(
+            {
+                "input_cost_per_mtok": 3.0,
+                "vendor": "openrouter",
+                "name": "anthropic/claude-3-5-sonnet",
+            },
+            1000,
+            200,
+        )
+        expected_claude = (1000 * 3.0 * 0.90 - 200 * 3.0 * 0.25) / 1e6
+        assert savings_claude == pytest.approx(expected_claude)
+
+    def test_net_savings_config_multipliers_override(self, app):
+        # Explicit TOML config fields override vendor defaults
+        savings = app._compute_cache_net_savings(
+            {
+                "input_cost_per_mtok": 15.0,
+                "vendor": "anthropic",
+                "cache_read_multiplier": 0.05,
+                "cache_write_multiplier": 2.00,
+            },
+            1000,
+            200,
+        )
+        saved = 1000 * 15.0 * (1.0 - 0.05) / 1e6
+        written = 200 * 15.0 * (2.00 - 1.0) / 1e6
+        assert savings == pytest.approx(saved - written)
 
     def test_net_savings_none_without_price(self, app):
         assert app._compute_cache_net_savings({}, 1000, 200) is None
