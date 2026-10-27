@@ -240,6 +240,10 @@ class BuiltinPolicyEngine(BasePolicyEngine):
             "find_files",
         ) or tool.startswith("mcp__"):
             candidate_paths: list[str] = []
+            # Comprehensive key identifiers for candidate path extraction across built-in
+            # file operations and heterogeneous third-party MCP tools/plugins.
+            # Includes singular and plural variants (e.g. files, paths, targets, inputs)
+            # where paths or filenames may be passed as scalar strings or lists.
             path_keys = {
                 "path", "paths", "file", "files", "target", "targets", "input", "inputs",
                 "dir", "directory", "filename", "filepath", "targetpath", "targetfile",
