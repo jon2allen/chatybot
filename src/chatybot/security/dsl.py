@@ -78,9 +78,17 @@ class SecurityRuleAST:
             matched_tool = False
             if req_tool == rule_tool:
                 matched_tool = True
-            elif rule_tool == "write_file" and (req_tool in WRITE_TOOL_GROUP or any(req_tool.endswith("__" + w) for w in WRITE_TOOL_GROUP) or fnmatch.fnmatch(req_tool, "*write*")):
+            elif rule_tool == "write_file" and (
+                req_tool in WRITE_TOOL_GROUP
+                or any(req_tool.endswith("__" + w) for w in WRITE_TOOL_GROUP)
+                or (self.action in (Verdict.DENY, Verdict.ASK) and fnmatch.fnmatch(req_tool, "*write*"))
+            ):
                 matched_tool = True
-            elif rule_tool == "read_file" and (req_tool in READ_TOOL_GROUP or any(req_tool.endswith("__" + r) for r in READ_TOOL_GROUP) or fnmatch.fnmatch(req_tool, "*read*")):
+            elif rule_tool == "read_file" and (
+                req_tool in READ_TOOL_GROUP
+                or any(req_tool.endswith("__" + r) for r in READ_TOOL_GROUP)
+                or (self.action in (Verdict.DENY, Verdict.ASK) and fnmatch.fnmatch(req_tool, "*read*"))
+            ):
                 matched_tool = True
             elif fnmatch.fnmatch(req_tool, rule_tool):
                 matched_tool = True

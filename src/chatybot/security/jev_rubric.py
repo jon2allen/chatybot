@@ -254,5 +254,6 @@ def parse_choice(answer: dict[str, Any] | None) -> dict[str, Any] | None:
     conf = answer.get("confidence")
     conf_v = valid_probability(conf)
     if not probs and choice in STRICTNESS and conf_v is not None:
-        probs = {choice: conf_v}
+        rem = max(0.0, 1.0 - conf_v) / 2.0
+        probs = {c: (conf_v if c == choice else rem) for c in ("allow", "ask", "deny")}
     return {"choice": choice, "probabilities": probs, "confidence": conf}
