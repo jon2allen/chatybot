@@ -239,25 +239,15 @@ def db_list(app: Any = None) -> dict[str, Any]:
                 entries = 0
             else:
                 with open(db_path, "r", encoding="utf-8", errors="ignore") as f:
-                    text = f.read()
-                # Fast count of top-level document entries in TinyDB without parsing all document contents
-                m_table = re.search(r'"(?:items|_default)"\s*:\s*\{', text)
-                if not m_table:
-                    entries = 0
+                    data = json.load(f)
+                if isinstance(data, dict):
+                    entries = (
+                        len(data.get("items", {}))
+                        if "items" in data
+                        else len(data.get("_default", {}))
+                    )
                 else:
-                    m = re.findall(r'"(\d+)"\s*:\s*\{', text)
-                    if m:
-                        entries = len(m)
-                    elif re.search(r'"(?:items|_default)"\s*:\s*\{\s*\}', text):
-                        entries = 0
-                    else:
-                        # Fallback for non-numeric keys
-                        data = json.loads(text)
-                        entries = (
-                            len(data.get("items", {}))
-                            if "items" in data
-                            else len(data.get("_default", {}))
-                        )
+                    entries = 0
         except Exception:
             entries = -1
 
