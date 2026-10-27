@@ -168,6 +168,7 @@ class ChatybotApp:
         #   "keep"   - keep raw <think> tags inside assistant content
         #   "field"  - pass reasoning via reasoning_content on assistant messages
         self.reasoning_history_mode: str = "auto"
+        self._models_needing_missing_thinking: set[str] = set()
         self.default_profile: str | None = None
         self._openai_clients: dict[str, Any] = {}
         
@@ -942,7 +943,7 @@ class ChatybotApp:
         return candidate
 
     @staticmethod
-    @lru_cache(maxsize=2048)
+    @lru_cache(maxsize=128)
     def _extract_thinking_tokens(response_text: str) -> tuple[str | None, str]:
         """Extract reasoning traces from response text. Handles closed and unclosed thinking blocks.
         
@@ -1640,6 +1641,7 @@ class ChatybotApp:
         """Call create(); if the server rejects stripped reasoning and
         reasoning_history_mode is 'auto', retry with allow_missing_thinking=true
         and backfilled reasoning_content on prior assistant messages."""
+        model_name = str(kwargs.get("model", "")).strip()
         try:
             return await client.chat.completions.create(**kwargs)
         except Exception as e:
@@ -1668,7 +1670,10 @@ class ChatybotApp:
                                 msg["reasoning_content"] = thinking_text if thinking_text else " "
 
                 try:
-                    return await client.chat.completions.create(**retry_kwargs)
+                    res = await client.chat.completions.create(**retry_kwargs)
+                    if model_name:
+                        self._models_needing_missing_thinking.add(model_name)
+                    return res
                 except Exception as inner_e:
                     # If still rejected, check if server strictly demands reasoning_content
                     # (some servers require reasoning_content specifically rather than thinking/reasoning)
@@ -1683,7 +1688,10 @@ class ChatybotApp:
                                     )
                                     changed = True
                         if changed:
-                            return await client.chat.completions.create(**retry_kwargs)
+                            res = await client.chat.completions.create(**retry_kwargs)
+                            if model_name:
+                                self._models_needing_missing_thinking.add(model_name)
+                            return res
                     raise
             raise
 
@@ -2119,6 +2127,19 @@ class ChatybotApp:
                     cleaned_messages.append(updated_msg)
                 else:
                     cleaned_messages.append(msg)
+
+            # If this model was previously detected as needing allow_missing_thinking, apply up front
+            model_key = str(kwargs.get("model", "")).strip()
+            if mode == "auto" and model_key and model_key in self._models_needing_missing_thinking:
+                kwargs.setdefault("extra_body", {}).setdefault(
+                    "chat_template_kwargs", {}
+                )["allow_missing_thinking"] = True
+                for msg in cleaned_messages:
+                    if isinstance(msg, dict) and msg.get("role") == "assistant":
+                        if not (msg.get("reasoning_content") or msg.get("thinking") or msg.get("reasoning")):
+                            thinking_text, _ = self._extract_thinking_tokens(msg.get("content", ""))
+                            msg["reasoning_content"] = thinking_text if thinking_text else " "
+
             kwargs["messages"] = cleaned_messages
 
             tps_records = []
@@ -4237,7 +4258,14 @@ class ChatybotApp:
             return f"{tool_name}:{args_json}"
         return f"{tool_name}:{tool_args}"
 
-    def _serve_loop_refusal(self, store: dict[str, tuple[str, str, str]] | None, tool_name: str, tool_args: Any, kind: str) -> str | None:
+    def _serve_loop_refusal(
+        self,
+        store: dict[str, tuple[str, str, str]] | None,
+        tool_name: str,
+        tool_args: Any,
+        kind: str,
+        refusal_key: str | None = None,
+    ) -> str | None:
         """Return a refusal remembered earlier in this tool loop, or None.
 
         ``kind`` is "pre-execution" or "output". On a hit the tool is neither
@@ -4246,7 +4274,7 @@ class ChatybotApp:
         """
         if not getattr(self, "in_tool_loop", False) or store is None or not tool_name:
             return None
-        key = self._build_security_refusal_key(tool_name, tool_args)
+        key = refusal_key if refusal_key is not None else self._build_security_refusal_key(tool_name, tool_args)
         if key not in store:
             return None
         cached_res, cached_err, orig_req_id = store[key]
@@ -4509,10 +4537,10 @@ class ChatybotApp:
             # Refusals remembered in this tool loop: no new evaluation, prompt or execution.
             # Output refusals are checked too, so a tool whose output was refused is not run again.
             sec_cache_key = None
-            if getattr(self, "in_tool_loop", False) and self._loop_security_refusals is not None and tool_name:
+            if getattr(self, "in_tool_loop", False) and tool_name:
                 sec_cache_key = self._build_security_refusal_key(tool_name, tool_args)
             for _store, _kind in ((self._loop_security_refusals, "pre-execution"), (self._loop_output_refusals, "output")):
-                _cached = self._serve_loop_refusal(_store, tool_name, tool_args, _kind)
+                _cached = self._serve_loop_refusal(_store, tool_name, tool_args, _kind, refusal_key=sec_cache_key)
                 if _cached is not None:
                     return _cached
 

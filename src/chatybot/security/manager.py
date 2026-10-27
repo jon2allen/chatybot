@@ -65,8 +65,7 @@ class SecurityManager:
         self.non_interactive_ask: str = "deny"
         self.max_refusals_per_loop: int = 3
         self.engine: BasePolicyEngine | None = None
-        from chatybot.security.secret_scanner import SecretScanner
-        self.secret_scanner: SecretScanner = SecretScanner()
+        self.secret_scanner: Any = None
 
         if self.enabled:
             self._load_config_and_initialize()
@@ -140,6 +139,11 @@ class SecurityManager:
 
         from chatybot.security.secret_scanner import SecretScanner
         self.secret_scanner = SecretScanner(rules=output_cfg.get("rules"))
+        try:
+            import chatybot.security.jev as jev_mod
+            jev_mod._SCANNER = self.secret_scanner
+        except Exception:
+            pass
 
         engine_type = str(self.config.get("engine", "builtin")).lower()
 
@@ -289,6 +293,7 @@ class SecurityManager:
             chatybot_exec_policy=chatybot_exec_policy,
             allow_chatybot_subprocess=allow_chatybot_subprocess,
             allow_env_override=allow_env_override,
+            secret_scanner=self.secret_scanner,
             debug=self.debug,
         )
 

@@ -285,6 +285,12 @@ class SecretScanner:
         self._compiled_rules: list[
             tuple[re.Pattern[str], Verdict, str, tuple[str, ...] | None, tuple[str, ...] | None, str | None]
         ] = []
+        self._deny_rules: list[
+            tuple[re.Pattern[str], Verdict, str, tuple[str, ...] | None, tuple[str, ...] | None, str | None]
+        ] = []
+        self._ask_rules: list[
+            tuple[re.Pattern[str], Verdict, str, tuple[str, ...] | None, tuple[str, ...] | None, str | None]
+        ] = []
         for r in raw_rules:
             pat_str = r.get("pattern", "")
             if not pat_str:
@@ -301,7 +307,12 @@ class SecretScanner:
             validator = r.get("validator")
             if validator is not None and validator not in VALIDATORS:
                 validator = None
-            self._compiled_rules.append((compiled, verdict, message, lits, lits_ci, validator))
+            rule_entry = (compiled, verdict, message, lits, lits_ci, validator)
+            self._compiled_rules.append(rule_entry)
+            if verdict == Verdict.DENY:
+                self._deny_rules.append(rule_entry)
+            else:
+                self._ask_rules.append(rule_entry)
 
         self._custom_known_secrets = known_secrets
         self._config_env_path = config_env_path
@@ -398,12 +409,14 @@ class SecretScanner:
         text, n = self._PEM_BLOCK.subn("<redacted-private-key>", text)
         count += n
 
+        lowered_text: str | None = None
         for pattern, _verdict, _message, lits, lits_ci, validator in self._compiled_rules:
             if lits is not None and not any(lit in text for lit in lits):
                 continue
             if lits_ci is not None:
-                low = text.lower()
-                if not any(lit in low for lit in lits_ci):
+                if lowered_text is None:
+                    lowered_text = text.lower()
+                if not any(lit in lowered_text for lit in lits_ci):
                     continue
             hits = 0
 
@@ -423,8 +436,11 @@ class SecretScanner:
                 hits += 1
                 return "<redacted>"
 
+            prev_text = text
             text = pattern.sub(_replace, text)
             count += hits
+            if hits > 0 and text != prev_text:
+                lowered_text = None
         return text, count
 
     def scan(self, text: str) -> tuple[Verdict, str] | None:
@@ -451,12 +467,11 @@ class SecretScanner:
             return any(_validate_match(validator, m) for m in pattern.finditer(text))
 
         # 1. Check DENY rules first (e.g. private cryptographic keys)
-        for pattern, verdict, message, lits, lits_ci, validator in self._compiled_rules:
-            if verdict == Verdict.DENY:
-                if not _matches_literals(lits, lits_ci):
-                    continue
-                if _rule_hits(pattern, validator):
-                    return verdict, message
+        for pattern, verdict, message, lits, lits_ci, validator in self._deny_rules:
+            if not _matches_literals(lits, lits_ci):
+                continue
+            if _rule_hits(pattern, validator):
+                return verdict, message
 
         # 2. Check known secrets from environment and config files (exact substring match)
         for secret_val, key_name in self._cached_known_secrets.items():
@@ -464,11 +479,10 @@ class SecretScanner:
                 return Verdict.ASK, f"Secret scanner: Output contains configured secret ({key_name})"
 
         # 3. Check remaining pattern rules (e.g. ASK) with literal pre-filtering
-        for pattern, verdict, message, lits, lits_ci, validator in self._compiled_rules:
-            if verdict != Verdict.DENY:
-                if not _matches_literals(lits, lits_ci):
-                    continue
-                if _rule_hits(pattern, validator):
-                    return verdict, message
+        for pattern, verdict, message, lits, lits_ci, validator in self._ask_rules:
+            if not _matches_literals(lits, lits_ci):
+                continue
+            if _rule_hits(pattern, validator):
+                return verdict, message
 
         return None

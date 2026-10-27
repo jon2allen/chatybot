@@ -103,6 +103,7 @@ class BuiltinPolicyEngine(BasePolicyEngine):
         chatybot_exec_policy: str = "deny",
         allow_chatybot_subprocess: bool | None = None,
         allow_env_override: bool = True,
+        secret_scanner: SecretScanner | None = None,
         debug: bool = False,
     ):
         self.debug = debug
@@ -124,6 +125,7 @@ class BuiltinPolicyEngine(BasePolicyEngine):
         self.output_rules = (
             output_rules if output_rules is not None else list(self.DEFAULT_OUTPUT_RULES)
         )
+        self._shared_secret_scanner = secret_scanner
         if self._custom_output_rules:
             self._output_scanner = SecretScanner(rules=self.output_rules, known_secrets={})
         else:
@@ -364,7 +366,7 @@ class BuiltinPolicyEngine(BasePolicyEngine):
                             extract_write_contents(item, depth + 1)
 
                 extract_write_contents(params)
-                scanner = self._output_scanner or self._default_output_scanner
+                scanner = self._output_scanner or self._shared_secret_scanner or self._default_output_scanner
                 if scanner is None:
                     self._default_output_scanner = SecretScanner()
                     scanner = self._default_output_scanner
@@ -551,31 +553,34 @@ class BuiltinPolicyEngine(BasePolicyEngine):
         if not output.strip():
             return PolicyDecision(verdict=Verdict.ALLOW, reason="Empty output.")
 
-        # Custom rules use their own scanner; otherwise one default-rules scanner is built
-        # on first use and reused (it compiles the rules and loads known secrets from the
-        # environment and .env files, which used to happen on every call).
+        # Custom rules use their own scanner. When running under SecurityManager
+        # (self._shared_secret_scanner is provided), the floor check has already
+        # scanned with the default rules; builtin avoids redundant double-scanning.
+        # When running standalone without custom output rules, fallback to a scanner.
         scanner = self._output_scanner
-        if scanner is None:
+        if scanner is None and self._shared_secret_scanner is None:
             if self._default_output_scanner is None:
                 self._default_output_scanner = SecretScanner()
             scanner = self._default_output_scanner
-        match = scanner.scan(output)
-        if match is not None:
-            verdict, reason = match
-            if self.debug:
-                print(f"[Security Debug] [OUTPUT RULE] '{request.tool}' output matched -> {verdict.value.upper()}")
-            details = None
-            if verdict == Verdict.ASK:
-                details = PolicyPromptDetails(
-                    title=f"Sensitive Output in {request.tool}",
-                    message=f"Output from '{request.tool}' contains potential sensitive data: {reason}. Allow LLM to view?",
-                    risk_level="high",
+
+        if scanner is not None:
+            match = scanner.scan(output)
+            if match is not None:
+                verdict, reason = match
+                if self.debug:
+                    print(f"[Security Debug] [OUTPUT RULE] '{request.tool}' output matched -> {verdict.value.upper()}")
+                details = None
+                if verdict == Verdict.ASK:
+                    details = PolicyPromptDetails(
+                        title=f"Sensitive Output in {request.tool}",
+                        message=f"Output from '{request.tool}' contains potential sensitive data: {reason}. Allow LLM to view?",
+                        risk_level="high",
+                    )
+                return PolicyDecision(
+                    verdict=verdict,
+                    reason=f"Builtin output rule: {reason}",
+                    prompt_details=details,
                 )
-            return PolicyDecision(
-                verdict=verdict,
-                reason=f"Builtin output rule: {reason}",
-                prompt_details=details,
-            )
 
         # 2. Evaluate output DSL rules against the output request.
         # In output-phase matching, ignore rules whose field is a parameter (e.g. command, path),
