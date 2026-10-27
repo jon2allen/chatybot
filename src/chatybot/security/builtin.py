@@ -241,11 +241,17 @@ class BuiltinPolicyEngine(BasePolicyEngine):
         ) or tool.startswith("mcp__"):
             candidate_paths: list[str] = []
             path_keys = {
-                "path", "file", "target", "dir", "directory",
-                "filename", "filepath", "targetpath", "targetfile",
+                "path", "paths", "file", "files", "target", "targets", "input", "inputs",
+                "dir", "directory", "filename", "filepath", "targetpath", "targetfile",
                 "source", "destination", "dest", "sourcefile", "destfile",
-                "sourcepath", "destpath", "cwd", "workdir", "workingdir", "paths",
+                "sourcepath", "destpath", "cwd", "workdir", "workingdir",
             }
+            is_mcp = tool.startswith("mcp__")
+
+            def looks_like_path(s: str) -> bool:
+                s_strip = s.strip()
+                return s_strip.startswith(("/", "~", "./", "../"))
+
             def extract_paths_recursive(data: Any, depth: int = 0, is_path_context: bool = False):
                 if depth > 10:
                     return
@@ -255,8 +261,12 @@ class BuiltinPolicyEngine(BasePolicyEngine):
                         is_path_field = (
                             k_clean in path_keys
                             or k_clean.endswith("path")
+                            or k_clean.endswith("paths")
                             or k_clean.endswith("file")
+                            or k_clean.endswith("files")
                             or k_clean.endswith("dir")
+                            or k_clean.endswith("target")
+                            or k_clean.endswith("targets")
                             or k_clean.endswith("workdir")
                         )
                         if is_path_field:
@@ -270,12 +280,15 @@ class BuiltinPolicyEngine(BasePolicyEngine):
                                         extract_paths_recursive(item, depth + 1, is_path_context=True)
                             elif isinstance(v, dict):
                                 extract_paths_recursive(v, depth + 1, is_path_context=True)
+                        elif isinstance(v, str):
+                            if is_mcp and looks_like_path(v):
+                                candidate_paths.append(v)
                         elif isinstance(v, (dict, list)):
                             extract_paths_recursive(v, depth + 1, is_path_context=False)
                 elif isinstance(data, list):
                     for item in data:
                         if isinstance(item, str):
-                            if is_path_context:
+                            if is_path_context or (is_mcp and looks_like_path(item)):
                                 candidate_paths.append(item)
                         elif isinstance(item, (dict, list)):
                             extract_paths_recursive(item, depth + 1, is_path_context=is_path_context)
