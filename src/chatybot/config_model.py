@@ -77,6 +77,18 @@ class BaseModelConfig(BaseModel):
     api_key: str | None = None
     """Name of the environment variable holding the actual API key."""
 
+    prompt_caching: bool | None = None
+    """Per-model prompt-caching override. None inherits [default].prompt_caching."""
+
+    prompt_cache_key: str | None = None
+    """Static prompt cache key override. When omitted, the cache key is bound
+    to the active session (or profile) at runtime. Never put secrets in this
+    value — cache keys may appear in provider-side logs."""
+
+    input_cost_per_mtok: float | None = None
+    """Base input price in USD per million tokens. Optional; enables net
+    prompt-cache savings figures in /cachekey status and /trace cache output."""
+
     temperature: float | None = None
     """Sampling temperature. None means 'use provider default'."""
 
@@ -267,6 +279,11 @@ class DefaultSettings(BaseModel):
 
     model: str | None = None
     """Alias of the model to use as the default (e.g. 'mistral_1')."""
+
+    prompt_caching: bool = True
+    """Global prompt-caching default. Individual model tables may override
+    with their own ``prompt_caching`` key. See
+    doc/proposal_prompt_caching_and_cache_key_controls.md §5.5."""
 
 
 # ============================================================================

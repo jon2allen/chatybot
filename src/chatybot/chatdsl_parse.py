@@ -194,6 +194,8 @@ class TParser:
         "env", "str_search", "debug", "config", "setup_keys", "migrate_sessions",
         # Documentation viewer
         "docs", "doc",
+        # Prompt caching controls
+        "cachekey",
         # Skills & Decision engine
         "skill", "decide"
     }

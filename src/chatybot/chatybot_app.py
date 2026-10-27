@@ -117,7 +117,7 @@ class ChatybotApp:
                 "loadvar", "savevar", "setvar", "notemode", "mem", "dump", "trace", "debug",
                 "run", "run_safe", "run_unsafe", "tool", "proc", "defproc", "endproc", "local", "foreach", "endfor", "break",
                 "session", "replay", "context", "ctx", "context_limit", "auto_truncate", "env", "chatdsl", "docs", "doc",
-                "skill",
+                "skill", "cachekey",
                 "ask", "decide", "str_search", "continue"
             ]
         )
@@ -245,6 +245,26 @@ class ChatybotApp:
         self.trace_tps_perf: bool = False
         self.trace_rerank: bool = False
         self.trace_agentic_loop: bool = False
+        self.trace_cache: bool = False
+        # Prompt caching state. prompt_caching_disabled is a session-only
+        # runtime toggle (/cachekey off|on); persistent config lives in
+        # chat_config.toml ([default].prompt_caching / per-model
+        # prompt_caching) and is surfaced through ConfigManager.
+        self.prompt_caching_disabled: bool = False
+        self.custom_cache_key: str | None = None
+        # Cache telemetry from the most recent completion (reset each turn).
+        self.last_cached_tokens: int = 0
+        self.last_cache_write_tokens: int = 0
+        self.last_prompt_tokens: int = 0
+        self.last_prompt_cache_key: str | None = None
+        # Cumulative cache telemetry for the active session.
+        self.session_cached_tokens: int = 0
+        self.session_cache_write_tokens: int = 0
+        self.session_prompt_tokens: int = 0
+        # Name of the most recently applied profile (/profile use); None
+        # until a profile is applied. Used as the non-session cache-key
+        # fallback. Set by handle_profile_command().
+        self.active_profile_name: str | None = None
         self.debug_payload_mode: bool = False
         self.debug_response_mode: bool = False
         self.debug_response_raw: bool = False
@@ -1401,6 +1421,166 @@ class ChatybotApp:
         return client
 
     @staticmethod
+    def _tool_sort_key(t: Any) -> str:
+        """Stable sort key for tool definitions across payload shapes.
+
+        Handles OpenAI-style ({"function": {"name": ...}}), Anthropic-style
+        ({"name": ...}), non-dict tool objects, and malformed entries so the
+        tools payload serializes byte-identically across turns (a prerequisite
+        for automatic prefix caching).
+        """
+        if isinstance(t, dict):
+            return str((t.get("function") or {}).get("name") or t.get("name") or "")
+        fn = getattr(t, "function", None)
+        return str(getattr(fn, "name", None) or getattr(t, "name", None) or "")
+
+    @staticmethod
+    def _apply_anthropic_breakpoints(kwargs: dict[str, Any]) -> None:
+        """Inject cache_control breakpoints for Anthropic models (via OpenRouter).
+
+        Places an ephemeral breakpoint on the LAST tool definition (caching the
+        system prompt + tool/MCP schema suite) and on the system message.
+        Both mutations deep-copy the mutated container so the caller's
+        conversation history is never modified in place — in-place tagging
+        would accumulate cache_control markers across turns and eventually
+        exceed Anthropic's 4-breakpoint limit.
+
+        Known gap (see doc/proposal §2.4): conversation-history turns are not
+        breakpoint-cached; only the prefix through system + tools is.
+        """
+        tools = kwargs.get("tools")
+        if tools and isinstance(tools, list):
+            tools_copy = list(tools)
+            last_tool = tools_copy[-1]
+            if isinstance(last_tool, dict):
+                last_tool = copy.deepcopy(last_tool)
+                last_tool["cache_control"] = {"type": "ephemeral"}
+                tools_copy[-1] = last_tool
+                kwargs["tools"] = tools_copy
+
+        messages = kwargs.get("messages")
+        if messages and isinstance(messages, list) and messages and isinstance(messages[0], dict) and messages[0].get("role") == "system":
+            system_msg = copy.deepcopy(messages[0])
+            content = system_msg.get("content")
+            if isinstance(content, str):
+                system_msg["content"] = [
+                    {"type": "text", "text": content, "cache_control": {"type": "ephemeral"}}
+                ]
+            elif isinstance(content, list) and content and isinstance(content[-1], dict):
+                content = copy.deepcopy(content)
+                content[-1] = dict(content[-1])
+                content[-1]["cache_control"] = {"type": "ephemeral"}
+                system_msg["content"] = content
+            else:
+                system_msg = None
+            if system_msg is not None:
+                kwargs["messages"] = [system_msg] + list(messages[1:])
+
+    def _resolve_prompt_cache_key(self, model_config: dict[str, Any]) -> str | None:
+        """Resolve the prompt cache key according to the priority hierarchy.
+
+        1. Explicit disable (per-model config, global [default] config, or /cachekey off)
+        2. ChatDSL protected variable ${PROMPT_CACHE_KEY}
+        3. Manual user command (/cachekey set <name>)
+        4. Per-model prompt_cache_key override in chat_config.toml
+        5. Active session binding (default)
+        6. Profile fallback for non-session queries
+        """
+        # 1. Disabled explicitly (runtime toggle wins; then per-model, then [default])
+        if getattr(self, "prompt_caching_disabled", False):
+            return None
+        if model_config.get("prompt_caching") is False:
+            return None
+        if self.config_manager.prompt_caching_default is False:
+            return None
+
+        # 2. ChatDSL protected variable override (${PROMPT_CACHE_KEY})
+        script_var = None
+        if self.buffer_manager is not None:
+            script_var = self.buffer_manager.get_script_var("PROMPT_CACHE_KEY")
+        if script_var and str(script_var).strip():
+            return str(script_var).strip()
+
+        # 3. Manual user command override (/cachekey set <name>)
+        if getattr(self, "custom_cache_key", None):
+            return self.custom_cache_key
+
+        # 4. Model configuration override in chat_config.toml
+        config_key = model_config.get("prompt_cache_key")
+        if config_key and str(config_key).strip():
+            return str(config_key).strip()
+
+        # 5. Active session binding (default)
+        if self.active_session_id:
+            return f"chatybot-{self.active_session_id}"
+
+        # 6. Profile fallback for non-session queries
+        active_profile = getattr(self, "active_profile_name", None) or "general"
+        return f"chatybot-profile-{active_profile}"
+
+    def _apply_prompt_caching(self, kwargs: dict[str, Any], model_config: dict[str, Any]) -> None:
+        """Provider-aware prompt caching payload adaptation.
+
+        - Mistral: top-level prompt_cache_key in extra_body.
+        - OpenRouter: session_id sticky routing + prompt_cache_key passthrough;
+          normalized cache_control breakpoints for Claude models.
+        - OpenAI / DeepSeek / Gemini / vLLM / Ollama: standard payload; caching
+          is automatic and depends only on prefix stability.
+        """
+        cache_key = self._resolve_prompt_cache_key(model_config)
+        self.last_prompt_cache_key = cache_key
+        if not cache_key:
+            return
+
+        base_url = (model_config.get("base_url") or "").lower()
+        vendor = (model_config.get("vendor") or "").lower()
+        is_mistral = "mistral.ai" in base_url or vendor == "mistral"
+        is_openrouter = "openrouter.ai" in base_url or vendor == "openrouter"
+        model_name_lower = (model_config.get("name") or "").lower()
+
+        # Prefix stabilization: serialize tools deterministically regardless of
+        # provider, whenever a tools payload is present.
+        if isinstance(kwargs.get("tools"), list):
+            kwargs["tools"] = sorted(kwargs["tools"], key=self._tool_sort_key)
+
+        if is_mistral:
+            kwargs.setdefault("extra_body", {})["prompt_cache_key"] = cache_key
+        elif is_openrouter:
+            extra = kwargs.setdefault("extra_body", {})
+            # OpenRouter native session_id activates sticky routing on request #1,
+            # pinning the upstream provider instance for the conversation.
+            if self.active_session_id:
+                extra["session_id"] = f"chatybot-{self.active_session_id}"
+            # Honored by Mistral upstreams; serves as the sticky-routing fallback.
+            extra["prompt_cache_key"] = cache_key
+            # Claude models: inject normalized cache_control breakpoints.
+            if "claude" in model_name_lower:
+                self._apply_anthropic_breakpoints(kwargs)
+        # OpenAI / DeepSeek / vLLM / Gemini: no payload changes needed.
+
+    def _compute_cache_net_savings(
+        self, model_config: dict[str, Any], cached_tokens: int, cache_write_tokens: int
+    ) -> float | None:
+        """Net financial benefit of prompt caching for one completion, in USD.
+
+        Requires a known base input price via model config
+        (``input_cost_per_mtok``, USD per million tokens). Returns None when the
+        price is unknown so callers can omit savings instead of guessing.
+        """
+        cost_per_mtok = model_config.get("input_cost_per_mtok")
+        try:
+            cost_per_mtok = float(cost_per_mtok) if cost_per_mtok is not None else None
+        except (ValueError, TypeError):
+            return None
+        if not cost_per_mtok or cost_per_mtok <= 0:
+            return None
+        cached_rate = 0.5 * cost_per_mtok   # 50% discount (OpenAI standard; conservative elsewhere)
+        write_rate = 1.25 * cost_per_mtok   # 1.25x warm-up surcharge (OpenAI/Anthropic standard tier)
+        gross_savings = cached_tokens * (cost_per_mtok - cached_rate) / 1_000_000
+        write_surcharge = cache_write_tokens * (write_rate - cost_per_mtok) / 1_000_000
+        return gross_savings - write_surcharge
+
+    @staticmethod
     def _is_missing_reasoning_error(e: Exception) -> bool:
         """Detect the strict-template 400 that demands reasoning in past turns."""
         msg = str(e).lower()
@@ -1777,6 +1957,12 @@ class ChatybotApp:
                     kwargs.setdefault("extra_body", {})["random_seed"] = current_seed
                 else:
                     kwargs["seed"] = current_seed
+
+        # Provider-aware prompt caching: resolve the cache key, inject
+        # provider-specific fields (Mistral prompt_cache_key, OpenRouter
+        # session_id sticky routing, Anthropic cache_control breakpoints),
+        # and serialize tools deterministically for prefix caching.
+        self._apply_prompt_caching(kwargs, model_config)
 
         try:
             start_time = time.time()
@@ -2294,11 +2480,72 @@ class ChatybotApp:
             # Reset reasoning token count for this completion; updated below if
             # the provider exposes reasoning token usage.
             self.last_reasoning_tokens = 0
+            # Reset prompt-cache telemetry for this completion; updated below
+            # when the provider reports cached/write token usage.
+            self.last_cached_tokens = 0
+            self.last_cache_write_tokens = 0
+            self.last_prompt_tokens = 0
             if hasattr(response, "usage") and response.usage:
                 out_tokens = response.usage.completion_tokens
-                print(
-                    f"Input tokens: {response.usage.prompt_tokens}, Output tokens: {out_tokens}"
-                )
+                prompt_tokens = response.usage.prompt_tokens
+
+                # Extract cached-read and cache-write token counts.
+                # Standard OpenAI / OpenRouter / DeepSeek schema:
+                #   usage.prompt_tokens_details.cached_tokens
+                # Anthropic native schema fallback:
+                #   usage.cache_read_input_tokens / cache_creation_input_tokens
+                cached_tokens = 0
+                cache_write_tokens = 0
+
+                def _as_int(value: Any) -> int:
+                    # Only accept real numbers: getattr on loosely-typed
+                    # response objects can return arbitrary objects.
+                    return int(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else 0
+
+                try:
+                    p_details = getattr(response.usage, "prompt_tokens_details", None)
+                    if p_details is not None:
+                        cached_tokens = _as_int(getattr(p_details, "cached_tokens", 0))
+                        # cache_write_tokens is not part of OpenAI's schema;
+                        # some proxies expose it. Degrades to 0 when absent.
+                        cache_write_tokens = _as_int(getattr(p_details, "cache_write_tokens", 0))
+                    if not cached_tokens:
+                        cached_tokens = _as_int(getattr(response.usage, "cache_read_input_tokens", 0))
+                    if not cache_write_tokens:
+                        cache_write_tokens = _as_int(getattr(response.usage, "cache_creation_input_tokens", 0))
+                except (ValueError, TypeError):
+                    cached_tokens = 0
+                    cache_write_tokens = 0
+                self.last_cached_tokens = cached_tokens
+                self.last_cache_write_tokens = cache_write_tokens
+                self.last_prompt_tokens = prompt_tokens
+                # Update cumulative session cache statistics.
+                self.session_cached_tokens += cached_tokens
+                self.session_cache_write_tokens += cache_write_tokens
+                self.session_prompt_tokens += prompt_tokens
+
+                if cached_tokens > 0 or cache_write_tokens > 0:
+                    hit_pct = (cached_tokens / prompt_tokens) * 100 if prompt_tokens else 0
+                    details = f"{cached_tokens} read"
+                    if cache_write_tokens > 0:
+                        details += f", {cache_write_tokens} write"
+                    savings = self._compute_cache_net_savings(model_config, cached_tokens, cache_write_tokens)
+                    savings_txt = f", net savings ${savings:.4f}" if savings is not None else ""
+                    print(
+                        f"Tokens: {prompt_tokens} in ({details} / {hit_pct:.0f}% hit rate), {out_tokens} out{savings_txt}"
+                    )
+                else:
+                    print(
+                        f"Input tokens: {prompt_tokens}, Output tokens: {out_tokens}"
+                    )
+
+                if self.trace_cache:
+                    hit_pct = (cached_tokens / prompt_tokens) * 100 if prompt_tokens else 0
+                    print(
+                        f"[TRACE:CACHE] Key={self.last_prompt_cache_key!r} | "
+                        f"In={prompt_tokens} | Read={cached_tokens} ({hit_pct:.0f}%) | "
+                        f"Write={cache_write_tokens}"
+                    )
                 # Capture reasoning token count if the provider reports it
                 # (e.g. OpenAI completion_tokens_details.reasoning_tokens).
                 try:
@@ -7096,6 +7343,9 @@ class ChatybotApp:
             try:
                 path = pm._resolve_path(args[1])
                 await self.execute_script(path)
+                # Track the applied profile name for the prompt-cache-key
+                # profile fallback (see _resolve_prompt_cache_key).
+                self.active_profile_name = args[1]
                 print(f"[profile] Applied: {args[1]}")
             except Exception as e:
                 print(f"Error applying profile: {e}")

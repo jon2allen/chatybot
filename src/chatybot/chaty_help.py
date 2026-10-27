@@ -219,7 +219,23 @@ class HelpSystem:
             long_desc="Display all models configured in the chat_config.toml file with their aliases.",
             see_also=["/model"]
         ))
-        
+
+        self.register_command(CommandHelp(
+            name="/cachekey",
+            category="model",
+            short_desc="View or control prompt-cache key binding and cache telemetry",
+            usage="/cachekey [status|session|reset|profile|set <name>|on|off]",
+            long_desc=(
+                "Controls the prompt_cache_key sent to model providers for prompt caching. "
+                "By default the key is bound to the active session id. Subcommands: "
+                "status (show key, provider, hit rate, net savings), session/reset (rebind to the "
+                "active session), profile (bind to the active profile), set <name> (custom "
+                "key), on/off (enable or disable cache-key emission)."
+            ),
+            examples=["/cachekey", "/cachekey status", "/cachekey set kb-rag-v1", "/cachekey off"],
+            see_also=["/dblog", "/trace", "/model"]
+        ))
+
         self.register_command(CommandHelp(
             name="/env",
             category="model",

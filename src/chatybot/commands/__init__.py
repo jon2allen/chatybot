@@ -6,6 +6,7 @@ Add new domain modules here as they are created during the phased migration.
 
 from chatybot.commands import (
     buffer,  # noqa: F401  (registers /file, /filebank1-5, /imagebank1-5, etc.)
+    cachekey,  # noqa: F401  (registers /cachekey)
     db,  # noqa: F401  (registers /setdb, /dblist, /searchdb, etc.)
     debug,  # noqa: F401  (registers /echo)
     debug_misc,  # noqa: F401  (registers /trace, /debug, /prompt, /logging, etc.)

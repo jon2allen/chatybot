@@ -975,6 +975,8 @@ set my_limit = 16000
 | `/trace imagedbg` | Debug | `/trace imagedbg [on\|off]` | Image generation debug |
 | `/trace rerank` | Debug | `/trace rerank [on\|off]` | Rerank operation tracing |
 | `/trace agentic_loop` | Debug | `/trace agentic_loop [on\|off]` | Agentic loop tracing |
+| `/trace cache` | Debug | `/trace cache [on\|off]` | Per-turn prompt-cache telemetry line |
+| `/cachekey` | Model | `/cachekey [status\|session\|reset\|profile\|set <name>\|on\|off]` | View/control the prompt-cache key binding and cache telemetry |
 | `/debug` | Debug | `/debug <payload\|response\|vmem>` | Debug mode settings |
 | `/logging` | Debug | `/logging [start\|end]` | Start/stop file logging |
 | `/mem` | Debug | `/mem [detail\|debug]` | Show memory usage |

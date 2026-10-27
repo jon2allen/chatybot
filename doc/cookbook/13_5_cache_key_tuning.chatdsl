@@ -1,0 +1,13 @@
+# Recipe 13.5 - Prompt-cache key tuning
+# Goal: inspect cache telemetry, pin a shared cache key for a RAG batch,
+# and restore the automatic session binding afterwards.
+# Run: /script doc/cookbook/13_5_cache_key_tuning.chatdsl
+
+/cachekey status
+/cachekey set kb-rag-v1
+/model mistral_1
+Summarize the key ideas of KV-cache reuse in transformer inference.
+/cachekey status
+/cachekey session
+/model mistral_1
+Now contrast KV-cache reuse with prefix caching.

@@ -27,6 +27,11 @@ default_quality = "standard"
 # Target/trigger percentage for auto truncation (10.0 to 100.0, default: 100.0)
 # auto_truncate_pct = 90.0
 #
+# Enable or disable prompt caching globally across all models (default: true).
+# Individual [models.<alias>] tables may override with their own
+# prompt_caching = false, or pin a static cache key with prompt_cache_key = "...".
+# prompt_caching = true
+#
 # Example:
 #   [default]
 #   model = "mistral_1"
