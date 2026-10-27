@@ -369,6 +369,27 @@ def dblog(include_thinking: bool = False) -> None:
 
     metadata["prompt"] = last_prompt
 
+    # Prompt-caching telemetry from the most recent completion. These are
+    # secondary metadata; a missing app instance or attribute must never
+    # abort the log.
+    def _cache_int(value: Any) -> int:
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return 0
+
+    def _cache_key_str(value: Any) -> str | None:
+        if value is None:
+            return None
+        try:
+            return str(value)
+        except Exception:
+            return None
+
+    metadata["cached_tokens"] = _cache_int(getattr(app_instance, "last_cached_tokens", 0)) if app_instance else 0
+    metadata["cache_write_tokens"] = _cache_int(getattr(app_instance, "last_cache_write_tokens", 0)) if app_instance else 0
+    metadata["prompt_cache_key"] = _cache_key_str(getattr(app_instance, "last_prompt_cache_key", None)) if app_instance else None
+
     # Thinking/reasoning awareness. The thinking text is embedded in
     # the stored response as <think>...</think> tags (standardized at
     # completion time).

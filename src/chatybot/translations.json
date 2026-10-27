@@ -32,7 +32,8 @@
       "/docs": "/docs",
       "/doc": "/docs",
       "/decide": "/decide",
-      "/skill": "/skill"
+      "/skill": "/skill",
+      "/cachekey": "/cachekey"
     },
     "keywords": {
       "set": "set",
@@ -127,7 +128,10 @@
       "wizard": "wizard",
       "enable": "enable",
       "disable": "disable",
-      "edit": "edit"
+      "edit": "edit",
+      "session": "session",
+      "reset": "reset",
+      "profile": "profile"
     },
     "ui": {
       "language_changed": "Language set to: {lang}",
@@ -148,7 +152,25 @@
       "security_blocked_non_interactive": "Security Policy Blocked: Non-interactive execution of '{tool}' rejected by non_interactive_ask policy (Reason: {reason}).",
       "security_declined_msg": "Security Authorization Denied: User declined execution of '{tool}'.",
       "security_refusal_final": "Do not retry this action or an equivalent one. Tell the user what you were trying to do and ask how to proceed.",
-      "security_refusal_limit_reached": "Reached security refusal limit ({limit}) in tool loop. Terminating loop."
+      "security_refusal_limit_reached": "Reached security refusal limit ({limit}) in tool loop. Terminating loop.",
+      "ui.cache_status": "Prompt Cache Status",
+      "ui.cache_status_label": "Status:",
+      "ui.cache_active_key": "Active Key:",
+      "ui.cache_provider": "Provider:",
+      "ui.cache_cached_tokens": "Cached Tokens:",
+      "ui.cache_write_tokens": "Write Tokens:",
+      "ui.cache_session_hit": "Session Hit Rate:",
+      "ui.cache_net_savings": "Est. Net Savings:",
+      "ui.cache_no_data": "No cache telemetry yet (no completion reported cached tokens).",
+      "ui.cache_status_disabled": "Disabled",
+      "ui.cache_status_auto": "Enabled (Auto Session)",
+      "ui.cache_status_custom": "Custom Key",
+      "ui.cache_reset_session": "Cache key reset to the active session: chatybot-{cache_key}",
+      "ui.cache_reset_no_session": "Custom key cleared. No active session; key will fall back to the active profile.",
+      "ui.cache_bound_profile": "Cache key bound to active profile: {cache_key}",
+      "ui.cache_set": "Cache key set to: {cache_key}",
+      "ui.cache_off": "Prompt cache-key emission disabled (this session only).",
+      "ui.cache_on": "Prompt cache-key emission enabled."
     },
     "help": {
       "headers": {
@@ -288,7 +310,8 @@
       "/docs": "/docs",
       "/doc": "/docs",
       "/habilidad": "/skill",
-      "/skill": "/skill"
+      "/skill": "/skill",
+      "/clavedecache": "/cachekey"
     },
     "keywords": {
       "informacion": "info",
@@ -465,7 +488,11 @@
       "aprender": "learn",
       "aplicar": "apply",
       "importar": "import",
-      "asistente": "wizard"
+      "asistente": "wizard",
+      "sesion": "session",
+      "reiniciar": "reset",
+      "reajustar": "reset",
+      "perfil": "profile"
     },
     "ui": {
       "language_changed": "Idioma establecido en: {lang}",
@@ -852,7 +879,8 @@
       "/docs": "/docs",
       "/doc": "/docs",
       "/competence": "/skill",
-      "/skill": "/skill"
+      "/skill": "/skill",
+      "/clecache": "/cachekey"
     },
     "keywords": {
       "informations": "info",
@@ -1033,7 +1061,11 @@
       "apprendre": "learn",
       "appliquer": "apply",
       "importer": "import",
-      "assistant": "wizard"
+      "assistant": "wizard",
+      "session": "session",
+      "reinitialiser": "reset",
+      "reajuster": "reset",
+      "profil": "profile"
     },
     "ui": {
       "language_changed": "Langue définie sur : {lang}",
@@ -1423,7 +1455,8 @@
       "/docs": "/docs",
       "/doc": "/docs",
       "/技能": "/skill",
-      "/skill": "/skill"
+      "/skill": "/skill",
+      "/缓存键": "/cachekey"
     },
     "keywords": {
       "信息": "info",
@@ -1596,7 +1629,10 @@
       "学习": "learn",
       "应用": "apply",
       "导入": "import",
-      "向导": "wizard"
+      "向导": "wizard",
+      "会话": "session",
+      "重置": "reset",
+      "配置文件": "profile"
     },
     "ui": {
       "language_changed": "语言设置为: {lang}",
@@ -1983,7 +2019,8 @@
       "/docs": "/docs",
       "/doc": "/docs",
       "/competenza": "/skill",
-      "/skill": "/skill"
+      "/skill": "/skill",
+      "/chiavecache": "/cachekey"
     },
     "keywords": {
       "informazioni": "info",
@@ -2151,7 +2188,11 @@
       "impara": "learn",
       "applica": "apply",
       "importa": "import",
-      "procedura": "wizard"
+      "procedura": "wizard",
+      "sessione": "session",
+      "reimpostare": "reset",
+      "resetta": "reset",
+      "profilo": "profile"
     },
     "ui": {
       "language_changed": "Lingua impostata su: {lang}",
@@ -2539,7 +2580,8 @@
       "/docs": "/docs",
       "/doc": "/docs",
       "/مهارة": "/skill",
-      "/skill": "/skill"
+      "/skill": "/skill",
+      "/مفتاح-الكاش": "/cachekey"
     },
     "keywords": {
       "معلومات": "info",
@@ -2715,7 +2757,11 @@
       "تعلم": "learn",
       "تطبيق": "apply",
       "استيراد": "import",
-      "معالج": "wizard"
+      "معالج": "wizard",
+      "حالة": "status",
+      "جلسة": "session",
+      "إعادة": "reset",
+      "ملف-التعريف": "profile"
     },
     "ui": {
       "language_changed": "تغيرت اللغة لـ: {lang}",

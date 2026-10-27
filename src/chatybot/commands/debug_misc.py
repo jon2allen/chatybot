@@ -16,7 +16,7 @@ from chatybot.commands.registry import CommandResult, command
 from chatybot.extract_code import process_file
 
 
-@command("/trace", help="Toggle trace flags", args="<rawpayload|tps|tpsperf|imagedbg|rerank|agentic_loop> <on|off>", category="debug")
+@command("/trace", help="Toggle trace flags", args="<rawpayload|tps|tpsperf|imagedbg|rerank|agentic_loop|cache> <on|off>", category="debug")
 async def cmd_trace(ctx: CommandContext, parts: list, command: str) -> CommandResult:
     app = ctx.app
     if len(parts) >= 3:
@@ -27,11 +27,11 @@ async def cmd_trace(ctx: CommandContext, parts: list, command: str) -> CommandRe
         extra = command.split()[3:]
         if extra:
             print(f"Error: unexpected argument(s) after '{state}': {' '.join(extra)}")
-            print("Usage: /trace <rawpayload|tps|tpsperf|imagedbg|rerank|agentic_loop> <on|off>")
+            print("Usage: /trace <rawpayload|tps|tpsperf|imagedbg|rerank|agentic_loop|cache> <on|off>")
             return CommandResult.ok()
         if state not in ("on", "off"):
             print(f"Error: invalid state '{state}'. Use 'on' or 'off'.")
-            print("Usage: /trace <rawpayload|tps|tpsperf|imagedbg|rerank|agentic_loop> <on|off>")
+            print("Usage: /trace <rawpayload|tps|tpsperf|imagedbg|rerank|agentic_loop|cache> <on|off>")
             return CommandResult.ok()
         is_on = state == "on"
         if subcmd == "rawpayload":
@@ -63,10 +63,13 @@ async def cmd_trace(ctx: CommandContext, parts: list, command: str) -> CommandRe
             else:
                 app.trace_agentic_loop = True
                 print("Agentic loop trace display enabled.")
+        elif subcmd == "cache":
+            app.trace_cache = is_on
+            print(f"Trace cache set to {is_on}")
         else:
-            print("Unknown /trace subcommand. Use rawpayload, tps, tpsperf, imagedbg, rerank, or agentic_loop.")
+            print("Unknown /trace subcommand. Use rawpayload, tps, tpsperf, imagedbg, rerank, agentic_loop, or cache.")
     else:
-        print("Usage: /trace <rawpayload|tps|tpsperf|imagedbg|rerank|agentic_loop> <on|off>")
+        print("Usage: /trace <rawpayload|tps|tpsperf|imagedbg|rerank|agentic_loop|cache> <on|off>")
     return CommandResult.ok()
 
 

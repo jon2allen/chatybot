@@ -1623,6 +1623,32 @@ What are the trade-offs of LSM trees compared to B-Trees?
 3. `/session export csv <file> -t` produces a `QUOTE_ALL` CSV containing timestamps, TPS, timing, prompts, responses, and reasoning traces for spreadsheet or database ingestion.
 4. For agentic tool loops, `/tool export csv <file>` or `/tool history csv <file>` exports step-by-step tool execution traces and timings.
 
+### 13.5 Prompt-cache key tuning
+- **Goal:** inspect prompt-cache telemetry, pin a shared cache key for RAG/batch runs, and restore automatic session binding.
+- **Commands:** `/cachekey [status|session|reset|profile|set <name>|on|off]`, `/trace cache on|off`.
+- **Script:** `cookbook/13_5_cache_key_tuning.chatdsl`
+- **Run:** `/script doc/cookbook/13_5_cache_key_tuning.chatdsl`
+
+```dsl
+/cachekey status
+/cachekey set kb-rag-v1
+/model mistral_1
+Summarize the key ideas of KV-cache reuse in transformer inference.
+/cachekey status
+/cachekey session
+/model mistral_1
+Now contrast KV-cache reuse with prefix caching.
+```
+
+**Walkthrough**
+1. `/cachekey status` shows the active key, provider, cached/write token counts, hit rate, and (when `input_cost_per_mtok` is configured for the model) estimated net savings after cache-write warm-up surcharges.
+2. By default the cache key is bound to the active session (`chatybot-<session_id>`), so multi-turn chats and tool loops hit the provider KV cache automatically.
+3. `/cachekey set <name>` pins a custom key so separate sessions running the same corpus share one cached prefix — useful for repeated RAG queries or batch evaluations. `${PROMPT_CACHE_KEY}` is the script-variable equivalent.
+4. `/cachekey session` (synonym: `/cachekey reset`) clears the custom key and rebinds to the active session; `/cachekey profile` binds to the most recently applied profile; `/cachekey off` disables cache-key emission for the current session only.
+5. `/trace cache on` prints a per-turn `[TRACE:CACHE]` line (key, input/read/write tokens, hit rate) after each completion.
+
+**Variations:** add `prompt_caching = false` to a `[models.<alias>]` table (or `[default]`) to disable prompt caching persistently in `chat_config.toml`.
+
 ---
 
 ## Chapter 14 — Novel Use Cases
@@ -2338,6 +2364,7 @@ if "${TOOL_DISPATCH_EXIT_CODE}" == "0" then /echo Permitted workspace write conf
 | 13.1 | Tracing | `/trace` | new |
 | 13.2 | Inspecting state | `/dump` `/mem` `/showfile` `/debug` | new |
 | 13.3 | Performance & rate limits | `wait` `/context_limit` `/auto_truncate` | new |
+| 13.5 | Prompt-cache key tuning | `/cachekey` `/trace cache` `${PROMPT_CACHE_KEY}` | new |
 | 14.1 | Autonomous research agent | `/tool loop` + `/rerank` + `/dblog` | novel |
 | 14.2 | Iterative image refinement | `/imagine` + vision + `foreach` | novel |
 | 14.3 | LLM-as-judge ensemble vote | multi-model + `/rerank` vote | novel |
@@ -2377,7 +2404,7 @@ if "${TOOL_DISPATCH_EXIT_CODE}" == "0" then /echo Permitted workspace write conf
 | 10 Profiles | HowTo: Profile Management; Profile Commands |
 | 11 Macros | Macro Syntax; `chatdsl_macro_implementation.md` |
 | 12 Localization | Multi-Language Support; `multilingual_cross_reference.md` |
-| 13 Diagnostics | Diagnostics & Monitoring; Diagnostics Commands |
+| 13 Diagnostics | Diagnostics & Monitoring; Diagnostics Commands; Prompt-Cache Controls (`/cachekey`) |
 | 14 Novel Use Cases | (no existing counterpart) |
 | 15 Dynamic Skill Loading | (new — see Dynamic Skill Loading section in `chatdsl_guide_v1.md`) |
 | 16 Pluggable Security | (new — see `pluggable_security.md` and `tools/racf-guard/README.md`) |

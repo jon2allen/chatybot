@@ -22,6 +22,9 @@ class ConfigManager:
         self.top_k: int | None = None
         self.freq_penalty: float | None = None
         self.pres_penalty: float | None = None
+        # Global prompt-caching default from [default].prompt_caching
+        # (per-model tables may override with their own prompt_caching key).
+        self.prompt_caching_default: bool = True
         self.enable_chat_history: bool = True
         self.auto_truncate: bool = False
         self.auto_truncate_pct: float = 100.0
@@ -60,6 +63,10 @@ class ConfigManager:
         # otherwise fall back to the first model in TOML order.
         default_cfg = self.config.get("default", {})
         default_model = default_cfg.get("model") if isinstance(default_cfg, dict) else None
+        # Global prompt-caching default (chatybot resolves the per-model
+        # prompt_caching override at completion time from the model config).
+        if isinstance(default_cfg, dict) and "prompt_caching" in default_cfg:
+            self.prompt_caching_default = bool(default_cfg["prompt_caching"])
         if default_model and default_model in self.config["models"]:
             self.default_model_alias = default_model
         else:
