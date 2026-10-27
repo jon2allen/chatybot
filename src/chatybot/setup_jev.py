@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 import re
 import shutil
-import subprocess
 import sys
 from pathlib import Path
 
@@ -84,6 +83,20 @@ def _seed_files() -> None:
     log_dir.mkdir(parents=True, exist_ok=True)
 
 
+def _upsert_section(content: str, section_name: str, block: str) -> str:
+    """Insert or replace a TOML section, handling active or commented headers."""
+    section_pattern = re.compile(rf'^\s*\[{section_name}\]', re.MULTILINE)
+    clean_block = block.strip() + "\n"
+    if section_pattern.search(content):
+        return re.sub(rf'\[{section_name}\][\s\S]*?(?=\n\[|\Z)', clean_block, content, count=1)
+    if f"# [{section_name}]" in content:
+        pattern = re.compile(rf'#\s*\[{section_name}\][\s\S]*?(?=\n\s*\[|\n\s*#\s*\[|\Z)', re.MULTILINE)
+        m = pattern.search(content)
+        if m:
+            return content[:m.start()] + clean_block + content[m.end():]
+    return content + "\n" + block
+
+
 def _configure_security_toml(mode: str) -> None:
     """Update security.toml with the selected engine/chain mode."""
     with open(DEFAULT_CONFIG_PATH, "r", encoding="utf-8") as f:
@@ -114,20 +127,7 @@ cache             = true
 redact_secrets    = true
 log_path          = "~/.config/chatybot/logs/jev_security.jsonl"
 """
-    jev_section_active = re.search(r'^\s*\[jev\]', content, flags=re.MULTILINE)
-    if jev_section_active:
-        content = re.sub(r'\[jev\][\s\S]*?(?=\n\[|\Z)', jev_block.strip() + "\n", content, count=1)
-    else:
-        # Check if commented [jev] exists
-        if "# [jev]" in content:
-            pattern = re.compile(r'#\s*\[jev\][\s\S]*?(?=\n\s*\[|\n\s*#\s*\[|\Z)', re.MULTILINE)
-            m = pattern.search(content)
-            if m:
-                content = content[:m.start()] + jev_block.strip() + "\n" + content[m.end():]
-            else:
-                content += "\n" + jev_block
-        else:
-            content += "\n" + jev_block
+    content = _upsert_section(content, "jev", jev_block)
 
     # 3. Configure [chain] section if requested
     if mode in ("shadow", "dual_enforce"):
@@ -141,25 +141,7 @@ shadow_on_deny = true
 log_path       = "~/.config/chatybot/logs/security_chain.jsonl"
 redact_log     = true
 """
-        chain_section_active = re.search(r'^\s*\[chain\]', content, flags=re.MULTILINE)
-        if chain_section_active:
-            content = re.sub(
-                r'\[chain\][\s\S]*?(?=\n\[|\Z)',
-                chain_block.strip() + "\n",
-                content,
-                count=1,
-            )
-        else:
-            # Check for commented # [chain]
-            if "# [chain]" in content:
-                pattern = re.compile(r'#\s*\[chain\][\s\S]*?(?=\n\s*\[|\n\s*#\s*\[|\Z)', re.MULTILINE)
-                m = pattern.search(content)
-                if m:
-                    content = content[:m.start()] + chain_block.strip() + "\n" + content[m.end():]
-                else:
-                    content += "\n" + chain_block
-            else:
-                content += "\n" + chain_block
+        content = _upsert_section(content, "chain", chain_block)
 
     # Validate generated TOML
     tomllib.loads(content)
@@ -214,7 +196,7 @@ def main() -> int:
 
     # Step 2: Check / prompt for API key
     print("\n[2/4] Checking OpenRouter API Key...")
-    api_key = _check_and_prompt_api_key()
+    _check_and_prompt_api_key()
 
     # Step 3: Choose configuration mode
     print("\n[3/4] Select Deployment Mode:")

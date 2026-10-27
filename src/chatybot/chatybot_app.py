@@ -1653,7 +1653,6 @@ class ChatybotApp:
                     "[Reasoning history: server requires thinking in past turns. "
                     "Retrying with allow_missing_thinking=true and reasoning_content fallback...]"
                 )
-                import copy
                 retry_kwargs = copy.deepcopy(kwargs)
                 # Pass both top-level and extra_body chat_template_kwargs for broad engine compatibility
                 retry_kwargs.setdefault("extra_body", {}).setdefault(
@@ -1666,7 +1665,7 @@ class ChatybotApp:
                     for msg in retry_kwargs["messages"]:
                         if isinstance(msg, dict) and msg.get("role") == "assistant":
                             if not (msg.get("reasoning_content") or msg.get("thinking") or msg.get("reasoning")):
-                                thinking_text, clean_c = self._extract_thinking_tokens(msg.get("content", ""))
+                                thinking_text, _ = self._extract_thinking_tokens(msg.get("content", ""))
                                 msg["reasoning_content"] = thinking_text if thinking_text else " "
 
                 try:
@@ -4243,6 +4242,24 @@ class ChatybotApp:
             return f"Security refusal (final): {clean_reason} {guidance}"
         return f"Security refusal (final): {clean_reason}. {guidance}"
 
+    def _record_and_format_refusal(
+        self,
+        reason: str,
+        request_id: str = "",
+        cache_key: str | None = None,
+        cache_store: dict | None = None,
+    ) -> str:
+        """Set dispatch script vars, format refusal, cache if requested, and return refusal string."""
+        if hasattr(self, "buffer_manager") and self.buffer_manager is not None:
+            self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
+            self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', reason)
+            self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
+            self.buffer_manager.set_script_var('TOOL_DISPATCH_REQUEST_ID', request_id or "")
+        refusal_str = self._format_security_refusal(reason, request_id or "")
+        if cache_key is not None and cache_store is not None:
+            cache_store[cache_key] = (refusal_str, reason, request_id or "")
+        return refusal_str
+
     def _build_security_refusal_key(self, tool_name: str, tool_args: Any) -> str:
         """Build normalised key for loop security refusal caching."""
         if isinstance(tool_args, str):
@@ -4373,14 +4390,12 @@ class ChatybotApp:
             print(f"\n{deny_header} {deny_msg}")
             if hasattr(self, "logging_manager") and getattr(self.logging_manager, "logging_active", False):
                 self.logging_manager.log_message(f"[Security Audit] BLOCKED OUTPUT of tool '{tool_name}'. Reason: {post_decision.reason}")
-            self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
-            self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', deny_msg)
-            self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
-            self.buffer_manager.set_script_var('TOOL_DISPATCH_REQUEST_ID', getattr(post_decision, "request_id", ""))
-            refusal_str = self._format_security_refusal(deny_msg, getattr(post_decision, "request_id", ""))
-            if output_cache_key is not None and self._loop_output_refusals is not None:
-                self._loop_output_refusals[output_cache_key] = (refusal_str, deny_msg, getattr(post_decision, "request_id", ""))
-            return refusal_str
+            return self._record_and_format_refusal(
+                deny_msg,
+                getattr(post_decision, "request_id", ""),
+                cache_key=output_cache_key,
+                cache_store=self._loop_output_refusals,
+            )
 
         elif post_decision.verdict == Verdict.ASK:
             def _record_post_outcome(outcome: str) -> None:
@@ -4417,14 +4432,12 @@ class ChatybotApp:
                     print(f"\n{deny_header} {block_msg}")
                     if hasattr(self, "logging_manager") and getattr(self.logging_manager, "logging_active", False):
                         self.logging_manager.log_message(f"[Security Audit] BLOCKED NON-INTERACTIVE OUTPUT of tool '{tool_name}'. Reason: {post_decision.reason}")
-                    self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
-                    self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', block_msg)
-                    self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
-                    self.buffer_manager.set_script_var('TOOL_DISPATCH_REQUEST_ID', getattr(post_decision, "request_id", ""))
-                    refusal_str = self._format_security_refusal(block_msg, getattr(post_decision, "request_id", ""))
-                    if output_cache_key is not None and self._loop_output_refusals is not None:
-                        self._loop_output_refusals[output_cache_key] = (refusal_str, block_msg, getattr(post_decision, "request_id", ""))
-                    return refusal_str
+                    return self._record_and_format_refusal(
+                        block_msg,
+                        getattr(post_decision, "request_id", ""),
+                        cache_key=output_cache_key,
+                        cache_store=self._loop_output_refusals,
+                    )
 
             prompt_title = post_decision.prompt_details.title if post_decision.prompt_details else "Sensitive Output Review"
             prompt_msg = post_decision.prompt_details.message if post_decision.prompt_details else f"Output from '{tool_name}' contains potential sensitive material: {post_decision.reason}"
@@ -4454,14 +4467,12 @@ class ChatybotApp:
                 print(f"[Security Block] {cancel_msg}")
                 if hasattr(self, "logging_manager") and getattr(self.logging_manager, "logging_active", False):
                     self.logging_manager.log_message(f"[Security Audit] USER DECLINED OUTPUT of tool '{tool_name}'. Reason: {post_decision.reason}")
-                self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
-                self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', cancel_msg)
-                self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
-                self.buffer_manager.set_script_var('TOOL_DISPATCH_REQUEST_ID', getattr(post_decision, "request_id", ""))
-                refusal_str = self._format_security_refusal(cancel_msg, getattr(post_decision, "request_id", ""))
-                if output_cache_key is not None and self._loop_output_refusals is not None:
-                    self._loop_output_refusals[output_cache_key] = (refusal_str, cancel_msg, getattr(post_decision, "request_id", ""))
-                return refusal_str
+                return self._record_and_format_refusal(
+                    cancel_msg,
+                    getattr(post_decision, "request_id", ""),
+                    cache_key=output_cache_key,
+                    cache_store=self._loop_output_refusals,
+                )
 
         return raw_output
 
@@ -4565,14 +4576,12 @@ class ChatybotApp:
                     print(f"\n{deny_header} {deny_msg}")
                     if hasattr(self, "logging_manager") and getattr(self.logging_manager, "logging_active", False):
                         self.logging_manager.log_message(f"[Security Audit] BLOCKED tool '{tool_name}'. Reason: {sec_decision.reason}")
-                    self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
-                    self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', deny_msg)
-                    self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
-                    self.buffer_manager.set_script_var('TOOL_DISPATCH_REQUEST_ID', getattr(sec_decision, "request_id", ""))
-                    refusal_str = self._format_security_refusal(deny_msg, getattr(sec_decision, "request_id", ""))
-                    if sec_cache_key is not None and self._loop_security_refusals is not None:
-                        self._loop_security_refusals[sec_cache_key] = (refusal_str, deny_msg, getattr(sec_decision, "request_id", ""))
-                    return refusal_str
+                    return self._record_and_format_refusal(
+                        deny_msg,
+                        getattr(sec_decision, "request_id", ""),
+                        cache_key=sec_cache_key,
+                        cache_store=self._loop_security_refusals,
+                    )
                 elif sec_decision.verdict == Verdict.ASK:
                     if getattr(self, "auto_approve", False):
                         _record_sec_outcome("auto_approved_yes_flag")
@@ -4602,14 +4611,12 @@ class ChatybotApp:
                             print(f"\n{deny_header} {cancel_msg}")
                             if hasattr(self, "logging_manager") and getattr(self.logging_manager, "logging_active", False):
                                 self.logging_manager.log_message(f"[Security Audit] BLOCKED non-interactive tool '{tool_name}'. Reason: {sec_decision.reason}")
-                            self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
-                            self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', cancel_msg)
-                            self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
-                            self.buffer_manager.set_script_var('TOOL_DISPATCH_REQUEST_ID', getattr(sec_decision, "request_id", ""))
-                            refusal_str = self._format_security_refusal(cancel_msg, getattr(sec_decision, "request_id", ""))
-                            if sec_cache_key is not None and self._loop_security_refusals is not None:
-                                self._loop_security_refusals[sec_cache_key] = (refusal_str, cancel_msg, getattr(sec_decision, "request_id", ""))
-                            return refusal_str
+                            return self._record_and_format_refusal(
+                                cancel_msg,
+                                getattr(sec_decision, "request_id", ""),
+                                cache_key=sec_cache_key,
+                                cache_store=self._loop_security_refusals,
+                            )
                     else:
                         risk = sec_decision.prompt_details.risk_level if sec_decision.prompt_details else "medium"
                         msg = sec_decision.prompt_details.message if sec_decision.prompt_details else f"Authorize '{tool_name}'?"
@@ -4638,14 +4645,12 @@ class ChatybotApp:
                             if hasattr(self, "logging_manager") and getattr(self.logging_manager, "logging_active", False):
                                 self.logging_manager.log_message(f"[Security Audit] USER DECLINED tool '{tool_name}'. Reason: {sec_decision.reason}")
                             print(f"[Security] {cancel_msg}")
-                            self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
-                            self.buffer_manager.set_script_var('TOOL_DISPATCH_ERROR', cancel_msg)
-                            self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
-                            self.buffer_manager.set_script_var('TOOL_DISPATCH_REQUEST_ID', getattr(sec_decision, "request_id", ""))
-                            refusal_str = self._format_security_refusal(cancel_msg, getattr(sec_decision, "request_id", ""))
-                            if sec_cache_key is not None and self._loop_security_refusals is not None:
-                                self._loop_security_refusals[sec_cache_key] = (refusal_str, cancel_msg, getattr(sec_decision, "request_id", ""))
-                            return refusal_str
+                            return self._record_and_format_refusal(
+                                cancel_msg,
+                                getattr(sec_decision, "request_id", ""),
+                                cache_key=sec_cache_key,
+                                cache_store=self._loop_security_refusals,
+                            )
                         else:
                             _record_sec_outcome("approved")
                             if self.security_debug:
@@ -7204,26 +7209,8 @@ class ChatybotApp:
 
         # When enable_tools is specified, default behavior is to disable all other
         # available tools first, then enable the ones specified by the skill.
-        specified_enables = set(config.get("enable_tools", []))
-        all_available_tools: set[str] = set()
-        if specified_enables:
-            try:
-                cfg = self._load_tools_config()
-                if cfg and "tools" in cfg:
-                    all_available_tools.update(cfg["tools"].keys())
-            except Exception:
-                pass
-            if getattr(self, "mcp_manager", None) and isinstance(getattr(self.mcp_manager, "cached_schemas", None), dict):
-                for server, tlist in self.mcp_manager.cached_schemas.items():
-                    for t in tlist:
-                        all_available_tools.add(f"mcp__{server}__{t.name}")
-            if hasattr(self, "tool_overrides"):
-                all_available_tools.update(self.tool_overrides.keys())
-
-        # Determine tools to disable and enable
-        tools_to_disable = set(config.get("disable_tools", []))
-        if specified_enables:
-            tools_to_disable.update(all_available_tools - specified_enables)
+        from chatybot.tools.skill_utils import resolve_skill_tools_to_disable
+        specified_enables, tools_to_disable = resolve_skill_tools_to_disable(self, config)
 
         enable_diffs = [
             t for t in config.get("enable_tools", [])

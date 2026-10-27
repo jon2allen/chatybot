@@ -29,7 +29,7 @@ except ImportError:
     except ImportError:
         tomllib = None
 
-from chatybot.tool_args import unwrap_tool_args  # noqa: E402  (shared with security; re-exported)
+from chatybot.tool_args import unwrap_tool_args
 
 DEFAULT_CONFIG_PATH = os.path.expanduser("~/.config/chatybot/tools_config.toml")
 if not os.path.exists(DEFAULT_CONFIG_PATH):
