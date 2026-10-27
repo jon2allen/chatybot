@@ -88,9 +88,15 @@ def _upsert_section(content: str, section_name: str, block: str) -> str:
     section_pattern = re.compile(rf'^\s*\[{section_name}\]', re.MULTILINE)
     clean_block = block.strip() + "\n"
     if section_pattern.search(content):
-        return re.sub(rf'\[{section_name}\][\s\S]*?(?=\n\[|\Z)', clean_block, content, count=1)
+        return re.sub(
+            rf'^\s*\[{section_name}\][\s\S]*?(?=\n\s*\[|\Z)',
+            clean_block,
+            content,
+            count=1,
+            flags=re.MULTILINE,
+        )
     if f"# [{section_name}]" in content:
-        pattern = re.compile(rf'#\s*\[{section_name}\][\s\S]*?(?=\n\s*\[|\n\s*#\s*\[|\Z)', re.MULTILINE)
+        pattern = re.compile(rf'^[ \t]*#[ \t]*\[{section_name}\][\s\S]*?(?=\n\s*\[|\n\s*#\s*\[|\Z)', re.MULTILINE)
         m = pattern.search(content)
         if m:
             return content[:m.start()] + clean_block + content[m.end():]
@@ -144,7 +150,11 @@ redact_log     = true
         content = _upsert_section(content, "chain", chain_block)
 
     # Validate generated TOML
-    tomllib.loads(content)
+    parsed_config = tomllib.loads(content)
+    if parsed_config.get("engine") != engine_val:
+        raise ValueError(
+            f"Config validation error: engine expected '{engine_val}', got '{parsed_config.get('engine')}'"
+        )
 
     with open(DEFAULT_CONFIG_PATH, "w", encoding="utf-8") as f:
         f.write(content)
