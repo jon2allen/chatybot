@@ -384,46 +384,17 @@ class JevPolicyEngine(BasePolicyEngine):
             return decision
 
         body = {"state": self.rubric.build_state(tool, params, context), "model": self.model, "questions": self.questions}
-        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-
-        if _trace_enabled(self.trace_raw_payload):
-            print_request_payload(self.url, body, api_key, label="JEV Security Request Payload:")
-
-        t0 = time.perf_counter()
-        try:
-            resp = self._http_post(self.url, body, headers, self.timeout_seconds)
-            answers = resp.get("answers") if isinstance(resp, dict) else None
-            if not isinstance(answers, dict) or not answers:
-                raise ValueError("response has no answers")
-        except Exception as e:  # noqa: BLE001
-            ms = (time.perf_counter() - t0) * 1000
-            if self.debug:
-                print(f"[Security Debug] [JEV] Request failed after {ms:.0f} ms: {e}")
-            decision = self._error_decision(request, f"{type(e).__name__}: {str(e)[:200]}")
-            self._log(request, params, None, decision, ms, source="error", error=str(e)[:300])
-            return decision
-        ms = (time.perf_counter() - t0) * 1000
-
-        if _trace_enabled(self.trace_raw_payload):
-            print_response_payload("ok", json.dumps(resp, ensure_ascii=False), label="JEV Security Response Payload:")
-
-        rec = self.rubric.parse_answers(answers, self.mode)
-        verdict, reasons = self.rubric.evaluate(rec, self.mode)
-        if trunc_state["truncated"]:
-            if verdict != "deny":
-                verdict = stricter(verdict, "ask")
-            reasons.append("parameters truncated before review->at least ask")
-            rec["truncated"] = True
-
-        decision = self._decision(tool, verdict, reasons)
-        if self.debug:
-            print(f"[Security Debug] [JEV] '{tool}' -> {verdict.upper()} in {ms:.0f} ms: {decision.reason}")
-        self._log(request, params, rec, decision, ms, source="api", usage=resp.get("usage"))
-        if self.cache_enabled:
-            self._cache[cache_key] = (decision, rec)
-            if len(self._cache) > self.cache_size:
-                self._cache.popitem(last=False)
-        return dataclasses.replace(decision)
+        return self._evaluate_state_and_post(
+            request=request,
+            tool=tool,
+            params=params,
+            body=body,
+            api_key=api_key,
+            cache_key=cache_key,
+            is_truncated=trunc_state["truncated"],
+            trunc_reason="parameters truncated before review->at least ask",
+            log_label="JEV Security",
+        )
 
     def supports_output_evaluation(self) -> bool:
         return self.output_scan
@@ -480,10 +451,34 @@ class JevPolicyEngine(BasePolicyEngine):
         }
         state_text = f"{self.rubric.preamble}\n\nACTION OUTPUT TO JUDGE:\n{json.dumps(state_action, indent=2, ensure_ascii=False)}"
         body = {"state": state_text, "model": self.model, "questions": self.questions}
+        return self._evaluate_state_and_post(
+            request=request,
+            tool=tool,
+            params=params,
+            body=body,
+            api_key=api_key,
+            cache_key=cache_key,
+            is_truncated=trunc_state["truncated"],
+            trunc_reason="output truncated before review->at least ask",
+            log_label="JEV Security Output",
+        )
+
+    def _evaluate_state_and_post(
+        self,
+        request: PolicyRequest,
+        tool: str,
+        params: dict,
+        body: dict,
+        api_key: str,
+        cache_key: str,
+        is_truncated: bool,
+        trunc_reason: str,
+        log_label: str,
+    ) -> PolicyDecision:
         headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
 
         if _trace_enabled(self.trace_raw_payload):
-            print_request_payload(self.url, body, api_key, label="JEV Security Output Request Payload:")
+            print_request_payload(self.url, body, api_key, label=f"{log_label} Request Payload:")
 
         t0 = time.perf_counter()
         try:
@@ -494,26 +489,26 @@ class JevPolicyEngine(BasePolicyEngine):
         except Exception as e:  # noqa: BLE001
             ms = (time.perf_counter() - t0) * 1000
             if self.debug:
-                print(f"[Security Debug] [JEV] Output check failed after {ms:.0f} ms: {e}")
+                print(f"[Security Debug] [JEV] Request failed after {ms:.0f} ms: {e}")
             decision = self._error_decision(request, f"{type(e).__name__}: {str(e)[:200]}")
             self._log(request, params, None, decision, ms, source="error", error=str(e)[:300])
             return decision
         ms = (time.perf_counter() - t0) * 1000
 
         if _trace_enabled(self.trace_raw_payload):
-            print_response_payload("ok", json.dumps(resp, ensure_ascii=False), label="JEV Security Output Response Payload:")
+            print_response_payload("ok", json.dumps(resp, ensure_ascii=False), label=f"{log_label} Response Payload:")
 
         rec = self.rubric.parse_answers(answers, self.mode)
         verdict, reasons = self.rubric.evaluate(rec, self.mode)
-        if trunc_state["truncated"]:
+        if is_truncated:
             if verdict != "deny":
                 verdict = stricter(verdict, "ask")
-            reasons.append("output truncated before review->at least ask")
+            reasons.append(trunc_reason)
             rec["truncated"] = True
 
         decision = self._decision(tool, verdict, reasons)
         if self.debug:
-            print(f"[Security Debug] [JEV] Output of '{tool}' -> {verdict.upper()} in {ms:.0f} ms: {decision.reason}")
+            print(f"[Security Debug] [JEV] '{tool}' -> {verdict.upper()} in {ms:.0f} ms: {decision.reason}")
         self._log(request, params, rec, decision, ms, source="api", usage=resp.get("usage"))
         if self.cache_enabled:
             self._cache[cache_key] = (decision, rec)

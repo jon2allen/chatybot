@@ -361,7 +361,7 @@ def from_log(args, rubric: Rubric) -> int:
         changed = []
         for e in graded:
             mode = args.mode_given or e.get("mode", "noul")
-            v, reasons = rubric.evaluate(e, mode)
+            v, _ = rubric.evaluate(e, mode)
             if e.get("truncated") and v != "deny":
                 v = stricter(v, "ask")
             e["_regraded"] = v

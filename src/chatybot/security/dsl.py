@@ -439,15 +439,8 @@ class SecurityDSLParser:
                 operator = "contains"
         # Check explicit parameter name:
         # - where <param> contains ..., where any field contains ..., where * contains ...
-        elif re.match(
-            r'^(?:where|with|if|that|which)?\s*(?:(?:the\s+)?(?:field|parameter|param|arg|argument)\s+)?'
-            r'(any\s+(?:field|parameter|param|arg|argument)|\*|(?!that\b|which\b|where\b|with\b|if\b|the\b|field\b|param\b|parameter\b|arg\b|argument\b|contains\b|containing\b|ends\b|ending\b|starts\b|starting\b|equals\b|matches\b|is\b)[a-zA-Z0-9_\.\-]+)\s+'
-            r'(contains|ends with|ending with|starts with|starting with|equals|is|matches)\s+'
-            r'(?:["\']([^"\']+)["\']|(\S+))',
-            rest,
-            re.IGNORECASE,
-        ):
-            m_param_explicit = re.match(
+        elif (
+            m_param_explicit := re.match(
                 r'^(?:where|with|if|that|which)?\s*(?:(?:the\s+)?(?:field|parameter|param|arg|argument)\s+)?'
                 r'(any\s+(?:field|parameter|param|arg|argument)|\*|(?!that\b|which\b|where\b|with\b|if\b|the\b|field\b|param\b|parameter\b|arg\b|argument\b|contains\b|containing\b|ends\b|ending\b|starts\b|starting\b|equals\b|matches\b|is\b)[a-zA-Z0-9_\.\-]+)\s+'
                 r'(contains|ends with|ending with|starts with|starting with|equals|is|matches)\s+'
@@ -455,6 +448,7 @@ class SecurityDSLParser:
                 rest,
                 re.IGNORECASE,
             )
+        ):
             raw_param = m_param_explicit.group(1).lower()
             if raw_param.startswith("any") or raw_param == "*":
                 param_name = "*"

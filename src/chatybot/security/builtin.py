@@ -122,11 +122,9 @@ class BuiltinPolicyEngine(BasePolicyEngine):
         if rules:
             self.rules.update({k.lower(): str(v).lower() for k, v in rules.items()})
         self._custom_output_rules = output_rules is not None
-        self.output_rules = (
-            output_rules if output_rules is not None else list(self.DEFAULT_OUTPUT_RULES)
-        )
+        self.output_rules = output_rules
         self._shared_secret_scanner = secret_scanner
-        if self._custom_output_rules:
+        if self._custom_output_rules and self.output_rules is not None:
             self._output_scanner = SecretScanner(rules=self.output_rules, known_secrets={})
         else:
             self._output_scanner = None

@@ -178,17 +178,8 @@ def call_skill(name: str, app: Any = None) -> dict[str, Any]:
     return result
 
 
-def _apply_tool_config_silent(app: Any, config: dict, skill_name: str) -> dict[str, Any]:
-    """Apply a skill's tool_config silently (no user prompt).
-
-    Returns a summary of what changed so the model knows its current
-    tool capabilities. This is the mid-loop equivalent of
-    _apply_skill_tool_config() but without the interactive confirmation.
-
-    The previous tool state is snapshotted for /skill restore.
-    """
-    # When enable_tools is specified, default behavior is to disable all other
-    # available tools first, then enable the ones specified by the skill.
+def resolve_skill_tools_to_disable(app: Any, config: dict) -> tuple[set[str], set[str]]:
+    """Determine specified enables and tools to disable for a skill's tool config."""
     specified_enables = set(config.get("enable_tools", []))
     all_available_tools: set[str] = set()
     if specified_enables:
@@ -209,6 +200,21 @@ def _apply_tool_config_silent(app: Any, config: dict, skill_name: str) -> dict[s
     tools_to_disable = set(config.get("disable_tools", []))
     if specified_enables:
         tools_to_disable.update(all_available_tools - specified_enables)
+    return specified_enables, tools_to_disable
+
+
+def _apply_tool_config_silent(app: Any, config: dict, skill_name: str) -> dict[str, Any]:
+    """Apply a skill's tool_config silently (no user prompt).
+
+    Returns a summary of what changed so the model knows its current
+    tool capabilities. This is the mid-loop equivalent of
+    _apply_skill_tool_config() but without the interactive confirmation.
+
+    The previous tool state is snapshotted for /skill restore.
+    """
+    # When enable_tools is specified, default behavior is to disable all other
+    # available tools first, then enable the ones specified by the skill.
+    specified_enables, tools_to_disable = resolve_skill_tools_to_disable(app, config)
 
     changes: list[str] = []
     if config.get("mode") == "on" and not app.tool_mode:
