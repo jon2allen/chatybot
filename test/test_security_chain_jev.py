@@ -144,6 +144,114 @@ def test_manager_allow_engine(tmp_path, capsys):
     assert mgr.engine.protect_security_config is False
 
 
+def test_manager_exposes_engine_type(tmp_path):
+    cfg = tmp_path / "security.toml"
+    cfg.write_text('engine = "allow"\n')
+    mgr = SecurityManager(config_path=str(cfg))
+    assert mgr.engine_type == "allow"
+
+    cfg.write_text('engine = "builtin"\n')
+    mgr = SecurityManager(config_path=str(cfg))
+    assert mgr.engine_type == "builtin"
+
+    mgr_off = SecurityManager(config_path=str(cfg), enabled=False)
+    assert mgr_off.engine_type == "disabled"
+
+
+@pytest.fixture
+def sec_app(tmp_path):
+    """A minimal ChatybotApp shell with a real BufferManager and builtin SecurityManager."""
+    from chatybot.chatybot_app import ChatybotApp
+    from chatybot.buffer_manager import BufferManager
+
+    cfg = tmp_path / "security.toml"
+    cfg.write_text('engine = "builtin"\n')
+    mgr = SecurityManager(config_path=str(cfg))
+
+    app = object.__new__(ChatybotApp)
+    app.security_manager = mgr
+    app.buffer_manager = BufferManager()
+    return app
+
+
+def test_store_security_decision(sec_app):
+    """_store_security_decision writes a dict suitable for session tool records."""
+    # Allow decision (input phase): no request_id, no outcome
+    allow_dec = PolicyDecision(verdict=Verdict.ALLOW, reason="fine", request_id="r1", duration_ms=12.3)
+    sec_app._store_security_decision(allow_dec)
+    stored = sec_app.buffer_manager.get_script_var('SECURITY_DECISION')
+    assert "input" in stored
+    assert stored["input"]["verdict"] == "allow"
+    assert stored["input"]["engine"] == "builtin"
+    assert stored["input"]["reason"] == "fine"
+    assert stored["input"]["duration_ms"] == 12.3
+    assert "request_id" not in stored["input"]
+    assert "outcome" not in stored["input"]
+
+    # Deny decision (input phase): includes request_id
+    deny_dec = PolicyDecision(verdict=Verdict.DENY, reason="blocked", request_id="r2", duration_ms=5.0)
+    sec_app._store_security_decision(deny_dec)
+    stored = sec_app.buffer_manager.get_script_var('SECURITY_DECISION')
+    assert stored["input"]["verdict"] == "deny"
+    assert stored["input"]["request_id"] == "r2"
+
+    # Ask with outcome (input phase): includes request_id and outcome
+    ask_dec = PolicyDecision(verdict=Verdict.ASK, reason="needs human", request_id="r3", duration_ms=8.0)
+    sec_app._store_security_decision(ask_dec, outcome="approved")
+    stored = sec_app.buffer_manager.get_script_var('SECURITY_DECISION')
+    assert stored["input"]["verdict"] == "ask"
+    assert stored["input"]["request_id"] == "r3"
+    assert stored["input"]["outcome"] == "approved"
+
+
+def test_store_security_decision_input_output_separate(sec_app):
+    """Output phase must not overwrite input phase (Bug 1 regression test)."""
+    # Input: ASK, user approves
+    ask_dec = PolicyDecision(verdict=Verdict.ASK, reason="needs human", request_id="r-in", duration_ms=200.0)
+    sec_app._store_security_decision(ask_dec, outcome="approved")
+
+    # Output: ALLOW
+    out_dec = PolicyDecision(verdict=Verdict.ALLOW, reason="output fine", request_id="r-out", duration_ms=10.0)
+    sec_app._store_security_decision(out_dec, phase="output")
+
+    stored = sec_app.buffer_manager.get_script_var('SECURITY_DECISION')
+    assert "input" in stored
+    assert "output" in stored
+    # Input phase preserved
+    assert stored["input"]["verdict"] == "ask"
+    assert stored["input"]["request_id"] == "r-in"
+    assert stored["input"]["outcome"] == "approved"
+    assert stored["input"]["duration_ms"] == 200.0
+    # Output phase separate
+    assert stored["output"]["verdict"] == "allow"
+    assert "request_id" not in stored["output"]
+
+
+def test_store_security_decision_cached_refusal(sec_app):
+    """A cached refusal served from the loop cache should still produce a security record."""
+    sec_app.in_tool_loop = True
+    sec_app._loop_security_refusals = {}
+    sec_app._loop_output_refusals = {}
+    sec_app.active_session_id = "test-session"
+    sec_app.security_debug = False
+
+    # Simulate a cached refusal
+    sec_cache_key = sec_app._build_security_refusal_key("run_command", {"command": "rm -rf /"})
+    sec_app._loop_security_refusals[sec_cache_key] = ("Security refusal (final): blocked", "blocked", "r-cached")
+
+    cached = sec_app._serve_loop_refusal(
+        sec_app._loop_security_refusals, "run_command", {"command": "rm -rf /"},
+        "pre-execution", refusal_key=sec_cache_key,
+    )
+    assert cached is not None
+    stored = sec_app.buffer_manager.get_script_var('SECURITY_DECISION')
+    assert "input" in stored
+    assert stored["input"]["verdict"] == "deny"
+    assert stored["input"]["request_id"] == "r-cached"
+    assert stored["input"]["reason"] == "blocked"
+    assert stored["input"]["source"] == "cache"
+
+
 # --------------------------------------------------------------------------- chain engine
 
 def test_chain_strictest_enforcing_verdict_wins():

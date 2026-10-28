@@ -4328,6 +4328,33 @@ class ChatybotApp:
             cache_store[cache_key] = (refusal_str, reason, request_id or "")
         return refusal_str
 
+    def _store_security_decision(self, decision: Any, phase: str = "input", outcome: str = "", source: str = "") -> None:
+        """Store security decision metadata as a script var for the agentic loop tool record.
+
+        Input and output phases are kept separate so the output check does not
+        overwrite the input decision (which may carry an ASK verdict, user outcome,
+        and request_id worth auditing).
+        """
+        from .security.models import Verdict as _Verdict
+        sec: dict[str, Any] = {
+            "verdict": decision.verdict.value,
+            "engine": getattr(getattr(self, "security_manager", None), "engine_type", ""),
+            "reason": decision.reason or "",
+            "duration_ms": getattr(decision, "duration_ms", 0.0),
+        }
+        if decision.verdict != _Verdict.ALLOW:
+            sec["request_id"] = getattr(decision, "request_id", "")
+        if outcome:
+            sec["outcome"] = outcome
+        if source:
+            sec["source"] = source
+        if hasattr(self, "buffer_manager") and self.buffer_manager is not None:
+            current = self.buffer_manager.get_script_var('SECURITY_DECISION') or {}
+            if not isinstance(current, dict):
+                current = {}
+            current[phase] = sec
+            self.buffer_manager.set_script_var('SECURITY_DECISION', current, allow_protected=True)
+
     def _build_security_refusal_key(self, tool_name: str, tool_args: Any) -> str:
         """Build normalised key for loop security refusal caching."""
         if isinstance(tool_args, str):
@@ -4380,6 +4407,10 @@ class ChatybotApp:
             self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '1')
             self.buffer_manager.set_script_var('TOOL_DISPATCH_REQUEST_ID', orig_req_id)
         self._last_dispatch_refusal = {"reason": cached_err, "request_id": orig_req_id}
+        from .security.models import PolicyDecision, Verdict
+        phase = "output" if kind == "output" else "input"
+        cached_dec = PolicyDecision(verdict=Verdict.DENY, reason=cached_err, request_id=orig_req_id)
+        self._store_security_decision(cached_dec, phase=phase, source="cache")
         return cached_res
 
     def _format_refusal_limit_summary(self, refusal_records: list[dict[str, Any]]) -> str:
@@ -4447,6 +4478,7 @@ class ChatybotApp:
         self.last_security_duration_ms = getattr(self, "last_security_duration_ms", 0.0) + post_ms
         if hasattr(self, "buffer_manager") and self.buffer_manager is not None:
             self.buffer_manager.set_script_var('SECURITY_EVAL_TIME_MS', f"{self.last_security_duration_ms:.2f}")
+        self._store_security_decision(post_decision, phase="output")
 
         from .security.models import Verdict
 
@@ -4473,6 +4505,7 @@ class ChatybotApp:
                         record(post_decision, outcome, tool=tool_name)
                     except Exception:
                         pass
+                self._store_security_decision(post_decision, phase="output", outcome=outcome)
 
             if getattr(self, "auto_approve", False):
                 _record_post_outcome("auto_approved_yes_flag")
@@ -4604,6 +4637,8 @@ class ChatybotApp:
 
             sec_mgr = getattr(self, "security_manager", None)
             self.last_security_duration_ms = 0.0
+            if hasattr(self, "buffer_manager") and self.buffer_manager is not None:
+                self.buffer_manager.set_script_var('SECURITY_DECISION', None, allow_protected=True)
 
             def _record_sec_outcome(outcome: str) -> None:
                 """Log what happened to an ASK decision (joined to the decision by request_id)."""
@@ -4613,6 +4648,7 @@ class ChatybotApp:
                         record(sec_decision, outcome, tool=tool_name)
                     except Exception:
                         pass
+                self._store_security_decision(sec_decision, outcome=outcome)
             # Refusals remembered in this tool loop: no new evaluation, prompt or execution.
             # Output refusals are checked too, so a tool whose output was refused is not run again.
             sec_cache_key = None
@@ -4636,6 +4672,7 @@ class ChatybotApp:
                 self.last_security_duration_ms = getattr(sec_decision, "duration_ms", 0.0)
                 if hasattr(self, "buffer_manager") and self.buffer_manager is not None:
                     self.buffer_manager.set_script_var('SECURITY_EVAL_TIME_MS', f"{self.last_security_duration_ms:.2f}")
+                self._store_security_decision(sec_decision)
                 if sec_decision.verdict == Verdict.DENY:
                     deny_header = self.i18n.get_ui_string("security_blocked_header", "[Security Block]")
                     deny_msg = self.i18n.get_ui_string("security_blocked_msg", f"Security Policy Blocked: {sec_decision.reason}", reason=sec_decision.reason)
@@ -6569,6 +6606,7 @@ class ChatybotApp:
                 # Execute the tool and capture result
                 self.buffer_manager.set_script_var('TOOL_DISPATCH_RESULT', '')
                 self.buffer_manager.set_script_var('TOOL_DISPATCH_EXIT_CODE', '0')
+                self.buffer_manager.set_script_var('SECURITY_DECISION', None, allow_protected=True)
                 _tool_t0 = time.perf_counter()
                 _tool_ts = datetime.now().isoformat()
                 try:
@@ -6636,6 +6674,9 @@ class ChatybotApp:
                 }
                 if guard_withheld:
                     tool_record["loop_guard"] = guard_decision.action
+                _sec_record = self.buffer_manager.get_script_var('SECURITY_DECISION')
+                if isinstance(_sec_record, dict) and _sec_record:
+                    tool_record["security"] = _sec_record
 
                 current_loop = self.buffer_manager.get_script_var('AGENTIC_LOOP') or []
                 if not isinstance(current_loop, list):
