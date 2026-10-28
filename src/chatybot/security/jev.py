@@ -535,6 +535,7 @@ class JevPolicyEngine(BasePolicyEngine):
         api | cache | self_protect | skip_tools | error."""
         if not self.log_path:
             return
+        context = {k: v for k, v in request.context.items() if k != "interactive"}
         entry = {
             "event": "decision",
             "ts": datetime.now(UTC).isoformat(),
@@ -542,6 +543,7 @@ class JevPolicyEngine(BasePolicyEngine):
             "source": source,
             "tool": request.tool,
             "parameters": params,
+            "context": prepare_for_log(context, self.redact_secrets) if context else {},
             "interactive": bool(request.context.get("interactive", False)),
             "verdict": decision.verdict.value,
             "reason": decision.reason,

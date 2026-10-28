@@ -231,6 +231,44 @@ def test_chain_log_redacts_secrets(tmp_path):
     assert "<redacted>" in text
 
 
+def test_chain_log_no_redact_still_writes_context(tmp_path):
+    """redact_log=False must not crash _log when context is present (regression: UnboundLocalError)."""
+    log = tmp_path / "chain.jsonl"
+    chain = ChainedPolicyEngine(
+        [ChainStage("a", Fixed(Verdict.ALLOW))],
+        log_path=str(log),
+        redact_log=False,
+    )
+    request = PolicyRequest(
+        tool="run_command",
+        parameters={"command": "ls"},
+        context={"interactive": True, "session_id": "s1", "working_directory": "/tmp"},
+    )
+    chain.evaluate(request)
+    entry = json.loads(log.read_text().strip())
+    assert entry["context"] == {"session_id": "s1", "working_directory": "/tmp"}
+    assert entry["interactive"] is True
+
+
+def test_chain_log_context_redacted(tmp_path):
+    """context values are redacted when redact_log is on."""
+    log = tmp_path / "chain.jsonl"
+    chain = ChainedPolicyEngine(
+        [ChainStage("a", Fixed(Verdict.ALLOW))],
+        log_path=str(log),
+    )
+    request = PolicyRequest(
+        tool="run_command",
+        parameters={"command": "ls"},
+        context={"interactive": True, "session_id": "s1", "working_directory": "/tmp"},
+    )
+    chain.evaluate(request)
+    entry = json.loads(log.read_text().strip())
+    assert "session_id" in entry["context"]
+    assert "working_directory" in entry["context"]
+    assert "interactive" not in entry["context"]
+
+
 def test_manager_chain_config(tmp_path):
     cfg = tmp_path / "security.toml"
     log = tmp_path / "logs" / "chain.jsonl"
