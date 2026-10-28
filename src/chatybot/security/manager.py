@@ -65,6 +65,7 @@ class SecurityManager:
         self.non_interactive_ask: str = "deny"
         self.max_refusals_per_loop: int = 3
         self.engine: BasePolicyEngine | None = None
+        self.engine_type: str = "disabled"
         self.secret_scanner: Any = None
 
         if self.enabled:
@@ -163,6 +164,7 @@ class SecurityManager:
             engine_type = "builtin"
 
         self.engine = self._build_engine(engine_type, top_level=True)
+        self.engine_type = engine_type
 
     ENGINE_TYPES = ("builtin", "binary", "allow", "jev", "chain")
     # Logged by default for the engines whose effectiveness is still being
