@@ -30,6 +30,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from chatybot.security.base import BasePolicyEngine
+from chatybot.security.jev import prepare_for_log
 from chatybot.security.models import PolicyDecision, PolicyRequest, Verdict
 
 logger = logging.getLogger(__name__)
@@ -165,9 +166,8 @@ class ChainedPolicyEngine(BasePolicyEngine):
         verdicts = {r["verdict"] for r in results if "verdict" in r}
         params: Any = request.parameters
         if self.redact_log:
-            from chatybot.security.jev import prepare_for_log
-
             params = prepare_for_log(request.parameters or {})
+        context = {k: v for k, v in request.context.items() if k != "interactive"}
         entry = {
             "event": "decision",
             "phase": phase,
@@ -175,6 +175,7 @@ class ChainedPolicyEngine(BasePolicyEngine):
             "request_id": request.request_id,
             "tool": request.tool,
             "parameters": params,
+            "context": prepare_for_log(context, self.redact_log) if context else {},
             "interactive": bool(request.context.get("interactive", False)),
             "final": final.verdict.value,
             "decided_by": decided_by,

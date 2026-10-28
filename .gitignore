@@ -11,3 +11,42 @@ chatybot.vmem.*.log
 *.env
 !.env.example
 code_analysis/report.json
+
+# --- OS / editor ---
+.DS_Store
+**/.DS_Store
+
+# --- Extra virtualenvs ---
+chat2_env/
+venv/
+**/venv/
+.venv*/
+
+# --- Runtime logs & debug dumps ---
+chatybot.log.*
+*.log
+imagine_debug_*.txt
+
+# --- Local/per-machine config ---
+.config/
+
+# --- Fuzzing output ---
+crashes/
+fuzz_tests/corpus/
+
+# --- Chat history / session state ---
+$CHAT_HISTORY
+.chat_history
+
+# --- Scratch & trash ---
+_to_delete/
+*.bak
+
+# --- Generated run outputs ---
+*_food_comparison/
+*_algorithms_actual/
+dsl_test/vortex_results*/
+test_images/accuracy_results/
+dufu_poetry_actual/
+dufu_poetry_analysis/
+logic_problems/
