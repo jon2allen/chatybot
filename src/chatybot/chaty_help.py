@@ -1040,7 +1040,7 @@ class HelpSystem:
             name="/batch",
             category="batch",
             short_desc="Asynchronous provider Batch API jobs (stage, seal, submit, poll)",
-            usage="/batch <status|start|prompt|add|items|ids|show|edit|remove|clear|dump|end|abort|run|check|retry|list|cancel> [name] [key=value ...]",
+            usage="/batch <status|start|prompt|add|items|ids|show|edit|remove|clear|dump|end|abort|run|check|results|retry|list|cancel> [name] [key=value ...]",
             long_desc=(
                 "Batch API jobs: asynchronous bulk inference submitted to a provider "
                 "Batch API (OpenRouter in Phase 1, Mistral in Phase 2) at a 50% discount "
@@ -1079,7 +1079,7 @@ class HelpSystem:
                 "add": "Append items: <text> | filebank=N [split=lines|paragraphs] | var=NAME | file=PATH [id=<id>]",
                 "items [name]": "List staged items with previews [limit=N] [range=start:end]",
                 "ids [name]": "List item IDs; exports ${BATCH_ITEM_IDS} [var=<target>]",
-                "show <id>": "Inspect the full payload of one staged item",
+                "show <id>": "Inspect one item: full input payload, plus its retrieved completion when results.jsonl exists",
                 "edit <id>": "In-place update: <text> | var=NAME | file=PATH",
                 "remove <id>": "Remove an item from the open draft (alias: del)",
                 "clear [name]": "Reset staged items to 0 (alias: reset)",
@@ -1088,6 +1088,7 @@ class HelpSystem:
                 "abort [name]": "Discard an open (never-submitted) staging session",
                 "run [name]": "Estimate cost, verify budget, submit [force=true] [adopt=<provider_id>]",
                 "check [name]": "Poll status / retrieve results [wait=true polls until terminal]",
+                "results [name]": "Print retrieved completions with pagination; exports ${BATCH_RESULTS} [limit=N] [range=start:end] [var=<target>]",
                 "cancel <name>": "Cancel an in-flight batch",
                 "retry <name>": "New batch from failed items (Phase 3)",
                 "list": "Alias for /batchlist",
