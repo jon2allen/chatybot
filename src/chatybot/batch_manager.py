@@ -33,6 +33,12 @@ from typing import Any
 
 import aiohttp
 
+from .payload_trace import (
+    _mask_key,
+    print_request_payload,
+    print_response_payload,
+    trace_enabled,
+)
 from .security.secret_scanner import SecretScanner
 
 # ---------------------------------------------------------------------------
@@ -109,9 +115,13 @@ class OpenRouterBatchProvider:
 
     name = "openrouter"
 
-    def __init__(self, api_key: str, base_url: str | None = None):
+    def __init__(self, api_key: str, base_url: str | None = None, *,
+                 trace_raw_payload: bool = False,
+                 logging_manager: Any = None):
         self.api_key = api_key
         self.base_url = (base_url or OPENROUTER_API_BASE).rstrip("/")
+        self.trace_raw_payload = trace_raw_payload
+        self.logging_manager = logging_manager
 
     def _headers(self) -> dict[str, str]:
         return {
@@ -124,10 +134,54 @@ class OpenRouterBatchProvider:
         return BatchError(f"HTTP {status} from {url}: {body[:500]}")
 
     async def _request(self, session: aiohttp.ClientSession, method: str, url: str,
-                       json_body: dict | None = None) -> dict:
+                       json_body: dict | None = None,
+                       allow_missing_404: bool = False) -> dict | None:
+        if trace_enabled(self.trace_raw_payload):
+            if json_body is not None:
+                print_request_payload(
+                    url,
+                    json_body,
+                    self.api_key,
+                    logging_manager=self.logging_manager,
+                    label=f"Batch API Request Payload ({method}):",
+                )
+            else:
+                masked_key = _mask_key(self.api_key)
+                header_line = f"Headers: {{'Authorization': 'Bearer {masked_key}', 'Content-Type': 'application/json'}}"
+                trace_text = (
+                    f"Batch API Request ({method}):\n"
+                    f"-----------------------------\n"
+                    f"{method} {url}\n"
+                    f"{header_line}\n"
+                    f"---- end of payload ---"
+                )
+                print(trace_text)
+                if self.logging_manager and hasattr(self.logging_manager, "log_message"):
+                    try:
+                        self.logging_manager.log_message(trace_text)
+                    except Exception:
+                        pass
+
         async with session.request(method, url, headers=self._headers(),
                                    json=json_body, timeout=aiohttp.ClientTimeout(total=HTTP_TIMEOUT_SECONDS)) as resp:
+            if resp.status == 404 and allow_missing_404:
+                if trace_enabled(self.trace_raw_payload):
+                    print_response_payload(
+                        resp.status,
+                        "(404 Not Found - batch not queryable yet)",
+                        logging_manager=self.logging_manager,
+                        label=f"Batch API Response Payload ({method} {url}):",
+                    )
+                return None
+
             text = await resp.text()
+            if trace_enabled(self.trace_raw_payload):
+                print_response_payload(
+                    resp.status,
+                    text,
+                    logging_manager=self.logging_manager,
+                    label=f"Batch API Response Payload ({method} {url}):",
+                )
             if resp.status >= 400:
                 raise self._http_error(resp.status, text, url)
             return json.loads(text) if text else {}
@@ -149,14 +203,7 @@ class OpenRouterBatchProvider:
         'not yet' when allow_missing."""
         url = f"{self.base_url}/batches/{provider_id}"
         async with aiohttp.ClientSession() as session:
-            async with session.request("GET", url, headers=self._headers(),
-                                       timeout=aiohttp.ClientTimeout(total=HTTP_TIMEOUT_SECONDS)) as resp:
-                if resp.status == 404 and allow_missing:
-                    return None
-                text = await resp.text()
-                if resp.status >= 400:
-                    raise self._http_error(resp.status, text, url)
-                return json.loads(text) if text else {}
+            return await self._request(session, "GET", url, allow_missing_404=allow_missing)
 
     async def list(self) -> list[dict]:
         """List batches (list items omit results: 'results': null)."""
@@ -894,7 +941,14 @@ def split_text(content: str, mode: str = "lines") -> list[str]:
     return [line.strip() for line in content.split("\n") if line.strip()]
 
 
-def make_provider(model_config: dict, api_key: str) -> OpenRouterBatchProvider:
+def make_provider(model_config: dict, api_key: str, *,
+                  trace_raw_payload: bool = False,
+                  logging_manager: Any = None) -> OpenRouterBatchProvider:
     """Build the Phase 1 OpenRouter provider from a chat_config model entry."""
     base_url = model_config.get("base_url") or OPENROUTER_API_BASE
-    return OpenRouterBatchProvider(api_key=api_key, base_url=base_url)
+    return OpenRouterBatchProvider(
+        api_key=api_key,
+        base_url=base_url,
+        trace_raw_payload=trace_raw_payload,
+        logging_manager=logging_manager,
+    )
