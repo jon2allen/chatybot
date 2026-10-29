@@ -205,6 +205,7 @@ class TestBatchManager:
 class FakeProvider:
     """In-memory OpenRouter-shaped provider for testing submit/poll/cancel."""
     name = "openrouter"
+    supports_cancel = True  # unlike the real OpenRouter backend
 
     def __init__(self, fail_submit=False, final_status="completed"):
         self.fail_submit = fail_submit
@@ -1374,3 +1375,79 @@ class TestSamplingFixes:
         asyncio.run(run_cmd(ctx, "/batch edit ed3_0001 set temp=0.5 in the answer"))
         item = mgr.show_item(mgr.resolve("ed3"), "ed3_0001")
         assert item["text"] == "set temp=0.5 in the answer"
+
+
+class TestCancelUnsupportedProvider:
+    """OpenRouter has no cancel endpoint: /batch cancel must explain and
+    offer a local-only force path instead of raising a raw HTTP 404."""
+
+    def _inflight(self, mgr, name):
+        meta = mgr.start(name, model_alias="gptoss_batch",
+                         model_name="openai/gpt-oss-120b:batch",
+                         provider="openrouter", prompt="p")
+        mgr.add_items(meta, ["x"], id_prefix=f"{name}_")
+        mgr.end(meta)
+        provider = FakeProvider(final_status="in_progress")
+        meta = asyncio.run(mgr.run(meta, provider))
+        assert meta["status"] == STATUS_SUBMITTED or meta["status"] == STATUS_IN_PROGRESS
+        return meta, provider
+
+    def test_openrouter_provider_declares_no_cancel(self):
+        from chatybot.batch_manager import OpenRouterBatchProvider
+        assert OpenRouterBatchProvider.supports_cancel is False
+
+    def test_cancel_without_force_refused_informatively(self, mgr, capsys):
+        meta, provider = self._inflight(mgr, "cantstop")
+        provider.supports_cancel = False
+        with pytest.raises(BatchError, match="cannot cancel a submitted batch"):
+            asyncio.run(mgr.cancel(meta, provider))
+        # State unchanged by the refusal
+        assert mgr.find_by_name("cantstop")["status"] != "cancelled"
+
+    def test_cancel_force_marks_local_only(self, mgr, capsys):
+        meta, provider = self._inflight(mgr, "disown")
+        provider.supports_cancel = False
+        meta = asyncio.run(mgr.cancel(meta, provider, force=True))
+        assert meta["status"] == "cancelled"
+        out = capsys.readouterr().out
+        assert "locally only" in out
+
+    def test_cancel_command_flow_and_check_short_circuit(self, mgr, capsys, monkeypatch):
+        ctx = make_ctx(mgr)
+        asyncio.run(run_cmd(ctx, "/batch start todrop"))
+        asyncio.run(run_cmd(ctx, "/batch add item"))
+        asyncio.run(run_cmd(ctx, "/batch end"))
+        provider = FakeProvider(final_status="in_progress")
+        provider.supports_cancel = False  # mirror the real OpenRouter backend
+        monkeypatch.setattr(batch_cmds, "_build_provider", lambda app, meta: provider)
+        asyncio.run(run_cmd(ctx, "/batch run todrop"))
+        capsys.readouterr()
+
+        # Without force: informative refusal, no raw HTTP error
+        asyncio.run(run_cmd(ctx, "/batch cancel todrop"))
+        out = capsys.readouterr().out
+        assert "cannot cancel a submitted batch" in out
+        assert "force=true" in out
+        assert mgr.find_by_name("todrop")["status"] != "cancelled"
+
+        # With force: local cancel
+        asyncio.run(run_cmd(ctx, "/batch cancel todrop force=true"))
+        out = capsys.readouterr().out
+        assert "Cancelled batch 'todrop'" in out
+        assert "locally only" in out
+
+        # check no longer polls a locally-cancelled batch
+        calls_before = list(provider.calls)
+        asyncio.run(run_cmd(ctx, "/batch check todrop"))
+        out = capsys.readouterr().out
+        assert "cancelled locally and is not polled anymore" in out
+        assert list(provider.calls) == calls_before  # no provider traffic
+
+    def test_cancel_supported_provider_still_remote(self, mgr, capsys):
+        """Providers that do support cancel (FakeProvider default) keep the
+        remote+local path."""
+        meta, provider = self._inflight(mgr, "cansupport")
+        assert provider.supports_cancel is True
+        meta = asyncio.run(mgr.cancel(meta, provider))
+        assert meta["status"] == "cancelled"
+        assert provider.batches[meta["provider_id"]]["status"] == "cancelled"
