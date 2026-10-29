@@ -801,6 +801,13 @@ class BatchManager:
                     results.append(json.loads(line))
         return results
 
+    def get_result(self, batch_id: str, custom_id: str) -> dict | None:
+        """One retrieved result record by custom_id, or None before retrieval."""
+        for record in self.read_results(batch_id):
+            if record.get("custom_id") == custom_id:
+                return record
+        return None
+
 
 # ---------------------------------------------------------------------------
 # Ingestion helpers shared with the command layer

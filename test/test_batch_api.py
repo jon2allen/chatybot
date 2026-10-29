@@ -715,3 +715,87 @@ class TestReviewFixes:
         assert i18n.translate_command_string("/批量 重新开始") == "/batch clear"
         i18n.set_locale("ar")
         assert i18n.translate_command_string("/دفعة إخلاء") == "/batch clear"
+
+
+class TestResultsInspection:
+    """Native result inspection: /batch show with completions and /batch results."""
+
+    def _completed_batch(self, mgr, name, n=2):
+        """Stage, submit, and complete a batch through the fake provider."""
+        meta = mgr.start(name, model_alias="gptoss_batch",
+                         model_name="openai/gpt-oss-120b:batch",
+                         provider="openrouter", prompt="Translate.")
+        mgr.add_items(meta, [f"poem {i}" for i in range(n)], id_prefix=f"{name}_")
+        mgr.end(meta)
+        provider = FakeProvider()
+        meta = asyncio.run(mgr.run(meta, provider))
+        meta = asyncio.run(mgr.check(meta, provider))
+        assert meta["status"] == STATUS_COMPLETED
+        return meta, provider
+
+    def test_show_displays_result_under_input(self, mgr, capsys):
+        meta, _ = self._completed_batch(mgr, "shown")
+        ctx = make_ctx(mgr)
+        asyncio.run(run_cmd(ctx, "/batch show shown_0001 shown"))
+        out = capsys.readouterr().out
+        assert "[Input]:" in out
+        assert "poem 0" in out
+        assert "[Result]:" in out
+        assert "ok" in out           # FakeProvider completion content
+        assert "Status: 200" in out  # header line carries the result status
+
+    def test_show_before_retrieval(self, mgr, capsys):
+        ctx = make_ctx(mgr)
+        asyncio.run(run_cmd(ctx, "/batch start fresh"))
+        asyncio.run(run_cmd(ctx, "/batch add nothing yet"))
+        asyncio.run(run_cmd(ctx, "/batch show fresh_0001 fresh"))
+        out = capsys.readouterr().out
+        assert "[Input]:" in out
+        assert "No results yet" in out
+
+    def test_show_error_record(self, mgr, capsys):
+        meta, _ = self._completed_batch(mgr, "errb", n=1)
+        # Overwrite the stored result with an error-shaped record
+        records = mgr.read_results(meta["batch_id"])
+        records[0] = {"custom_id": records[0]["custom_id"],
+                      "status_code": 500, "content": None,
+                      "error": "HTTP 500 upstream failure"}
+        mgr._fsync_write(
+            os.path.join(mgr.batches_dir, meta["batch_id"], "results.jsonl"),
+            "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in records))
+        ctx = make_ctx(mgr)
+        asyncio.run(run_cmd(ctx, "/batch show errb_0001 errb"))
+        out = capsys.readouterr().out
+        assert "[Error]:" in out
+        assert "HTTP 500 upstream failure" in out
+
+    def test_results_command_pagination_and_vars(self, mgr, capsys):
+        self._completed_batch(mgr, "listed", n=3)
+        ctx = make_ctx(mgr)
+        asyncio.run(run_cmd(ctx, "/batch results listed limit=2"))
+        out = capsys.readouterr().out
+        assert "showing 2 of 3 records" in out
+        assert "listed_0001" in out and "listed_0003" not in out
+        records = ctx.app.buffer_manager.get_script_var("BATCH_RESULTS")
+        assert len(records) == 3  # full list bound, pagination is display-only
+
+        asyncio.run(run_cmd(ctx, "/batch results listed range=2: var=my_res"))
+        out = capsys.readouterr().out
+        assert "listed_0003" in out
+        assert len(ctx.app.buffer_manager.get_script_var("my_res")) == 3
+
+    def test_results_before_retrieval(self, mgr, capsys):
+        ctx = make_ctx(mgr)
+        asyncio.run(run_cmd(ctx, "/batch start waiting"))
+        asyncio.run(run_cmd(ctx, "/batch add x"))
+        asyncio.run(run_cmd(ctx, "/batch results waiting"))
+        out = capsys.readouterr().out
+        assert "No results retrieved yet" in out
+        assert "/batch check waiting" in out
+
+    def test_results_localized_subcommand(self):
+        from chatybot.localization import LocalizationManager
+        i18n = LocalizationManager()
+        i18n.set_locale("es")
+        assert i18n.translate_command_string(
+            "/lote resultados mibatch limit=5") == "/batch results mibatch limit=5"

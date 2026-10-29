@@ -240,7 +240,7 @@ def _try_active_draft(mgr: BatchManager) -> dict | None:
 # ---------------------------------------------------------------------------
 
 @command("/batch", help="Batch API jobs: stage, seal, submit, poll, retrieve",
-         args="<status|start|prompt|add|items|ids|show|edit|remove|clear|dump|end|abort|run|check|retry|list|cancel> [name] [key=value ...]",
+         args="<status|start|prompt|add|items|ids|show|edit|remove|clear|dump|end|abort|run|check|results|retry|list|cancel> [name] [key=value ...]",
          category="batch")
 async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandResult:
     app = ctx.app
@@ -448,10 +448,30 @@ async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandRe
             custom_id = tokens[0]
             meta = mgr.resolve(_name_token(rest, skip=custom_id))
             item = mgr.show_item(meta, custom_id)
+            result = mgr.get_result(meta["batch_id"], custom_id)
+            status_note = (f"   Status: {result['status_code']}"
+                           if result is not None else "")
             print(f"\nItem: {item['custom_id']}  (batch: {meta['name']})")
-            print(f"Origin: {item.get('origin', 'manual')}   Chars: {len(item['text'])}")
+            print(f"Origin: {item.get('origin', 'manual')}   "
+                  f"Chars: {len(item['text'])}{status_note}")
             print("-" * 60)
+            print("[Input]:")
             print(item["text"])
+            if result is not None:
+                print("-" * 60)
+                if result.get("error"):
+                    print("[Error]:")
+                    print(result["error"])
+                else:
+                    print(f"[Result]:   (status {result['status_code']})")
+                    print(result.get("content") or "(empty completion)")
+            elif mgr.read_results(meta["batch_id"]):
+                print("-" * 60)
+                print(f"[Result]: not retrieved for this item "
+                      "(no record in results.jsonl).")
+            else:
+                print(f"\n(No results yet — batch status: {meta['status']}. "
+                      f"Run '/batch check {meta['name']}' to poll/retrieve.)")
             print()
             return CommandResult.ok()
 
@@ -593,6 +613,56 @@ async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandRe
             print(f"Batch '{meta['name']}': status={meta['status']}{extra}")
             return CommandResult.ok()
 
+        # ---- results ---------------------------------------------------------------------
+        elif subcmd == "results":
+            opts, tokens = _parse_args(rest)
+            meta = mgr.resolve(_name_token(rest))
+            records = mgr.read_results(meta["batch_id"])
+            if not records:
+                print(f"No results retrieved yet for '{meta['name']}' "
+                      f"(status: {meta['status']}).")
+                print("Run '/batch check {0}' to poll/retrieve.".format(meta["name"]))
+                return CommandResult.ok()
+            offset, limit = 0, 10
+            if "limit" in opts:
+                try:
+                    limit = int(opts["limit"])
+                except ValueError:
+                    print("Invalid limit value. Using default limit of 10.")
+            if "range" in opts:
+                try:
+                    r = opts["range"]
+                    if ":" in r:
+                        s, e = r.split(":", 1)
+                        offset = int(s) if s else 0
+                        limit = (int(e) - offset) if e else None
+                    else:
+                        offset = int(r)
+                except ValueError:
+                    print("Invalid range format. Use range=start:end. "
+                          "Using default limit of 10.")
+            end = len(records) if limit is None else min(offset + limit, len(records))
+            page = records[offset:end]
+
+            bound = opts.get("var", "BATCH_RESULTS").strip().lstrip("$")
+            # The variable carries the FULL record list (pagination is
+            # display-only), each record: custom_id, status_code, content, error
+            app.buffer_manager.set_script_var(bound, records, allow_protected=True)
+
+            print(f"\n[Results: {meta['name']} — showing {len(page)} of "
+                  f"{len(records)} records, status: {meta['status']}]")
+            for i, record in enumerate(page, offset + 1):
+                print("-" * 60)
+                status = record.get("status_code", "?")
+                print(f"#{i}  {record.get('custom_id')}   [{status}]")
+                if record.get("error"):
+                    print(f"[Error]: {record['error']}")
+                else:
+                    print(record.get("content") or "(empty completion)")
+            print("-" * 60)
+            print(f"(all {len(records)} records exported to ${{{bound}}})\n")
+            return CommandResult.ok()
+
         # ---- cancel ------------------------------------------------------------------------
         elif subcmd == "cancel":
             meta = mgr.resolve(_name_token(rest))
@@ -616,8 +686,8 @@ async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandRe
 
         else:
             print(f"Unknown batch subcommand: {subcmd}. Use start, prompt, add, items, "
-                  "ids, show, edit, remove, clear, dump, end, abort, run, check, retry, "
-                  "list, cancel, or status.")
+                  "ids, show, edit, remove, clear, dump, end, abort, run, check, "
+                  "results, retry, list, cancel, or status.")
             return CommandResult.ok()
 
     except BatchError as e:

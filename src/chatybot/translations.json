@@ -146,7 +146,8 @@
       "run": "run",
       "cancel": "cancel",
       "abort": "abort",
-      "here": "here"
+      "here": "here",
+      "results": "results"
     },
     "ui": {
       "language_changed": "Language set to: {lang}",
@@ -522,7 +523,8 @@
       "cancelar": "cancel",
       "abortar": "abort",
       "aqui": "here",
-      "vaciar": "clear"
+      "vaciar": "clear",
+      "resultados": "results"
     },
     "ui": {
       "language_changed": "Idioma establecido en: {lang}",
@@ -1107,7 +1109,9 @@
       "executer": "run",
       "annuler": "cancel",
       "abandon": "abort",
-      "ici": "here"
+      "ici": "here",
+      "resultats": "results",
+      "résultats": "results"
     },
     "ui": {
       "language_changed": "Langue définie sur : {lang}",
@@ -1688,7 +1692,8 @@
       "取消": "cancel",
       "中止": "abort",
       "此处": "here",
-      "重新开始": "clear"
+      "重新开始": "clear",
+      "结果": "results"
     },
     "ui": {
       "language_changed": "语言设置为: {lang}",
@@ -2261,7 +2266,8 @@
       "annulla": "cancel",
       "interrompi": "abort",
       "qui": "here",
-      "svuota": "clear"
+      "svuota": "clear",
+      "risultati": "results"
     },
     "ui": {
       "language_changed": "Lingua impostata su: {lang}",
@@ -2844,7 +2850,8 @@
       "إلغاء": "cancel",
       "إحباط": "abort",
       "هنا": "here",
-      "إخلاء": "clear"
+      "إخلاء": "clear",
+      "نتائج": "results"
     },
     "ui": {
       "language_changed": "تغيرت اللغة لـ: {lang}",

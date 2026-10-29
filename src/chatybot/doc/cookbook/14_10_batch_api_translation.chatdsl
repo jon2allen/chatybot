@@ -49,6 +49,9 @@
 # 10. Poll until terminal and retrieve results (results.jsonl; exact usage.cost)
 /batch check dufu_run wait=true
 
+# 10b. Inspect retrieved completions natively (paginated; exports ${BATCH_RESULTS})
+/batch results dufu_run limit=5
+
 # 11. Query the global catalog (auto-exports ${BATCH_LIST} and ${BATCH_IDS})
 /batchlist since=1d
 
