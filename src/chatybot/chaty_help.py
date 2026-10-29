@@ -1089,7 +1089,7 @@ class HelpSystem:
                 "abort [name]": "Discard an open (never-submitted) staging session",
                 "run [name]": "Estimate cost, verify budget, submit [force=true] [adopt=<provider_id>]",
                 "check [name]": "Poll status / retrieve results [wait=true polls until terminal]",
-                "results [name]": "Print retrieved completions with pagination; exports ${BATCH_RESULTS} [limit=N] [range=start:end] [var=<target>]",
+                "results [name]": "Print retrieved completions with pagination; exports ${BATCH_RESULTS} [limit=N] [range=start:end] [var=<target>]. Records are in staging (submission) order — providers return results in arbitrary completion order; always match by custom_id",
                 "cancel <name>": "Cancel an in-flight batch [force=true for providers without a cancel endpoint (OpenRouter): marks it cancelled locally while the remote job still runs to completion]",
                 "retry <name>": "New batch from failed items (Phase 3)",
                 "list": "Alias for /batchlist",
