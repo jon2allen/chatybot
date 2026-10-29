@@ -1054,3 +1054,124 @@ class TestCloneGuards:
         asyncio.run(run_cmd(ctx, "/batch add compare model=gpt-4 prompt=hello world"))
         item = mgr.list_items(mgr.resolve("t1"))[0]
         assert item["text"] == "compare model=gpt-4 prompt=hello world"
+
+
+class TestBatchRawPayloadTrace:
+    """Tests for raw-payload tracing in batch provider network calls."""
+
+    @pytest.fixture
+    def mock_session(self, monkeypatch):
+        class MockResponse:
+            def __init__(self, status=200, text_data="{}"):
+                self.status = status
+                self._text = text_data
+
+            async def text(self):
+                return self._text
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc_val, exc_tb):
+                return False
+
+        class MockClientSession:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc_val, exc_tb):
+                return False
+
+            def request(self, method, url, **kwargs):
+                resp_json = {
+                    "id": "batch_test_123",
+                    "status": "completed",
+                    "results": [
+                        {
+                            "custom_id": "test_0001",
+                            "response": {
+                                "status_code": 200,
+                                "body": {"choices": [{"message": {"content": "Translated text"}}]},
+                            },
+                        }
+                    ],
+                    "usage": {"cost": 0.00042},
+                }
+                return MockResponse(status=200, text_data=json.dumps(resp_json))
+
+        import aiohttp
+        monkeypatch.setattr(aiohttp, "ClientSession", MockClientSession)
+
+    def test_provider_trace_submit_and_get(self, mock_session, capsys):
+        from chatybot.batch_manager import OpenRouterBatchProvider
+        provider = OpenRouterBatchProvider(
+            api_key="sk-or-v1-abcdef1234567890",
+            base_url="https://test.api",
+            trace_raw_payload=True,
+        )
+        reqs = [{"custom_id": "item_1", "body": {"messages": [{"role": "user", "content": "hi"}]}}]
+
+        # Test submit
+        asyncio.run(provider.submit(reqs, "test-model"))
+        out = capsys.readouterr().out
+        assert "Batch API Request Payload (POST):" in out
+        assert "POST https://test.api/batches" in out
+        assert "test-model" in out
+        assert "Batch API Response Payload (POST https://test.api/batches):" in out
+        assert "batch_test_123" in out
+
+        # Test get
+        asyncio.run(provider.get("batch_test_123"))
+        out_get = capsys.readouterr().out
+        assert "Batch API Request (GET):" in out_get
+        assert "GET https://test.api/batches/batch_test_123" in out_get
+        assert "Batch API Response Payload (GET https://test.api/batches/batch_test_123):" in out_get
+        assert "Translated text" in out_get
+
+    def test_provider_trace_disabled_prints_nothing(self, mock_session, capsys, monkeypatch):
+        from chatybot.batch_manager import OpenRouterBatchProvider
+        monkeypatch.delenv("CHATYBOT_TRACE_RAW_PAYLOAD", raising=False)
+        provider = OpenRouterBatchProvider(
+            api_key="sk-or-v1-abcdef1234567890",
+            base_url="https://test.api",
+            trace_raw_payload=False,
+        )
+        asyncio.run(provider.submit([], "test-model"))
+        asyncio.run(provider.get("batch_test_123"))
+        out = capsys.readouterr().out
+        assert "Batch API Request" not in out
+        assert "Batch API Response" not in out
+
+    def test_provider_honors_env_var_trace(self, mock_session, capsys, monkeypatch):
+        from chatybot.batch_manager import OpenRouterBatchProvider
+        monkeypatch.setenv("CHATYBOT_TRACE_RAW_PAYLOAD", "1")
+        provider = OpenRouterBatchProvider(
+            api_key="sk-or-v1-abcdef1234567890",
+            base_url="https://test.api",
+            trace_raw_payload=False,
+        )
+        asyncio.run(provider.get("batch_test_123"))
+        out = capsys.readouterr().out
+        assert "Batch API Request (GET):" in out
+        assert "Batch API Response Payload" in out
+
+    def test_build_provider_passes_app_trace_setting(self, monkeypatch):
+        from chatybot.commands.batch import _build_provider
+        app = MagicMock()
+        app.trace_raw_payload = True
+        app.logging_manager = MagicMock()
+        app.config_manager.get_model_config.return_value = {
+            "name": "test-model",
+            "vendor": "openrouter",
+            "batch": True,
+            "api_key": "MOCK_KEY_VAR",
+        }
+        monkeypatch.setenv("MOCK_KEY_VAR", "mock-key-val")
+        meta = {"provider": "openrouter", "model_alias": "test_alias"}
+        prov = _build_provider(app, meta)
+        assert prov.trace_raw_payload is True
+        assert prov.logging_manager == app.logging_manager
+

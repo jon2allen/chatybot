@@ -118,7 +118,14 @@ def _build_provider(app: Any, meta: dict):
     if not api_key:
         raise BatchError(f"API key not found: set the {api_key_env or 'provider'} "
                          "environment variable (model config 'api_key' names it).")
-    return make_provider(model_config, api_key)
+    trace_raw_payload = getattr(app, "trace_raw_payload", False)
+    logging_manager = getattr(app, "logging_manager", None)
+    return make_provider(
+        model_config,
+        api_key,
+        trace_raw_payload=trace_raw_payload,
+        logging_manager=logging_manager,
+    )
 
 
 # Option keys each consuming subcommand may parse. Keeping these tight per
