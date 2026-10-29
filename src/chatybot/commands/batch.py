@@ -149,6 +149,7 @@ DUMP_OPTS = {"var"}
 RUN_OPTS = {"force", "adopt"}
 CHECK_OPTS = {"wait"}
 RESULTS_OPTS = {"limit", "range", "var"}
+CANCEL_OPTS = {"force"}
 
 
 def _extract_sampling_params(opts: dict[str, str],
@@ -867,6 +868,11 @@ async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandRe
                 _print_batch_status(meta)
                 print("Results already retrieved (results.jsonl).")
                 return CommandResult.ok()
+            if meta["status"] == "cancelled":
+                print(f"Batch '{meta['name']}' was cancelled locally and is not "
+                      "polled anymore. The remote job may still have run to "
+                      "completion and billed at batch rates.")
+                return CommandResult.ok()
             provider_obj = _build_provider(app, meta)
             wait = opts.get("wait", "false").lower() in ("true", "1", "yes")
             meta = await mgr.check(meta, provider_obj, wait=wait)
@@ -930,9 +936,11 @@ async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandRe
 
         # ---- cancel ------------------------------------------------------------------------
         elif subcmd == "cancel":
+            opts, tokens = _parse_args(rest, keys=CANCEL_OPTS)
             meta = mgr.resolve(_name_token(rest))
             provider_obj = _build_provider(app, meta) if meta.get("provider_id") else None
-            meta = await mgr.cancel(meta, provider_obj)
+            force = opts.get("force", "").lower() in ("true", "1", "yes")
+            meta = await mgr.cancel(meta, provider_obj, force=force)
             print(f"Cancelled batch '{meta['name']}' (status: {meta['status']}).")
             return CommandResult.ok()
 

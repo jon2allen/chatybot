@@ -211,9 +211,17 @@ class OpenRouterBatchProvider:
             data = await self._request(session, "GET", f"{self.base_url}/batches")
             return data.get("data") or []
 
+    # OpenRouter's Batch API has no cancel endpoint (web-verified): a
+    # submitted batch always runs to completion or expires within 24h.
+    supports_cancel = False
+
     async def cancel(self, provider_id: str) -> dict:
-        async with aiohttp.ClientSession() as session:
-            return await self._request(session, "POST", f"{self.base_url}/batches/{provider_id}/cancel")
+        raise BatchError(
+            "OpenRouter does not support cancelling a submitted batch — it "
+            "runs to completion (or expires within 24 hours) and bills at "
+            "batch rates. Use '/batch cancel <name> force=true' to disown it "
+            "locally."
+        )
 
     # -- normalization -----------------------------------------------------
 
@@ -924,12 +932,29 @@ class BatchManager:
         self._write_meta(meta)
         return meta
 
-    async def cancel(self, meta: dict, provider_obj: Any) -> dict:
-        """Cancel an in-flight batch at the provider and locally."""
+    async def cancel(self, meta: dict, provider_obj: Any,
+                     force: bool = False) -> dict:
+        """Cancel an in-flight batch at the provider and locally.
+
+        Providers without a cancel endpoint (OpenRouter) cannot stop a
+        submitted job: refuse unless force=True, which marks the batch
+        cancelled locally while the remote job still runs to completion."""
         if meta["status"] not in OPEN_STATES:
             raise BatchError(f"Batch '{meta['name']}' is not in flight (status: {meta['status']}).")
-        if meta.get("provider_id"):
+        if provider_obj is not None and getattr(provider_obj, "supports_cancel", False):
             await provider_obj.cancel(meta["provider_id"])
+        else:
+            if not force:
+                raise BatchError(
+                    f"Provider '{meta.get('provider', 'unknown')}' cannot cancel a "
+                    "submitted batch — it will run to completion (or expire within "
+                    "24 hours) and bill at batch rates.\n"
+                    "To remove it from your active batches anyway, re-run with "
+                    f"force=true: '/batch cancel {meta['name']} force=true' "
+                    "(marks it cancelled locally; the remote job is not stopped)."
+                )
+            print(f"Note: cancelling '{meta['name']}' locally only — the remote "
+                  "job will still run to completion and bill at batch rates.")
         meta["status"] = STATUS_CANCELLED
         meta["finalized_at"] = int(time.time())
         self._write_meta(meta)
