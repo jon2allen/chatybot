@@ -207,9 +207,13 @@ class FakeProvider:
     name = "openrouter"
     supports_cancel = True  # unlike the real OpenRouter backend
 
-    def __init__(self, fail_submit=False, final_status="completed"):
+    def __init__(self, fail_submit=False, final_status="completed",
+                 empty_custom_ids=None):
         self.fail_submit = fail_submit
         self.final_status = final_status
+        # Items whose completion body is empty (status 200, no content) —
+        # mirroring the real-world gpt-oss/OpenRouter behavior.
+        self.empty_custom_ids = set(empty_custom_ids or ())
         self.batches = {}
         self.calls = []
 
@@ -224,8 +228,11 @@ class FakeProvider:
                                "failed": 0},
             "results": [
                 {"custom_id": r["custom_id"],
-                 "response": {"status_code": 200,
-                              "body": {"choices": [{"message": {"content": "ok"}}]}}}
+                 **({"response": {"status_code": 200,
+                                  "body": {"choices": [{"message": {"content": ""}}]}}}
+                    if r["custom_id"] in self.empty_custom_ids else
+                    {"response": {"status_code": 200,
+                                  "body": {"choices": [{"message": {"content": "ok"}}]}}})}
                 for r in requests
             ],
             "usage": {"cost": 0.002051105},
@@ -1478,3 +1485,75 @@ class TestResultsOrdering:
         stored = mgr.read_results(meta["batch_id"])
         assert [r["custom_id"] for r in stored] == [
             "ordered_0001", "ordered_0002", "ordered_0003"]
+
+
+class TestEmptyCompletionVisibility:
+    """Providers count status-200 empty completions as successes and never
+    retry them; every batch surface must make them visible."""
+
+    def _completed_with_empties(self, mgr, n=3, empty=2):
+        meta = mgr.start("empt", model_alias="gptoss_batch",
+                         model_name="openai/gpt-oss-120b:batch",
+                         provider="openrouter", prompt="p")
+        mgr.add_items(meta, [f"item {i}" for i in range(n)], id_prefix="empt_")
+        mgr.end(meta)
+        empty_ids = {f"empt_{i:04d}" for i in range(1, empty + 1)}
+        provider = FakeProvider(empty_custom_ids=empty_ids)
+        meta = asyncio.run(mgr.run(meta, provider))
+        meta = asyncio.run(mgr.check(meta, provider))
+        return meta, provider
+
+    def test_meta_records_empty_count(self, mgr):
+        meta, _ = self._completed_with_empties(mgr)
+        assert meta["empty_results"] == 2
+        # Catalog record carries it too
+        rec = mgr.find_by_name("empt")
+        assert rec["empty_results"] == 2
+        assert rec["results_count"] == 3
+
+    def test_check_summary_and_status_show_empties(self, mgr, capsys, monkeypatch):
+        # Stage and submit, but let the /batch check COMMAND do the retrieval
+        meta = mgr.start("empt", model_alias="gptoss_batch",
+                         model_name="openai/gpt-oss-120b:batch",
+                         provider="openrouter", prompt="p")
+        mgr.add_items(meta, ["a", "b", "c"], id_prefix="empt_")
+        mgr.end(meta)
+        provider = FakeProvider(empty_custom_ids={"empt_0001", "empt_0002"})
+        monkeypatch.setattr(batch_cmds, "_build_provider", lambda app, meta: provider)
+        meta = asyncio.run(mgr.run(meta, provider))
+
+        ctx = make_ctx(mgr)
+        asyncio.run(run_cmd(ctx, "/batch check empt"))
+        out = capsys.readouterr().out
+        assert "results: 3 written to results.jsonl (2 empty)" in out
+
+        asyncio.run(run_cmd(ctx, "/batch status empt"))
+        out = capsys.readouterr().out
+        assert "Results:    3 (2 empty)" in out
+
+    def test_results_header_and_batchlist_show_empties(self, mgr, capsys):
+        self._completed_with_empties(mgr)
+        ctx = make_ctx(mgr)
+        asyncio.run(run_cmd(ctx, "/batch results empt"))
+        out = capsys.readouterr().out
+        assert "3 records, 2 empty" in out
+
+        capsys.readouterr()
+        asyncio.run(run_cmd(ctx, "/batchlist all"))
+        out = capsys.readouterr().out
+        assert "2 empty" in out
+
+    def test_zero_empties_shows_no_marker(self, mgr, capsys, monkeypatch):
+        meta = mgr.start("clean", model_alias="gptoss_batch",
+                         model_name="openai/gpt-oss-120b:batch",
+                         provider="openrouter", prompt="p")
+        mgr.add_items(meta, ["a"], id_prefix="clean_")
+        mgr.end(meta)
+        provider = FakeProvider()  # no empty ids
+        monkeypatch.setattr(batch_cmds, "_build_provider", lambda app, meta: provider)
+        meta = asyncio.run(mgr.run(meta, provider))
+        ctx = make_ctx(mgr)
+        asyncio.run(run_cmd(ctx, "/batch check clean"))
+        out = capsys.readouterr().out
+        assert "results: 1 written to results.jsonl" in out
+        assert "empty" not in out

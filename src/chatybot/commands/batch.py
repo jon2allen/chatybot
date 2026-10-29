@@ -298,6 +298,10 @@ def _print_batch_status(meta: dict) -> None:
         print(f"  Host:       {meta['host_backend']}")
     if meta.get("cost_usd") is not None:
         print(f"  Exact cost: ${meta['cost_usd']}")
+    if meta.get("results_count") is not None:
+        empty_note = (f" ({meta['empty_results']} empty)"
+                      if meta.get("empty_results") else "")
+        print(f"  Results:    {meta['results_count']}{empty_note}")
     if meta.get("prompt"):
         prompt_prev = meta["prompt"][:60] + "..." if len(meta["prompt"]) > 60 else meta["prompt"]
         print(f"  Prompt:     \"{prompt_prev}\"")
@@ -879,6 +883,8 @@ async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandRe
             extra = ""
             if meta.get("results_count"):
                 extra = f"  results: {meta['results_count']} written to results.jsonl"
+                if meta.get("empty_results"):
+                    extra += f" ({meta['empty_results']} empty)"
             if meta.get("cost_usd") is not None:
                 extra += f"  exact cost: ${meta['cost_usd']}"
             print(f"Batch '{meta['name']}': status={meta['status']}{extra}")
@@ -920,8 +926,12 @@ async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandRe
             # display-only), each record: custom_id, status_code, content, error
             app.buffer_manager.set_script_var(bound, records, allow_protected=True)
 
+            empty_now = sum(
+                1 for record in records
+                if not record.get("error") and not (record.get("content") or "").strip())
+            empty_note = f", {empty_now} empty" if empty_now else ""
             print(f"\n[Results: {meta['name']} — showing {len(page)} of "
-                  f"{len(records)} records, status: {meta['status']}]")
+                  f"{len(records)} records{empty_note}, status: {meta['status']}]")
             for i, record in enumerate(page, offset + 1):
                 print("-" * 60)
                 status = record.get("status_code", "?")
@@ -1082,8 +1092,10 @@ async def cmd_batchlist(ctx: CommandContext, parts: list, command: str) -> Comma
         for idx, r in enumerate(records, 1):
             cost = f"  ${r['cost_usd']:.6f}" if r.get("cost_usd") is not None else ""
             host = f"  via {r['host_backend']}" if r.get("host_backend") else ""
+            empty = (f"  {r['empty_results']} empty"
+                     if r.get("empty_results") else "")
             print(f"  {idx}. {r['batch_id']}  [{r.get('status')}]  "
-                  f"items={r.get('item_count', 0)}{cost}{host}")
+                  f"items={r.get('item_count', 0)}{empty}{cost}{host}")
             print(f"     ├─ name: {r.get('name')}   model: {r.get('model_alias')} "
                   f"({r.get('model')})")
             created = datetime.fromtimestamp(r.get("created_at") or 0)

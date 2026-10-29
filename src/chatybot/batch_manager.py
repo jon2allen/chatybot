@@ -337,6 +337,7 @@ class BatchManager:
             "batch_id", "provider_id", "name", "provider", "host_backend",
             "model_alias", "model", "prompt", "status", "item_count",
             "temperature", "max_tokens", "top_p", "frequency_penalty", "presence_penalty",
+            "results_count", "empty_results",
             "created_at", "finalized_at", "cost_usd", "workspace",
         )}
         self._ensure_root()
@@ -926,6 +927,12 @@ class BatchManager:
                 r.get("custom_id"), len(staged_order)))
             data = "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in normalized)
             self._fsync_write(self._results_path(meta["batch_id"]), data)
+            # Batch providers count empty completions (status 200, no
+            # content) as successes and never retry them; surface them so
+            # users can spot flaky runs and re-queue just those items.
+            meta["empty_results"] = sum(
+                1 for r in normalized
+                if not r.get("error") and not (r.get("content") or "").strip())
             meta["finalized_at"] = int(time.time())
             telemetry = provider_obj.telemetry_of(batch)
             if telemetry.get("cost_usd") is not None:
