@@ -799,3 +799,90 @@ class TestResultsInspection:
         i18n.set_locale("es")
         assert i18n.translate_command_string(
             "/lote resultados mibatch limit=5") == "/batch results mibatch limit=5"
+
+
+class TestShowResolutionFix:
+    """Regression: /batch show must work without a batch name, including on
+    completed batches (previously fell back to resolve(None), which only
+    considers non-terminal batches and failed with 'No batch specified')."""
+
+    def _completed_batch(self, mgr, name, n=1):
+        meta = mgr.start(name, model_alias="gptoss_batch",
+                         model_name="openai/gpt-oss-120b:batch",
+                         provider="openrouter", prompt="Translate.")
+        mgr.add_items(meta, [f"poem {i}" for i in range(n)], id_prefix=f"{name}_")
+        mgr.end(meta)
+        provider = FakeProvider()
+        meta = asyncio.run(mgr.run(meta, provider))
+        meta = asyncio.run(mgr.check(meta, provider))
+        return meta
+
+    def test_show_item_without_name_on_completed_batch(self, mgr, capsys):
+        """The reported failure: '/batch show df1_0001' on a completed batch."""
+        self._completed_batch(mgr, "df1")
+        ctx = make_ctx(mgr)
+        asyncio.run(run_cmd(ctx, "/batch show df1_0001"))
+        out = capsys.readouterr().out
+        assert "[Input]:" in out
+        assert "[Result]:" in out
+        assert "Error" not in out
+
+    def test_show_batch_name_only_gives_overview(self, mgr, capsys):
+        """The reported failure: '/batch show df1' (name only) must show the
+        batch overview instead of erroring."""
+        self._completed_batch(mgr, "df1", n=2)
+        ctx = make_ctx(mgr)
+        asyncio.run(run_cmd(ctx, "/batch show df1"))
+        out = capsys.readouterr().out
+        assert "Batch: df1" in out
+        assert "Staged item IDs: df1_0001, df1_0002" in out
+        assert "/batch show <item-id>" in out
+
+    def test_show_unknown_item_clear_error(self, mgr, capsys):
+        ctx = make_ctx(mgr)
+        asyncio.run(run_cmd(ctx, "/batch show no_such_item"))
+        out = capsys.readouterr().out
+        assert "item 'no_such_item' not found in any batch" in out
+        assert "No batch specified" not in out
+
+    def test_show_still_accepts_explicit_name(self, mgr, capsys):
+        self._completed_batch(mgr, "named")
+        ctx = make_ctx(mgr)
+        asyncio.run(run_cmd(ctx, "/batch show named_0001 named"))
+        out = capsys.readouterr().out
+        assert "[Input]:" in out and "[Result]:" in out
+
+    def test_edit_without_name_on_active_draft(self, mgr, capsys):
+        ctx = make_ctx(mgr)
+        asyncio.run(run_cmd(ctx, "/batch start ed1"))
+        asyncio.run(run_cmd(ctx, "/batch add original text"))
+        asyncio.run(run_cmd(ctx, "/batch edit ed1_0001 replacement text"))
+        item = mgr.show_item(mgr.resolve("ed1"), "ed1_0001")
+        assert item["text"] == "replacement text"
+
+    def test_remove_without_name_on_active_draft(self, mgr, capsys):
+        ctx = make_ctx(mgr)
+        asyncio.run(run_cmd(ctx, "/batch start rm1"))
+        asyncio.run(run_cmd(ctx, "/batch add doomed"))
+        asyncio.run(run_cmd(ctx, "/batch remove rm1_0001"))
+        assert mgr.list_items(mgr.resolve("rm1")) == []
+
+    def test_edit_consumes_explicit_name_token(self, mgr, capsys):
+        """When a token resolves the batch explicitly, it must not leak into
+        the replacement text."""
+        ctx = make_ctx(mgr)
+        asyncio.run(run_cmd(ctx, "/batch start ed2"))
+        asyncio.run(run_cmd(ctx, "/batch add original"))
+        asyncio.run(run_cmd(ctx, "/batch edit ed2_0001 ed2 the new text"))
+        item = mgr.show_item(mgr.resolve("ed2"), "ed2_0001")
+        assert item["text"] == "the new text"
+
+    def test_edit_locked_item_reports_lock(self, mgr, capsys):
+        """Edit on a staged (locked) item found by ID reports the lock."""
+        ctx = make_ctx(mgr)
+        asyncio.run(run_cmd(ctx, "/batch start lk1"))
+        asyncio.run(run_cmd(ctx, "/batch add sealed"))
+        asyncio.run(run_cmd(ctx, "/batch end"))
+        asyncio.run(run_cmd(ctx, "/batch edit lk1_0001 nope"))
+        out = capsys.readouterr().out
+        assert "only be edited while the batch is in draft" in out
