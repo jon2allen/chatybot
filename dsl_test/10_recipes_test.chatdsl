@@ -1,0 +1,130 @@
+# Recipe Generation and Batch Categorization Script
+# Goal: Generate 10 recipes with mistral_1, then use gptoss_batch to categorize them
+# Run: /script dsl_test/10_recipes_test.chatdsl
+#
+# Each run gets a unique batch instance name (recipe_cat_<timestamp>) so a
+# re-run never collides with a batch that is still in flight or completed.
+
+# ============================================
+# PHASE 1: Generate 10 Recipes with mistral_1
+# ============================================
+/session history off
+/model mistral_1
+/temp 0.7
+
+# Unique run tag: every run stages its own batch instance
+/run date +%Y%m%d_%H%M%S
+/setvar run_tag {LAST_COMPLETION}
+
+/echo "=== Starting Recipe Generation (run ${run_tag}) ==="
+
+# Recipe 1: Italian Pasta
+set recipe_1_prompt = "Create a detailed recipe for a traditional Italian pasta dish. Include ingredients, step-by-step instructions, and serving suggestions."
+${recipe_1_prompt}
+/setvar recipe_1 {LAST_COMPLETION}
+
+# Recipe 2: Mexican Salsa
+set recipe_2_prompt = "Create a detailed recipe for a spicy Mexican salsa. Include ingredients, preparation method, and tips for adjusting spice level."
+${recipe_2_prompt}
+/setvar recipe_2 {LAST_COMPLETION}
+
+# Recipe 3: French Dessert
+set recipe_3_prompt = "Create a detailed recipe for a classic French dessert. Include ingredients, baking instructions, and presentation tips."
+${recipe_3_prompt}
+/setvar recipe_3 {LAST_COMPLETION}
+
+# Recipe 4: German Stew
+set recipe_4_prompt = "Create a detailed recipe for a hearty German stew. Include ingredients, cooking time, and traditional serving suggestions."
+${recipe_4_prompt}
+/setvar recipe_4 {LAST_COMPLETION}
+
+# Recipe 5: Greek Salad
+set recipe_5_prompt = "Create a detailed recipe for a fresh Greek salad. Include ingredients, dressing recipe, and variations."
+${recipe_5_prompt}
+/setvar recipe_5 {LAST_COMPLETION}
+
+# Recipe 6: Indian Curry
+set recipe_6_prompt = "Create a detailed recipe for a flavorful Indian curry. Include ingredients, spice blend, and cooking instructions."
+${recipe_6_prompt}
+/setvar recipe_6 {LAST_COMPLETION}
+
+# Recipe 7: Japanese Soup
+set recipe_7_prompt = "Create a detailed recipe for a comforting Japanese soup. Include ingredients, broth preparation, and traditional garnishes."
+${recipe_7_prompt}
+/setvar recipe_7 {LAST_COMPLETION}
+
+# Recipe 8: Thai Stir-Fry
+set recipe_8_prompt = "Create a detailed recipe for a zesty Thai stir-fry. Include ingredients, sauce recipe, and cooking technique."
+${recipe_8_prompt}
+/setvar recipe_8 {LAST_COMPLETION}
+
+# Recipe 9: Spanish Paella
+set recipe_9_prompt = "Create a detailed recipe for a rich Spanish paella. Include ingredients, rice cooking method, and traditional seafood options."
+${recipe_9_prompt}
+/setvar recipe_9 {LAST_COMPLETION}
+
+# Recipe 10: American Pie
+set recipe_10_prompt = "Create a detailed recipe for a sweet American pie. Include crust recipe, filling ingredients, and baking instructions."
+${recipe_10_prompt}
+/setvar recipe_10 {LAST_COMPLETION}
+
+/echo "=== All 10 recipes generated and saved ==="
+
+# ============================================
+# PHASE 2: Batch Categorization with gptoss_batch
+# ============================================
+
+# Switch to batch-capable model
+/model gptoss_batch
+
+/echo "=== Starting Batch Categorization (recipe_cat_${run_tag}) ==="
+
+# Set the batch instruction/prompt for categorization
+/batch prompt "For each recipe provided, categorize it by extracting the following information in JSON format: {\"type\": \"Main course/Appetizer/Dessert/Soup/Salad/etc\", \"country\": \"country of origin\", \"cuisine\": \"cuisine type\", \"key_ingredients\": [\"ingredient1\", \"ingredient2\", \"ingredient3\"], \"difficulty\": \"Easy/Medium/Hard\"}. Only output the JSON object, no other text."
+
+# Start a new batch under the unique run-tagged name
+/batch start recipe_cat_${run_tag}
+
+# Add all recipes with explicit IDs. split=none keeps each multi-line
+# recipe as ONE item (the var source defaults to line-splitting otherwise).
+/batch add id=recipe_1 var=recipe_1 split=none
+/batch add id=recipe_2 var=recipe_2 split=none
+/batch add id=recipe_3 var=recipe_3 split=none
+/batch add id=recipe_4 var=recipe_4 split=none
+/batch add id=recipe_5 var=recipe_5 split=none
+/batch add id=recipe_6 var=recipe_6 split=none
+/batch add id=recipe_7 var=recipe_7 split=none
+/batch add id=recipe_8 var=recipe_8 split=none
+/batch add id=recipe_9 var=recipe_9 split=none
+/batch add id=recipe_10 var=recipe_10 split=none
+
+# Inspect the staged items
+/echo "=== Batch items staged ==="
+/batch items recipe_cat_${run_tag}
+
+# Validate and lock the manifest
+/batch end recipe_cat_${run_tag}
+
+# Dump the JSON payload for inspection
+/batch dump recipe_cat_${run_tag}
+
+# Submit the batch job
+/echo "=== Submitting batch job ==="
+/batch run recipe_cat_${run_tag}
+
+# Poll for results and wait for completion
+/echo "=== Waiting for batch results ==="
+/batch check recipe_cat_${run_tag} wait=true
+
+# Bind the retrieved records to a variable
+/echo "=== Categorization Results ==="
+/batch results recipe_cat_${run_tag} var=batch_results
+
+# Persist the results variable to a run-tagged file
+/savevar batch_results batch_categorization_results_${run_tag}.txt
+/echo "Results saved to: batch_categorization_results_${run_tag}.txt"
+
+# Switch back to interactive model
+/model mistral_1
+
+/echo "=== Script Complete ==="
