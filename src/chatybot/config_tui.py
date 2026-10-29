@@ -734,6 +734,7 @@ class ConfigTUI:
         ("vendor", "Vendor Tag", "str"),
         ("image_generation", "Image Generation", "bool"),
         ("image_endpoint", "Image Endpoint", "str"),
+        ("batch", "Batch Capable", "bool"),
     ]
 
     def get_available_replace_scopes(self) -> list[tuple[str, str, str]]:
@@ -1456,7 +1457,7 @@ class ConfigTUI:
     def edit_model_form(self, stdscr, initial_alias: str, model: Any, is_new: bool = False):
         """Run form editor overlay."""
         h, w = stdscr.getmaxyx()
-        win_h, win_w = 22, 64
+        win_h, win_w = 24, 64
         win_y = (h - win_h) // 2
         win_x = (w - win_w) // 2
         
@@ -1477,6 +1478,7 @@ class ConfigTUI:
             "image_generation": "false",
             "image_endpoint": "",
             "image_modalities": "",
+            "batch": "false",
         }
         
         # Populate additional fields if chat type
@@ -1485,6 +1487,7 @@ class ConfigTUI:
             form_data["image_endpoint"] = model.image_endpoint or ""
             if model.image_modalities:
                 form_data["image_modalities"] = ", ".join(model.image_modalities)
+            form_data["batch"] = "true" if model.batch else "false"
                 
         # Form field coordinates & types
         # format: (key, label, y, x, field_width, f_type, options_list)
@@ -1509,6 +1512,10 @@ class ConfigTUI:
             ("image_generation", "Enabled:",         16, 16, 12, "cycle", ["true", "false"]),
             ("image_endpoint",   "Endpoint:",        17, 16, 24, "text", None),
             ("image_modalities", "Modalities:",      18, 16, 24, "text", None),
+
+            # Batch API section
+            ("section_bt",       "── Batch API ───────────────────────", 19, 4, 0, "header", None),
+            ("batch",            "Enabled:",         20, 16, 12, "cycle", ["true", "false"]),
         ]
         
         # Interactive elements only (filter out headers)
@@ -1636,9 +1643,9 @@ class ConfigTUI:
 
     def is_field_hidden(self, key: str, form_data: dict) -> bool:
         if form_data["type"] == "apple_fm":
-            # apple_fm has no base_url, api_key, or image generation
-            return key in ("base_url", "api_key", "image_generation", "image_endpoint", "image_modalities")
-        if key in ("image_generation", "image_endpoint", "image_modalities") and form_data["type"] in ("reranker", "decision"):
+            # apple_fm has no base_url, api_key, image generation, or batch
+            return key in ("base_url", "api_key", "image_generation", "image_endpoint", "image_modalities", "batch", "section_im", "section_bt")
+        if key in ("image_generation", "image_endpoint", "image_modalities", "batch", "section_im", "section_bt") and form_data["type"] in ("reranker", "decision"):
             return True
         return bool(key in ("image_endpoint", "image_modalities") and form_data["image_generation"] == "false")
 
@@ -1670,8 +1677,10 @@ class ConfigTUI:
                 form_data["api_key"] = ""
                 form_data["vendor"] = "apple"
                 form_data["image_generation"] = "false"
+                form_data["batch"] = "false"
             elif form_data["type"] == "reranker":
                 form_data["image_generation"] = "false"
+                form_data["batch"] = "false"
                 # If switching to reranker, jina is a good default preset
                 if form_data["vendor"] == "":
                     form_data["vendor"] = "jina"
@@ -1680,6 +1689,7 @@ class ConfigTUI:
                     form_data["api_key"] = p.api_key_env
             elif form_data["type"] == "decision":
                 form_data["image_generation"] = "false"
+                form_data["batch"] = "false"
                 # If switching to decision, typesafe is a good default preset
                 if form_data["vendor"] == "":
                     form_data["vendor"] = "typesafe"
@@ -1780,6 +1790,7 @@ class ConfigTUI:
                 update["image_generation"] = img_gen
                 update["image_endpoint"] = img_end
                 update["image_modalities"] = img_mods
+                update["batch"] = form_data.get("batch") == "true"
 
                 if isinstance(existing, ChatModelConfig):
                     updated_model = existing.model_copy(update=update)
