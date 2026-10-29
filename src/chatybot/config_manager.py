@@ -185,6 +185,29 @@ class ConfigManager:
                 image_models.append(alias)
         return image_models
     
+    def list_batch_capable_models(self) -> list[str]:
+        """
+        List all models that support asynchronous provider batch jobs.
+
+        Returns:
+            List of model aliases that have batch = true
+        """
+        batch_models = []
+        for alias, config in self.config.get("models", {}).items():
+            if config.get("batch", False):
+                batch_models.append(alias)
+        return batch_models
+    
+    def get_batch_config(self) -> dict[str, Any]:
+        """
+        Get Batch API subsystem configuration ([batch] table).
+
+        Returns:
+            Dictionary with default_model, max_cost_usd,
+            max_open_per_provider, keep_remote_files
+        """
+        return self.config.get("batch", {}) or {}
+    
     def get_image_config(self) -> dict[str, Any]:
         """
         Get image generation configuration.

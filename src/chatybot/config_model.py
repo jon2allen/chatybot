@@ -51,6 +51,26 @@ class ImageGenerationSettings(BaseModel):
     """Default quality tier (e.g. 'standard', 'hd')."""
 
 
+class BatchSettings(BaseModel):
+    """Global defaults for the Batch API subsystem (proposal §4.1).
+
+    Batch jobs are asynchronous bulk inference submitted to a provider
+    Batch API (OpenRouter now, Mistral in Phase 2) at a 50% discount.
+    """
+
+    default_model: str | None = None
+    """Model alias used for batch jobs when the active model is not batch-capable."""
+
+    max_cost_usd: float = 5.00
+    """Pre-submit cost estimate ceiling; /batch run refuses above it unless force=true."""
+
+    max_open_per_provider: int = 3
+    """Maximum simultaneously open (submitting/submitted/in_progress) batches per provider."""
+
+    keep_remote_files: bool = False
+    """Phase 2 (Mistral Files API): keep uploaded input/output files on the provider."""
+
+
 # ============================================================================
 # BASE MODEL CONFIG
 # ============================================================================
@@ -169,6 +189,11 @@ class ChatModelConfig(BaseModelConfig):
     image_modalities: list[str] | None = None
     """OpenRouter-style modality list for image requests.
     e.g. ['image'] or ['image', 'text']."""
+
+    batch: bool = False
+    """Whether this model can be used for asynchronous provider batch jobs
+    (/batch start → /batch run). The model name must be a provider batch
+    variant (e.g. 'openai/gpt-oss-120b:batch' on OpenRouter)."""
 
 
 # ============================================================================
@@ -306,6 +331,9 @@ class ChatConfig(BaseModel):
     )
     """Global image generation defaults."""
 
+    batch: BatchSettings = Field(default_factory=BatchSettings)
+    """Global Batch API subsystem defaults."""
+
     mcp: MCPConfig = Field(default_factory=MCPConfig)
     """Model Context Protocol (MCP) server configuration."""
 
@@ -440,6 +468,10 @@ class ChatConfig(BaseModel):
         """Return chat models that have ``image_generation = True``."""
         return [m for m in self.chat_models() if m.image_generation]
 
+    def batch_capable_models(self) -> list[ChatModelConfig]:
+        """Return chat models that have ``batch = True``."""
+        return [m for m in self.chat_models() if m.batch]
+
     def get_model(self, alias: str) -> ModelConfig | None:
         """
         Look up a model by its alias.
@@ -525,6 +557,21 @@ class ChatConfig(BaseModel):
         for k, v in self.image_generation.model_dump(exclude_none=True).items():
             if isinstance(v, str):
                 lines.append(f'{k} = "{v}"')
+            else:
+                lines.append(f'{k} = {v}')
+        lines.append("")
+
+        # 2b. Batch API settings
+        lines.append("# ====================================================================")
+        lines.append("# BATCH API SETTINGS")
+        lines.append("# ====================================================================")
+        lines.append("")
+        lines.append("[batch]")
+        for k, v in self.batch.model_dump(exclude_none=True).items():
+            if isinstance(v, str):
+                lines.append(f'{k} = "{v}"')
+            elif isinstance(v, bool):
+                lines.append(f'{k} = {str(v).lower()}')
             else:
                 lines.append(f'{k} = {v}')
         lines.append("")

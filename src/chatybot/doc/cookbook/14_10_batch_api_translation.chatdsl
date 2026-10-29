@@ -1,0 +1,56 @@
+# Recipe 14.10 - Batch API translation pipeline (batch_api)
+# Run: /script doc/cookbook/14_10_batch_api_translation.chatdsl
+#
+# WHY "batch_api": this recipe drives the asynchronous *provider* Batch API
+# (/batch commands) — bulk inference submitted to OpenRouter (Mistral in a
+# later phase), polled out-of-band, and retrieved at a 50% discount. Do not
+# confuse it with the other "batch" concepts in ChatyBot:
+#   * batch-n / "Batched Top-N" — the client-side chunk pre-filter that
+#     /rerank applies to directory sources (limit_batch_size windows; see
+#     doc/BATCH_N_WALKTHROUGH.md). Purely local; no provider batch job.
+#   * Recipe 14.5 "batch file processor" — a client-side foreach loop over
+#     files making sequential, interactive (online) LLM calls.
+# batch_api = async bulk inference at the provider. This recipe = batch_api.
+#
+# Requires: a batch-capable model in chat_config.toml (batch = true), e.g.
+# [models.gptoss_batch] with name = "openai/gpt-oss-120b:batch" (the ":batch"
+# suffix is required by OpenRouter), and OPENROUTER_API_KEY set.
+
+# 1. Select the batch-capable model (idiomatic: /model on its own line)
+/model gptoss_batch
+
+# 2. Set the batch instruction (system role for every item in the job)
+/batch prompt "Translate each Chinese poem into pinyin with tone marks and faithful English."
+
+# 3. Open the staging draft
+/batch start dufu_run
+
+# 4. Ingest the corpus from Filebank 1 (splits by line, auto IDs fb1_line_0001...)
+/filebank1 data/poems_short.txt
+/batch add filebank=1 split=lines
+
+# 5. Add one extra priority item from a script variable with an explicit ID
+/setvar special_poem "春望: 国破山河在，城春草木深。感时花溅泪，恨别鸟惊心。"
+/batch add id=chunwang var=special_poem
+
+# 6. Inspect the draft before sealing
+/batch items
+/batch show chunwang
+
+# 7. Close staging: runs the secret scanner over every item and locks the manifest
+/batch end
+
+# 8. Dump the compiled JSON payload (printed and bound to ${BATCH_PAYLOAD})
+/batch dump dufu_run
+
+# 9. Submit to OpenRouter (pre-submit cost guard; crash-safe sidecar write)
+/batch run dufu_run
+
+# 10. Poll until terminal and retrieve results (results.jsonl; exact usage.cost)
+/batch check dufu_run wait=true
+
+# 11. Query the global catalog (auto-exports ${BATCH_LIST} and ${BATCH_IDS})
+/batchlist since=1d
+
+# 12. Restore the interactive chat model (the session was left in batch mode)
+/model mistral_1

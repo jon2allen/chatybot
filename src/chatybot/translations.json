@@ -33,7 +33,9 @@
       "/doc": "/docs",
       "/decide": "/decide",
       "/skill": "/skill",
-      "/cachekey": "/cachekey"
+      "/cachekey": "/cachekey",
+      "/batch": "/batch",
+      "/batchlist": "/batchlist"
     },
     "keywords": {
       "set": "set",
@@ -131,7 +133,20 @@
       "edit": "edit",
       "session": "session",
       "reset": "reset",
-      "profile": "profile"
+      "profile": "profile",
+      "end": "end",
+      "add": "add",
+      "prompt": "prompt",
+      "dump": "dump",
+      "items": "items",
+      "remove": "remove",
+      "del": "del",
+      "clear": "clear",
+      "check": "check",
+      "run": "run",
+      "cancel": "cancel",
+      "abort": "abort",
+      "here": "here"
     },
     "ui": {
       "language_changed": "Language set to: {lang}",
@@ -311,7 +326,9 @@
       "/doc": "/docs",
       "/habilidad": "/skill",
       "/skill": "/skill",
-      "/clavedecache": "/cachekey"
+      "/clavedecache": "/cachekey",
+      "/lote": "/batch",
+      "/listalotes": "/batchlist"
     },
     "keywords": {
       "informacion": "info",
@@ -492,7 +509,20 @@
       "sesion": "session",
       "reiniciar": "reset",
       "reajustar": "reset",
-      "perfil": "profile"
+      "perfil": "profile",
+      "fin": "end",
+      "anadir": "add",
+      "añadir": "add",
+      "indicacion": "prompt",
+      "volcado": "dump",
+      "elementos": "items",
+      "quitar": "remove",
+      "comprobar": "check",
+      "ejecutar": "run",
+      "cancelar": "cancel",
+      "abortar": "abort",
+      "aqui": "here",
+      "vaciar": "clear"
     },
     "ui": {
       "language_changed": "Idioma establecido en: {lang}",
@@ -880,7 +910,9 @@
       "/doc": "/docs",
       "/competence": "/skill",
       "/skill": "/skill",
-      "/clecache": "/cachekey"
+      "/clecache": "/cachekey",
+      "/lot": "/batch",
+      "/listelots": "/batchlist"
     },
     "keywords": {
       "informations": "info",
@@ -1065,7 +1097,17 @@
       "session": "session",
       "reinitialiser": "reset",
       "reajuster": "reset",
-      "profil": "profile"
+      "profil": "profile",
+      "ajouter": "add",
+      "invite": "prompt",
+      "vidage": "dump",
+      "elements": "items",
+      "vider": "clear",
+      "verifier": "check",
+      "executer": "run",
+      "annuler": "cancel",
+      "abandon": "abort",
+      "ici": "here"
     },
     "ui": {
       "language_changed": "Langue définie sur : {lang}",
@@ -1456,7 +1498,9 @@
       "/doc": "/docs",
       "/技能": "/skill",
       "/skill": "/skill",
-      "/缓存键": "/cachekey"
+      "/缓存键": "/cachekey",
+      "/批量": "/batch",
+      "/批量列表": "/batchlist"
     },
     "keywords": {
       "信息": "info",
@@ -1632,7 +1676,19 @@
       "向导": "wizard",
       "会话": "session",
       "重置": "reset",
-      "配置文件": "profile"
+      "配置文件": "profile",
+      "结束": "end",
+      "添加": "add",
+      "提示": "prompt",
+      "转储": "dump",
+      "项目": "items",
+      "移除": "remove",
+      "检查": "check",
+      "运行": "run",
+      "取消": "cancel",
+      "中止": "abort",
+      "此处": "here",
+      "重新开始": "clear"
     },
     "ui": {
       "language_changed": "语言设置为: {lang}",
@@ -2020,7 +2076,9 @@
       "/doc": "/docs",
       "/competenza": "/skill",
       "/skill": "/skill",
-      "/chiavecache": "/cachekey"
+      "/chiavecache": "/cachekey",
+      "/lotto": "/batch",
+      "/listalotti": "/batchlist"
     },
     "keywords": {
       "informazioni": "info",
@@ -2192,7 +2250,18 @@
       "sessione": "session",
       "reimpostare": "reset",
       "resetta": "reset",
-      "profilo": "profile"
+      "profilo": "profile",
+      "aggiungi": "add",
+      "prompt": "prompt",
+      "scarico": "dump",
+      "elementi": "items",
+      "rimuovi": "remove",
+      "controlla": "check",
+      "esegui": "run",
+      "annulla": "cancel",
+      "interrompi": "abort",
+      "qui": "here",
+      "svuota": "clear"
     },
     "ui": {
       "language_changed": "Lingua impostata su: {lang}",
@@ -2581,7 +2650,9 @@
       "/doc": "/docs",
       "/مهارة": "/skill",
       "/skill": "/skill",
-      "/مفتاح-الكاش": "/cachekey"
+      "/مفتاح-الكاش": "/cachekey",
+      "/دفعة": "/batch",
+      "/قائمة_الدفعات": "/batchlist"
     },
     "keywords": {
       "معلومات": "info",
@@ -2761,7 +2832,19 @@
       "حالة": "status",
       "جلسة": "session",
       "إعادة": "reset",
-      "ملف-التعريف": "profile"
+      "ملف-التعريف": "profile",
+      "نهاية": "end",
+      "إضافة": "add",
+      "موجه": "prompt",
+      "تفريغ": "dump",
+      "عناصر": "items",
+      "إزالة": "remove",
+      "تحقق": "check",
+      "تشغيل": "run",
+      "إلغاء": "cancel",
+      "إحباط": "abort",
+      "هنا": "here",
+      "إخلاء": "clear"
     },
     "ui": {
       "language_changed": "تغيرت اللغة لـ: {lang}",
