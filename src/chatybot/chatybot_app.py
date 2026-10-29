@@ -118,6 +118,7 @@ class ChatybotApp:
                 "run", "run_safe", "run_unsafe", "tool", "proc", "defproc", "endproc", "local", "foreach", "endfor", "break",
                 "session", "replay", "context", "ctx", "context_limit", "auto_truncate", "env", "chatdsl", "docs", "doc",
                 "skill", "cachekey",
+                "batch", "batchlist",
                 "ask", "decide", "str_search", "continue"
             ]
         )
@@ -1722,6 +1723,15 @@ class ChatybotApp:
         # Apple Foundation Model — on-device, non-OpenAI path
         if model_config.get("type") == "apple_fm":
             return await self._apple_fm_completion(prompt, stream=stream)
+
+        # Batch-only model selected: interactive chat is disabled (mode
+        # semantics mirror image/audio; switch back with /model <chat-alias>)
+        if model_config.get("batch", False):
+            print(f"Error: current model '{model_alias}' is a batch-only model "
+                  "(asynchronous provider Batch API).")
+            print("  Use /batch commands for bulk jobs, or switch back to an "
+                  "interactive model with /model <chat-alias>.")
+            return ""
 
         client = self.get_openai_client(model_alias)
         model_name = model_config["name"]

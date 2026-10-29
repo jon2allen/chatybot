@@ -197,7 +197,9 @@ class TParser:
         # Prompt caching controls
         "cachekey",
         # Skills & Decision engine
-        "skill", "decide"
+        "skill", "decide",
+        # Batch API subsystem (asynchronous provider batch jobs)
+        "batch", "batchlist"
     }
 
     def __init__(self, tokens: list[Token], verbose: bool = False):
