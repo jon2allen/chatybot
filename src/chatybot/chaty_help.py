@@ -1074,8 +1074,8 @@ class HelpSystem:
             ],
             parameters={
                 "status": "Show the active batch draft (default with no subcommand)",
-                "start <name>": "Open a new draft, or reopen a staged draft [clear=true]",
-                "clone <src> <new>": 'Clone an existing batch into a new draft [prompt="..."] [model=<alias>] [force=true to replace an existing draft/staged batch of that name]',
+                "start <name>": "Open a new draft, or reopen a staged draft [model=<alias>] [temp=<float>] [max_tokens=<int>] [top_p=<float>] [clear=true]",
+                "clone <src> <new>": 'Clone an existing batch into a new draft [prompt="..."] [model=<alias>] [temp=<float>] [force=true to replace an existing draft/staged batch of that name]',
                 "prompt": 'Set the batch instruction: "inline text" | translate|summarize|classify | file=<path>',
                 "add": "Append items: <text> | filebank=N [split=lines|paragraphs] | var=NAME | file=PATH [id=<id>]",
                 "items [name]": "List staged items with previews [limit=N] [range=start:end]",
