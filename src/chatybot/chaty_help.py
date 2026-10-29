@@ -1079,7 +1079,7 @@ class HelpSystem:
                 "add": "Append items: <text> | filebank=N [split=lines|paragraphs] | var=NAME | file=PATH [id=<id>]",
                 "items [name]": "List staged items with previews [limit=N] [range=start:end]",
                 "ids [name]": "List item IDs; exports ${BATCH_ITEM_IDS} [var=<target>]",
-                "show <id>": "Inspect one item: full input payload, plus its retrieved completion when results.jsonl exists",
+                "show <id|name>": "Inspect one item by ID (input + retrieved completion); with only a batch name, shows the batch overview and its item IDs. The batch is found by the item ID itself when no name is given",
                 "edit <id>": "In-place update: <text> | var=NAME | file=PATH",
                 "remove <id>": "Remove an item from the open draft (alias: del)",
                 "clear [name]": "Reset staged items to 0 (alias: reset)",

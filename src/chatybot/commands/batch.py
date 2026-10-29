@@ -225,6 +225,40 @@ def _parse_since(raw: str) -> datetime | None:
         return None
 
 
+def _resolve_item_batch(mgr: BatchManager, custom_id: str,
+                        tokens: list[str]) -> tuple[dict | None, str | None]:
+    """Resolve the batch owning an item ID for show/edit/remove.
+
+    Priority:
+      1. An explicit name token that actually contains the item
+         (disambiguates duplicate IDs across batches; the token is consumed
+         so edit does not treat it as replacement text).
+      2. The newest EDITABLE (draft) batch containing the item — edit and
+         remove then operate on the draft, while show on a non-draft match
+         falls through to (3) and gets a clear lock error.
+      3. The newest batch of any status containing the item — this is what
+         makes /batch show <item-id> work on completed batches with no name.
+
+    Returns (meta, consumed_name_token) or (None, None) when the item is not
+    found anywhere (the caller prints a targeted error)."""
+    for tok in tokens:
+        if tok == custom_id:
+            continue
+        rec = mgr.find_by_name(tok)
+        if rec is not None:
+            meta = mgr.read_meta(rec["batch_id"])
+            if any(it["custom_id"] == custom_id
+                   for it in mgr.list_items(meta)):
+                return meta, tok
+    editable = mgr.find_batches_containing(custom_id, editable_only=True)
+    if editable:
+        return editable[0], None
+    any_match = mgr.find_batches_containing(custom_id)
+    if any_match:
+        return any_match[0], None
+    return None, None
+
+
 def _try_active_draft(mgr: BatchManager) -> dict | None:
     candidates = [r for r in mgr.list_index() if r.get("status") in EDITABLE_STATES]
     if not candidates:
@@ -443,10 +477,31 @@ async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandRe
         elif subcmd == "show":
             opts, tokens = _parse_args(rest)
             if not tokens:
-                print("Usage: /batch show <item-id> [name]")
+                print("Usage: /batch show <item-id> [batch-name]  "
+                      "(or /batch show <batch-name> for a batch overview)")
                 return CommandResult.ok()
-            custom_id = tokens[0]
-            meta = mgr.resolve(_name_token(rest, skip=custom_id))
+            first = tokens[0]
+            # Name-only form: batch overview + its item IDs
+            if len(tokens) == 1 and mgr.find_by_name(first) is not None:
+                meta = mgr.resolve(first)
+                _print_batch_status(meta)
+                ids = [it["custom_id"] for it in mgr.list_items(meta)]
+                print(f"Staged item IDs: {', '.join(ids)}" if ids
+                      else "No staged items.")
+                print("Inspect one with: /batch show <item-id>")
+                return CommandResult.ok()
+            custom_id = first
+            meta, _consumed = _resolve_item_batch(mgr, custom_id, tokens[1:])
+            if meta is None:
+                active = _try_active_draft(mgr)
+                if active is not None and any(
+                        it["custom_id"] == custom_id
+                        for it in mgr.list_items(active)):
+                    meta = active
+                else:
+                    print(f"Error: item '{custom_id}' not found in any batch. "
+                          "List a batch's items with: /batch items <name>")
+                    return CommandResult.ok()
             item = mgr.show_item(meta, custom_id)
             result = mgr.get_result(meta["batch_id"], custom_id)
             status_note = (f"   Status: {result['status_code']}"
@@ -482,7 +537,11 @@ async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandRe
                 print("Usage: /batch edit <id> <text | var=NAME | file=PATH> [name]")
                 return CommandResult.ok()
             custom_id = tokens[0]
-            meta = mgr.resolve(_name_token(rest, skip=custom_id))
+            meta, consumed = _resolve_item_batch(mgr, custom_id, tokens[1:])
+            if meta is None:
+                print(f"Error: item '{custom_id}' not found in any batch. "
+                      "List a batch's items with: /batch items <name>")
+                return CommandResult.ok()
             if "var" in opts:
                 value = _get_var_value(app, opts["var"].strip().lstrip("$"))
                 new_text = "" if value is None else str(value)
@@ -490,7 +549,8 @@ async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandRe
                 with open(os.path.expanduser(opts["file"]), "r", encoding="utf-8") as f:
                     new_text = f.read().strip()
             else:
-                new_text = _text_from_tokens(tokens[1:])
+                text_tokens = [t for t in tokens[1:] if t != consumed]
+                new_text = _text_from_tokens(text_tokens)
             if not new_text:
                 print("Error: empty replacement text.")
                 return CommandResult.ok()
@@ -505,7 +565,11 @@ async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandRe
                 print("Usage: /batch remove <id> [name]")
                 return CommandResult.ok()
             custom_id = tokens[0]
-            meta = mgr.resolve(_name_token(rest, skip=custom_id))
+            meta, _consumed = _resolve_item_batch(mgr, custom_id, tokens[1:])
+            if meta is None:
+                print(f"Error: item '{custom_id}' not found in any batch. "
+                      "List a batch's items with: /batch items <name>")
+                return CommandResult.ok()
             mgr.remove_item(meta, custom_id)
             print(f"Removed item '{custom_id}' from '{meta['name']}' "
                   f"({meta['item_count']} items remain).")

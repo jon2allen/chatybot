@@ -808,6 +808,26 @@ class BatchManager:
                 return record
         return None
 
+    def find_batches_containing(self, custom_id: str,
+                                editable_only: bool = False) -> list[dict]:
+        """Batches (newest first) whose staging contains custom_id.
+
+        Used by /batch show|edit|remove when the batch name is not given:
+        the item ID itself identifies the batch. With editable_only, only
+        draft batches are considered (edit/remove operate on drafts)."""
+        matches = []
+        for rec in reversed(self.list_index()):
+            try:
+                meta = self.read_meta(rec["batch_id"])
+            except BatchError:
+                continue
+            if editable_only and meta["status"] not in EDITABLE_STATES:
+                continue
+            if any(it["custom_id"] == custom_id
+                   for it in self._read_items(meta["batch_id"])):
+                matches.append(meta)
+        return matches
+
 
 # ---------------------------------------------------------------------------
 # Ingestion helpers shared with the command layer
