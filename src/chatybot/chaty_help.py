@@ -1040,7 +1040,7 @@ class HelpSystem:
             name="/batch",
             category="batch",
             short_desc="Asynchronous provider Batch API jobs (stage, seal, submit, poll)",
-            usage="/batch <status|start|prompt|add|items|ids|show|edit|remove|clear|dump|end|abort|run|check|results|retry|list|cancel> [name] [key=value ...]",
+            usage="/batch <status|start|clone|prompt|add|items|ids|show|edit|remove|clear|dump|end|abort|run|check|results|retry|list|cancel> [name] [key=value ...]",
             long_desc=(
                 "Batch API jobs: asynchronous bulk inference submitted to a provider "
                 "Batch API (OpenRouter in Phase 1, Mistral in Phase 2) at a 50% discount "
@@ -1075,6 +1075,7 @@ class HelpSystem:
             parameters={
                 "status": "Show the active batch draft (default with no subcommand)",
                 "start <name>": "Open a new draft, or reopen a staged draft [clear=true]",
+                "clone <src> <new>": 'Clone an existing batch into a new draft [prompt="..."] [model=<alias>] [force=true to replace an existing draft/staged batch of that name]',
                 "prompt": 'Set the batch instruction: "inline text" | translate|summarize|classify | file=<path>',
                 "add": "Append items: <text> | filebank=N [split=lines|paragraphs] | var=NAME | file=PATH [id=<id>]",
                 "items [name]": "List staged items with previews [limit=N] [range=start:end]",

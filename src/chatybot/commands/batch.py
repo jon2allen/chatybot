@@ -40,7 +40,7 @@ from chatybot.commands.registry import CommandResult, command
 # ---------------------------------------------------------------------------
 
 BATCH_KV_KEYS = {"id", "var", "filebank", "split", "file", "limit", "range",
-                 "force", "adopt", "wait", "clear"}
+                 "force", "adopt", "wait", "clear", "prompt", "model"}
 
 # Built-in prompt templates (proposal §4.2 "Named Template")
 BUILTIN_PROMPTS = {
@@ -121,12 +121,22 @@ def _build_provider(app: Any, meta: dict):
     return make_provider(model_config, api_key)
 
 
-def _parse_args(rest: str) -> tuple[dict[str, str], list[str]]:
+# Option keys each consuming subcommand may parse. Keeping these tight per
+# subcommand means free text can never lose a token that merely looks like an
+# unrelated subcommand's option (e.g. '/batch add ... model=x' stays text).
+ADD_OPTS = {"id", "var", "filebank", "split", "file"}
+CLONE_OPTS = {"prompt", "model", "force"}
+
+
+def _parse_args(rest: str,
+                keys: set[str] | None = None) -> tuple[dict[str, str], list[str]]:
     """Split a sub-argument string into key=value options and free tokens.
 
     Uses shlex so quoted inline prompts and file paths survive intact.
-    A token counts as key=value only when its key is a known batch option,
-    so item text containing '=' is never swallowed."""
+    A token counts as key=value only when its key is in the allowed option
+    set (default: all batch keys, used by name-taking subcommands), so item
+    text containing '=' is never swallowed."""
+    allowed = keys if keys is not None else BATCH_KV_KEYS
     opts: dict[str, str] = {}
     tokens: list[str] = []
     try:
@@ -136,7 +146,7 @@ def _parse_args(rest: str) -> tuple[dict[str, str], list[str]]:
     for tok in parts:
         if "=" in tok:
             key, _, val = tok.partition("=")
-            if key.lower() in BATCH_KV_KEYS:
+            if key.lower() in allowed:
                 opts[key.lower()] = val
                 continue
         tokens.append(tok)
@@ -274,7 +284,7 @@ def _try_active_draft(mgr: BatchManager) -> dict | None:
 # ---------------------------------------------------------------------------
 
 @command("/batch", help="Batch API jobs: stage, seal, submit, poll, retrieve",
-         args="<status|start|prompt|add|items|ids|show|edit|remove|clear|dump|end|abort|run|check|results|retry|list|cancel> [name] [key=value ...]",
+         args="<status|start|clone|prompt|add|items|ids|show|edit|remove|clear|dump|end|abort|run|check|results|retry|list|cancel> [name] [key=value ...]",
          category="batch")
 async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandResult:
     app = ctx.app
@@ -319,6 +329,57 @@ async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandRe
             print("  Add items with /batch add, then seal with /batch end.")
             return CommandResult.ok()
 
+        # ---- clone ------------------------------------------------------
+        elif subcmd == "clone":
+            opts, tokens = _parse_args(rest, keys=CLONE_OPTS)
+            if len(tokens) < 2:
+                print("Usage: /batch clone <source_batch> <new_name> "
+                      '[prompt="..."] [model=<alias>] [force=true]')
+                return CommandResult.ok()
+            source_target = tokens[0]
+            new_name = tokens[1]
+
+            model_alias = None
+            model_name = None
+            provider = None
+            if "model" in opts:
+                req_alias = opts["model"].strip()
+                try:
+                    m_cfg = app.config_manager.get_model_config(req_alias)
+                except ValueError:
+                    print(f"Error: model alias '{req_alias}' not found in chat_config.toml.")
+                    return CommandResult.ok()
+                if not m_cfg.get("batch", False):
+                    print(f"Error: model '{req_alias}' is not flagged batch-capable (batch = true).")
+                    return CommandResult.ok()
+                model_alias = req_alias
+                model_name = m_cfg.get("name", req_alias)
+                provider = (m_cfg.get("vendor") or "openrouter").lower()
+
+            prompt = None
+            if "prompt" in opts:
+                p_raw = opts["prompt"].strip()
+                prompt = BUILTIN_PROMPTS.get(p_raw.lower(), p_raw)
+
+            new_meta = mgr.clone(
+                source_target,
+                new_name,
+                prompt=prompt,
+                model_alias=model_alias,
+                model_name=model_name,
+                provider=provider,
+                force=opts.get("force", "").lower() in ("true", "1", "yes"),
+            )
+            print(f"Cloned batch '{source_target}' -> '{new_meta['name']}' "
+                  f"(ID: {new_meta['batch_id']}, items: {new_meta['item_count']}, "
+                  f"model: {new_meta['model_alias']}, status: draft)")
+            if new_meta.get("prompt"):
+                shown = new_meta["prompt"] if len(new_meta["prompt"]) <= 60 else new_meta["prompt"][:60] + "..."
+                print(f"  Batch prompt: \"{shown}\"")
+            print("  Edit items with /batch edit, delete with /batch remove, "
+                  "add with /batch add, then seal with /batch end.")
+            return CommandResult.ok()
+
         # ---- prompt ------------------------------------------------------
         elif subcmd == "prompt":
             if not rest.strip():
@@ -353,7 +414,7 @@ async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandRe
 
         # ---- add ----------------------------------------------------------
         elif subcmd == "add":
-            opts, tokens = _parse_args(rest)
+            opts, tokens = _parse_args(rest, keys=ADD_OPTS)
             # /batch add always operates on the active draft (proposal §4.3
             # has no name argument for add). Guessing a leading batch name
             # from the first token would corrupt text that happens to start
@@ -749,7 +810,7 @@ async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandRe
                                        "/batchlist " + rest_str)
 
         else:
-            print(f"Unknown batch subcommand: {subcmd}. Use start, prompt, add, items, "
+            print(f"Unknown batch subcommand: {subcmd}. Use start, clone, prompt, add, items, "
                   "ids, show, edit, remove, clear, dump, end, abort, run, check, "
                   "results, retry, list, cancel, or status.")
             return CommandResult.ok()

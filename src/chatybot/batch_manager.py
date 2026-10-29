@@ -409,6 +409,58 @@ class BatchManager:
         meta["prompt"] = prompt
         self._write_meta(meta)
 
+    def clone(self, source_target: str, new_name: str, *,
+              prompt: str | None = None,
+              model_alias: str | None = None,
+              model_name: str | None = None,
+              provider: str | None = None,
+              force: bool = False) -> dict:
+        """Clone an existing batch into a new draft staging session.
+
+        Copies all staged items and configuration from source_target into a fresh
+        instance directory (status: draft). If prompt or model settings are
+        supplied, they override the source batch's configuration. The cloned draft
+        is fully editable (items can be edited, added, or removed) and must be sealed
+        with /batch end before submission.
+
+        Refuses when new_name already belongs to an editable batch (draft/staged)
+        unless force=True — start() would reopen and clear that batch, silently
+        destroying its staged items (and un-sealing it if staged)."""
+        existing = self.find_by_name(sanitize_batch_name(new_name))
+        if existing is not None:
+            existing_meta = self.read_meta(existing["batch_id"])
+            if (existing_meta["status"] in EDITABLE_STATES
+                    or existing_meta["status"] == STATUS_STAGED) and not force:
+                raise BatchError(
+                    f"Batch '{new_name}' already exists (status: "
+                    f"{existing_meta['status']}) and would be overwritten. "
+                    "Choose a different name, or re-run with force=true to "
+                    "replace its staged items."
+                )
+        source_meta = self.resolve(source_target)
+        items = self._read_items(source_meta["batch_id"])
+
+        chosen_alias = model_alias or source_meta.get("model_alias") or ""
+        chosen_name = model_name or source_meta.get("model") or chosen_alias
+        chosen_provider = provider or source_meta.get("provider") or "openrouter"
+        chosen_prompt = prompt if prompt is not None else source_meta.get("prompt")
+
+        new_meta = self.start(
+            new_name,
+            model_alias=chosen_alias,
+            model_name=chosen_name,
+            provider=chosen_provider,
+            prompt=chosen_prompt,
+            clear=True,
+        )
+
+        if items:
+            self._rewrite_items(new_meta["batch_id"], items)
+            new_meta["item_count"] = len(items)
+            self._write_meta(new_meta)
+
+        return new_meta
+
     # -- staging items -----------------------------------------------------
 
     def _read_items(self, batch_id: str) -> list[dict]:
