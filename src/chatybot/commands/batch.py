@@ -40,7 +40,10 @@ from chatybot.commands.registry import CommandResult, command
 # ---------------------------------------------------------------------------
 
 BATCH_KV_KEYS = {"id", "var", "filebank", "split", "file", "limit", "range",
-                 "force", "adopt", "wait", "clear", "prompt", "model"}
+                 "force", "adopt", "wait", "clear", "prompt", "model",
+                 "temp", "temperature", "max_tokens", "top_p",
+                 "freq_penalty", "frequency_penalty",
+                 "pres_penalty", "presence_penalty"}
 
 # Built-in prompt templates (proposal §4.2 "Named Template")
 BUILTIN_PROMPTS = {
@@ -132,7 +135,78 @@ def _build_provider(app: Any, meta: dict):
 # subcommand means free text can never lose a token that merely looks like an
 # unrelated subcommand's option (e.g. '/batch add ... model=x' stays text).
 ADD_OPTS = {"id", "var", "filebank", "split", "file"}
-CLONE_OPTS = {"prompt", "model", "force"}
+CLONE_OPTS = {"prompt", "model", "force", "temp", "temperature", "max_tokens",
+              "top_p", "freq_penalty", "frequency_penalty",
+              "pres_penalty", "presence_penalty"}
+
+
+def _extract_sampling_params(opts: dict[str, str],
+                             model_config: dict | None = None) -> dict[str, Any]:
+    """Extract and validate sampling parameters from CLI options with model_config fallback."""
+    out: dict[str, Any] = {}
+    cfg = model_config or {}
+
+    # temperature
+    temp_val = opts.get("temp") if "temp" in opts else opts.get("temperature")
+    if temp_val is not None:
+        try:
+            t = float(temp_val.strip())
+            if not (0.0 <= t <= 2.0):
+                print(f"Warning: temperature {t} is outside typical range [0.0, 2.0].")
+            out["temperature"] = t
+        except ValueError:
+            print(f"Warning: invalid temperature '{temp_val}', ignoring.")
+    elif cfg.get("temperature") is not None:
+        out["temperature"] = float(cfg["temperature"])
+
+    # max_tokens
+    mt_val = opts.get("max_tokens")
+    if mt_val is not None:
+        try:
+            out["max_tokens"] = int(mt_val.strip())
+        except ValueError:
+            print(f"Warning: invalid max_tokens '{mt_val}', ignoring.")
+    elif cfg.get("max_tokens") is not None:
+        out["max_tokens"] = int(cfg["max_tokens"])
+
+    # top_p
+    tp_val = opts.get("top_p")
+    if tp_val is not None:
+        try:
+            tp = float(tp_val.strip())
+            if not (0.0 <= tp <= 1.0):
+                print(f"Warning: top_p {tp} is outside range [0.0, 1.0].")
+            out["top_p"] = tp
+        except ValueError:
+            print(f"Warning: invalid top_p '{tp_val}', ignoring.")
+    elif cfg.get("top_p") is not None:
+        out["top_p"] = float(cfg["top_p"])
+
+    # frequency_penalty
+    fp_val = opts.get("frequency_penalty") if "frequency_penalty" in opts else opts.get("freq_penalty")
+    if fp_val is not None:
+        try:
+            out["frequency_penalty"] = float(fp_val.strip())
+        except ValueError:
+            print(f"Warning: invalid frequency_penalty '{fp_val}', ignoring.")
+    elif cfg.get("freq_penalty") is not None:
+        out["frequency_penalty"] = float(cfg["freq_penalty"])
+    elif cfg.get("frequency_penalty") is not None:
+        out["frequency_penalty"] = float(cfg["frequency_penalty"])
+
+    # presence_penalty
+    pp_val = opts.get("presence_penalty") if "presence_penalty" in opts else opts.get("pres_penalty")
+    if pp_val is not None:
+        try:
+            out["presence_penalty"] = float(pp_val.strip())
+        except ValueError:
+            print(f"Warning: invalid presence_penalty '{pp_val}', ignoring.")
+    elif cfg.get("pres_penalty") is not None:
+        out["presence_penalty"] = float(cfg["pres_penalty"])
+    elif cfg.get("presence_penalty") is not None:
+        out["presence_penalty"] = float(cfg["presence_penalty"])
+
+    return out
 
 
 def _parse_args(rest: str,
@@ -215,6 +289,19 @@ def _print_batch_status(meta: dict) -> None:
     if meta.get("prompt"):
         prompt_prev = meta["prompt"][:60] + "..." if len(meta["prompt"]) > 60 else meta["prompt"]
         print(f"  Prompt:     \"{prompt_prev}\"")
+    sampling_parts = []
+    if meta.get("temperature") is not None:
+        sampling_parts.append(f"temp={meta['temperature']}")
+    if meta.get("top_p") is not None:
+        sampling_parts.append(f"top_p={meta['top_p']}")
+    if meta.get("max_tokens") is not None:
+        sampling_parts.append(f"max_tokens={meta['max_tokens']}")
+    if meta.get("frequency_penalty") is not None:
+        sampling_parts.append(f"freq_penalty={meta['frequency_penalty']}")
+    if meta.get("presence_penalty") is not None:
+        sampling_parts.append(f"pres_penalty={meta['presence_penalty']}")
+    if sampling_parts:
+        print(f"  Sampling:   {', '.join(sampling_parts)}")
     created = datetime.fromtimestamp(meta.get("created_at") or 0)
     print(f"  Created:    {created.strftime('%Y-%m-%d %H:%M')}")
     if meta.get("finalized_at"):
@@ -316,21 +403,40 @@ async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandRe
         elif subcmd == "start":
             opts, tokens = _parse_args(rest)
             if not tokens:
-                print("Usage: /batch start <name> [clear=true]")
+                print("Usage: /batch start <name> [model=<alias>] [temp=<float>] "
+                      "[max_tokens=<int>] [top_p=<float>] [clear=true]")
                 return CommandResult.ok()
             name = tokens[0]
-            model_alias, model_config = _require_batch_model(app)
+
+            if "model" in opts:
+                req_alias = opts["model"].strip()
+                try:
+                    model_config = app.config_manager.get_model_config(req_alias)
+                except ValueError:
+                    print(f"Error: model alias '{req_alias}' not found in chat_config.toml.")
+                    return CommandResult.ok()
+                if not model_config.get("batch", False):
+                    print(f"Error: model '{req_alias}' is not flagged batch-capable (batch = true).")
+                    return CommandResult.ok()
+                model_alias = req_alias
+            else:
+                model_alias, model_config = _require_batch_model(app)
+
+            sampling = _extract_sampling_params(opts, model_config)
             prompt = _pending_batch_prompt.get("prompt")
             meta = mgr.start(name, model_alias=model_alias,
                              model_name=model_config.get("name", model_alias),
                              provider=(model_config.get("vendor") or "openrouter").lower(),
                              prompt=prompt,
-                             clear=opts.get("clear", "").lower() in ("true", "1", "yes"))
+                             clear=opts.get("clear", "").lower() in ("true", "1", "yes"),
+                             **sampling)
             print(f"Opened batch draft '{meta['name']}' (ID: {meta['batch_id']}, "
                   f"model: {model_alias})")
             if meta.get("prompt"):
                 shown = meta["prompt"] if len(meta["prompt"]) <= 60 else meta["prompt"][:60] + "..."
                 print(f"  Batch prompt set: \"{shown}\"")
+            if meta.get("temperature") is not None:
+                print(f"  Temperature: {meta['temperature']}")
             if opts.get("clear", "").lower() in ("true", "1", "yes"):
                 print("  Staged items cleared.")
             print("  Add items with /batch add, then seal with /batch end.")
@@ -341,7 +447,7 @@ async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandRe
             opts, tokens = _parse_args(rest, keys=CLONE_OPTS)
             if len(tokens) < 2:
                 print("Usage: /batch clone <source_batch> <new_name> "
-                      '[prompt="..."] [model=<alias>] [force=true]')
+                      '[prompt="..."] [model=<alias>] [temp=<float>] [force=true]')
                 return CommandResult.ok()
             source_target = tokens[0]
             new_name = tokens[1]
@@ -349,6 +455,7 @@ async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandRe
             model_alias = None
             model_name = None
             provider = None
+            m_cfg = None
             if "model" in opts:
                 req_alias = opts["model"].strip()
                 try:
@@ -368,6 +475,7 @@ async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandRe
                 p_raw = opts["prompt"].strip()
                 prompt = BUILTIN_PROMPTS.get(p_raw.lower(), p_raw)
 
+            sampling = _extract_sampling_params(opts, m_cfg)
             new_meta = mgr.clone(
                 source_target,
                 new_name,
@@ -376,6 +484,7 @@ async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandRe
                 model_name=model_name,
                 provider=provider,
                 force=opts.get("force", "").lower() in ("true", "1", "yes"),
+                **sampling,
             )
             print(f"Cloned batch '{source_target}' -> '{new_meta['name']}' "
                   f"(ID: {new_meta['batch_id']}, items: {new_meta['item_count']}, "
@@ -383,6 +492,8 @@ async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandRe
             if new_meta.get("prompt"):
                 shown = new_meta["prompt"] if len(new_meta["prompt"]) <= 60 else new_meta["prompt"][:60] + "..."
                 print(f"  Batch prompt: \"{shown}\"")
+            if new_meta.get("temperature") is not None:
+                print(f"  Temperature: {new_meta['temperature']}")
             print("  Edit items with /batch edit, delete with /batch remove, "
                   "add with /batch add, then seal with /batch end.")
             return CommandResult.ok()

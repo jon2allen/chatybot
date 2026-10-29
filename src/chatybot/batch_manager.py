@@ -328,6 +328,7 @@ class BatchManager:
         record = {k: meta.get(k) for k in (
             "batch_id", "provider_id", "name", "provider", "host_backend",
             "model_alias", "model", "prompt", "status", "item_count",
+            "temperature", "max_tokens", "top_p", "frequency_penalty", "presence_penalty",
             "created_at", "finalized_at", "cost_usd", "workspace",
         )}
         self._ensure_root()
@@ -389,7 +390,12 @@ class BatchManager:
     # -- draft lifecycle ---------------------------------------------------
 
     def start(self, name: str, model_alias: str, model_name: str, provider: str,
-              prompt: str | None = None, clear: bool = False) -> dict:
+              prompt: str | None = None, clear: bool = False,
+              temperature: float | None = None,
+              max_tokens: int | None = None,
+              top_p: float | None = None,
+              frequency_penalty: float | None = None,
+              presence_penalty: float | None = None) -> dict:
         """Open a new staging session, or reopen an existing draft/staged batch.
 
         Reopening a 'staged' batch transitions it back to 'draft' so items can
@@ -418,6 +424,16 @@ class BatchManager:
                 meta["status"] = STATUS_DRAFT
                 if prompt is not None:
                     meta["prompt"] = prompt
+                if temperature is not None:
+                    meta["temperature"] = temperature
+                if max_tokens is not None:
+                    meta["max_tokens"] = max_tokens
+                if top_p is not None:
+                    meta["top_p"] = top_p
+                if frequency_penalty is not None:
+                    meta["frequency_penalty"] = frequency_penalty
+                if presence_penalty is not None:
+                    meta["presence_penalty"] = presence_penalty
                 self._write_meta(meta)
                 return meta
 
@@ -435,6 +451,11 @@ class BatchManager:
             "model_alias": model_alias,
             "model": model_name,
             "prompt": prompt,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "top_p": top_p,
+            "frequency_penalty": frequency_penalty,
+            "presence_penalty": presence_penalty,
             "status": STATUS_DRAFT,
             "item_count": 0,
             "created_at": int(time.time()),
@@ -461,12 +482,17 @@ class BatchManager:
               model_alias: str | None = None,
               model_name: str | None = None,
               provider: str | None = None,
+              temperature: float | None = None,
+              max_tokens: int | None = None,
+              top_p: float | None = None,
+              frequency_penalty: float | None = None,
+              presence_penalty: float | None = None,
               force: bool = False) -> dict:
         """Clone an existing batch into a new draft staging session.
 
         Copies all staged items and configuration from source_target into a fresh
-        instance directory (status: draft). If prompt or model settings are
-        supplied, they override the source batch's configuration. The cloned draft
+        instance directory (status: draft). If prompt, model, or sampling settings
+        are supplied, they override the source batch's configuration. The cloned draft
         is fully editable (items can be edited, added, or removed) and must be sealed
         with /batch end before submission.
 
@@ -491,6 +517,11 @@ class BatchManager:
         chosen_name = model_name or source_meta.get("model") or chosen_alias
         chosen_provider = provider or source_meta.get("provider") or "openrouter"
         chosen_prompt = prompt if prompt is not None else source_meta.get("prompt")
+        chosen_temp = temperature if temperature is not None else source_meta.get("temperature")
+        chosen_max_tokens = max_tokens if max_tokens is not None else source_meta.get("max_tokens")
+        chosen_top_p = top_p if top_p is not None else source_meta.get("top_p")
+        chosen_freq_pen = frequency_penalty if frequency_penalty is not None else source_meta.get("frequency_penalty")
+        chosen_pres_pen = presence_penalty if presence_penalty is not None else source_meta.get("presence_penalty")
 
         new_meta = self.start(
             new_name,
@@ -499,6 +530,11 @@ class BatchManager:
             provider=chosen_provider,
             prompt=chosen_prompt,
             clear=True,
+            temperature=chosen_temp,
+            max_tokens=chosen_max_tokens,
+            top_p=chosen_top_p,
+            frequency_penalty=chosen_freq_pen,
+            presence_penalty=chosen_pres_pen,
         )
 
         if items:
@@ -684,7 +720,18 @@ class BatchManager:
             if meta.get("prompt"):
                 messages.append({"role": "system", "content": meta["prompt"]})
             messages.append({"role": "user", "content": item["text"]})
-            requests.append({"custom_id": item["custom_id"], "body": {"messages": messages}})
+            body: dict[str, Any] = {"messages": messages}
+            if meta.get("temperature") is not None:
+                body["temperature"] = meta["temperature"]
+            if meta.get("max_tokens") is not None:
+                body["max_tokens"] = meta["max_tokens"]
+            if meta.get("top_p") is not None:
+                body["top_p"] = meta["top_p"]
+            if meta.get("frequency_penalty") is not None:
+                body["frequency_penalty"] = meta["frequency_penalty"]
+            if meta.get("presence_penalty") is not None:
+                body["presence_penalty"] = meta["presence_penalty"]
+            requests.append({"custom_id": item["custom_id"], "body": body})
         return {
             "endpoint": OPENROUTER_ENDPOINT,
             "model": meta["model"],

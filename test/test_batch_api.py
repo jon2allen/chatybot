@@ -1175,3 +1175,122 @@ class TestBatchRawPayloadTrace:
         assert prov.trace_raw_payload is True
         assert prov.logging_manager == app.logging_manager
 
+
+class TestBatchSamplingParams:
+    """Tests for sampling parameters (temperature, max_tokens, top_p, penalties)."""
+
+    def test_manager_start_and_build_payload_with_sampling(self, mgr):
+        meta = mgr.start(
+            "samp1",
+            model_alias="gptoss_batch",
+            model_name="openai/gpt-oss-120b:batch",
+            provider="openrouter",
+            temperature=0.3,
+            max_tokens=256,
+            top_p=0.85,
+            frequency_penalty=0.5,
+            presence_penalty=0.2,
+        )
+        assert meta["temperature"] == 0.3
+        assert meta["max_tokens"] == 256
+        assert meta["top_p"] == 0.85
+        assert meta["frequency_penalty"] == 0.5
+        assert meta["presence_penalty"] == 0.2
+
+        items = mgr.add_items(meta, ["item text"], id_prefix="test_")
+        payload = mgr.build_payload(meta, items)
+        body = payload["requests"][0]["body"]
+        assert body["temperature"] == 0.3
+        assert body["max_tokens"] == 256
+        assert body["top_p"] == 0.85
+        assert body["frequency_penalty"] == 0.5
+        assert body["presence_penalty"] == 0.2
+        assert body.get("stream") is not True
+
+    def test_manager_build_payload_omits_none_sampling(self, mgr):
+        meta = mgr.start(
+            "samp_none",
+            model_alias="gptoss_batch",
+            model_name="openai/gpt-oss-120b:batch",
+            provider="openrouter",
+        )
+        items = mgr.add_items(meta, ["item text"], id_prefix="test_")
+        payload = mgr.build_payload(meta, items)
+        body = payload["requests"][0]["body"]
+        assert "temperature" not in body
+        assert "max_tokens" not in body
+        assert "top_p" not in body
+        assert "frequency_penalty" not in body
+        assert "presence_penalty" not in body
+        assert body.get("stream") is not True
+
+    def test_manager_clone_inherits_and_overrides_sampling(self, mgr):
+        orig = mgr.start(
+            "orig_samp",
+            model_alias="gptoss_batch",
+            model_name="openai/gpt-oss-120b:batch",
+            provider="openrouter",
+            temperature=0.2,
+            max_tokens=100,
+        )
+        mgr.add_items(orig, ["hello"], id_prefix="orig_")
+
+        # Clone 1: inherit
+        cloned1 = mgr.clone("orig_samp", "clone_inherit")
+        assert cloned1["temperature"] == 0.2
+        assert cloned1["max_tokens"] == 100
+
+        # Clone 2: override temperature
+        cloned2 = mgr.clone("orig_samp", "clone_override", temperature=0.7)
+        assert cloned2["temperature"] == 0.7
+        assert cloned2["max_tokens"] == 100
+
+    def test_cli_start_with_sampling_opts(self, mgr, capsys):
+        ctx = make_ctx(mgr)
+        asyncio.run(run_cmd(ctx, "/batch start cli_samp temp=0.4 max_tokens=300 top_p=0.9"))
+        out = capsys.readouterr().out
+        assert "Opened batch draft 'cli_samp'" in out
+        assert "Temperature: 0.4" in out
+        meta = mgr.resolve("cli_samp")
+        assert meta["temperature"] == 0.4
+        assert meta["max_tokens"] == 300
+        assert meta["top_p"] == 0.9
+
+    def test_cli_start_inherits_model_config_sampling(self, mgr, capsys):
+        ctx = make_ctx(mgr)
+        # Model config has temperature = 0.7
+        ctx.app.config_manager.get_model_config.return_value = {
+            "name": "openai/gpt-oss-120b:batch",
+            "vendor": "openrouter",
+            "batch": True,
+            "temperature": 0.7,
+            "max_tokens": 512,
+        }
+        asyncio.run(run_cmd(ctx, "/batch start inherit_cfg"))
+        out = capsys.readouterr().out
+        assert "Temperature: 0.7" in out
+        meta = mgr.resolve("inherit_cfg")
+        assert meta["temperature"] == 0.7
+        assert meta["max_tokens"] == 512
+
+    def test_cli_clone_sampling_override(self, mgr, capsys):
+        ctx = make_ctx(mgr)
+        asyncio.run(run_cmd(ctx, "/batch start b_src temp=0.2"))
+        capsys.readouterr()
+
+        asyncio.run(run_cmd(ctx, "/batch clone b_src b_dst temp=0.85"))
+        out = capsys.readouterr().out
+        assert "Cloned batch 'b_src' -> 'b_dst'" in out
+        assert "Temperature: 0.85" in out
+        meta = mgr.resolve("b_dst")
+        assert meta["temperature"] == 0.85
+
+    def test_status_displays_sampling(self, mgr, capsys):
+        ctx = make_ctx(mgr)
+        asyncio.run(run_cmd(ctx, "/batch start status_samp temp=0.15 max_tokens=128"))
+        capsys.readouterr()
+        asyncio.run(run_cmd(ctx, "/batch status status_samp"))
+        out = capsys.readouterr().out
+        assert "Sampling:   temp=0.15, max_tokens=128" in out
+
+
