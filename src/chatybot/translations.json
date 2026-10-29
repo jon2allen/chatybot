@@ -147,7 +147,8 @@
       "cancel": "cancel",
       "abort": "abort",
       "here": "here",
-      "results": "results"
+      "results": "results",
+      "clone": "clone"
     },
     "ui": {
       "language_changed": "Language set to: {lang}",
@@ -524,7 +525,9 @@
       "abortar": "abort",
       "aqui": "here",
       "vaciar": "clear",
-      "resultados": "results"
+      "resultados": "results",
+      "clonar": "clone",
+      "duplicar": "clone"
     },
     "ui": {
       "language_changed": "Idioma establecido en: {lang}",
@@ -1111,7 +1114,9 @@
       "abandon": "abort",
       "ici": "here",
       "resultats": "results",
-      "résultats": "results"
+      "résultats": "results",
+      "cloner": "clone",
+      "dupliquer": "clone"
     },
     "ui": {
       "language_changed": "Langue définie sur : {lang}",
@@ -1693,7 +1698,9 @@
       "中止": "abort",
       "此处": "here",
       "重新开始": "clear",
-      "结果": "results"
+      "结果": "results",
+      "克隆": "clone",
+      "复制": "clone"
     },
     "ui": {
       "language_changed": "语言设置为: {lang}",
@@ -2267,7 +2274,9 @@
       "interrompi": "abort",
       "qui": "here",
       "svuota": "clear",
-      "risultati": "results"
+      "risultati": "results",
+      "clona": "clone",
+      "duplica": "clone"
     },
     "ui": {
       "language_changed": "Lingua impostata su: {lang}",
@@ -2851,7 +2860,9 @@
       "إحباط": "abort",
       "هنا": "here",
       "إخلاء": "clear",
-      "نتائج": "results"
+      "نتائج": "results",
+      "استنساخ": "clone",
+      "نسخ": "clone"
     },
     "ui": {
       "language_changed": "تغيرت اللغة لـ: {lang}",

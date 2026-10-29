@@ -886,3 +886,171 @@ class TestShowResolutionFix:
         asyncio.run(run_cmd(ctx, "/batch edit lk1_0001 nope"))
         out = capsys.readouterr().out
         assert "only be edited while the batch is in draft" in out
+
+
+# ---------------------------------------------------------------------------
+# Batch Clone (Option 1)
+# ---------------------------------------------------------------------------
+
+class TestBatchClone:
+    def test_manager_clone_copies_items_and_metadata(self, mgr):
+        meta = mgr.start("src1", model_alias="gptoss_batch",
+                         model_name="openai/gpt-oss-120b:batch",
+                         provider="openrouter", prompt="Original prompt")
+        mgr.add_items(meta, ["item one", "item two"], id_prefix="src1_")
+        mgr.end(meta)
+
+        cloned = mgr.clone("src1", "dst1")
+        assert cloned["name"] == "dst1"
+        assert cloned["status"] == STATUS_DRAFT
+        assert cloned["prompt"] == "Original prompt"
+        assert cloned["model_alias"] == "gptoss_batch"
+        assert cloned["item_count"] == 2
+
+        items = mgr.list_items(cloned)
+        assert len(items) == 2
+        assert items[0]["text"] == "item one"
+        assert items[1]["text"] == "item two"
+
+    def test_manager_clone_prompt_and_model_override(self, mgr):
+        meta = mgr.start("src2", model_alias="gptoss_batch",
+                         model_name="openai/gpt-oss-120b:batch",
+                         provider="openrouter", prompt="Old prompt")
+        mgr.add_items(meta, ["poem"], id_prefix="src2_")
+        mgr.end(meta)
+
+        cloned = mgr.clone(
+            "src2", "dst2",
+            prompt="New custom prompt",
+            model_alias="custom_batch",
+            model_name="openai/custom:batch",
+            provider="openrouter",
+        )
+        assert cloned["name"] == "dst2"
+        assert cloned["prompt"] == "New custom prompt"
+        assert cloned["model_alias"] == "custom_batch"
+        assert cloned["model"] == "openai/custom:batch"
+        assert cloned["status"] == STATUS_DRAFT
+
+    def test_clone_command_workflow_edit_remove_add(self, mgr, capsys):
+        ctx = make_ctx(mgr)
+        asyncio.run(run_cmd(ctx, "/batch start orig_run"))
+        asyncio.run(run_cmd(ctx, "/batch add line 1"))
+        asyncio.run(run_cmd(ctx, "/batch add line 2"))
+        asyncio.run(run_cmd(ctx, "/batch end"))
+
+        # Clone into a new batch with prompt override
+        asyncio.run(run_cmd(ctx, '/batch clone orig_run copy_run prompt="Refined translation"'))
+        out = capsys.readouterr().out
+        assert "Cloned batch 'orig_run' -> 'copy_run'" in out
+        assert "Refined translation" in out
+
+        # Edit, remove, and add on the cloned draft
+        asyncio.run(run_cmd(ctx, "/batch edit orig_run_0001 line 1 modified"))
+        asyncio.run(run_cmd(ctx, "/batch remove orig_run_0002"))
+        asyncio.run(run_cmd(ctx, "/batch add line 3 appended"))
+
+        # Seal the cloned batch
+        asyncio.run(run_cmd(ctx, "/batch end"))
+        out = capsys.readouterr().out
+        assert "Sealed batch 'copy_run': 2 items scanned" in out
+
+        copy_meta = mgr.resolve("copy_run")
+        items = mgr.list_items(copy_meta)
+        assert len(items) == 2
+        assert items[0]["text"] == "line 1 modified"
+        assert items[1]["text"] == "line 3 appended"
+
+        # Ensure original batch was untouched
+        orig_meta = mgr.resolve("orig_run")
+        orig_items = mgr.list_items(orig_meta)
+        assert len(orig_items) == 2
+        assert orig_items[0]["text"] == "line 1"
+        assert orig_items[1]["text"] == "line 2"
+
+    def test_clone_missing_args(self, mgr, capsys):
+        ctx = make_ctx(mgr)
+        asyncio.run(run_cmd(ctx, "/batch clone"))
+        out = capsys.readouterr().out
+        assert "Usage: /batch clone" in out
+
+    def test_clone_localization(self):
+        from chatybot.localization import LocalizationManager
+        i18n = LocalizationManager()
+        i18n.set_locale("es")
+        assert i18n.translate_command_string("/lote clonar b1 b2") == "/batch clone b1 b2"
+        assert i18n.translate_command_string("/lote duplicar b1 b2") == "/batch clone b1 b2"
+        i18n.set_locale("fr")
+        assert i18n.translate_command_string("/lot cloner b1 b2") == "/batch clone b1 b2"
+        i18n.set_locale("zh")
+        assert i18n.translate_command_string("/批量 克隆 b1 b2") == "/batch clone b1 b2"
+        i18n.set_locale("it")
+        assert i18n.translate_command_string("/lotto clona b1 b2") == "/batch clone b1 b2"
+        i18n.set_locale("ar")
+        assert i18n.translate_command_string("/دفعة استنساخ b1 b2") == "/batch clone b1 b2"
+
+
+
+class TestCloneGuards:
+    """Regression: cloning must not silently destroy an existing draft."""
+
+    def _source(self, mgr, name="srcb"):
+        meta = mgr.start(name, model_alias="m", model_name="n",
+                         provider="openrouter", prompt="p")
+        mgr.add_items(meta, ["cloned item"], id_prefix=f"{name}_")
+        mgr.end(meta)
+        return meta
+
+    def test_clone_into_existing_draft_refused_then_forced(self, mgr, capsys):
+        self._source(mgr)
+        existing = mgr.start("taken", model_alias="m", model_name="n",
+                             provider="openrouter", prompt="keep")
+        mgr.add_items(existing, ["PRECIOUS EXISTING ITEM"], id_prefix="taken_")
+
+        with pytest.raises(BatchError, match="would be overwritten"):
+            mgr.clone("srcb", "taken")
+        # Refusal left the existing draft intact
+        assert mgr.list_items(mgr.find_by_name("taken"))[0]["text"] == \
+            "PRECIOUS EXISTING ITEM"
+
+        mgr.clone("srcb", "taken", force=True)
+        assert [it["text"] for it in mgr.list_items(mgr.find_by_name("taken"))] \
+            == ["cloned item"]
+
+    def test_clone_command_refusal_and_force(self, mgr, capsys):
+        ctx = make_ctx(mgr)
+        asyncio.run(run_cmd(ctx, "/batch start orig"))
+        asyncio.run(run_cmd(ctx, "/batch add payload"))
+        asyncio.run(run_cmd(ctx, "/batch end"))
+        asyncio.run(run_cmd(ctx, "/batch start victim"))
+        asyncio.run(run_cmd(ctx, "/batch add must survive"))
+        capsys.readouterr()
+
+        asyncio.run(run_cmd(ctx, "/batch clone orig victim"))
+        out = capsys.readouterr().out
+        assert "would be overwritten" in out
+        items = mgr.list_items(mgr.find_by_name("victim"))
+        assert [it["text"] for it in items] == ["must survive"]
+
+        asyncio.run(run_cmd(ctx, "/batch clone orig victim force=true"))
+        out = capsys.readouterr().out
+        assert "Cloned batch 'orig' -> 'victim'" in out
+        items = mgr.list_items(mgr.find_by_name("victim"))
+        assert [it["text"] for it in items] == ["payload"]
+
+    def test_clone_same_name_unseals_only_with_force(self, mgr):
+        """'/batch clone src src' must not silently un-seal the source."""
+        self._source(mgr, "sealme")
+        with pytest.raises(BatchError, match="would be overwritten"):
+            mgr.clone("sealme", "sealme")
+        assert mgr.find_by_name("sealme")["status"] == "staged"
+        cloned = mgr.clone("sealme", "sealme", force=True)
+        assert cloned["status"] == STATUS_DRAFT
+
+    def test_add_text_with_model_and_prompt_tokens_stays_intact(self, mgr, capsys):
+        """/batch add must not swallow model=/prompt= tokens as options."""
+        ctx = make_ctx(mgr)
+        asyncio.run(run_cmd(ctx, "/batch start t1"))
+        asyncio.run(run_cmd(ctx, "/batch add compare model=gpt-4 prompt=hello world"))
+        item = mgr.list_items(mgr.resolve("t1"))[0]
+        assert item["text"] == "compare model=gpt-4 prompt=hello world"
