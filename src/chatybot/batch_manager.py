@@ -916,6 +916,14 @@ class BatchManager:
                 refetched = await provider_obj.get(meta["provider_id"])
                 results = (refetched or {}).get("results") or []
             normalized = [provider_obj.normalize_result(r) for r in results]
+            # Providers return results in COMPLETION order, which is arbitrary
+            # and varies run to run. Sort into the staging (submission) order
+            # so results.jsonl and /batch results are predictable; the
+            # custom_id is the join key either way.
+            staged_order = {it["custom_id"]: i for i, it
+                            in enumerate(self._read_items(meta["batch_id"]))}
+            normalized.sort(key=lambda r: staged_order.get(
+                r.get("custom_id"), len(staged_order)))
             data = "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in normalized)
             self._fsync_write(self._results_path(meta["batch_id"]), data)
             meta["finalized_at"] = int(time.time())

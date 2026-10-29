@@ -1451,3 +1451,30 @@ class TestCancelUnsupportedProvider:
         meta = asyncio.run(mgr.cancel(meta, provider))
         assert meta["status"] == "cancelled"
         assert provider.batches[meta["provider_id"]]["status"] == "cancelled"
+
+
+class TestResultsOrdering:
+    """Providers return results in arbitrary completion order; ChatyBot must
+    normalize results.jsonl (and /batch results) back into staging order."""
+
+    def test_results_written_in_staging_order(self, mgr, capsys):
+        meta = mgr.start("ordered", model_alias="gptoss_batch",
+                         model_name="openai/gpt-oss-120b:batch",
+                         provider="openrouter", prompt="p")
+        mgr.add_items(meta, ["one", "two", "three"], id_prefix="ordered_")
+        mgr.end(meta)
+        provider = FakeProvider()
+        # Corrupt the provider order: return results in REVERSE completion order
+        async def shuffled_submit(requests, model_name):
+            batch = await FakeProvider.submit(provider, list(reversed(requests)),
+                                              model_name)
+            provider.calls.append(("submit", model_name, len(requests)))
+            return batch
+        provider.submit = shuffled_submit
+        meta = asyncio.run(mgr.run(meta, provider))
+        meta = asyncio.run(mgr.check(meta, provider))
+        assert meta["status"] == STATUS_COMPLETED
+        # results.jsonl restored to staging order despite reverse provider order
+        stored = mgr.read_results(meta["batch_id"])
+        assert [r["custom_id"] for r in stored] == [
+            "ordered_0001", "ordered_0002", "ordered_0003"]
