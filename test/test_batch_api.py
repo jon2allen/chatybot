@@ -1294,3 +1294,83 @@ class TestBatchSamplingParams:
         assert "Sampling:   temp=0.15, max_tokens=128" in out
 
 
+
+
+class TestSamplingFixes:
+    """Regressions for the sampling-parameter review findings."""
+
+    def _ctx_with_model_temp(self, mgr, model_temperature=0.3):
+        """make_ctx with a model config carrying a default temperature."""
+        ctx = make_ctx(mgr)
+        model_config = {
+            "name": "openai/gpt-oss-120b:batch",
+            "vendor": "openrouter",
+            "batch": True,
+            "api_key": "OPENROUTER_API_KEY",
+            "temperature": model_temperature,
+            "max_tokens": 1024,
+            "input_cost_per_mtok": 0.10,
+        }
+        ctx.app.config_manager.get_model_config.return_value = model_config
+        return ctx
+
+    def test_plain_reopen_preserves_sampling(self, mgr, capsys):
+        """P1 — reopening a draft must not revert user-set sampling to the
+        model-config default."""
+        ctx = self._ctx_with_model_temp(mgr, model_temperature=0.3)
+        asyncio.run(run_cmd(ctx, "/batch start keep1 temp=0.9"))
+        assert mgr.resolve("keep1")["temperature"] == 0.9
+        asyncio.run(run_cmd(ctx, "/batch add item"))
+        asyncio.run(run_cmd(ctx, "/batch end"))
+        capsys.readouterr()
+        # Plain reopen (the documented append workflow)
+        asyncio.run(run_cmd(ctx, "/batch start keep1"))
+        out = capsys.readouterr().out
+        assert "Temperature: 0.3" not in out
+        assert mgr.resolve("keep1")["temperature"] == 0.9
+        # Explicit override on reopen still updates
+        asyncio.run(run_cmd(ctx, "/batch start keep1 temp=0.5"))
+        assert mgr.resolve("keep1")["temperature"] == 0.5
+
+    def test_new_batch_still_inherits_model_sampling(self, mgr, capsys):
+        """Creation-time model-config inheritance is unaffected by P1."""
+        ctx = self._ctx_with_model_temp(mgr, model_temperature=0.7)
+        asyncio.run(run_cmd(ctx, "/batch start inherit2"))
+        assert mgr.resolve("inherit2")["temperature"] == 0.7
+
+    def test_run_estimate_uses_batch_max_tokens(self, mgr, capsys, monkeypatch):
+        """P2 — the pre-submit cost estimate must use the batch's own
+        max_tokens, not the model config's."""
+        ctx = self._ctx_with_model_temp(mgr)  # model max_tokens: 1024
+        asyncio.run(run_cmd(ctx, "/batch start priced2 max_tokens=100"))
+        asyncio.run(run_cmd(ctx, "/batch add " + "x" * 400))
+        asyncio.run(run_cmd(ctx, "/batch end"))
+        provider = FakeProvider()
+        monkeypatch.setattr(batch_cmds, "_build_provider", lambda app, meta: provider)
+        asyncio.run(run_cmd(ctx, "/batch run priced2"))
+        out = capsys.readouterr().out
+        # Expected with batch max_tokens=100 (not model 1024):
+        # 400 chars -> 100 input tokens; (100 + 100*1) * 0.10/1M * 0.5
+        expected = (400 // 4 + 100 * 1) * 0.10 / 1_000_000 * 0.5
+        assert f"${expected:.4f}" in out
+        wrong = (400 // 4 + 1024 * 1) * 0.10 / 1_000_000 * 0.5
+        assert f"${wrong:.4f}" not in out
+
+    def test_prompt_text_with_sampling_tokens_intact(self, mgr, capsys):
+        """P3 — '/batch prompt' free text must not lose temp=/max_tokens=
+        tokens to option parsing."""
+        ctx = make_ctx(mgr)
+        asyncio.run(run_cmd(ctx, '/batch prompt "output temp=0.5 and top_p=0.9 in prose"'))
+        asyncio.run(run_cmd(ctx, "/batch start prose1"))
+        meta = mgr.resolve("prose1")
+        assert meta["prompt"] == "output temp=0.5 and top_p=0.9 in prose"
+        assert meta.get("temperature") is None  # not parsed as an option
+
+    def test_edit_text_with_sampling_tokens_intact(self, mgr, capsys):
+        """P3 — '/batch edit' replacement text keeps temp= tokens."""
+        ctx = make_ctx(mgr)
+        asyncio.run(run_cmd(ctx, "/batch start ed3"))
+        asyncio.run(run_cmd(ctx, "/batch add original"))
+        asyncio.run(run_cmd(ctx, "/batch edit ed3_0001 set temp=0.5 in the answer"))
+        item = mgr.show_item(mgr.resolve("ed3"), "ed3_0001")
+        assert item["text"] == "set temp=0.5 in the answer"

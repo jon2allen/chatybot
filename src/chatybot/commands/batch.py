@@ -134,10 +134,21 @@ def _build_provider(app: Any, meta: dict):
 # Option keys each consuming subcommand may parse. Keeping these tight per
 # subcommand means free text can never lose a token that merely looks like an
 # unrelated subcommand's option (e.g. '/batch add ... model=x' stays text).
+SAMPLING_KEYS = {"temp", "temperature", "max_tokens", "top_p",
+                 "freq_penalty", "frequency_penalty",
+                 "pres_penalty", "presence_penalty"}
 ADD_OPTS = {"id", "var", "filebank", "split", "file"}
-CLONE_OPTS = {"prompt", "model", "force", "temp", "temperature", "max_tokens",
-              "top_p", "freq_penalty", "frequency_penalty",
-              "pres_penalty", "presence_penalty"}
+CLONE_OPTS = {"prompt", "model", "force"} | SAMPLING_KEYS
+START_OPTS = {"model", "clear"} | SAMPLING_KEYS
+PROMPT_OPTS = {"file"}
+ITEMS_OPTS = {"limit", "range"}
+IDS_OPTS = {"var"}
+SHOW_OPTS: set[str] = set()
+EDIT_OPTS = {"var", "file"}
+DUMP_OPTS = {"var"}
+RUN_OPTS = {"force", "adopt"}
+CHECK_OPTS = {"wait"}
+RESULTS_OPTS = {"limit", "range", "var"}
 
 
 def _extract_sampling_params(opts: dict[str, str],
@@ -401,7 +412,7 @@ async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandRe
 
         # ---- start ------------------------------------------------------
         elif subcmd == "start":
-            opts, tokens = _parse_args(rest)
+            opts, tokens = _parse_args(rest, keys=START_OPTS)
             if not tokens:
                 print("Usage: /batch start <name> [model=<alias>] [temp=<float>] "
                       "[max_tokens=<int>] [top_p=<float>] [clear=true]")
@@ -422,7 +433,12 @@ async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandRe
             else:
                 model_alias, model_config = _require_batch_model(app)
 
-            sampling = _extract_sampling_params(opts, model_config)
+            # Model-config sampling defaults apply only at CREATION; a
+            # plain reopen keeps the batch's existing sampling, and only
+            # explicit options on this command line update it.
+            will_reopen = mgr.find_by_name(name) is not None
+            sampling = _extract_sampling_params(
+                opts, None if will_reopen else model_config)
             prompt = _pending_batch_prompt.get("prompt")
             meta = mgr.start(name, model_alias=model_alias,
                              model_name=model_config.get("name", model_alias),
@@ -507,7 +523,7 @@ async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandRe
                       else "No batch prompt set. Usage: /batch prompt \"<text>\" | "
                            "<template> | file=<path>")
                 return CommandResult.ok()
-            opts, tokens = _parse_args(rest)
+            opts, tokens = _parse_args(rest, keys=PROMPT_OPTS)
             if "file" in opts:
                 path = os.path.expanduser(opts["file"])
                 if not os.path.isfile(path):
@@ -607,7 +623,7 @@ async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandRe
 
         # ---- items ---------------------------------------------------------
         elif subcmd == "items":
-            opts, tokens = _parse_args(rest)
+            opts, tokens = _parse_args(rest, keys=ITEMS_OPTS)
             meta = mgr.resolve(_name_token(rest))
             offset, limit = 0, 10
             if "limit" in opts:
@@ -639,7 +655,7 @@ async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandRe
 
         # ---- ids ------------------------------------------------------------
         elif subcmd == "ids":
-            opts, tokens = _parse_args(rest)
+            opts, tokens = _parse_args(rest, keys=IDS_OPTS)
             meta = mgr.resolve(_name_token(rest))
             items = mgr.list_items(meta)
             ids = [it["custom_id"] for it in items]
@@ -654,7 +670,7 @@ async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandRe
 
         # ---- show -------------------------------------------------------------
         elif subcmd == "show":
-            opts, tokens = _parse_args(rest)
+            opts, tokens = _parse_args(rest, keys=SHOW_OPTS)
             if not tokens:
                 print("Usage: /batch show <item-id> [batch-name]  "
                       "(or /batch show <batch-name> for a batch overview)")
@@ -711,7 +727,7 @@ async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandRe
 
         # ---- edit ----------------------------------------------------------
         elif subcmd == "edit":
-            opts, tokens = _parse_args(rest)
+            opts, tokens = _parse_args(rest, keys=EDIT_OPTS)
             if not tokens:
                 print("Usage: /batch edit <id> <text | var=NAME | file=PATH> [name]")
                 return CommandResult.ok()
@@ -739,7 +755,7 @@ async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandRe
 
         # ---- remove / del ----------------------------------------------------
         elif subcmd in ("remove", "del", "delete"):
-            opts, tokens = _parse_args(rest)
+            opts, tokens = _parse_args(rest, keys=SHOW_OPTS)
             if not tokens:
                 print("Usage: /batch remove <id> [name]")
                 return CommandResult.ok()
@@ -770,7 +786,7 @@ async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandRe
 
         # ---- dump ----------------------------------------------------------------
         elif subcmd == "dump":
-            opts, tokens = _parse_args(rest)
+            opts, tokens = _parse_args(rest, keys=DUMP_OPTS)
             meta = mgr.resolve(_name_token(rest))
             payload = mgr.dump_payload(meta)
             print(f"\nBatch payload for '{meta['name']}':")
@@ -798,7 +814,7 @@ async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandRe
 
         # ---- run ------------------------------------------------------------------------
         elif subcmd == "run":
-            opts, tokens = _parse_args(rest)
+            opts, tokens = _parse_args(rest, keys=RUN_OPTS)
             meta = mgr.resolve(_name_token(rest))
             if "adopt" in opts:
                 mgr.adopt_orphan(meta, opts["adopt"])
@@ -814,8 +830,14 @@ async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandRe
             force = opts.get("force", "").lower() in ("true", "1", "yes")
 
             items = mgr.list_items(meta)
+            # The batch's own max_tokens (set at start/clone) governs the
+            # actual per-request payload — the estimate and budget guard use
+            # it, falling back to the model config's value.
+            effective_max_tokens = (meta.get("max_tokens")
+                                    if meta.get("max_tokens") is not None
+                                    else batch_model_config.get("max_tokens"))
             estimate = mgr.estimate_cost_usd(meta, items,
-                                             batch_model_config.get("max_tokens"),
+                                             effective_max_tokens,
                                              batch_model_config.get("input_cost_per_mtok"))
             if estimate is None:
                 print("  Note: cost estimate unavailable (model lacks "
@@ -828,7 +850,7 @@ async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandRe
                 force=force,
                 max_cost_usd=float(batch_cfg.get("max_cost_usd", 5.0)),
                 max_open_per_provider=int(batch_cfg.get("max_open_per_provider", 3)),
-                max_tokens=batch_model_config.get("max_tokens"),
+                max_tokens=effective_max_tokens,
                 input_cost_per_mtok=batch_model_config.get("input_cost_per_mtok"),
             )
             print(f"Submitted batch '{meta['name']}' to {meta['provider']} "
@@ -838,7 +860,7 @@ async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandRe
 
         # ---- check ----------------------------------------------------------------------
         elif subcmd == "check":
-            opts, tokens = _parse_args(rest)
+            opts, tokens = _parse_args(rest, keys=CHECK_OPTS)
             meta = mgr.resolve(_name_token(rest))
             results_path = os.path.join(mgr.batches_dir, meta["batch_id"], "results.jsonl")
             if meta["status"] in TERMINAL_STATES and os.path.exists(results_path):
@@ -858,7 +880,7 @@ async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandRe
 
         # ---- results ---------------------------------------------------------------------
         elif subcmd == "results":
-            opts, tokens = _parse_args(rest)
+            opts, tokens = _parse_args(rest, keys=RESULTS_OPTS)
             meta = mgr.resolve(_name_token(rest))
             records = mgr.read_results(meta["batch_id"])
             if not records:
