@@ -126,37 +126,96 @@ class BaseModelConfig(BaseModel):
     @property
     def detected_vendor(self) -> str:
         """Heuristically detect the vendor name based on base_url, api_key, or name if not explicitly set."""
-        explicit = getattr(self, "vendor", None)
-        if explicit:
-            return explicit
-        
-        base_url_lower = self.base_url.lower()
-        api_key_lower = (self.api_key or "").lower()
-        name_lower = self.name.lower()
-        
-        if "openrouter" in base_url_lower or "openrouter" in api_key_lower:
-            return "openrouter"
-        if "googleapis.com" in base_url_lower or "gemini" in api_key_lower or "google" in name_lower or "google" in base_url_lower:
+        prov = detect_provider(self)
+        return "" if prov in ("other", "local") else prov
+
+
+def detect_provider(model_config: dict[str, Any] | BaseModelConfig | None) -> str:
+    """Detect the canonical provider name from a model config dict or BaseModelConfig.
+
+    Returns one of:
+      'openrouter' | 'mistral' | 'openai' | 'google' | 'nvidia' | 'bytez' |
+      'jina' | 'ollama' | 'llama_cpp' | 'publicai' | 'huggingface' |
+      'apple_fm' | 'local' | 'other'
+    """
+    if not model_config:
+        return "other"
+
+    # Explicit vendor property or dict key
+    vendor = (
+        model_config.get("vendor")
+        if isinstance(model_config, dict)
+        else getattr(model_config, "vendor", None)
+    )
+    if vendor:
+        v = str(vendor).strip().lower()
+        if v in ("gemini", "google"):
             return "google"
-        if "mistral" in base_url_lower or "mistral" in api_key_lower:
-            return "mistral"
-        if "openai.com" in base_url_lower or "openai" in api_key_lower:
-            return "openai"
-        if "nvidia" in base_url_lower or "nvidia" in api_key_lower:
-            return "nvidia"
-        if "jina" in base_url_lower or "jina" in api_key_lower:
-            return "jina"
-        if "localhost:11434" in base_url_lower or "ollama" in base_url_lower or "ollama" in api_key_lower:
+        if v in ("ollama", "localhost:11434"):
             return "ollama"
-        if "localhost:8080" in base_url_lower or "llama.cpp" in base_url_lower or "llama-cpp" in base_url_lower:
+        if v in ("llama.cpp", "llama_cpp"):
             return "llama_cpp"
-        if "publicai" in base_url_lower or "swiss" in api_key_lower:
-            return "publicai"
-        if "bytez" in base_url_lower or "bytez" in api_key_lower:
-            return "bytez"
-        if "huggingface" in base_url_lower or "hf_api_key" in api_key_lower or "hf_token" in api_key_lower or "hf.co" in base_url_lower:
-            return "huggingface"
-        return ""
+        if v in ("apple", "apple_fm", "on-device"):
+            return "apple_fm"
+        return v
+
+    if isinstance(model_config, dict):
+        base_url_lower = (model_config.get("base_url") or "").lower()
+        api_key_lower = (model_config.get("api_key") or "").lower()
+        name_lower = (model_config.get("name") or "").lower()
+        model_type = (model_config.get("type") or "").lower()
+    else:
+        base_url_lower = (getattr(model_config, "base_url", None) or "").lower()
+        api_key_lower = (getattr(model_config, "api_key", None) or "").lower()
+        name_lower = (getattr(model_config, "name", None) or "").lower()
+        model_type = (getattr(model_config, "type", None) or "").lower()
+
+    if model_type == "apple_fm" or "on-device" in base_url_lower:
+        return "apple_fm"
+    if "openrouter" in base_url_lower or "openrouter" in api_key_lower:
+        return "openrouter"
+    if "googleapis.com" in base_url_lower or "gemini" in api_key_lower or "google" in name_lower or "google" in base_url_lower:
+        return "google"
+    if "mistral" in base_url_lower or "mistral" in api_key_lower:
+        return "mistral"
+    if "api.openai.com" in base_url_lower or "openai.com" in base_url_lower or "openai" in api_key_lower:
+        return "openai"
+    if "nvidia" in base_url_lower or "nvidia" in api_key_lower or "nvidia" in name_lower:
+        return "nvidia"
+    if "bytez" in base_url_lower or "bytez" in api_key_lower:
+        return "bytez"
+    if "jina" in base_url_lower or "jina" in api_key_lower:
+        return "jina"
+    if "localhost:11434" in base_url_lower or "11434" in base_url_lower or "ollama" in base_url_lower or "ollama" in api_key_lower:
+        return "ollama"
+    if "localhost:8080" in base_url_lower or "8080" in base_url_lower or "llama.cpp" in base_url_lower or "llama-cpp" in base_url_lower:
+        return "llama_cpp"
+    if "publicai" in base_url_lower or "swiss" in api_key_lower:
+        return "publicai"
+    if "huggingface" in base_url_lower or "hf_api_key" in api_key_lower or "hf_token" in api_key_lower or "hf.co" in base_url_lower:
+        return "huggingface"
+    if "localhost" in base_url_lower or "127.0.0.1" in base_url_lower:
+        return "local"
+    return "other"
+
+
+def compute_hit_pct(
+    cached: int,
+    total: int,
+    *,
+    round_digits: int | None = None,
+    none_on_zero: bool = False,
+) -> float | None:
+    """Calculate cache hit percentage safely without ZeroDivisionError.
+
+    When total is 0:
+      - if none_on_zero is True: returns None (for metrics contracts like agentic loop records)
+      - otherwise: returns 0.0
+    """
+    if not total:
+        return None if none_on_zero else 0.0
+    pct = (cached / total) * 100.0
+    return round(pct, round_digits) if round_digits is not None else pct
 
 
 # ============================================================================
@@ -613,25 +672,25 @@ class ChatConfig(BaseModel):
         }
 
         for alias, model in self.models.items():
-            base_url = model.base_url.lower()
-            if "openrouter" in base_url and model.type == "reranker":
+            prov = detect_provider(model)
+            if prov == "openrouter" and model.type == "reranker":
                 # Cohere reranker goes with OpenRouter
                 categories["OPENROUTER MODELS"].append((alias, model))
-            elif "jina" in base_url or model.type == "reranker":
+            elif prov == "jina" or model.type == "reranker":
                 categories["JINA RERANKER MODELS"].append((alias, model))
             elif model.type == "decision":
                 categories["DECISION MODELS"].append((alias, model))
-            elif "openrouter.ai" in base_url:
+            elif prov == "openrouter":
                 categories["OPENROUTER MODELS"].append((alias, model))
-            elif "nvidia" in base_url or "integrate.api.nvidia" in base_url:
+            elif prov == "nvidia":
                 categories["NVIDIA NIM MODELS"].append((alias, model))
-            elif "publicai.co" in base_url:
+            elif prov == "publicai":
                 categories["PUBLICAI MODELS"].append((alias, model))
-            elif "bytez.com" in base_url:
+            elif prov == "bytez":
                 categories["BYTEZ MODELS"].append((alias, model))
-            elif "11434" in base_url or "localhost" in base_url:
+            elif prov in ("ollama", "llama_cpp", "local"):
                 categories["OLLAMA MODELS"].append((alias, model))
-            elif model.type == "apple_fm" or "on-device" in base_url:
+            elif prov == "apple_fm" or model.type == "apple_fm":
                 categories["APPLE FM MODELS"].append((alias, model))
             else:
                 categories["CHAT MODELS"].append((alias, model))
