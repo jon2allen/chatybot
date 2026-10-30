@@ -102,6 +102,11 @@ class BatchItem(dict):
     """One staged request item: custom_id, text, origin, added_at."""
 
 
+def is_empty_result(record: dict) -> bool:
+    """True when a completion record succeeded (status 200) but returned no content."""
+    return not record.get("error") and not (record.get("content") or "").strip()
+
+
 # ---------------------------------------------------------------------------
 # Providers (Phase 1: OpenRouter; Mistral lands in Phase 2 behind this shape)
 # ---------------------------------------------------------------------------
@@ -479,7 +484,7 @@ class BatchManager:
         return meta
 
     def set_prompt(self, meta: dict, prompt: str) -> None:
-        if meta["status"] not in EDITABLE_STATES and meta["status"] != STATUS_DRAFT:
+        if meta["status"] not in EDITABLE_STATES:
             raise BatchError(f"Batch '{meta['name']}' is closed (status: {meta['status']}). "
                              "Reopen it with '/batch start "
                              f"{meta['name']}' first.")
@@ -567,14 +572,17 @@ class BatchManager:
                     items.append(json.loads(line))
         return items
 
-    def _append_items(self, meta: dict, items: list[dict]) -> int:
+    def _append_items(self, meta: dict, items: list[dict], total_count: int | None = None) -> int:
         """Append items to staging.jsonl (flushed per line) and update counts."""
         path = self._staging_path(meta["batch_id"])
         with open(path, "a", encoding="utf-8") as f:
             for item in items:
                 f.write(json.dumps(item, ensure_ascii=False) + "\n")
                 f.flush()
-        meta["item_count"] = self._read_items(meta["batch_id"]).__len__()
+        if total_count is not None:
+            meta["item_count"] = total_count
+        else:
+            meta["item_count"] = len(self._read_items(meta["batch_id"]))
         self._write_meta(meta)
         return len(items)
 
@@ -632,7 +640,7 @@ class BatchManager:
                 "origin": origin,
                 "added_at": int(time.time()),
             })
-        self._append_items(meta, new_items)
+        self._append_items(meta, new_items, total_count=len(items) + len(new_items))
         return new_items
 
     def list_items(self, meta: dict, offset: int = 0, limit: int | None = None) -> list[dict]:
@@ -761,7 +769,7 @@ class BatchManager:
 
     def abort(self, meta: dict) -> None:
         """Discard an open (never-submitted) staging session entirely."""
-        if meta["status"] in OPEN_STATES or meta["status"] in (STATUS_STAGED,) and meta.get("provider_id"):
+        if (meta["status"] in OPEN_STATES or meta["status"] == STATUS_STAGED) and meta.get("provider_id"):
             raise BatchError(f"Batch '{meta['name']}' was submitted (status: {meta['status']}) "
                              "and cannot be aborted. Use '/batch cancel' instead.")
         if meta["status"] in TERMINAL_STATES:
@@ -810,7 +818,8 @@ class BatchManager:
     async def run(self, meta: dict, provider_obj: Any, *, force: bool = False,
                   max_cost_usd: float = 5.0, max_open_per_provider: int = 3,
                   max_tokens: int | None = None,
-                  input_cost_per_mtok: float | None = None) -> dict:
+                  input_cost_per_mtok: float | None = None,
+                  precomputed_estimate: float | None = None) -> dict:
         """Estimate cost, verify the budget and concurrency caps, then submit.
 
         The pre-POST sidecar write (status='submitting', fsynced) happens
@@ -829,8 +838,11 @@ class BatchManager:
             )
 
         self._require_staged(meta)
-        items = self._read_items(meta["batch_id"])
-        estimate = self.estimate_cost_usd(meta, items, max_tokens, input_cost_per_mtok)
+        if precomputed_estimate is not None:
+            estimate = precomputed_estimate
+        else:
+            items = self._read_items(meta["batch_id"])
+            estimate = self.estimate_cost_usd(meta, items, max_tokens, input_cost_per_mtok)
         if estimate is not None and estimate > max_cost_usd and not force:
             raise BatchError(
                 f"Estimated batch cost ${estimate:.4f} exceeds max_cost_usd "
@@ -930,9 +942,7 @@ class BatchManager:
             # Batch providers count empty completions (status 200, no
             # content) as successes and never retry them; surface them so
             # users can spot flaky runs and re-queue just those items.
-            meta["empty_results"] = sum(
-                1 for r in normalized
-                if not r.get("error") and not (r.get("content") or "").strip())
+            meta["empty_results"] = sum(1 for r in normalized if is_empty_result(r))
             meta["finalized_at"] = int(time.time())
             telemetry = provider_obj.telemetry_of(batch)
             if telemetry.get("cost_usd") is not None:

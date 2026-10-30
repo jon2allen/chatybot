@@ -28,6 +28,7 @@ from chatybot.batch_manager import (
     BatchManager,
     EDITABLE_STATES,
     TERMINAL_STATES,
+    is_empty_result,
     make_provider,
     sanitize_batch_name,
     split_text,
@@ -83,6 +84,58 @@ def _require_batch_model(app: Any) -> tuple[str, dict]:
                   "(models need 'batch = true').")
         raise BatchError("batch model required")
     return alias, config
+
+
+def _resolve_batch_alias(app: Any, alias: str) -> dict | None:
+    """Validate and return config for a requested model alias, or None on error."""
+    try:
+        config = app.config_manager.get_model_config(alias)
+    except ValueError:
+        print(f"Error: model alias '{alias}' not found in chat_config.toml.")
+        return None
+    if not config.get("batch", False):
+        print(f"Error: model '{alias}' is not flagged batch-capable (batch = true).")
+        return None
+    return config
+
+
+def _opt_bool(opts: dict[str, str], key: str, default: bool = False) -> bool:
+    """Extract a boolean option from CLI options dict."""
+    val = opts.get(key)
+    if val is None:
+        return default
+    return val.strip().lower() in ("true", "1", "yes")
+
+
+def _preview(text: str | None, max_len: int = 60) -> str:
+    """Truncate text for CLI preview display."""
+    if not text:
+        return ""
+    return text[:max_len] + "..." if len(text) > max_len else text
+
+
+def _parse_paging(opts: dict[str, str], default_limit: int | None = 10) -> tuple[int, int | None]:
+    """Parse limit= and range= options into (offset, limit)."""
+    offset = 0
+    limit = default_limit
+    if "limit" in opts:
+        try:
+            limit = int(opts["limit"])
+        except ValueError:
+            print(f"Invalid limit value. Using default limit of {default_limit or 10}.")
+    if "range" in opts:
+        try:
+            r = opts["range"]
+            if ":" in r:
+                s, e = r.split(":", 1)
+                offset = int(s) if s else 0
+                limit = (int(e) - offset) if e else None
+            else:
+                offset = int(r)
+        except ValueError:
+            print("Invalid range format. Use range=start:end, range=:end, or range=start:. "
+                  f"Using default limit of {default_limit or 10}.")
+    return offset, limit
 
 
 def _batch_model_config(app: Any, meta: dict) -> dict:
@@ -303,7 +356,7 @@ def _print_batch_status(meta: dict) -> None:
                       if meta.get("empty_results") else "")
         print(f"  Results:    {meta['results_count']}{empty_note}")
     if meta.get("prompt"):
-        prompt_prev = meta["prompt"][:60] + "..." if len(meta["prompt"]) > 60 else meta["prompt"]
+        prompt_prev = _preview(meta["prompt"], 60)
         print(f"  Prompt:     \"{prompt_prev}\"")
     sampling_parts = []
     if meta.get("temperature") is not None:
@@ -426,13 +479,8 @@ async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandRe
 
             if "model" in opts:
                 req_alias = opts["model"].strip()
-                try:
-                    model_config = app.config_manager.get_model_config(req_alias)
-                except ValueError:
-                    print(f"Error: model alias '{req_alias}' not found in chat_config.toml.")
-                    return CommandResult.ok()
-                if not model_config.get("batch", False):
-                    print(f"Error: model '{req_alias}' is not flagged batch-capable (batch = true).")
+                model_config = _resolve_batch_alias(app, req_alias)
+                if model_config is None:
                     return CommandResult.ok()
                 model_alias = req_alias
             else:
@@ -449,16 +497,15 @@ async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandRe
                              model_name=model_config.get("name", model_alias),
                              provider=(model_config.get("vendor") or "openrouter").lower(),
                              prompt=prompt,
-                             clear=opts.get("clear", "").lower() in ("true", "1", "yes"),
+                             clear=_opt_bool(opts, "clear"),
                              **sampling)
             print(f"Opened batch draft '{meta['name']}' (ID: {meta['batch_id']}, "
                   f"model: {model_alias})")
             if meta.get("prompt"):
-                shown = meta["prompt"] if len(meta["prompt"]) <= 60 else meta["prompt"][:60] + "..."
-                print(f"  Batch prompt set: \"{shown}\"")
+                print(f"  Batch prompt set: \"{_preview(meta['prompt'], 60)}\"")
             if meta.get("temperature") is not None:
                 print(f"  Temperature: {meta['temperature']}")
-            if opts.get("clear", "").lower() in ("true", "1", "yes"):
+            if _opt_bool(opts, "clear"):
                 print("  Staged items cleared.")
             print("  Add items with /batch add, then seal with /batch end.")
             return CommandResult.ok()
@@ -479,13 +526,8 @@ async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandRe
             m_cfg = None
             if "model" in opts:
                 req_alias = opts["model"].strip()
-                try:
-                    m_cfg = app.config_manager.get_model_config(req_alias)
-                except ValueError:
-                    print(f"Error: model alias '{req_alias}' not found in chat_config.toml.")
-                    return CommandResult.ok()
-                if not m_cfg.get("batch", False):
-                    print(f"Error: model '{req_alias}' is not flagged batch-capable (batch = true).")
+                m_cfg = _resolve_batch_alias(app, req_alias)
+                if m_cfg is None:
                     return CommandResult.ok()
                 model_alias = req_alias
                 model_name = m_cfg.get("name", req_alias)
@@ -504,15 +546,14 @@ async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandRe
                 model_alias=model_alias,
                 model_name=model_name,
                 provider=provider,
-                force=opts.get("force", "").lower() in ("true", "1", "yes"),
+                force=_opt_bool(opts, "force"),
                 **sampling,
             )
             print(f"Cloned batch '{source_target}' -> '{new_meta['name']}' "
                   f"(ID: {new_meta['batch_id']}, items: {new_meta['item_count']}, "
                   f"model: {new_meta['model_alias']}, status: draft)")
             if new_meta.get("prompt"):
-                shown = new_meta["prompt"] if len(new_meta["prompt"]) <= 60 else new_meta["prompt"][:60] + "..."
-                print(f"  Batch prompt: \"{shown}\"")
+                print(f"  Batch prompt: \"{_preview(new_meta['prompt'], 60)}\"")
             if new_meta.get("temperature") is not None:
                 print(f"  Temperature: {new_meta['temperature']}")
             print("  Edit items with /batch edit, delete with /batch remove, "
@@ -630,23 +671,7 @@ async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandRe
         elif subcmd == "items":
             opts, tokens = _parse_args(rest, keys=ITEMS_OPTS)
             meta = mgr.resolve(_name_token(rest))
-            offset, limit = 0, 10
-            if "limit" in opts:
-                try:
-                    limit = int(opts["limit"])
-                except ValueError:
-                    print("Invalid limit value. Using default limit of 10.")
-            if "range" in opts:
-                try:
-                    r = opts["range"]
-                    if ":" in r:
-                        s, e = r.split(":", 1)
-                        offset = int(s) if s else 0
-                        limit = (int(e) - offset) if e else None
-                    else:
-                        offset = int(r)
-                except ValueError:
-                    print("Invalid range format. Use range=start:end. Using default limit of 10.")
+            offset, limit = _parse_paging(opts)
             items = mgr.list_items(meta, offset=offset, limit=limit)
             print(f"\n[Staged Items: {meta['name']} ({meta['item_count']} items, "
                   f"status: {meta['status']})]")
@@ -832,7 +857,7 @@ async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandRe
             batch_model_config = _batch_model_config(app, meta)
             provider_obj = _build_provider(app, meta)
             batch_cfg = _batch_config(app)
-            force = opts.get("force", "").lower() in ("true", "1", "yes")
+            force = _opt_bool(opts, "force")
 
             items = mgr.list_items(meta)
             # The batch's own max_tokens (set at start/clone) governs the
@@ -857,6 +882,7 @@ async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandRe
                 max_open_per_provider=int(batch_cfg.get("max_open_per_provider", 3)),
                 max_tokens=effective_max_tokens,
                 input_cost_per_mtok=batch_model_config.get("input_cost_per_mtok"),
+                precomputed_estimate=estimate,
             )
             print(f"Submitted batch '{meta['name']}' to {meta['provider']} "
                   f"(provider id: {meta['provider_id']}, status: {meta['status']}).")
@@ -878,7 +904,7 @@ async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandRe
                       "completion and billed at batch rates.")
                 return CommandResult.ok()
             provider_obj = _build_provider(app, meta)
-            wait = opts.get("wait", "false").lower() in ("true", "1", "yes")
+            wait = _opt_bool(opts, "wait")
             meta = await mgr.check(meta, provider_obj, wait=wait)
             extra = ""
             if meta.get("results_count"):
@@ -900,24 +926,7 @@ async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandRe
                       f"(status: {meta['status']}).")
                 print("Run '/batch check {0}' to poll/retrieve.".format(meta["name"]))
                 return CommandResult.ok()
-            offset, limit = 0, 10
-            if "limit" in opts:
-                try:
-                    limit = int(opts["limit"])
-                except ValueError:
-                    print("Invalid limit value. Using default limit of 10.")
-            if "range" in opts:
-                try:
-                    r = opts["range"]
-                    if ":" in r:
-                        s, e = r.split(":", 1)
-                        offset = int(s) if s else 0
-                        limit = (int(e) - offset) if e else None
-                    else:
-                        offset = int(r)
-                except ValueError:
-                    print("Invalid range format. Use range=start:end. "
-                          "Using default limit of 10.")
+            offset, limit = _parse_paging(opts)
             end = len(records) if limit is None else min(offset + limit, len(records))
             page = records[offset:end]
 
@@ -926,9 +935,7 @@ async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandRe
             # display-only), each record: custom_id, status_code, content, error
             app.buffer_manager.set_script_var(bound, records, allow_protected=True)
 
-            empty_now = sum(
-                1 for record in records
-                if not record.get("error") and not (record.get("content") or "").strip())
+            empty_now = sum(1 for record in records if is_empty_result(record))
             empty_note = f", {empty_now} empty" if empty_now else ""
             print(f"\n[Results: {meta['name']} — showing {len(page)} of "
                   f"{len(records)} records{empty_note}, status: {meta['status']}]")
@@ -949,7 +956,7 @@ async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandRe
             opts, tokens = _parse_args(rest, keys=CANCEL_OPTS)
             meta = mgr.resolve(_name_token(rest))
             provider_obj = _build_provider(app, meta) if meta.get("provider_id") else None
-            force = opts.get("force", "").lower() in ("true", "1", "yes")
+            force = _opt_bool(opts, "force")
             meta = await mgr.cancel(meta, provider_obj, force=force)
             print(f"Cancelled batch '{meta['name']}' (status: {meta['status']}).")
             return CommandResult.ok()
@@ -1010,22 +1017,9 @@ async def cmd_batchlist(ctx: CommandContext, parts: list, command: str) -> Comma
         elif param in ("here", "here=true"):
             here_only = True
         elif param.startswith("limit="):
-            try:
-                limit = int(param[6:])
-            except ValueError:
-                print("Invalid limit value. Using default limit of 10.")
+            _, limit = _parse_paging({"limit": arg[6:]}, default_limit=limit)
         elif param.startswith("range="):
-            try:
-                range_raw = param[6:]
-                if ":" in range_raw:
-                    r_start, r_end = range_raw.split(":", 1)
-                    offset = int(r_start) if r_start != "" else 0
-                    limit = (int(r_end) - offset) if r_end != "" else None
-                else:
-                    offset = int(range_raw)
-            except ValueError:
-                print("Invalid range format. Use range=start:end, range=:end, or "
-                      "range=start:. Using default limit of 10.")
+            offset, limit = _parse_paging({"range": arg[6:]}, default_limit=limit)
         elif param.startswith("model="):
             model_filter = param[6:].lower()
         elif param.startswith("status="):

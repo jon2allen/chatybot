@@ -1557,3 +1557,78 @@ class TestEmptyCompletionVisibility:
         out = capsys.readouterr().out
         assert "results: 1 written to results.jsonl" in out
         assert "empty" not in out
+
+
+class TestRefactoredHelpers:
+    """Tests for refactored helpers and edge-case fixes."""
+
+    def test_is_empty_result(self):
+        from chatybot.batch_manager import is_empty_result
+        assert is_empty_result({"status_code": 200, "content": "", "error": None}) is True
+        assert is_empty_result({"status_code": 200, "content": "   ", "error": None}) is True
+        assert is_empty_result({"status_code": 200, "content": "Valid answer", "error": None}) is False
+        assert is_empty_result({"status_code": 500, "content": "", "error": "rate limit"}) is False
+
+    def test_opt_bool(self):
+        from chatybot.commands.batch import _opt_bool
+        assert _opt_bool({"force": "true"}, "force") is True
+        assert _opt_bool({"force": "1"}, "force") is True
+        assert _opt_bool({"force": "yes"}, "force") is True
+        assert _opt_bool({"force": "YES "}, "force") is True
+        assert _opt_bool({"force": "false"}, "force") is False
+        assert _opt_bool({"force": "no"}, "force") is False
+        assert _opt_bool({}, "force", default=True) is True
+        assert _opt_bool({}, "force", default=False) is False
+
+    def test_preview(self):
+        from chatybot.commands.batch import _preview
+        assert _preview(None) == ""
+        assert _preview("Short text") == "Short text"
+        long_str = "A" * 70
+        assert _preview(long_str, max_len=60) == "A" * 60 + "..."
+
+    def test_parse_paging(self, capsys):
+        from chatybot.commands.batch import _parse_paging
+        # Defaults
+        assert _parse_paging({}) == (0, 10)
+        # limit=
+        assert _parse_paging({"limit": "5"}) == (0, 5)
+        # range=start:end
+        assert _parse_paging({"range": "2:6"}) == (2, 4)
+        # range=:end (open start)
+        assert _parse_paging({"range": ":7"}) == (0, 7)
+        # range=start: (open end)
+        assert _parse_paging({"range": "3:"}) == (3, None)
+        # single number range
+        assert _parse_paging({"range": "4"}) == (4, 10)
+        # Invalid values fallback gracefully
+        assert _parse_paging({"limit": "invalid"}) == (0, 10)
+        assert "Invalid limit value" in capsys.readouterr().out
+        assert _parse_paging({"range": "bad:format:extra"}) == (0, 10)
+        assert "Invalid range format" in capsys.readouterr().out
+
+    def test_abort_submitting_orphan_without_provider_id(self, mgr):
+        """A batch that crashed in STATUS_SUBMITTING before acquiring a provider_id
+        can be aborted and cleaned up rather than trapped."""
+        meta = mgr.start("crashed_orphan", model_alias="gptoss_batch",
+                         model_name="openai/gpt-oss-120b:batch",
+                         provider="openrouter", prompt="p")
+        mgr.add_items(meta, ["item1"], id_prefix="co_")
+        mgr.end(meta)
+        meta["status"] = "submitting"
+        mgr._write_meta(meta)
+
+        # Abort should cleanly delete the orphan instance directory and catalog entry
+        mgr.abort(meta)
+        assert mgr.find_by_name("crashed_orphan") is None
+
+    def test_run_with_precomputed_estimate(self, mgr):
+        meta = mgr.start("fast_est", model_alias="gptoss_batch",
+                         model_name="openai/gpt-oss-120b:batch",
+                         provider="openrouter", prompt="p")
+        mgr.add_items(meta, ["item1"], id_prefix="fe_")
+        mgr.end(meta)
+        provider = FakeProvider()
+        meta = asyncio.run(mgr.run(meta, provider, precomputed_estimate=0.0042))
+        assert meta["status"] == "submitted"
+
