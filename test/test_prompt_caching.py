@@ -313,6 +313,21 @@ class TestCachekeyCommand:
         result = asyncio.run(app.handle_escape_command("/cachekey bogus"))
         out = capsys.readouterr().out
         assert "Unknown subcommand" in out
+        assert "/cachekey" in out
+        assert "/trace" not in out
+
+    def test_status_reports_session_write_tokens(self, app, capsys):
+        app.active_session_id = "ses_0505"
+        app.last_cached_tokens = 2000
+        app.last_prompt_tokens = 5000
+        app.session_cached_tokens = 2000
+        app.session_cache_write_tokens = 800
+        app.session_prompt_tokens = 5000
+        result = asyncio.run(app.handle_escape_command("/cachekey status"))
+        assert result is True
+        out = capsys.readouterr().out
+        assert "Session Hit Rate:" in out
+        assert "800 written" in out
 
 
 class TestParserAndLocalization:
@@ -461,3 +476,46 @@ class TestConfigManager:
         cm = ConfigManager(config_path=str(cfg))
         cm.load_config()
         assert cm.prompt_caching_default is False
+
+
+class TestProviderDetectionAndHitPct:
+    """Test unified detect_provider and compute_hit_pct contracts."""
+
+    def test_compute_hit_pct_none_on_zero(self):
+        from src.chatybot.config_model import compute_hit_pct
+        assert compute_hit_pct(0, 0, none_on_zero=True) is None
+        assert compute_hit_pct(100, 0, none_on_zero=True) is None
+        assert compute_hit_pct(0, 0, none_on_zero=False) == 0.0
+        assert compute_hit_pct(100, 300, round_digits=1) == 33.3
+        assert compute_hit_pct(50, 200) == 25.0
+
+    def test_detect_provider_vendor_overrides_proxy(self):
+        from src.chatybot.config_model import detect_provider
+        # Proxy or gateway with custom base_url but explicit vendor
+        cfg = {"base_url": "https://gateway.internal.corp/v1", "vendor": "mistral"}
+        assert detect_provider(cfg) == "mistral"
+
+        cfg = {"base_url": "https://gateway.internal.corp/v1", "vendor": "openai"}
+        assert detect_provider(cfg) == "openai"
+
+        cfg = {"base_url": "https://gateway.internal.corp/v1", "vendor": "gemini"}
+        assert detect_provider(cfg) == "google"
+
+        cfg = {"base_url": "https://gateway.internal.corp/v1", "vendor": "nvidia"}
+        assert detect_provider(cfg) == "nvidia"
+
+        cfg = {"base_url": "https://gateway.internal.corp/v1", "vendor": "bytez"}
+        assert detect_provider(cfg) == "bytez"
+
+    def test_detect_provider_heuristic_fallbacks(self):
+        from src.chatybot.config_model import detect_provider
+        assert detect_provider({"base_url": "https://api.mistral.ai/v1"}) == "mistral"
+        assert detect_provider({"base_url": "https://openrouter.ai/api/v1"}) == "openrouter"
+        assert detect_provider({"base_url": "https://api.openai.com/v1"}) == "openai"
+        assert detect_provider({"base_url": "https://generativelanguage.googleapis.com/v1beta"}) == "google"
+        assert detect_provider({"base_url": "https://integrate.api.nvidia.com/v1"}) == "nvidia"
+        assert detect_provider({"base_url": "https://api.bytez.com/models/v2"}) == "bytez"
+        assert detect_provider({"base_url": "http://localhost:11434/v1"}) == "ollama"
+        assert detect_provider({"base_url": "on-device"}) == "apple_fm"
+        assert detect_provider({"base_url": "https://custom.unknown.com/v1"}) == "other"
+        assert detect_provider(None) == "other"

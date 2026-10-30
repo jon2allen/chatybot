@@ -59,6 +59,7 @@ from .commands import registry as _command_registry
 from .commands.context import CommandContext
 from .commands.registry import CommandAction, CommandResult
 from .config_manager import ConfigManager
+from .config_model import compute_hit_pct, detect_provider
 from .tool_args import unwrap_tool_args
 from .image_generator import ImageGenerator
 from .image_manager import ImageManager
@@ -1544,10 +1545,9 @@ class ChatybotApp:
         if not cache_key:
             return
 
-        base_url = (model_config.get("base_url") or "").lower()
-        vendor = (model_config.get("vendor") or "").lower()
-        is_mistral = "mistral.ai" in base_url or vendor == "mistral"
-        is_openrouter = "openrouter.ai" in base_url or vendor == "openrouter"
+        provider = detect_provider(model_config)
+        is_mistral = provider == "mistral"
+        is_openrouter = provider == "openrouter"
         model_name_lower = (model_config.get("name") or "").lower()
 
         # Prefix stabilization: serialize tools deterministically regardless of
@@ -1569,6 +1569,8 @@ class ChatybotApp:
             if "claude" in model_name_lower:
                 self._apply_anthropic_breakpoints(kwargs)
         # OpenAI / DeepSeek / vLLM / Gemini: no payload changes needed.
+
+    compute_hit_pct = staticmethod(compute_hit_pct)
 
     def _compute_cache_net_savings(
         self, model_config: dict[str, Any], cached_tokens: int, cache_write_tokens: int
@@ -1606,7 +1608,7 @@ class ChatybotApp:
             "prompt_tokens": prompt_tokens,
             "cached_tokens": cached,
             "cache_write_tokens": written,
-            "hit_pct": round(cached / prompt_tokens * 100, 1) if prompt_tokens else None,
+            "hit_pct": compute_hit_pct(cached, prompt_tokens, round_digits=1, none_on_zero=True),
         }
 
     def _accumulate_loop_cache(self, totals: dict[str, Any]) -> None:
@@ -1788,8 +1790,9 @@ class ChatybotApp:
             else:
                 messages.append({"role": "user", "content": full_prompt})
 
+        provider = detect_provider(model_config)
         is_nvidia = (
-            "nvidia" in model_config.get("base_url", "").lower()
+            provider == "nvidia"
             or "nvidia" in model_name.lower()
         )
         is_reasoning_model = is_nvidia or "qwen" in model_name.lower() or "glm" in model_name.lower()
@@ -1908,12 +1911,10 @@ class ChatybotApp:
         if mt is not None:
             kwargs["max_tokens"] = mt
 
-        is_mistral = "mistral.ai" in model_config.get("base_url", "").lower()
-        is_openai_official = (
-            "api.openai.com" in model_config.get("base_url", "").lower()
-        )
-        is_google = "googleapis.com" in model_config.get("base_url", "").lower()
-        is_bytez = "bytez.com" in model_config.get("base_url", "").lower()
+        is_mistral = provider == "mistral"
+        is_openai_official = provider == "openai"
+        is_google = provider == "google"
+        is_bytez = provider == "bytez"
 
         tp = None if self.top_p in ("off", "none", "disable", False) else (self.top_p if self.top_p is not None else model_config.get("top_p"))
         if tp is not None:
@@ -1947,7 +1948,7 @@ class ChatybotApp:
             is_muse_model = any(x in model_name.lower() for x in ["muse", "glimmer"]) or any(x in active_alias_lower for x in ["muse", "glimmer"])
             if is_muse_model:
                 kwargs.setdefault("extra_body", {}).setdefault("chat_template_kwargs", {})["reasoning_strength"] = self.reasoning_effort
-            elif is_openai_official or "openrouter" in model_config.get("base_url", "").lower():
+            elif is_openai_official or provider == "openrouter":
                 # OpenAI and OpenRouter support reasoning_effort at top level
                 kwargs["reasoning_effort"] = self.reasoning_effort
             elif is_mistral:
@@ -2581,7 +2582,7 @@ class ChatybotApp:
                 self.session_prompt_tokens += prompt_tokens
 
                 if cached_tokens > 0 or cache_write_tokens > 0:
-                    hit_pct = (cached_tokens / prompt_tokens) * 100 if prompt_tokens else 0
+                    hit_pct = compute_hit_pct(cached_tokens, prompt_tokens)
                     details = f"{cached_tokens} read"
                     if cache_write_tokens > 0:
                         details += f", {cache_write_tokens} write"
@@ -2596,7 +2597,7 @@ class ChatybotApp:
                     )
 
                 if self.trace_cache:
-                    hit_pct = (cached_tokens / prompt_tokens) * 100 if prompt_tokens else 0
+                    hit_pct = compute_hit_pct(cached_tokens, prompt_tokens)
                     print(
                         f"[TRACE:CACHE] Key={self.last_prompt_cache_key!r} | "
                         f"In={prompt_tokens} | Read={cached_tokens} ({hit_pct:.0f}%) | "
