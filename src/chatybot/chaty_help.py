@@ -1046,7 +1046,7 @@ class HelpSystem:
                 "Batch API (OpenRouter in Phase 1, Mistral in Phase 2) at a 50% discount "
                 "off standard token rates. Jobs outlive the prompt cycle that creates "
                 "them: stage items into a draft, seal with a security scan, submit, then "
-                "poll and retrieve results. Storage lives under ~/.chatybot/batches/ "
+                "poll and retrieve results. Storage lives under ~/.local/share/chatybot/batches/ "
                 "(per-instance directories + global index.jsonl), fully decoupled from "
                 "session history.\n\n"
                 "Model selection is idiomatic: /model <batch-alias> on its own line "
@@ -1103,7 +1103,7 @@ class HelpSystem:
             short_desc="List batches from the global catalog",
             usage="/batchlist [all] [ids] [limit=N] [range=start:end] [model=<alias>] [status=<s>] [since=<Nd|Nh|Nm>] [here=true] [var=<varname>]",
             long_desc=(
-                "Query the global batch catalog (~/.chatybot/batches/index.jsonl) with "
+                "Query the global batch catalog (~/.local/share/chatybot/batches/index.jsonl) with "
                 "the same filter syntax as /session list. Every invocation exports "
                 "${BATCH_LIST} (matched metadata records) and ${BATCH_IDS} (batch ID "
                 "strings)."

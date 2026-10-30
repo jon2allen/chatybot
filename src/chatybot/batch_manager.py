@@ -4,7 +4,7 @@ batch_manager.py — Batch API subsystem storage, state machine, and providers.
 
 Implements Phase 1 of the Batch API proposal (mistral-batch-poc/batch_proposal_v3.md):
 
-* Dedicated instance directory per batch under ``~/.chatybot/batches/`` plus a
+* Dedicated instance directory per batch under ``~/.local/share/chatybot/batches/`` plus a
   global ``index.jsonl`` catalog (proposal §4.4, Option 1).
 * Crash-safe state machine: draft → staged → submitting → submitted →
   in_progress → completed / failed / expired / cancelled / submit_failed,
@@ -45,7 +45,7 @@ from .security.secret_scanner import SecretScanner
 # Constants
 # ---------------------------------------------------------------------------
 
-DEFAULT_BATCHES_DIR = "~/.chatybot/batches"
+DEFAULT_BATCHES_DIR = "~/.local/share/chatybot/batches"
 
 # Batch lifecycle states (proposal §4.4 state machine)
 STATUS_DRAFT = "draft"

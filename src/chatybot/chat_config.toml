@@ -17,7 +17,7 @@ default_quality = "standard"
 # ============================================================================
 # Asynchronous provider Batch API jobs (/batch start → add → end → run → check).
 # Bulk inference is submitted, polled, and retrieved out-of-band at a 50%
-# discount off standard token rates. Storage lives under ~/.chatybot/batches/,
+# discount off standard token rates. Storage lives under ~/.local/share/chatybot/batches/,
 # fully decoupled from session history.
 
 [batch]
