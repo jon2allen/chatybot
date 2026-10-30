@@ -590,7 +590,7 @@ class HelpSystem:
             short_desc="Execute a script file in the current session",
             usage="/source <file>",
             long_desc="Execute a script file containing multiple commands in the current interactive session without exiting.",
-            examples=["/source ~/.chatybot_profile", "/source load_vars.chatdsl"],
+            examples=["/source ~/.config/chatybot/profiles/coding.chatdsl", "/source load_vars.chatdsl"],
             see_also=["/script"]
         ))
         
