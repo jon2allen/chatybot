@@ -1632,3 +1632,59 @@ class TestRefactoredHelpers:
         meta = asyncio.run(mgr.run(meta, provider, precomputed_estimate=0.0042))
         assert meta["status"] == "submitted"
 
+    def test_clean_var_name(self):
+        from chatybot.commands.paging import clean_var_name
+        assert clean_var_name("$MY_VAR") == "MY_VAR"
+        assert clean_var_name("  $$RESULT  ") == "RESULT"
+        assert clean_var_name(None, default="DEFAULT") == "DEFAULT"
+        assert clean_var_name("", default="DEF") == ""
+
+    def test_abort_submitting_warns(self, mgr, capsys):
+        meta = mgr.start("warn_orphan", model_alias="gptoss_batch",
+                         model_name="openai/gpt-oss-120b:batch",
+                         provider="openrouter", prompt="p")
+        mgr.add_items(meta, ["item1"], id_prefix="wo_")
+        mgr.end(meta)
+        meta["status"] = "submitting"
+        mgr._write_meta(meta)
+
+        mgr.abort(meta)
+        out = capsys.readouterr().out
+        assert "Warning: Batch 'warn_orphan' was in 'submitting' state." in out
+        assert "A remote batch may still exist and bill" in out
+
+    def test_batch_config_delegation(self):
+        from chatybot.commands.batch import _batch_config
+        class FakeApp:
+            class FakeConfigManager:
+                called = False
+                def get_batch_config(self):
+                    self.called = True
+                    return {"max_cost_usd": 12.5}
+            config_manager = FakeConfigManager()
+        app = FakeApp()
+        cfg = _batch_config(app)
+        assert cfg == {"max_cost_usd": 12.5}
+        assert app.config_manager.called is True
+
+    def test_stray_add_when_newest_is_submitted(self, mgr, capsys):
+        ctx = make_ctx(mgr)
+        # Create a batch and move it to submitted
+        meta = mgr.start("submitted_b", model_alias="gptoss_batch",
+                         model_name="openai/gpt-oss-120b:batch",
+                         provider="openrouter", prompt="p")
+        mgr.add_items(meta, ["item1"], id_prefix="sb_")
+        mgr.end(meta)
+        meta["status"] = "submitted"
+        meta["provider_id"] = "prov_123"
+        mgr._write_meta(meta)
+
+        # A stray /batch add with no draft open should say 'no active draft found'
+        capsys.readouterr()
+        asyncio.run(run_cmd(ctx, "/batch add orphaned item"))
+        out = capsys.readouterr().out
+        assert "Error: no batch specified and no active draft found." in out
+        assert "Start one with: /batch start <name>" in out
+        assert "already been submitted" not in out
+
+

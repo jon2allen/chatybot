@@ -34,6 +34,7 @@ from chatybot.batch_manager import (
     split_text,
 )
 from chatybot.commands.context import CommandContext
+from chatybot.commands.paging import clean_var_name, parse_paging, parse_since
 from chatybot.commands.registry import CommandResult, command
 
 # ---------------------------------------------------------------------------
@@ -114,28 +115,7 @@ def _preview(text: str | None, max_len: int = 60) -> str:
     return text[:max_len] + "..." if len(text) > max_len else text
 
 
-def _parse_paging(opts: dict[str, str], default_limit: int | None = 10) -> tuple[int, int | None]:
-    """Parse limit= and range= options into (offset, limit)."""
-    offset = 0
-    limit = default_limit
-    if "limit" in opts:
-        try:
-            limit = int(opts["limit"])
-        except ValueError:
-            print(f"Invalid limit value. Using default limit of {default_limit or 10}.")
-    if "range" in opts:
-        try:
-            r = opts["range"]
-            if ":" in r:
-                s, e = r.split(":", 1)
-                offset = int(s) if s else 0
-                limit = (int(e) - offset) if e else None
-            else:
-                offset = int(r)
-        except ValueError:
-            print("Invalid range format. Use range=start:end, range=:end, or range=start:. "
-                  f"Using default limit of {default_limit or 10}.")
-    return offset, limit
+_parse_paging = parse_paging
 
 
 def _batch_model_config(app: Any, meta: dict) -> dict:
@@ -336,6 +316,8 @@ def _id_prefix_for_source(source_kind: str, source_name: str, split_mode: str) -
 
 
 def _batch_config(app: Any) -> dict:
+    if hasattr(app.config_manager, "get_batch_config"):
+        return app.config_manager.get_batch_config()
     return app.config_manager.config.get("batch", {}) or {}
 
 
@@ -379,23 +361,7 @@ def _print_batch_status(meta: dict) -> None:
     print()
 
 
-def _parse_since(raw: str) -> datetime | None:
-    try:
-        if raw.endswith("d"):
-            delta = timedelta(days=float(raw[:-1]))
-        elif raw.endswith("h"):
-            delta = timedelta(hours=float(raw[:-1]))
-        elif raw.endswith("m"):
-            delta = timedelta(minutes=float(raw[:-1]))
-        else:
-            print(f"Invalid since= unit '{raw}'. Use d (days), h (hours), or m (minutes). "
-                  "E.g. since=7d")
-            return None
-        return datetime.now() - delta
-    except ValueError:
-        print(f"Invalid since= value '{raw}'. Use numeric values like since=7d, "
-              "since=24h, since=30m")
-        return None
+_parse_since = parse_since
 
 
 def _resolve_item_batch(mgr: BatchManager, custom_id: str,
@@ -444,7 +410,563 @@ def _try_active_draft(mgr: BatchManager) -> dict | None:
 
 # ---------------------------------------------------------------------------
 # /batch
+# ---------------------------------------------------------# ---------------------------------------------------------------------------
+# /batch subcommands (modular handlers)
 # ---------------------------------------------------------------------------
+
+def _resolve_add_source(app: Any, opts: dict[str, str], tokens: list[str],
+                        meta: dict, split_mode: str) -> tuple[list[str], str, str] | None:
+    """Resolve texts, origin, and id_prefix from add options or free tokens.
+
+    Returns (texts, origin, id_prefix) or None on validation failure.
+    """
+    if "filebank" in opts:
+        bank_name = f"filebank{opts['filebank']}"
+        content = app.buffer_manager.file_banks.get(bank_name, "")
+        if not content:
+            print(f"Error: {bank_name} is empty. "
+                  f"Load it first: /filebank{opts['filebank']} <path>")
+            return None
+        origin = bank_name
+        id_prefix = _id_prefix_for_source("filebank", f"fb{opts['filebank']}", split_mode)
+        texts = _split_for_add(content, split_mode)
+    elif "var" in opts:
+        var_name = clean_var_name(opts["var"])
+        value = _get_var_value(app, var_name)
+        if value is None:
+            print(f"Error: script variable '{var_name}' is not set.")
+            return None
+        origin = f"var:{var_name}"
+        id_prefix = _id_prefix_for_source("var", var_name, split_mode)
+        if isinstance(value, (list, tuple)):
+            texts = [str(v) for v in value]
+        else:
+            texts = _split_for_add(str(value), split_mode)
+    elif "file" in opts:
+        path = os.path.expanduser(opts["file"])
+        if not os.path.isfile(path):
+            print(f"Error: file not found: {path}")
+            return None
+        with open(path, "r", encoding="utf-8") as f:
+            content = f.read()
+        stem = os.path.splitext(os.path.basename(path))[0]
+        origin = f"file:{path}"
+        id_prefix = _id_prefix_for_source("file", stem, split_mode)
+        texts = _split_for_add(content, split_mode)
+    else:
+        text = _text_from_tokens(tokens)
+        if not text:
+            print("Usage: /batch add <text | filebank=N | var=NAME | file=PATH> "
+                  "[id=<id>] [split=lines|paragraphs]")
+            return None
+        texts = [text]
+        origin = "manual"
+        id_prefix = f"{sanitize_batch_name(meta['name'])}_"
+    if not texts:
+        print("Error: no items to add (source was empty after splitting).")
+        return None
+    return texts, origin, id_prefix
+
+
+def _print_added_summary(meta: dict, added: list[dict]) -> None:
+    """Print confirmation and previews for newly added items."""
+    print(f"Added {len(added)} item(s) to '{meta['name']}' "
+          f"({meta['item_count']} total):")
+    for item in added[:5]:
+        preview = (item["text"][:40] + "...") if len(item["text"]) > 40 else item["text"]
+        print(f"  {item['custom_id']}: \"{preview}\"")
+    if len(added) > 5:
+        print(f"  ... and {len(added) - 5} more (list with /batch items)")
+
+
+async def _sc_status(ctx: CommandContext, mgr: BatchManager, rest: str) -> CommandResult:
+    target = _name_token(rest)
+    meta = mgr.resolve(target) if target else _try_active_draft(mgr)
+    if meta is None:
+        print("No batch draft open. Start one with: /batch start <name>")
+        print("Catalog: /batchlist")
+    else:
+        _print_batch_status(meta)
+    return CommandResult.ok()
+
+
+async def _sc_start(ctx: CommandContext, mgr: BatchManager, rest: str) -> CommandResult:
+    opts, tokens = _parse_args(rest, keys=START_OPTS)
+    if not tokens:
+        print("Usage: /batch start <name> [model=<alias>] [temp=<float>] "
+              "[max_tokens=<int>] [top_p=<float>] [clear=true]")
+        return CommandResult.ok()
+    name = tokens[0]
+
+    if "model" in opts:
+        req_alias = opts["model"].strip()
+        model_config = _resolve_batch_alias(ctx.app, req_alias)
+        if model_config is None:
+            return CommandResult.ok()
+        model_alias = req_alias
+    else:
+        model_alias, model_config = _require_batch_model(ctx.app)
+
+    # Model-config sampling defaults apply only at CREATION; a
+    # plain reopen keeps the batch's existing sampling, and only
+    # explicit options on this command line update it.
+    will_reopen = mgr.find_by_name(name) is not None
+    sampling = _extract_sampling_params(
+        opts, None if will_reopen else model_config)
+    prompt = _pending_batch_prompt.get("prompt")
+    meta = mgr.start(name, model_alias=model_alias,
+                     model_name=model_config.get("name", model_alias),
+                     provider=(model_config.get("vendor") or "openrouter").lower(),
+                     prompt=prompt,
+                     clear=_opt_bool(opts, "clear"),
+                     **sampling)
+    print(f"Opened batch draft '{meta['name']}' (ID: {meta['batch_id']}, "
+          f"model: {model_alias})")
+    if meta.get("prompt"):
+        print(f"  Batch prompt set: \"{_preview(meta['prompt'], 60)}\"")
+    if meta.get("temperature") is not None:
+        print(f"  Temperature: {meta['temperature']}")
+    if _opt_bool(opts, "clear"):
+        print("  Staged items cleared.")
+    print("  Add items with /batch add, then seal with /batch end.")
+    return CommandResult.ok()
+
+
+async def _sc_clone(ctx: CommandContext, mgr: BatchManager, rest: str) -> CommandResult:
+    opts, tokens = _parse_args(rest, keys=CLONE_OPTS)
+    if len(tokens) < 2:
+        print("Usage: /batch clone <source_batch> <new_name> "
+              '[prompt="..."] [model=<alias>] [temp=<float>] [force=true]')
+        return CommandResult.ok()
+    source_target = tokens[0]
+    new_name = tokens[1]
+
+    model_alias = None
+    model_name = None
+    provider = None
+    m_cfg = None
+    if "model" in opts:
+        req_alias = opts["model"].strip()
+        m_cfg = _resolve_batch_alias(ctx.app, req_alias)
+        if m_cfg is None:
+            return CommandResult.ok()
+        model_alias = req_alias
+        model_name = m_cfg.get("name", req_alias)
+        provider = (m_cfg.get("vendor") or "openrouter").lower()
+
+    prompt = None
+    if "prompt" in opts:
+        p_raw = opts["prompt"].strip()
+        prompt = BUILTIN_PROMPTS.get(p_raw.lower(), p_raw)
+
+    sampling = _extract_sampling_params(opts, m_cfg)
+    new_meta = mgr.clone(
+        source_target,
+        new_name,
+        prompt=prompt,
+        model_alias=model_alias,
+        model_name=model_name,
+        provider=provider,
+        force=_opt_bool(opts, "force"),
+        **sampling,
+    )
+    print(f"Cloned batch '{source_target}' -> '{new_meta['name']}' "
+          f"(ID: {new_meta['batch_id']}, items: {new_meta['item_count']}, "
+          f"model: {new_meta['model_alias']}, status: draft)")
+    if new_meta.get("prompt"):
+        print(f"  Batch prompt: \"{_preview(new_meta['prompt'], 60)}\"")
+    if new_meta.get("temperature") is not None:
+        print(f"  Temperature: {new_meta['temperature']}")
+    print("  Edit items with /batch edit, delete with /batch remove, "
+          "add with /batch add, then seal with /batch end.")
+    return CommandResult.ok()
+
+
+async def _sc_prompt(ctx: CommandContext, mgr: BatchManager, rest: str) -> CommandResult:
+    if not rest.strip():
+        meta = _try_active_draft(mgr)
+        current = (meta or {}).get("prompt") or _pending_batch_prompt.get("prompt")
+        print(f"Batch prompt: {current!r}" if current
+              else "No batch prompt set. Usage: /batch prompt \"<text>\" | "
+                   "<template> | file=<path>")
+        return CommandResult.ok()
+    opts, tokens = _parse_args(rest, keys=PROMPT_OPTS)
+    if "file" in opts:
+        path = os.path.expanduser(opts["file"])
+        if not os.path.isfile(path):
+            print(f"Error: prompt file not found: {path}")
+            return CommandResult.ok()
+        with open(path, "r", encoding="utf-8") as f:
+            prompt = f.read().strip()
+    else:
+        text = _text_from_tokens(tokens)
+        prompt = BUILTIN_PROMPTS.get(text.strip().lower(), text)
+    if not prompt:
+        print("Error: empty batch prompt.")
+        return CommandResult.ok()
+    meta = _try_active_draft(mgr)
+    if meta is not None:
+        mgr.set_prompt(meta, prompt)
+        print(f"Batch prompt set on '{meta['name']}'.")
+    else:
+        _pending_batch_prompt["prompt"] = prompt
+        print("Batch prompt set (applies to the next /batch start).")
+    return CommandResult.ok()
+
+
+async def _sc_add(ctx: CommandContext, mgr: BatchManager, rest: str) -> CommandResult:
+    opts, tokens = _parse_args(rest, keys=ADD_OPTS)
+    # /batch add operates on the active draft (or a sealed staged batch so add_items
+    # can informatively instruct how to reopen it with /batch start <name>)
+    meta = _try_active_draft(mgr)
+    if meta is None:
+        candidate = mgr.resolve(None)
+        if candidate is not None and candidate.get("status") == "staged":
+            meta = candidate
+        else:
+            print("Error: no batch specified and no active draft found. "
+                  "Start one with: /batch start <name>")
+            return CommandResult.ok()
+
+    split_mode = opts.get("split", "lines").lower()
+    if split_mode not in ("lines", "paragraphs", "none"):
+        print(f"Invalid split= mode '{split_mode}'. Use lines, paragraphs, or none.")
+        return CommandResult.ok()
+
+    resolved = _resolve_add_source(ctx.app, opts, tokens, meta, split_mode)
+    if resolved is None:
+        return CommandResult.ok()
+    texts, origin, id_prefix = resolved
+
+    added = mgr.add_items(meta, texts, id_prefix=id_prefix,
+                          explicit_id=opts.get("id"), origin=origin)
+    _print_added_summary(meta, added)
+    return CommandResult.ok()
+
+
+async def _sc_items(ctx: CommandContext, mgr: BatchManager, rest: str) -> CommandResult:
+    opts, tokens = _parse_args(rest, keys=ITEMS_OPTS)
+    meta = mgr.resolve(_name_token(rest))
+    offset, limit = parse_paging(opts)
+    items = mgr.list_items(meta, offset=offset, limit=limit)
+    print(f"\n[Staged Items: {meta['name']} ({meta['item_count']} items, "
+          f"status: {meta['status']})]")
+    for i, item in enumerate(items, offset + 1):
+        preview = (item["text"][:40] + "...") if len(item["text"]) > 40 else item["text"]
+        print(f"  #{i}  {item['custom_id']}   \"{preview}\"")
+    if not items:
+        print("  (no items)")
+    print()
+    return CommandResult.ok()
+
+
+async def _sc_ids(ctx: CommandContext, mgr: BatchManager, rest: str) -> CommandResult:
+    opts, tokens = _parse_args(rest, keys=IDS_OPTS)
+    meta = mgr.resolve(_name_token(rest))
+    items = mgr.list_items(meta)
+    ids = [it["custom_id"] for it in items]
+    bound = clean_var_name(opts.get("var"), default="BATCH_ITEM_IDS")
+    ctx.app.buffer_manager.set_script_var(bound, ids, allow_protected=True)
+    print(f"\nItem IDs ({meta['name']}, {len(ids)}):")
+    for i in ids:
+        print(f"  {i}")
+    print(f"(exported to ${{{bound}}})\n")
+    return CommandResult.ok()
+
+
+async def _sc_show(ctx: CommandContext, mgr: BatchManager, rest: str) -> CommandResult:
+    opts, tokens = _parse_args(rest, keys=SHOW_OPTS)
+    if not tokens:
+        print("Usage: /batch show <item-id> [batch-name]  "
+              "(or /batch show <batch-name> for a batch overview)")
+        return CommandResult.ok()
+    first = tokens[0]
+    # Name-only form: batch overview + its item IDs
+    if len(tokens) == 1 and mgr.find_by_name(first) is not None:
+        meta = mgr.resolve(first)
+        _print_batch_status(meta)
+        ids = [it["custom_id"] for it in mgr.list_items(meta)]
+        print(f"Staged item IDs: {', '.join(ids)}" if ids else "No staged items.")
+        print("Inspect one with: /batch show <item-id>")
+        return CommandResult.ok()
+    custom_id = first
+    meta, _consumed = _resolve_item_batch(mgr, custom_id, tokens[1:])
+    if meta is None:
+        active = _try_active_draft(mgr)
+        if active is not None and any(
+                it["custom_id"] == custom_id
+                for it in mgr.list_items(active)):
+            meta = active
+        else:
+            print(f"Error: item '{custom_id}' not found in any batch. "
+                  "List a batch's items with: /batch items <name>")
+            return CommandResult.ok()
+    item = mgr.show_item(meta, custom_id)
+    result = mgr.get_result(meta["batch_id"], custom_id)
+    status_note = (f"   Status: {result['status_code']}"
+                   if result is not None else "")
+    print(f"\nItem: {item['custom_id']}  (batch: {meta['name']})")
+    print(f"Origin: {item.get('origin', 'manual')}   "
+          f"Chars: {len(item['text'])}{status_note}")
+    print("-" * 60)
+    print("[Input]:")
+    print(item["text"])
+    if result is not None:
+        print("-" * 60)
+        if result.get("error"):
+            print("[Error]:")
+            print(result["error"])
+        else:
+            print(f"[Result]:   (status {result['status_code']})")
+            print(result.get("content") or "(empty completion)")
+    elif mgr.read_results(meta["batch_id"]):
+        print("-" * 60)
+        print(f"[Result]: not retrieved for this item "
+              "(no record in results.jsonl).")
+    else:
+        print(f"\n(No results yet — batch status: {meta['status']}. "
+              f"Run '/batch check {meta['name']}' to poll/retrieve.)")
+    print()
+    return CommandResult.ok()
+
+
+async def _sc_edit(ctx: CommandContext, mgr: BatchManager, rest: str) -> CommandResult:
+    opts, tokens = _parse_args(rest, keys=EDIT_OPTS)
+    if not tokens:
+        print("Usage: /batch edit <id> <text | var=NAME | file=PATH> [name]")
+        return CommandResult.ok()
+    custom_id = tokens[0]
+    meta, consumed = _resolve_item_batch(mgr, custom_id, tokens[1:])
+    if meta is None:
+        print(f"Error: item '{custom_id}' not found in any batch. "
+              "List a batch's items with: /batch items <name>")
+        return CommandResult.ok()
+    if "var" in opts:
+        value = _get_var_value(ctx.app, clean_var_name(opts["var"]))
+        new_text = "" if value is None else str(value)
+    elif "file" in opts:
+        with open(os.path.expanduser(opts["file"]), "r", encoding="utf-8") as f:
+            new_text = f.read().strip()
+    else:
+        text_tokens = [t for t in tokens[1:] if t != consumed]
+        new_text = _text_from_tokens(text_tokens)
+    if not new_text:
+        print("Error: empty replacement text.")
+        return CommandResult.ok()
+    mgr.edit_item(meta, custom_id, new_text)
+    print(f"Updated item '{custom_id}' in '{meta['name']}'.")
+    return CommandResult.ok()
+
+
+async def _sc_remove(ctx: CommandContext, mgr: BatchManager, rest: str) -> CommandResult:
+    opts, tokens = _parse_args(rest, keys=SHOW_OPTS)
+    if not tokens:
+        print("Usage: /batch remove <id> [name]")
+        return CommandResult.ok()
+    custom_id = tokens[0]
+    meta, _consumed = _resolve_item_batch(mgr, custom_id, tokens[1:])
+    if meta is None:
+        print(f"Error: item '{custom_id}' not found in any batch. "
+              "List a batch's items with: /batch items <name>")
+        return CommandResult.ok()
+    mgr.remove_item(meta, custom_id)
+    print(f"Removed item '{custom_id}' from '{meta['name']}' "
+          f"({meta['item_count']} items remain).")
+    return CommandResult.ok()
+
+
+async def _sc_clear(ctx: CommandContext, mgr: BatchManager, rest: str) -> CommandResult:
+    meta = mgr.resolve(_name_token(rest))
+    if meta["status"] not in EDITABLE_STATES:
+        print(f"Error: items can only be cleared while in draft "
+              f"(status: {meta['status']}).")
+        return CommandResult.ok()
+    mgr.clear_items(meta["batch_id"])
+    meta["item_count"] = 0
+    mgr._write_meta(meta)
+    print(f"Cleared staged items of '{meta['name']}' (model and prompt kept, "
+          "status: draft).")
+    return CommandResult.ok()
+
+
+async def _sc_dump(ctx: CommandContext, mgr: BatchManager, rest: str) -> CommandResult:
+    opts, tokens = _parse_args(rest, keys=DUMP_OPTS)
+    meta = mgr.resolve(_name_token(rest))
+    payload = mgr.dump_payload(meta)
+    print(f"\nBatch payload for '{meta['name']}':")
+    print(payload)
+    bound = clean_var_name(opts.get("var"), default="BATCH_PAYLOAD")
+    ctx.app.buffer_manager.set_script_var(bound, payload, allow_protected=True)
+    print(f"\n(payload bound to ${{{bound}}})\n")
+    return CommandResult.ok()
+
+
+async def _sc_end(ctx: CommandContext, mgr: BatchManager, rest: str) -> CommandResult:
+    meta = mgr.resolve(_name_token(rest))
+    result = mgr.end(meta)
+    print(f"Sealed batch '{meta['name']}': {result['item_count']} items scanned "
+          "(no security hits), payload compiled to requests.json.")
+    print(f"Status: staged. Submit with /batch run {meta['name']}")
+    return CommandResult.ok()
+
+
+async def _sc_abort(ctx: CommandContext, mgr: BatchManager, rest: str) -> CommandResult:
+    meta = mgr.resolve(_name_token(rest))
+    mgr.abort(meta)
+    print(f"Aborted and deleted batch '{meta['name']}'.")
+    return CommandResult.ok()
+
+
+async def _sc_run(ctx: CommandContext, mgr: BatchManager, rest: str) -> CommandResult:
+    opts, tokens = _parse_args(rest, keys=RUN_OPTS)
+    meta = mgr.resolve(_name_token(rest))
+    if "adopt" in opts:
+        mgr.adopt_orphan(meta, opts["adopt"])
+        print(f"Adopted provider batch {opts['adopt']} into '{meta['name']}' "
+              "(status: submitted). Poll with /batch check.")
+        return CommandResult.ok()
+    batch_model_config = _batch_model_config(ctx.app, meta)
+    provider_obj = _build_provider(ctx.app, meta)
+    batch_cfg = _batch_config(ctx.app)
+    force = _opt_bool(opts, "force")
+
+    items = mgr.list_items(meta)
+    effective_max_tokens = (meta.get("max_tokens")
+                            if meta.get("max_tokens") is not None
+                            else batch_model_config.get("max_tokens"))
+    estimate = mgr.estimate_cost_usd(meta, items,
+                                     effective_max_tokens,
+                                     batch_model_config.get("input_cost_per_mtok"))
+    if estimate is None:
+        print("  Note: cost estimate unavailable (model lacks "
+             "input_cost_per_mtok); budget guard skipped.")
+    else:
+        print(f"  Pre-submit cost estimate: ${estimate:.4f}")
+
+    meta = await mgr.run(
+        meta, provider_obj,
+        force=force,
+        max_cost_usd=float(batch_cfg.get("max_cost_usd", 5.0)),
+        max_open_per_provider=int(batch_cfg.get("max_open_per_provider", 3)),
+        max_tokens=effective_max_tokens,
+        input_cost_per_mtok=batch_model_config.get("input_cost_per_mtok"),
+        precomputed_estimate=estimate,
+    )
+    print(f"Submitted batch '{meta['name']}' to {meta['provider']} "
+          f"(provider id: {meta['provider_id']}, status: {meta['status']}).")
+    print(f"Poll with: /batch check {meta['name']}")
+    return CommandResult.ok()
+
+
+async def _sc_check(ctx: CommandContext, mgr: BatchManager, rest: str) -> CommandResult:
+    opts, tokens = _parse_args(rest, keys=CHECK_OPTS)
+    meta = mgr.resolve(_name_token(rest))
+    results_path = os.path.join(mgr.batches_dir, meta["batch_id"], "results.jsonl")
+    if meta["status"] in TERMINAL_STATES and os.path.exists(results_path):
+        _print_batch_status(meta)
+        print("Results already retrieved (results.jsonl).")
+        return CommandResult.ok()
+    if meta["status"] == "cancelled":
+        print(f"Batch '{meta['name']}' was cancelled locally and is not "
+              "polled anymore. The remote job may still have run to "
+              "completion and billed at batch rates.")
+        return CommandResult.ok()
+    provider_obj = _build_provider(ctx.app, meta)
+    wait = _opt_bool(opts, "wait")
+    meta = await mgr.check(meta, provider_obj, wait=wait)
+    extra = ""
+    if meta.get("results_count"):
+        extra = f"  results: {meta['results_count']} written to results.jsonl"
+        if meta.get("empty_results"):
+            extra += f" ({meta['empty_results']} empty)"
+    if meta.get("cost_usd") is not None:
+        extra += f"  exact cost: ${meta['cost_usd']}"
+    print(f"Batch '{meta['name']}': status={meta['status']}{extra}")
+    return CommandResult.ok()
+
+
+async def _sc_results(ctx: CommandContext, mgr: BatchManager, rest: str) -> CommandResult:
+    opts, tokens = _parse_args(rest, keys=RESULTS_OPTS)
+    meta = mgr.resolve(_name_token(rest))
+    records = mgr.read_results(meta["batch_id"])
+    if not records:
+        print(f"No results retrieved yet for '{meta['name']}' "
+              f"(status: {meta['status']}).")
+        print("Run '/batch check {0}' to poll/retrieve.".format(meta["name"]))
+        return CommandResult.ok()
+    offset, limit = parse_paging(opts)
+    end = len(records) if limit is None else min(offset + limit, len(records))
+    page = records[offset:end]
+
+    bound = clean_var_name(opts.get("var"), default="BATCH_RESULTS")
+    ctx.app.buffer_manager.set_script_var(bound, records, allow_protected=True)
+
+    empty_now = sum(1 for record in records if is_empty_result(record))
+    empty_note = f", {empty_now} empty" if empty_now else ""
+    print(f"\n[Results: {meta['name']} — showing {len(page)} of "
+          f"{len(records)} records{empty_note}, status: {meta['status']}]")
+    for i, record in enumerate(page, offset + 1):
+        print("-" * 60)
+        status = record.get("status_code", "?")
+        print(f"#{i}  {record.get('custom_id')}   [{status}]")
+        if record.get("error"):
+            print(f"[Error]: {record['error']}")
+        else:
+            print(record.get("content") or "(empty completion)")
+    print("-" * 60)
+    print(f"(all {len(records)} records exported to ${{{bound}}})\n")
+    return CommandResult.ok()
+
+
+async def _sc_cancel(ctx: CommandContext, mgr: BatchManager, rest: str) -> CommandResult:
+    opts, tokens = _parse_args(rest, keys=CANCEL_OPTS)
+    meta = mgr.resolve(_name_token(rest))
+    provider_obj = _build_provider(ctx.app, meta) if meta.get("provider_id") else None
+    force = _opt_bool(opts, "force")
+    meta = await mgr.cancel(meta, provider_obj, force=force)
+    print(f"Cancelled batch '{meta['name']}' (status: {meta['status']}).")
+    return CommandResult.ok()
+
+
+async def _sc_retry(ctx: CommandContext, mgr: BatchManager, rest: str) -> CommandResult:
+    print("'/batch retry' is scheduled for Phase 3 (new batch from failed/"
+          "invalid items). For now, extract failed items from results.jsonl "
+          "and stage a new batch with /batch start.")
+    return CommandResult.ok()
+
+
+async def _sc_list(ctx: CommandContext, mgr: BatchManager, rest: str) -> CommandResult:
+    return await cmd_batchlist(ctx, ["/batchlist", *rest.split()],
+                               "/batchlist " + rest)
+
+
+_SUBCOMMAND_DISPATCH = {
+    "status": _sc_status,
+    "": _sc_status,
+    "start": _sc_start,
+    "clone": _sc_clone,
+    "prompt": _sc_prompt,
+    "add": _sc_add,
+    "items": _sc_items,
+    "ids": _sc_ids,
+    "show": _sc_show,
+    "edit": _sc_edit,
+    "remove": _sc_remove,
+    "del": _sc_remove,
+    "delete": _sc_remove,
+    "clear": _sc_clear,
+    "reset": _sc_clear,
+    "dump": _sc_dump,
+    "end": _sc_end,
+    "abort": _sc_abort,
+    "run": _sc_run,
+    "check": _sc_check,
+    "results": _sc_results,
+    "cancel": _sc_cancel,
+    "retry": _sc_retry,
+    "list": _sc_list,
+}
+
 
 @command("/batch", help="Batch API jobs: stage, seal, submit, poll, retrieve",
          args="<status|start|clone|prompt|add|items|ids|show|edit|remove|clear|dump|end|abort|run|check|results|retry|list|cancel> [name] [key=value ...]",
@@ -456,530 +978,15 @@ async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandRe
     subcmd = (parts[1].lower() if len(parts) > 1 else "status")
     rest = rest_all[2] if len(rest_all) > 2 else ""
 
+    handler = _SUBCOMMAND_DISPATCH.get(subcmd)
+    if not handler:
+        print(f"Unknown batch subcommand: {subcmd}. Use start, clone, prompt, add, items, "
+              "ids, show, edit, remove, clear, dump, end, abort, run, check, "
+              "results, retry, list, cancel, or status.")
+        return CommandResult.ok()
+
     try:
-        # ---- status (default) -------------------------------------------
-        if subcmd in ("status", ""):
-            target = _name_token(rest)
-            meta = mgr.resolve(target) if target else _try_active_draft(mgr)
-            if meta is None:
-                print("No batch draft open. Start one with: /batch start <name>")
-                print("Catalog: /batchlist")
-            else:
-                _print_batch_status(meta)
-            return CommandResult.ok()
-
-        # ---- start ------------------------------------------------------
-        elif subcmd == "start":
-            opts, tokens = _parse_args(rest, keys=START_OPTS)
-            if not tokens:
-                print("Usage: /batch start <name> [model=<alias>] [temp=<float>] "
-                      "[max_tokens=<int>] [top_p=<float>] [clear=true]")
-                return CommandResult.ok()
-            name = tokens[0]
-
-            if "model" in opts:
-                req_alias = opts["model"].strip()
-                model_config = _resolve_batch_alias(app, req_alias)
-                if model_config is None:
-                    return CommandResult.ok()
-                model_alias = req_alias
-            else:
-                model_alias, model_config = _require_batch_model(app)
-
-            # Model-config sampling defaults apply only at CREATION; a
-            # plain reopen keeps the batch's existing sampling, and only
-            # explicit options on this command line update it.
-            will_reopen = mgr.find_by_name(name) is not None
-            sampling = _extract_sampling_params(
-                opts, None if will_reopen else model_config)
-            prompt = _pending_batch_prompt.get("prompt")
-            meta = mgr.start(name, model_alias=model_alias,
-                             model_name=model_config.get("name", model_alias),
-                             provider=(model_config.get("vendor") or "openrouter").lower(),
-                             prompt=prompt,
-                             clear=_opt_bool(opts, "clear"),
-                             **sampling)
-            print(f"Opened batch draft '{meta['name']}' (ID: {meta['batch_id']}, "
-                  f"model: {model_alias})")
-            if meta.get("prompt"):
-                print(f"  Batch prompt set: \"{_preview(meta['prompt'], 60)}\"")
-            if meta.get("temperature") is not None:
-                print(f"  Temperature: {meta['temperature']}")
-            if _opt_bool(opts, "clear"):
-                print("  Staged items cleared.")
-            print("  Add items with /batch add, then seal with /batch end.")
-            return CommandResult.ok()
-
-        # ---- clone ------------------------------------------------------
-        elif subcmd == "clone":
-            opts, tokens = _parse_args(rest, keys=CLONE_OPTS)
-            if len(tokens) < 2:
-                print("Usage: /batch clone <source_batch> <new_name> "
-                      '[prompt="..."] [model=<alias>] [temp=<float>] [force=true]')
-                return CommandResult.ok()
-            source_target = tokens[0]
-            new_name = tokens[1]
-
-            model_alias = None
-            model_name = None
-            provider = None
-            m_cfg = None
-            if "model" in opts:
-                req_alias = opts["model"].strip()
-                m_cfg = _resolve_batch_alias(app, req_alias)
-                if m_cfg is None:
-                    return CommandResult.ok()
-                model_alias = req_alias
-                model_name = m_cfg.get("name", req_alias)
-                provider = (m_cfg.get("vendor") or "openrouter").lower()
-
-            prompt = None
-            if "prompt" in opts:
-                p_raw = opts["prompt"].strip()
-                prompt = BUILTIN_PROMPTS.get(p_raw.lower(), p_raw)
-
-            sampling = _extract_sampling_params(opts, m_cfg)
-            new_meta = mgr.clone(
-                source_target,
-                new_name,
-                prompt=prompt,
-                model_alias=model_alias,
-                model_name=model_name,
-                provider=provider,
-                force=_opt_bool(opts, "force"),
-                **sampling,
-            )
-            print(f"Cloned batch '{source_target}' -> '{new_meta['name']}' "
-                  f"(ID: {new_meta['batch_id']}, items: {new_meta['item_count']}, "
-                  f"model: {new_meta['model_alias']}, status: draft)")
-            if new_meta.get("prompt"):
-                print(f"  Batch prompt: \"{_preview(new_meta['prompt'], 60)}\"")
-            if new_meta.get("temperature") is not None:
-                print(f"  Temperature: {new_meta['temperature']}")
-            print("  Edit items with /batch edit, delete with /batch remove, "
-                  "add with /batch add, then seal with /batch end.")
-            return CommandResult.ok()
-
-        # ---- prompt ------------------------------------------------------
-        elif subcmd == "prompt":
-            if not rest.strip():
-                meta = _try_active_draft(mgr)
-                current = (meta or {}).get("prompt") or _pending_batch_prompt.get("prompt")
-                print(f"Batch prompt: {current!r}" if current
-                      else "No batch prompt set. Usage: /batch prompt \"<text>\" | "
-                           "<template> | file=<path>")
-                return CommandResult.ok()
-            opts, tokens = _parse_args(rest, keys=PROMPT_OPTS)
-            if "file" in opts:
-                path = os.path.expanduser(opts["file"])
-                if not os.path.isfile(path):
-                    print(f"Error: prompt file not found: {path}")
-                    return CommandResult.ok()
-                with open(path, "r", encoding="utf-8") as f:
-                    prompt = f.read().strip()
-            else:
-                text = _text_from_tokens(tokens)
-                prompt = BUILTIN_PROMPTS.get(text.strip().lower(), text)
-            if not prompt:
-                print("Error: empty batch prompt.")
-                return CommandResult.ok()
-            meta = _try_active_draft(mgr)
-            if meta is not None:
-                mgr.set_prompt(meta, prompt)
-                print(f"Batch prompt set on '{meta['name']}'.")
-            else:
-                _pending_batch_prompt["prompt"] = prompt
-                print("Batch prompt set (applies to the next /batch start).")
-            return CommandResult.ok()
-
-        # ---- add ----------------------------------------------------------
-        elif subcmd == "add":
-            opts, tokens = _parse_args(rest, keys=ADD_OPTS)
-            # /batch add always operates on the active draft (proposal §4.3
-            # has no name argument for add). Guessing a leading batch name
-            # from the first token would corrupt text that happens to start
-            # with a word matching an existing batch name.
-            meta = mgr.resolve(None)
-            if meta is None:
-                print("Error: no batch specified and no active draft found. "
-                      "Start one with: /batch start <name>")
-                return CommandResult.ok()
-
-            split_mode = opts.get("split", "lines").lower()
-            if split_mode not in ("lines", "paragraphs", "none"):
-                print(f"Invalid split= mode '{split_mode}'. Use lines, paragraphs, or none.")
-                return CommandResult.ok()
-            explicit_id = opts.get("id")
-            id_prefix = f"{sanitize_batch_name(meta['name'])}_"
-            origin = "manual"
-
-            if "filebank" in opts:
-                bank_name = f"filebank{opts['filebank']}"
-                content = app.buffer_manager.file_banks.get(bank_name, "")
-                if not content:
-                    print(f"Error: {bank_name} is empty. "
-                          f"Load it first: /filebank{opts['filebank']} <path>")
-                    return CommandResult.ok()
-                origin = bank_name
-                id_prefix = _id_prefix_for_source("filebank", f"fb{opts['filebank']}", split_mode)
-                texts = _split_for_add(content, split_mode)
-            elif "var" in opts:
-                var_name = opts["var"].strip().lstrip("$")
-                value = _get_var_value(app, var_name)
-                if value is None:
-                    print(f"Error: script variable '{var_name}' is not set.")
-                    return CommandResult.ok()
-                origin = f"var:{var_name}"
-                id_prefix = _id_prefix_for_source("var", var_name, split_mode)
-                if isinstance(value, (list, tuple)):
-                    texts = [str(v) for v in value]
-                else:
-                    texts = _split_for_add(str(value), split_mode)
-            elif "file" in opts:
-                path = os.path.expanduser(opts["file"])
-                if not os.path.isfile(path):
-                    print(f"Error: file not found: {path}")
-                    return CommandResult.ok()
-                with open(path, "r", encoding="utf-8") as f:
-                    content = f.read()
-                stem = os.path.splitext(os.path.basename(path))[0]
-                origin = f"file:{path}"
-                id_prefix = _id_prefix_for_source("file", stem, split_mode)
-                texts = _split_for_add(content, split_mode)
-            else:
-                text = _text_from_tokens(tokens)
-                if not text:
-                    print("Usage: /batch add <text | filebank=N | var=NAME | file=PATH> "
-                          "[id=<id>] [split=lines|paragraphs]")
-                    return CommandResult.ok()
-                texts = [text]
-            if not texts:
-                print("Error: no items to add (source was empty after splitting).")
-                return CommandResult.ok()
-            added = mgr.add_items(meta, texts, id_prefix=id_prefix,
-                                  explicit_id=explicit_id, origin=origin)
-            print(f"Added {len(added)} item(s) to '{meta['name']}' "
-                  f"({meta['item_count']} total):")
-            for item in added[:5]:
-                preview = (item["text"][:40] + "...") if len(item["text"]) > 40 else item["text"]
-                print(f"  {item['custom_id']}: \"{preview}\"")
-            if len(added) > 5:
-                print(f"  ... and {len(added) - 5} more (list with /batch items)")
-            return CommandResult.ok()
-
-        # ---- items ---------------------------------------------------------
-        elif subcmd == "items":
-            opts, tokens = _parse_args(rest, keys=ITEMS_OPTS)
-            meta = mgr.resolve(_name_token(rest))
-            offset, limit = _parse_paging(opts)
-            items = mgr.list_items(meta, offset=offset, limit=limit)
-            print(f"\n[Staged Items: {meta['name']} ({meta['item_count']} items, "
-                  f"status: {meta['status']})]")
-            for i, item in enumerate(items, offset + 1):
-                preview = (item["text"][:40] + "...") if len(item["text"]) > 40 else item["text"]
-                print(f"  #{i}  {item['custom_id']}   \"{preview}\"")
-            if not items:
-                print("  (no items)")
-            print()
-            return CommandResult.ok()
-
-        # ---- ids ------------------------------------------------------------
-        elif subcmd == "ids":
-            opts, tokens = _parse_args(rest, keys=IDS_OPTS)
-            meta = mgr.resolve(_name_token(rest))
-            items = mgr.list_items(meta)
-            ids = [it["custom_id"] for it in items]
-            target = opts.get("var")
-            bound = (target or "BATCH_ITEM_IDS").strip().lstrip("$")
-            app.buffer_manager.set_script_var(bound, ids, allow_protected=True)
-            print(f"\nItem IDs ({meta['name']}, {len(ids)}):")
-            for i in ids:
-                print(f"  {i}")
-            print(f"(exported to ${{{bound}}})\n")
-            return CommandResult.ok()
-
-        # ---- show -------------------------------------------------------------
-        elif subcmd == "show":
-            opts, tokens = _parse_args(rest, keys=SHOW_OPTS)
-            if not tokens:
-                print("Usage: /batch show <item-id> [batch-name]  "
-                      "(or /batch show <batch-name> for a batch overview)")
-                return CommandResult.ok()
-            first = tokens[0]
-            # Name-only form: batch overview + its item IDs
-            if len(tokens) == 1 and mgr.find_by_name(first) is not None:
-                meta = mgr.resolve(first)
-                _print_batch_status(meta)
-                ids = [it["custom_id"] for it in mgr.list_items(meta)]
-                print(f"Staged item IDs: {', '.join(ids)}" if ids
-                      else "No staged items.")
-                print("Inspect one with: /batch show <item-id>")
-                return CommandResult.ok()
-            custom_id = first
-            meta, _consumed = _resolve_item_batch(mgr, custom_id, tokens[1:])
-            if meta is None:
-                active = _try_active_draft(mgr)
-                if active is not None and any(
-                        it["custom_id"] == custom_id
-                        for it in mgr.list_items(active)):
-                    meta = active
-                else:
-                    print(f"Error: item '{custom_id}' not found in any batch. "
-                          "List a batch's items with: /batch items <name>")
-                    return CommandResult.ok()
-            item = mgr.show_item(meta, custom_id)
-            result = mgr.get_result(meta["batch_id"], custom_id)
-            status_note = (f"   Status: {result['status_code']}"
-                           if result is not None else "")
-            print(f"\nItem: {item['custom_id']}  (batch: {meta['name']})")
-            print(f"Origin: {item.get('origin', 'manual')}   "
-                  f"Chars: {len(item['text'])}{status_note}")
-            print("-" * 60)
-            print("[Input]:")
-            print(item["text"])
-            if result is not None:
-                print("-" * 60)
-                if result.get("error"):
-                    print("[Error]:")
-                    print(result["error"])
-                else:
-                    print(f"[Result]:   (status {result['status_code']})")
-                    print(result.get("content") or "(empty completion)")
-            elif mgr.read_results(meta["batch_id"]):
-                print("-" * 60)
-                print(f"[Result]: not retrieved for this item "
-                      "(no record in results.jsonl).")
-            else:
-                print(f"\n(No results yet — batch status: {meta['status']}. "
-                      f"Run '/batch check {meta['name']}' to poll/retrieve.)")
-            print()
-            return CommandResult.ok()
-
-        # ---- edit ----------------------------------------------------------
-        elif subcmd == "edit":
-            opts, tokens = _parse_args(rest, keys=EDIT_OPTS)
-            if not tokens:
-                print("Usage: /batch edit <id> <text | var=NAME | file=PATH> [name]")
-                return CommandResult.ok()
-            custom_id = tokens[0]
-            meta, consumed = _resolve_item_batch(mgr, custom_id, tokens[1:])
-            if meta is None:
-                print(f"Error: item '{custom_id}' not found in any batch. "
-                      "List a batch's items with: /batch items <name>")
-                return CommandResult.ok()
-            if "var" in opts:
-                value = _get_var_value(app, opts["var"].strip().lstrip("$"))
-                new_text = "" if value is None else str(value)
-            elif "file" in opts:
-                with open(os.path.expanduser(opts["file"]), "r", encoding="utf-8") as f:
-                    new_text = f.read().strip()
-            else:
-                text_tokens = [t for t in tokens[1:] if t != consumed]
-                new_text = _text_from_tokens(text_tokens)
-            if not new_text:
-                print("Error: empty replacement text.")
-                return CommandResult.ok()
-            mgr.edit_item(meta, custom_id, new_text)
-            print(f"Updated item '{custom_id}' in '{meta['name']}'.")
-            return CommandResult.ok()
-
-        # ---- remove / del ----------------------------------------------------
-        elif subcmd in ("remove", "del", "delete"):
-            opts, tokens = _parse_args(rest, keys=SHOW_OPTS)
-            if not tokens:
-                print("Usage: /batch remove <id> [name]")
-                return CommandResult.ok()
-            custom_id = tokens[0]
-            meta, _consumed = _resolve_item_batch(mgr, custom_id, tokens[1:])
-            if meta is None:
-                print(f"Error: item '{custom_id}' not found in any batch. "
-                      "List a batch's items with: /batch items <name>")
-                return CommandResult.ok()
-            mgr.remove_item(meta, custom_id)
-            print(f"Removed item '{custom_id}' from '{meta['name']}' "
-                  f"({meta['item_count']} items remain).")
-            return CommandResult.ok()
-
-        # ---- clear / reset -----------------------------------------------------
-        elif subcmd in ("clear", "reset"):
-            meta = mgr.resolve(_name_token(rest))
-            if meta["status"] not in EDITABLE_STATES:
-                print(f"Error: items can only be cleared while in draft "
-                      f"(status: {meta['status']}).")
-                return CommandResult.ok()
-            mgr.clear_items(meta["batch_id"])
-            meta["item_count"] = 0
-            mgr._write_meta(meta)
-            print(f"Cleared staged items of '{meta['name']}' (model and prompt kept, "
-                  "status: draft).")
-            return CommandResult.ok()
-
-        # ---- dump ----------------------------------------------------------------
-        elif subcmd == "dump":
-            opts, tokens = _parse_args(rest, keys=DUMP_OPTS)
-            meta = mgr.resolve(_name_token(rest))
-            payload = mgr.dump_payload(meta)
-            print(f"\nBatch payload for '{meta['name']}':")
-            print(payload)
-            bound = opts.get("var", "BATCH_PAYLOAD").strip().lstrip("$")
-            app.buffer_manager.set_script_var(bound, payload, allow_protected=True)
-            print(f"\n(payload bound to ${{{bound}}})\n")
-            return CommandResult.ok()
-
-        # ---- end -------------------------------------------------------------------
-        elif subcmd == "end":
-            meta = mgr.resolve(_name_token(rest))
-            result = mgr.end(meta)
-            print(f"Sealed batch '{meta['name']}': {result['item_count']} items scanned "
-                  "(no security hits), payload compiled to requests.json.")
-            print(f"Status: staged. Submit with /batch run {meta['name']}")
-            return CommandResult.ok()
-
-        # ---- abort --------------------------------------------------------------------
-        elif subcmd == "abort":
-            meta = mgr.resolve(_name_token(rest))
-            mgr.abort(meta)
-            print(f"Aborted and deleted batch '{meta['name']}'.")
-            return CommandResult.ok()
-
-        # ---- run ------------------------------------------------------------------------
-        elif subcmd == "run":
-            opts, tokens = _parse_args(rest, keys=RUN_OPTS)
-            meta = mgr.resolve(_name_token(rest))
-            if "adopt" in opts:
-                mgr.adopt_orphan(meta, opts["adopt"])
-                print(f"Adopted provider batch {opts['adopt']} into '{meta['name']}' "
-                      "(status: submitted). Poll with /batch check.")
-                return CommandResult.ok()
-            # Validate and price against the BATCH's model (meta), not the
-            # active interactive model — /batch run must work after the user
-            # switched their chat model back to a non-batch alias.
-            batch_model_config = _batch_model_config(app, meta)
-            provider_obj = _build_provider(app, meta)
-            batch_cfg = _batch_config(app)
-            force = _opt_bool(opts, "force")
-
-            items = mgr.list_items(meta)
-            # The batch's own max_tokens (set at start/clone) governs the
-            # actual per-request payload — the estimate and budget guard use
-            # it, falling back to the model config's value.
-            effective_max_tokens = (meta.get("max_tokens")
-                                    if meta.get("max_tokens") is not None
-                                    else batch_model_config.get("max_tokens"))
-            estimate = mgr.estimate_cost_usd(meta, items,
-                                             effective_max_tokens,
-                                             batch_model_config.get("input_cost_per_mtok"))
-            if estimate is None:
-                print("  Note: cost estimate unavailable (model lacks "
-                     "input_cost_per_mtok); budget guard skipped.")
-            else:
-                print(f"  Pre-submit cost estimate: ${estimate:.4f}")
-
-            meta = await mgr.run(
-                meta, provider_obj,
-                force=force,
-                max_cost_usd=float(batch_cfg.get("max_cost_usd", 5.0)),
-                max_open_per_provider=int(batch_cfg.get("max_open_per_provider", 3)),
-                max_tokens=effective_max_tokens,
-                input_cost_per_mtok=batch_model_config.get("input_cost_per_mtok"),
-                precomputed_estimate=estimate,
-            )
-            print(f"Submitted batch '{meta['name']}' to {meta['provider']} "
-                  f"(provider id: {meta['provider_id']}, status: {meta['status']}).")
-            print(f"Poll with: /batch check {meta['name']}")
-            return CommandResult.ok()
-
-        # ---- check ----------------------------------------------------------------------
-        elif subcmd == "check":
-            opts, tokens = _parse_args(rest, keys=CHECK_OPTS)
-            meta = mgr.resolve(_name_token(rest))
-            results_path = os.path.join(mgr.batches_dir, meta["batch_id"], "results.jsonl")
-            if meta["status"] in TERMINAL_STATES and os.path.exists(results_path):
-                _print_batch_status(meta)
-                print("Results already retrieved (results.jsonl).")
-                return CommandResult.ok()
-            if meta["status"] == "cancelled":
-                print(f"Batch '{meta['name']}' was cancelled locally and is not "
-                      "polled anymore. The remote job may still have run to "
-                      "completion and billed at batch rates.")
-                return CommandResult.ok()
-            provider_obj = _build_provider(app, meta)
-            wait = _opt_bool(opts, "wait")
-            meta = await mgr.check(meta, provider_obj, wait=wait)
-            extra = ""
-            if meta.get("results_count"):
-                extra = f"  results: {meta['results_count']} written to results.jsonl"
-                if meta.get("empty_results"):
-                    extra += f" ({meta['empty_results']} empty)"
-            if meta.get("cost_usd") is not None:
-                extra += f"  exact cost: ${meta['cost_usd']}"
-            print(f"Batch '{meta['name']}': status={meta['status']}{extra}")
-            return CommandResult.ok()
-
-        # ---- results ---------------------------------------------------------------------
-        elif subcmd == "results":
-            opts, tokens = _parse_args(rest, keys=RESULTS_OPTS)
-            meta = mgr.resolve(_name_token(rest))
-            records = mgr.read_results(meta["batch_id"])
-            if not records:
-                print(f"No results retrieved yet for '{meta['name']}' "
-                      f"(status: {meta['status']}).")
-                print("Run '/batch check {0}' to poll/retrieve.".format(meta["name"]))
-                return CommandResult.ok()
-            offset, limit = _parse_paging(opts)
-            end = len(records) if limit is None else min(offset + limit, len(records))
-            page = records[offset:end]
-
-            bound = opts.get("var", "BATCH_RESULTS").strip().lstrip("$")
-            # The variable carries the FULL record list (pagination is
-            # display-only), each record: custom_id, status_code, content, error
-            app.buffer_manager.set_script_var(bound, records, allow_protected=True)
-
-            empty_now = sum(1 for record in records if is_empty_result(record))
-            empty_note = f", {empty_now} empty" if empty_now else ""
-            print(f"\n[Results: {meta['name']} — showing {len(page)} of "
-                  f"{len(records)} records{empty_note}, status: {meta['status']}]")
-            for i, record in enumerate(page, offset + 1):
-                print("-" * 60)
-                status = record.get("status_code", "?")
-                print(f"#{i}  {record.get('custom_id')}   [{status}]")
-                if record.get("error"):
-                    print(f"[Error]: {record['error']}")
-                else:
-                    print(record.get("content") or "(empty completion)")
-            print("-" * 60)
-            print(f"(all {len(records)} records exported to ${{{bound}}})\n")
-            return CommandResult.ok()
-
-        # ---- cancel ------------------------------------------------------------------------
-        elif subcmd == "cancel":
-            opts, tokens = _parse_args(rest, keys=CANCEL_OPTS)
-            meta = mgr.resolve(_name_token(rest))
-            provider_obj = _build_provider(app, meta) if meta.get("provider_id") else None
-            force = _opt_bool(opts, "force")
-            meta = await mgr.cancel(meta, provider_obj, force=force)
-            print(f"Cancelled batch '{meta['name']}' (status: {meta['status']}).")
-            return CommandResult.ok()
-
-        # ---- retry (Phase 3) -------------------------------------------------------------------
-        elif subcmd == "retry":
-            print("'/batch retry' is scheduled for Phase 3 (new batch from failed/"
-                  "invalid items). For now, extract failed items from results.jsonl "
-                  "and stage a new batch with /batch start.")
-            return CommandResult.ok()
-
-        # ---- list (alias for /batchlist) ---------------------------------------------------------
-        elif subcmd == "list":
-            rest_str = command.split(maxsplit=2)[2] if len(command.split(maxsplit=2)) > 2 else ""
-            return await cmd_batchlist(ctx, ["/batchlist", *rest_str.split()],
-                                       "/batchlist " + rest_str)
-
-        else:
-            print(f"Unknown batch subcommand: {subcmd}. Use start, clone, prompt, add, items, "
-                  "ids, show, edit, remove, clear, dump, end, abort, run, check, "
-                  "results, retry, list, cancel, or status.")
-            return CommandResult.ok()
-
+        return await handler(ctx, mgr, rest)
     except BatchError as e:
         if str(e) == "batch model required":
             return CommandResult.ok()  # capability message already printed
@@ -1017,19 +1024,19 @@ async def cmd_batchlist(ctx: CommandContext, parts: list, command: str) -> Comma
         elif param in ("here", "here=true"):
             here_only = True
         elif param.startswith("limit="):
-            _, limit = _parse_paging({"limit": arg[6:]}, default_limit=limit)
+            _, limit = parse_paging({"limit": arg[6:]}, default_limit=limit)
         elif param.startswith("range="):
-            offset, limit = _parse_paging({"range": arg[6:]}, default_limit=limit)
+            offset, limit = parse_paging({"range": arg[6:]}, default_limit=limit)
         elif param.startswith("model="):
             model_filter = param[6:].lower()
         elif param.startswith("status="):
             status_filter = param[7:].lower()
         elif param.startswith("var="):
-            target_var = arg[4:].strip().lstrip("$")
+            target_var = clean_var_name(arg[4:])
         elif param.startswith("target="):
-            target_var = arg[7:].strip().lstrip("$")
+            target_var = clean_var_name(arg[7:])
         elif param.startswith("since="):
-            since_dt = _parse_since(arg[6:])
+            since_dt = parse_since(arg[6:])
 
     records = mgr.list_index()
 

@@ -9,6 +9,7 @@ import re
 from datetime import datetime
 
 from chatybot.commands.context import CommandContext
+from chatybot.commands.paging import clean_var_name, parse_paging, parse_since
 from chatybot.commands.registry import CommandResult, command
 from chatybot.commands.replay import handle_replay_command
 
@@ -198,46 +199,17 @@ async def cmd_session(ctx: CommandContext, parts: list, command: str) -> Command
             elif param in ("uncompressed", "status=uncompressed"):
                 compressed_filter = False
             elif param.startswith("limit="):
-                try:
-                    limit = int(param[6:])
-                except ValueError:
-                    print("Invalid limit value. Using default limit of 10.")
+                _, limit = parse_paging({"limit": arg[6:]}, default_limit=limit)
             elif param.startswith("range="):
-                try:
-                    range_raw = param[6:]
-                    if ":" in range_raw:
-                        r_start, r_end = range_raw.split(":", 1)
-                        offset = int(r_start) if r_start != "" else 0
-                        limit = (int(r_end) - offset) if r_end != "" else None
-                    else:
-                        offset = int(range_raw)
-                except ValueError:
-                    print("Invalid range format. Use range=start:end, range=:end, or range=start:. Using default limit of 10.")
+                offset, limit = parse_paging({"range": arg[6:]}, default_limit=limit)
             elif param.startswith("model="):
                 model_filter = param[6:].lower()
             elif param.startswith("var="):
-                target_var = arg[4:].strip().lstrip("$")
+                target_var = clean_var_name(arg[4:])
             elif param.startswith("target="):
-                target_var = arg[7:].strip().lstrip("$")
+                target_var = clean_var_name(arg[7:])
             elif param.startswith("since="):
-                raw = param[6:]
-                try:
-                    if raw.endswith("d"):
-                        from datetime import timedelta
-                        delta = timedelta(days=float(raw[:-1]))
-                    elif raw.endswith("h"):
-                        from datetime import timedelta
-                        delta = timedelta(hours=float(raw[:-1]))
-                    elif raw.endswith("m"):
-                        from datetime import timedelta
-                        delta = timedelta(minutes=float(raw[:-1]))
-                    else:
-                        print(f"Invalid since= unit '{raw}'. Use d (days), h (hours), or m (minutes). E.g. since=7d")
-                        delta = None
-                    if delta is not None:
-                        since_dt = datetime.now() - delta
-                except ValueError:
-                    print(f"Invalid since= value '{raw}'. Use numeric values like since=7d, since=24h, since=30m")
+                since_dt = parse_since(arg[6:])
 
         store = app._get_session_store()
         parsed_sessions = store.list_sessions(
