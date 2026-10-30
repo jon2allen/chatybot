@@ -775,6 +775,10 @@ class BatchManager:
         if meta["status"] in TERMINAL_STATES:
             raise BatchError(f"Batch '{meta['name']}' already reached terminal state "
                              f"({meta['status']}); nothing to abort.")
+        if meta["status"] == STATUS_SUBMITTING:
+            print(f"Warning: Batch '{meta['name']}' was in 'submitting' state. "
+                  "A remote batch may still exist and bill — check /batchlist or "
+                  f"adopt with '/batch run {meta['name']} adopt=<id>' before aborting.")
         import shutil
         shutil.rmtree(self._instance_dir(meta["batch_id"]), ignore_errors=True)
         # Catalog prune: rewrite the index without this batch_id
