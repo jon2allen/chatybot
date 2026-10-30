@@ -271,6 +271,14 @@ class Collector(ast.NodeVisitor):
                 self._collect_reference(val)
         self.generic_visit(node)
 
+    def visit_Dict(self, node: ast.Dict) -> None:
+        # dispatch tables / registries: `ACTIONS = {"start": _sc_start}` —
+        # the dict VALUES are references (the functions are reachable via
+        # the table). Keys are strings/None, skip them.
+        for value in node.values:
+            self._collect_reference(value)
+        self.generic_visit(node)
+
 
 def iter_py_files(paths: list[str], excludes: list[str], include_tests: bool,
                    test_ref_only: bool = False):
