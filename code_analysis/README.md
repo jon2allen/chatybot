@@ -29,7 +29,9 @@ To reduce false positives, the analyzer treats a function as alive if any of the
 
 These remain inherent limitations of static AST analysis:
 
-- **String-based dispatch** — `getattr(obj, "method_name")` or `registry["name"]` lookups
+- **String-based dispatch** — `getattr(obj, "method_name")` lookups. Dict-literal
+  registration tables (`ACTIONS = {"start": _sc_start}`) ARE detected: dict values
+  are collected as references.
 - **`__all__` exports** — functions exported in `__all__` for external consumers are not whitelisted
 - **Cross-project callers** — if chatybot is imported as a library by external code
 
