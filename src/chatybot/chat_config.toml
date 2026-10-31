@@ -13,6 +13,27 @@ default_size = "1024x1024"
 default_quality = "standard"
 
 # ============================================================================
+# BATCH API SETTINGS
+# ============================================================================
+# Asynchronous provider Batch API jobs (/batch start → add → end → run → check).
+# Bulk inference is submitted, polled, and retrieved out-of-band at a 50%
+# discount off standard token rates. Storage lives under ~/.local/share/chatybot/batches/,
+# fully decoupled from session history.
+
+[batch]
+# Batch-capable model alias used when the active model is not batch-capable
+# default_model = "gptoss_batch"
+
+# Pre-submit cost estimate ceiling; /batch run refuses above it unless force=true
+max_cost_usd = 5.00
+
+# Maximum simultaneously open (submitting/submitted/in_progress) batches per provider
+max_open_per_provider = 3
+
+# Phase 2 (Mistral Files API): keep uploaded input/output files on the provider
+keep_remote_files = false
+
+# ============================================================================
 # DEFAULT SETTINGS (optional)
 # ============================================================================
 # To pin a specific model as the default regardless of where it appears
@@ -296,3 +317,22 @@ type = "apple_fm"
 name = "Apple Foundation Model"
 context_limit = 4096
 temperature = 0.7
+
+# ============================================================================
+# BATCH API MODELS
+# ============================================================================
+# Asynchronous bulk inference via the provider Batch API (/batch commands).
+# NOTE: batch models are intentionally placed at the end of this file — the
+# first [models.*] entry becomes the default active model, and batch-only
+# models disable interactive chat while selected (mode semantics mirror
+# image-generation models).
+
+# OpenRouter batch model. The ":batch" suffix on the model name is required
+# by OpenRouter (validated live in mistral-batch-poc/run_batch_openrouter.py).
+[models.gptoss_batch]
+name = "openai/gpt-oss-120b:batch"
+temperature = 0.3
+base_url = "https://openrouter.ai/api/v1"
+api_key = "OPENROUTER_API_KEY"
+batch = true
+vendor = "openrouter"

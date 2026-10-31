@@ -20,4 +20,5 @@ from chatybot.commands import (
     session,  # noqa: F401  (registers /session)
     skills,  # noqa: F401  (registers /skill)
     tools,  # noqa: F401  (registers /run, /run_safe, /run_unsafe, /tool)
+    batch,  # noqa: F401  (registers /batch, /batchlist — Batch API subsystem)
 )

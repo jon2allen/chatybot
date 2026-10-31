@@ -51,7 +51,7 @@ async def cmd_proc(ctx: CommandContext, parts: list, command: str) -> CommandRes
             proc_name,
             f"{proc_name}.chatdsl",
             os.path.join("procs", f"{proc_name}.chatdsl"),
-            os.path.expanduser(os.path.join("~/.chatybot/procs", f"{proc_name}.chatdsl"))
+            os.path.expanduser(os.path.join("~/.config/chatybot/procs", f"{proc_name}.chatdsl"))
         ]
         found_path = None
         for path in search_paths:
