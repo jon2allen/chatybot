@@ -1,5 +1,27 @@
 # Design Options: Advanced Logging and Internationalization (i18n) Printer
 
+**Document Version:** 1.1
+**Date:** July 23, 2026 (date of the last commit touching this file: `d6d3db1`, 2026-07-23 11:38 -0400)
+**Status:** Superseded — early design-options exploration for the i18n print/logging mechanism. Option 1 evolved into `international_idea.md` and shipped as `LocalizationManager.print` (without its unified file logging); Option 3's interception mechanism later became `LoggingManager`'s pyio-intercept logging, minus translation; Option 2 (native logging with plain formatter) was never implemented and never revisited. Retained as the historical trade analysis; no live design items. See Option Absorption Map below
+**Applies To:** Historical precursor to `src/chatybot/localization.py` (`LocalizationManager.print`) and `src/chatybot/logging_manager.py` (pyio-intercept); superseded by `international_idea.md` (status: Implemented with deviations)
+
+---
+
+## Option Absorption Map (as-built, 2026-10-31)
+
+| Option | Fate in the implementation |
+|--------|---------------------------|
+| **1. Unified `ConsolePrinter` wrapper** | **Partially absorbed.** The key-based translation half shipped as `LocalizationManager.print` (`get_ui_string` + template `format(**kwargs)`), driven by `translations.json` instead of the in-class dict sketched here. The unified background `FileHandler` logging half was dropped — logging went to a separate `LoggingManager` (see Option 3). The "requires refactoring all `print()` calls" con proved true and is the reason many print sites still bypass localization today. |
+| **2. Native `logging` with `PlainConsoleFormatter`** | **Never implemented, never revisited.** The only option with no descendant in the codebase. |
+| **3. Global stdout interception** | **Absorbed in a different form.** The interception mechanism shipped as `LoggingManager`'s pyio-intercept stdout middleware — but for *logging only*, without the translation-at-the-pipe this option proposes. Using interception for translation was re-evaluated during the October 2026 architecture review and deliberately rejected: by the time text reaches stdout it is already formatted, the middleware has no catalog context, and it destroys the missing-key signal (see `doc/Halloween_proposal.md` §5 — interception is endorsed as a *detector* of untranslated output, never as the translator). |
+
+## Open Items
+
+1. **None as design items** — this document is historical. The living follow-ups live in `international_idea.md` (status header, deviations, open items) and `doc/Halloween_proposal.md` (i18n leak detector via interception, localization architecture hardening).
+2. Optional hygiene only: the filename suffix `_1` suggests a numbered series that never materialized; rename if desired.
+
+---
+
 This document outlines three architectural options for implementing a centralized print and logging system in ChatyBot that supports advanced file logging and internationalization (i18n) while maintaining the exact look and feel of the terminal interface.
 
 ---
