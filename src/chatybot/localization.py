@@ -189,6 +189,14 @@ class LocalizationManager:
         range_lines_map = {
             kw: canon for kw, canon in reverse_map.items() if canon in ("range", "lines")
         }
+        # Keyword-only map (excludes '/'-prefixed slash aliases, which are handled
+        # by step 2 via resolve_command). All catalog keys are single tokens, so a
+        # keyword can only match a line when it IS the line's first
+        # whitespace-delimited token - one dict lookup replaces the full-catalog
+        # scan per line.
+        keyword_map = {
+            kw: canon for kw, canon in reverse_map.items() if not kw.startswith("/")
+        }
 
         translated_lines = []
         lines = script_content.split("\n")
@@ -200,14 +208,14 @@ class LocalizationManager:
                 translated_lines.append(line)
                 continue
 
-            # 1. Translate keywords at start of line (e.g. "establecer var = val" -> "set var = val")
-            for localized_kw, canonical_kw in reverse_map.items():
-                if not localized_kw.startswith("/"):
-                    # Check for exact word start
-                    if stripped.startswith(localized_kw + " ") or stripped == localized_kw:
-                        line = line.replace(localized_kw, canonical_kw, 1)
-                        stripped = line.lstrip()
-                        break
+            # 1. Translate keyword at start of line (e.g. "establecer var = val" -> "set var = val").
+            # Single-token keys mean only the line's first word can match; exact-case
+            # lookup preserves the previous scan's semantics.
+            first_word = stripped.split(None, 1)[0]
+            canonical_kw = keyword_map.get(first_word)
+            if canonical_kw:
+                line = line.replace(first_word, canonical_kw, 1)
+                stripped = line.lstrip()
 
             # 1b. Translate conditional 'if ... then <cmd>' statements mid-line:
             # - Localized 'then' word (e.g. alors/allora/entonces/则/اذن outside quotes)
