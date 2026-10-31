@@ -138,11 +138,57 @@ class LocalizationManager:
                 
         return reverse_map
 
+    @staticmethod
+    def _find_then_token(line: str, then_words: list[str]) -> tuple[int, int, str] | None:
+        """Finds a whitespace-bounded 'then' (or localized alias) outside quoted strings."""
+        in_quote = None
+        escaped = False
+        i = 0
+        n = len(line)
+        while i < n:
+            c = line[i]
+            if escaped:
+                escaped = False
+                i += 1
+                continue
+            if c == "\\":
+                escaped = True
+                i += 1
+                continue
+            if c in ('"', "'"):
+                if in_quote == c:
+                    in_quote = None
+                elif in_quote is None:
+                    in_quote = c
+                i += 1
+                continue
+
+            if in_quote is None:
+                for tw in then_words:
+                    tw_len = len(tw)
+                    if line[i : i + tw_len] == tw:
+                        prev_ok = i == 0 or line[i - 1].isspace()
+                        next_ok = (i + tw_len == n) or line[i + tw_len].isspace()
+                        if prev_ok and next_ok:
+                            return i, i + tw_len, tw
+            i += 1
+        return None
+
     def translate_script(self, script_content: str) -> str:
         """Preprocessing step: translates localized keywords and command verbs into canonical English."""
         reverse_map = self.get_reverse_aliases()
         if not reverse_map:
             return script_content
+
+        # Cache localized 'then' words (e.g. Spanish 'entonces', French 'alors', Italian 'allora', Chinese '则', Arabic 'اذن')
+        then_aliases = sorted(
+            list({kw for kw, canon in reverse_map.items() if canon == "then"} | {"then"}),
+            key=len,
+            reverse=True,
+        )
+        range_lines_map = {
+            kw: canon for kw, canon in reverse_map.items() if canon in ("range", "lines")
+        }
 
         translated_lines = []
         lines = script_content.split("\n")
@@ -160,36 +206,51 @@ class LocalizationManager:
                     # Check for exact word start
                     if stripped.startswith(localized_kw + " ") or stripped == localized_kw:
                         line = line.replace(localized_kw, canonical_kw, 1)
+                        stripped = line.lstrip()
                         break
 
-            # 1b. Translate localized 'then' words mid-line (e.g. Arabic "اذن", Chinese "则")
-            for localized_kw, canonical_kw in reverse_map.items():
-                if canonical_kw == "then":
-                    line = re.sub(rf"(?<=\s){re.escape(localized_kw)}(?=\s|$)", "then", line)
+            # 1b. Translate conditional 'if ... then <cmd>' statements mid-line:
+            # - Localized 'then' word (e.g. alors/allora/entonces/则/اذن outside quotes)
+            # - Trailing keyword (e.g. 'break' aliases: 'rompere', 'casser', '跳出', 'كسر')
+            # - Trailing slash command (e.g. '/ayuda' -> '/help', '/aide' -> '/help', '/aiuto' -> '/help')
+            if stripped.startswith("if "):
+                then_match = self._find_then_token(line, then_aliases)
+                if then_match:
+                    start_idx, end_idx, matched_then = then_match
+                    prefix = line[:start_idx]
+                    suffix = line[end_idx:]
 
-            # 1c. Translate keywords following 'then ' (e.g. "if ... then rompere" -> "... then break",
-            # Chinese "then 跳出", Arabic "اذن كسر" after 1b rewrites اذن to then)
-            for localized_kw, canonical_kw in reverse_map.items():
-                if not localized_kw.startswith("/"):
-                    line = re.sub(
-                        rf"then {re.escape(localized_kw)}(?=\s|$)",
-                        f"then {canonical_kw}",
-                        line,
-                    )
+                    cmd_part = suffix.lstrip()
+                    cmd_indent = suffix[: len(suffix) - len(cmd_part)]
 
-            # 1d. Translate generator keywords in call position mid-line (e.g. Arabic
+                    if cmd_part:
+                        cmd_words = cmd_part.split(maxsplit=1)
+                        first_cmd_word = cmd_words[0]
+                        rest_cmd = (" " + cmd_words[1]) if len(cmd_words) > 1 else ""
+
+                        if first_cmd_word.startswith("/"):
+                            canonical_cmd = self.resolve_command(first_cmd_word)
+                            cmd_part = f"{canonical_cmd}{rest_cmd}"
+                        elif first_cmd_word in reverse_map and not first_cmd_word.startswith("/"):
+                            canonical_kw = reverse_map[first_cmd_word]
+                            cmd_part = f"{canonical_kw}{rest_cmd}"
+
+                    line = f"{prefix}then{cmd_indent}{cmd_part}"
+                    stripped = line.lstrip()
+
+            # 1c. Translate generator keywords in call position mid-line (e.g. Arabic
             # "لكل i in مدى(1:10)" -> "... in range(1:10)"); scoped to range/lines to
             # avoid rewriting unrelated keywords followed by '('
-            for localized_kw, canonical_kw in reverse_map.items():
-                if canonical_kw in ("range", "lines"):
+            if "(" in line and range_lines_map:
+                for localized_kw, canonical_kw in range_lines_map.items():
                     line = re.sub(
                         rf"(?<=\s){re.escape(localized_kw)}\(",
                         f"{canonical_kw}(",
                         line,
                     )
 
-            # 2. Translate slash commands (e.g. "/ayuda" -> "/help")
-            words = line.split(maxsplit=1)
+            # 2. Translate slash commands at start of line (e.g. "/ayuda" -> "/help")
+            words = stripped.split(maxsplit=1)
             first_word = words[0]
             if first_word.startswith("/"):
                 canonical_cmd = self.resolve_command(first_word)

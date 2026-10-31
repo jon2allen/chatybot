@@ -161,17 +161,31 @@ endfor
 """
     assert mgr_ar.translate_script(script_ar) == expected_ar
 
-    # Italian: existing keyword rompere was previously untranslated mid-line
+    # Italian: se -> if, allora -> then, rompere -> break, /aiuto -> /help
     mgr_it = LocalizationManager("it")
-    script_it = 'if ${num} == "5" then rompere\n'
+    script_it = 'se ${num} == "5" allora rompere\n'
     assert mgr_it.translate_script(script_it) == 'if ${num} == "5" then break\n'
+    script_it2 = 'se "${x}" == "yes" allora /aiuto\n'
+    assert mgr_it.translate_script(script_it2) == 'if "${x}" == "yes" then /help\n'
 
-    # Chinese localized 'then' word (则) mid-line. Note: mid-line slash commands
-    # after 'then' are NOT translated by translate_script (first-word only) -
-    # a known pre-existing limitation; use an English command here.
-    script_zh2 = '如果 ${x} == "yes" 则 /echo "ok"\n'
-    expected_zh2 = 'if ${x} == "yes" then /echo "ok"\n'
+    # Spanish mid-line slash command translation: si -> if, entonces -> then, /ayuda -> /help
+    mgr_es = LocalizationManager("es")
+    script_es = 'si "${x}" == "yes" entonces /ayuda\n'
+    assert mgr_es.translate_script(script_es) == 'if "${x}" == "yes" then /help\n'
+
+    # Chinese localized 'then' word (则) mid-line and slash command translation (/帮助 -> /help)
+    script_zh2 = '如果 ${x} == "yes" 则 /帮助\n'
+    expected_zh2 = 'if ${x} == "yes" then /help\n'
     assert mgr_zh.translate_script(script_zh2) == expected_zh2
+
+    # String literal safety: keywords inside quotes must not be translated
+    script_echo = '/echo "Please wait then rompere or allora"\n'
+    assert mgr_it.translate_script(script_echo) == script_echo
+
+    # Quoted 'then' in condition must not be mistaken for the delimiter
+    mgr_fr = LocalizationManager("fr")
+    script_cond = 'if "${val}" == "alors" alors /aide\n'
+    assert mgr_fr.translate_script(script_cond) == 'if "${val}" == "alors" then /help\n'
 
 
 def test_translate_script_local_and_generator_keywords():
