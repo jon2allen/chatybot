@@ -1,5 +1,34 @@
 # Profile Manager System Design
 
+**Document Version:** 1.1
+**Date:** July 23, 2026 (date of the last commit touching this file, when named `sonnet_plan_1.md`: `d6d3db1`, 2026-07-23 11:38 -0400)
+**Status:** Implemented with deviations — the profile system shipped (`profile_manager.py`, `profile_editor.py`, `/profile`, CLI flags, 3 presets, 4 test files) and then extended well beyond this design; validated against source on October 31, 2026. Renamed from `sonnet_plan_1.md` to describe its content. See Implementation Deviations and Open Items below
+**Applies To:** `src/chatybot/profile_manager.py`, `src/chatybot/profile_editor.py`, `src/chatybot/commands/debug_misc.py` (`/profile` dispatch), `chatybot_app.py` (CLI flags, `handle_profile_command`, `VALID_ESCAPE_COMMANDS`), `src/chatybot/profiles/*.chatdsl`, `tools_config.toml` `[config]` keys
+
+---
+
+## Implementation Deviations (as-built vs. this proposal)
+
+Validated claim-by-claim on 2026-10-31. What matches: `ProfileManager` with `read_meta`, `seed_presets`, `list_profiles`, clone/delete/export/import, and `_resolve_path`; the `@name`/`@description` annotation convention; the three presets (`coding`, `general`, `explorer`) with their exact contents; `--profile-edit` / `--profile-list` CLI flags (`chatybot_app.py:7887-7891`); the `tools_config.toml` keys (`default_profile`, `profile_dir`, `enable_profile_edit`); `seed_presets()` called at initialize (`chatybot_app.py:407`); `profile` in `VALID_ESCAPE_COMMANDS` (`:116`); `profiles/*.chatdsl` package data in `pyproject.toml` (`:50`); the curses editor; and the unit tests — 11 of the proposed names exist nearly verbatim in `test_profile_manager.py` (plus a 12th, `resolve_path_fallback_absolute_home`).
+
+The deviations — the implementation grew past this design:
+
+1. **Profiles became structured objects, not raw scripts.** The design treats a profile as a plain `.chatdsl` file with comment metadata and raw text handling. The implementation has a full `Profile` object model: `load_profile()`, `save_profile()`, `create_profile()`, `load_profile_string()`, `apply_profile_commands()`, and `upgrade_all_profiles()` — the TUI reads and writes parsed settings rather than editing text.
+2. **The unmanaged content region is new.** Profiles now have a managed region (TUI-editable settings) and an unmanaged body preserved verbatim without parsing (`test_profile_unmanaged.py`). Round-trip save/load preserves custom content. Not specified in this design at all.
+3. **`@version` annotation added** — presets carry `# @version: 1.0`, and `upgrade_all_profiles()` performs version-driven upgrades; the design specifies only `@name`/`@description`.
+4. **The `/profile` dispatch moved during command modularization** — it lives in `commands/debug_misc.py:409` and delegates to `app.handle_profile_command()`, not the `execute_script_command()` elif chain this design wires up.
+5. **The [!IMPORTANT] gap is closed**: `/tool max_turns <int>` now exists (exercised by `test_tool_max_turns_command`), and the "Current State vs Planned" table is entirely historical — every row is implemented.
+6. **Test scope quadrupled**: the design proposed 11 unit + 5 integration tests; as-built there are four files — `test_profile_manager.py` (12), `test_profile_integration.py` (6, including TUI help-documentation, `imagedbg` trace roundtrip, and explorer read-only-tool checks), `test_profile_tui_help.py` (field-help database), and `test_profile_unmanaged.py`.
+7. **`ProfileManager` API superset**: `list_profile_meta()`, `get_preset_names()`, `get_preset()`, `create_profile()`, `apply_profile_commands()` have no counterpart in this design.
+
+## Open Items
+
+1. **`/profile` help args string is incomplete** — `debug_misc.py:409` declares `args="<list|edit|use|delete> [name]"` while all eight subcommands (list, use, clone, delete, export, import, show, edit) are implemented and documented in the help system. Fix the args string or generate it from the handler.
+2. **Update or retire this document**: the "Current State vs Planned" table, the [!IMPORTANT] note, and the raw-text profile model now misdescribe the as-built system (see deviations 1-3). Either regenerate from the current implementation or mark this file historical.
+3. **Document the unmanaged-content delimiter and `@version` upgrade semantics** in the user-facing guides — they affect hand-edited profiles and are currently only in code and tests.
+
+---
+
 ## Overview
 
 The Profile Manager provides lifecycle management for ChatDSL profile scripts in chatybot. A profile is a plain `.chatdsl` file — no special syntax, no YAML. An optional pair of comment annotations at the top supply display metadata (`name` and `description`). All session configuration (model, tools, tracing, reasoning, temperature) is expressed using the **existing ChatDSL command set** that already works in any script.
