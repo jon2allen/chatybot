@@ -1,0 +1,107 @@
+# Recipe 14.11 - Batch API in the real world: blank completions and item retry
+# Run: /script doc/cookbook/14_11_batch_api_blank_retry.chatdsl
+#
+# WHY THIS RECIPE: batch providers count "empty completions" (HTTP 200, no
+# content) as SUCCESSES and never retry them — a live OpenRouter run with
+# gpt-oss-120b produced 2 blanks out of 10. Providers also return results in
+# arbitrary completion order. This recipe shows the production pattern:
+#   1. generate data, stage it under a unique per-run batch name
+#   2. submit, wait, retrieve (results arrive in staging order — ChatyBot
+#      normalizes them; the custom_id is the join key)
+#   3. DETECT blank completions per item from ${BATCH_RESULTS}
+#   4. re-stage ONLY the blank items into a retry batch and resubmit
+# The blank check is substring based on the record dict repr, so it works in
+# scripts without any JSON tooling. Scaling: this demo uses 3 recipes to stay
+# cheap; change RECIPE_COUNT (and the range bounds) to run more. Blanks are
+# stochastic — on a clean run the retry stage simply reports none found.
+
+# === Phase 0: unique run tag — every run gets its own batch instances ===
+/run date +%Y%m%d_%H%M%S
+/setvar run_tag {LAST_COMPLETION}
+
+# === Phase 1: generate the recipes (chat model) ===
+/session history off
+/model mistral_1
+/temp 0.7
+/echo "=== Generating recipes (run ${run_tag}) ==="
+
+set recipe_1_prompt = "Create a detailed recipe for a traditional Italian pasta dish. Output only the recipe itself: ingredients, step-by-step instructions, and serving suggestions — no introduction, no closing remarks."
+${recipe_1_prompt}
+/setvar recipe_1 {LAST_COMPLETION}
+
+set recipe_2_prompt = "Create a detailed recipe for a spicy Mexican salsa. Output only the recipe itself: ingredients, preparation, and tips — no introduction, no closing remarks."
+${recipe_2_prompt}
+/setvar recipe_2 {LAST_COMPLETION}
+
+set recipe_3_prompt = "Create a detailed recipe for a classic French dessert. Output only the recipe itself: ingredients, baking instructions, and presentation tips — no introduction, no closing remarks."
+${recipe_3_prompt}
+/setvar recipe_3 {LAST_COMPLETION}
+
+# === Phase 2: batch categorization (batch model) ===
+/model gptoss_batch
+
+/batch prompt "For each recipe provided, categorize it by extracting the following information in JSON format: {\"type\": \"Main course/Appetizer/Dessert/Soup/Salad/etc\", \"country\": \"country of origin\", \"cuisine\": \"cuisine type\", \"key_ingredients\": [\"ingredient1\", \"ingredient2\", \"ingredient3\"], \"difficulty\": \"Easy/Medium/Hard\"}. Only output the JSON object, no other text."
+
+/batch start recipe_cat_${run_tag}
+
+# split=none keeps each multi-line recipe as ONE item
+/batch add id=recipe_1 var=recipe_1 split=none
+/batch add id=recipe_2 var=recipe_2 split=none
+/batch add id=recipe_3 var=recipe_3 split=none
+
+/batch end recipe_cat_${run_tag}
+/batch run recipe_cat_${run_tag}
+/batch check recipe_cat_${run_tag} wait=true
+
+# /batch check reports blanks in its summary, e.g.:
+#   results: 3 written to results.jsonl (1 empty)
+# /batchlist shows them too:  [completed]  items=3  1 empty  $0.00xx
+
+# === Phase 3: detect blank completions from the retrieved records ===
+/batch results recipe_cat_${run_tag} var=batch_results
+/setvar results_text ${batch_results}
+/echo "=== Retrieved records (staging order): ==="
+/echo "${results_text}"
+
+# A blank record looks like:
+#   {'custom_id': 'recipe_2', 'status_code': 200, 'content': None}
+# (content None, or '' — with HTTP 200). Provider-side ERROR records have a
+# non-200 status_code and an 'error' field; the patterns below intentionally
+# match only status-200 blanks.
+
+# The closing brace excludes provider ERROR records (their dict continues
+# with 'error' after content), so these count pure status-200 blanks only
+/str_search "'content': None}" results_text
+/setvar blanks_none {STR_SEARCH}
+/str_search "'content': ''}" results_text
+/setvar blanks_empty {STR_SEARCH}
+/echo "Blank completions: none-content=${blanks_none}, empty-string=${blanks_empty}"
+
+# === Phase 4: retry only the blank items ===
+/batch start retry_${run_tag}
+
+foreach n in range(1:4)
+  # Is recipe_${n}'s record a status-200 blank?
+  /str_search "'custom_id': 'recipe_${n}', 'status_code': 200, 'content': None" results_text
+  /setvar blank_a {STR_SEARCH}
+  /str_search "'custom_id': 'recipe_${n}', 'status_code': 200, 'content': ''" results_text
+  /setvar blank_b {STR_SEARCH}
+  if "${blank_a}" > "0" then /batch add id=recipe_${n} var=recipe_${n} split=none
+  if "${blank_b}" > "0" then /batch add id=recipe_${n} var=recipe_${n} split=none
+endfor
+
+# ${BATCH_ITEM_IDS} of the retry batch is empty when nothing was re-added
+/batch ids retry_${run_tag}
+if "${BATCH_ITEM_IDS}" == "" then /echo "No blank completions — retry batch left empty"
+if "${BATCH_ITEM_IDS}" != "" then /batch end retry_${run_tag}
+if "${BATCH_ITEM_IDS}" != "" then /batch run retry_${run_tag}
+if "${BATCH_ITEM_IDS}" != "" then /batch check retry_${run_tag} wait=true
+if "${BATCH_ITEM_IDS}" != "" then /batch results retry_${run_tag} var=retry_results
+if "${BATCH_ITEM_IDS}" != "" then /savevar retry_results retry_results_${run_tag}.txt
+
+# Clean up the empty retry draft when there was nothing to redo
+if "${BATCH_ITEM_IDS}" == "" then /batch abort retry_${run_tag}
+
+# === Done: restore interactive chat ===
+/model mistral_1
+/echo "=== Recipe 14.11 complete (run ${run_tag}) ==="

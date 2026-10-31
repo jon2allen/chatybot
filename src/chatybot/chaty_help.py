@@ -590,7 +590,7 @@ class HelpSystem:
             short_desc="Execute a script file in the current session",
             usage="/source <file>",
             long_desc="Execute a script file containing multiple commands in the current interactive session without exiting.",
-            examples=["/source ~/.chatybot_profile", "/source load_vars.chatdsl"],
+            examples=["/source ~/.config/chatybot/profiles/coding.chatdsl", "/source load_vars.chatdsl"],
             see_also=["/script"]
         ))
         
@@ -1035,7 +1035,99 @@ class HelpSystem:
             ],
             see_also=["/tool", "/system", "/setdb"]
         ))
-    
+
+        self.register_command(CommandHelp(
+            name="/batch",
+            category="batch",
+            short_desc="Asynchronous provider Batch API jobs (stage, seal, submit, poll)",
+            usage="/batch <status|start|clone|prompt|add|items|ids|show|edit|remove|clear|dump|end|abort|run|check|results|retry|list|cancel> [name] [key=value ...]",
+            long_desc=(
+                "Batch API jobs: asynchronous bulk inference submitted to a provider "
+                "Batch API (OpenRouter in Phase 1, Mistral in Phase 2) at a 50% discount "
+                "off standard token rates. Jobs outlive the prompt cycle that creates "
+                "them: stage items into a draft, seal with a security scan, submit, then "
+                "poll and retrieve results. Storage lives under ~/.local/share/chatybot/batches/ "
+                "(per-instance directories + global index.jsonl), fully decoupled from "
+                "session history.\n\n"
+                "Model selection is idiomatic: /model <batch-alias> on its own line "
+                "(models need 'batch = true' in chat_config.toml). While a batch model "
+                "is selected, interactive chat is disabled — switch back with "
+                "/model <chat-alias>.\n\n"
+                "Lifecycle: start (draft) → add (items) → end (security scan + lock) → "
+                "run (cost guard + submit) → check (poll + retrieve).\n\n"
+                "Naming note: 'batch_api' refers to provider Batch APIs, unrelated to "
+                "batch-n (the /rerank Batched Top-N pre-filter) or the 14.5 cookbook "
+                "foreach batch processor."
+            ),
+            examples=[
+                "/model gptoss_batch",
+                '/batch prompt "Translate each poem into English."',
+                "/batch start dufu_run",
+                "/batch add filebank=1 split=lines",
+                "/batch add id=chunwang var=special_poem",
+                "/batch items",
+                "/batch end",
+                "/batch dump dufu_run",
+                "/batch run dufu_run",
+                "/batch check dufu_run wait=true",
+                "/model mistral_1",
+            ],
+            parameters={
+                "status": "Show the active batch draft (default with no subcommand)",
+                "start <name>": "Open a new draft, or reopen a staged draft [model=<alias>] [temp=<float>] [max_tokens=<int>] [top_p=<float>] [clear=true]",
+                "clone <src> <new>": 'Clone an existing batch into a new draft [prompt="..."] [model=<alias>] [temp=<float>] [force=true to replace an existing draft/staged batch of that name]',
+                "prompt": 'Set the batch instruction: "inline text" | translate|summarize|classify | file=<path>',
+                "add": "Append items: <text> | filebank=N [split=lines|paragraphs] | var=NAME | file=PATH [id=<id>]",
+                "items [name]": "List staged items with previews [limit=N] [range=start:end]",
+                "ids [name]": "List item IDs; exports ${BATCH_ITEM_IDS} [var=<target>]",
+                "show <id|name>": "Inspect one item by ID (input + retrieved completion); with only a batch name, shows the batch overview and its item IDs. The batch is found by the item ID itself when no name is given",
+                "edit <id>": "In-place update: <text> | var=NAME | file=PATH",
+                "remove <id>": "Remove an item from the open draft (alias: del)",
+                "clear [name]": "Reset staged items to 0 (alias: reset)",
+                "dump [name]": "Print the JSON request payload; binds ${BATCH_PAYLOAD} [var=<target>]",
+                "end [name]": "Security-scan items, compile requests.json, lock the manifest (staged)",
+                "abort [name]": "Discard an open (never-submitted) staging session",
+                "run [name]": "Estimate cost, verify budget, submit [force=true] [adopt=<provider_id>]",
+                "check [name]": "Poll status / retrieve results [wait=true polls until terminal]; the summary, /batch status, and /batchlist surface empty completions (status 200, no content — providers count them as successes and never retry them)",
+                "results [name]": "Print retrieved completions with pagination; exports ${BATCH_RESULTS} [limit=N] [range=start:end] [var=<target>]. Records are in staging (submission) order — providers return results in arbitrary completion order; always match by custom_id",
+                "cancel <name>": "Cancel an in-flight batch [force=true for providers without a cancel endpoint (OpenRouter): marks it cancelled locally while the remote job still runs to completion]",
+                "retry <name>": "New batch from failed items (Phase 3)",
+                "list": "Alias for /batchlist",
+            },
+            see_also=["/batchlist", "/model", "/filebank1"]
+        ))
+
+        self.register_command(CommandHelp(
+            name="/batchlist",
+            category="batch",
+            short_desc="List batches from the global catalog",
+            usage="/batchlist [all] [ids] [limit=N] [range=start:end] [model=<alias>] [status=<s>] [since=<Nd|Nh|Nm>] [here=true] [var=<varname>]",
+            long_desc=(
+                "Query the global batch catalog (~/.local/share/chatybot/batches/index.jsonl) with "
+                "the same filter syntax as /session list. Every invocation exports "
+                "${BATCH_LIST} (matched metadata records) and ${BATCH_IDS} (batch ID "
+                "strings)."
+            ),
+            examples=[
+                "/batchlist",
+                "/batchlist all ids",
+                "/batchlist status=completed since=7d",
+                "/batchlist model=gptoss_batch var=recent_batches",
+            ],
+            parameters={
+                "limit=N": "Number of records to display (default 10)",
+                "all": "Remove the limit and show every batch",
+                "ids": "Display only batch ID strings",
+                "range=start:end": "Slice pagination across the catalog",
+                "model=<alias>": "Filter by model alias or substring",
+                "status=<s>": "Filter by lifecycle status (draft, staged, submitting, submitted, in_progress, completed, failed, submit_failed, cancelled, expired)",
+                "since=<Nd|Nh|Nm>": "Time window filter (d days, h hours, m minutes)",
+                "here=true": "Only batches launched from the current workspace",
+                "var=<name>": "Export the matched records (or IDs with ids) to a script variable",
+            },
+            see_also=["/batch", "/session"]
+        ))
+
     def register_command(self, cmd_help: CommandHelp) -> None:
         """Register a command with the help system."""
         self.commands[cmd_help.name] = cmd_help
@@ -1149,7 +1241,15 @@ class HelpSystem:
             cmd_info = i18n.get_help_string("commands", cmd_help.name, {})
             if isinstance(cmd_info, dict):
                 display_short = cmd_info.get("short_desc", cmd_help.short_desc)
-                display_long = cmd_info.get("long_desc", cmd_help.long_desc)
+                localized_long = cmd_info.get("long_desc")
+                if (
+                    localized_long
+                    and localized_long != cmd_help.long_desc
+                    and getattr(i18n, "locale", "en") != "en"
+                ):
+                    # Bilingual display: keep the canonical English text and
+                    # append the localized translation beneath it.
+                    display_long = f"{cmd_help.long_desc}\n\n{localized_long}"
             
             for loc, canonical in aliases.items():
                 if canonical in display_usage:

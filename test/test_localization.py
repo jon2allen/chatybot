@@ -171,6 +171,40 @@ def test_help_localization():
     assert "Uso: /archivo <path>" in detail_fallback
     assert "Carga un archivo de texto en el búfer" in detail_fallback
 
+def test_help_bilingual_long_desc():
+    """Detailed help shows the English long_desc followed by the localized translation."""
+    from src.chatybot.chaty_help import get_help_system
+    help_sys = get_help_system()
+    mgr_es = LocalizationManager("spanish")
+    mgr_en = LocalizationManager("en")
+
+    detail_es = help_sys.get_help_text("/temp", i18n=mgr_es)
+    # English original kept...
+    assert "Set or disable the temperature parameter for the current model." in detail_es
+    # ...with the Spanish translation appended beneath it
+    assert "Establece o desactiva el parámetro de temperatura del modelo actual." in detail_es
+    assert detail_es.index("Set or disable") < detail_es.index("Establece o desactiva")
+
+    # English locale must not duplicate the long description
+    detail_en = help_sys.get_help_text("/temp", i18n=mgr_en)
+    assert detail_en.count("Set or disable the temperature parameter") == 1
+
+def test_help_translation_coverage_all_locales():
+    """Every command with an English long_desc has a localized long_desc + short_desc in every catalog locale."""
+    from src.chatybot.chaty_help import get_help_system
+    help_sys = get_help_system()
+
+    for locale in ("es", "fr", "zh", "it", "ar"):
+        mgr = LocalizationManager(locale)
+        catalog_cmds = mgr.catalog[locale]["help"]["commands"]
+
+        missing_long = [c.name for c in help_sys.commands.values()
+                        if c.long_desc and "long_desc" not in catalog_cmds.get(c.name, {})]
+        missing_short = [c.name for c in help_sys.commands.values()
+                         if "short_desc" not in catalog_cmds.get(c.name, {})]
+        assert missing_long == [], f"{locale}: commands missing long_desc: {missing_long}"
+        assert missing_short == [], f"{locale}: commands missing short_desc: {missing_short}"
+
 def test_cross_locale_fallback():
     # Test that English/default locale can resolve and translate Chinese commands
     mgr_en = LocalizationManager("en")

@@ -766,6 +766,75 @@ def test_tui_apply_form_edits_valid_alias_formats():
         tui.config.models["m1"] = tui.config.models.pop(valid_alias)
 
 
+def test_tui_apply_form_edits_batch_toggle():
+    tui = ConfigTUI()
+    tui.config = ChatConfig(models={
+        "m_batch": ChatModelConfig(name="batch-model", base_url="https://api.test/v1", batch=False)
+    })
+    tui.sync_models_list()
+
+    form_data = {
+        "alias": "m_batch",
+        "name": "batch-model",
+        "type": "chat",
+        "base_url": "https://api.test/v1",
+        "api_key": "",
+        "vendor": "openrouter",
+        "temperature": "",
+        "top_k": "",
+        "image_generation": "false",
+        "image_endpoint": "",
+        "image_modalities": "",
+        "batch": "true",
+    }
+    res = tui.apply_form_edits("m_batch", form_data, is_new=False)
+    assert res is True
+    assert tui.config.models["m_batch"].batch is True
+
+    # Toggle back to false
+    form_data["batch"] = "false"
+    res = tui.apply_form_edits("m_batch", form_data, is_new=False)
+    assert res is True
+    assert tui.config.models["m_batch"].batch is False
+
+
+def test_tui_bulk_replace_batch():
+    tui = ConfigTUI()
+    tui.config = ChatConfig(models={
+        "m1": ChatModelConfig(name="m1", base_url="https://openrouter.ai/api/v1", vendor="openrouter", batch=False),
+        "m2": ChatModelConfig(name="m2", base_url="https://openrouter.ai/api/v1", vendor="openrouter", batch=False),
+    })
+    tui.sync_models_list()
+
+    err, candidates = tui.compute_bulk_replacements(
+        field_key="batch",
+        scope_type="all",
+        scope_value="",
+        mode="set",
+        find_str="",
+        replace_str="true",
+    )
+    assert err is None
+    assert len(candidates) == 2
+    assert all(c["new_val"] is True for c in candidates)
+
+    applied = tui.apply_bulk_replacements(candidates)
+    assert applied == 2
+    assert tui.config.models["m1"].batch is True
+    assert tui.config.models["m2"].batch is True
+
+
+def test_tui_batch_field_hidden_for_non_chat():
+    tui = ConfigTUI()
+    assert tui.is_field_hidden("batch", {"type": "reranker"}) is True
+    assert tui.is_field_hidden("section_bt", {"type": "reranker"}) is True
+    assert tui.is_field_hidden("batch", {"type": "decision"}) is True
+    assert tui.is_field_hidden("batch", {"type": "apple_fm"}) is True
+    assert tui.is_field_hidden("batch", {"type": "chat"}) is False
+    assert tui.is_field_hidden("section_bt", {"type": "chat"}) is False
+
+
+
 
 
 
