@@ -173,6 +173,32 @@ endfor
     expected_zh2 = 'if ${x} == "yes" then /echo "ok"\n'
     assert mgr_zh.translate_script(script_zh2) == expected_zh2
 
+
+def test_translate_script_local_and_generator_keywords():
+    """Verify local (zh 局部, ar محلي) line-start translation and range/lines
+    generator keywords in call position (ar مدى(...), أسطر(...)). Without the
+    local mapping the line falls through to an LLM prompt; without the
+    generator pass the foreach iterable fails to resolve."""
+    # Chinese local keyword at line start
+    mgr_zh = LocalizationManager("zh")
+    assert mgr_zh.translate_script('局部 x = "v"\n') == 'local x = "v"\n'
+
+    # Arabic local keyword at line start
+    mgr_ar = LocalizationManager("ar")
+    assert mgr_ar.translate_script('محلي x = "v"\n') == 'local x = "v"\n'
+
+    # Arabic range generator in foreach iterable position
+    assert (
+        mgr_ar.translate_script("لكل i in مدى(1:10)\n")
+        == "foreach i in range(1:10)\n"
+    )
+
+    # Arabic lines generator in foreach iterable position
+    assert (
+        mgr_ar.translate_script("لكل سطر in أسطر(نص)\n")
+        == "foreach سطر in lines(نص)\n"
+    )
+
 @pytest.mark.anyio
 async def test_app_integration_localized_command():
     # Test that ChatybotApp correctly handles localized command strings

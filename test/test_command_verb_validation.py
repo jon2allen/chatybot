@@ -201,11 +201,13 @@ class TestCommandVerbValidation:
         app.i18n.set_locale("es")
         assert app.i18n.resolve_command("/procedimiento") == "/proc"
         assert app.i18n.translate_script("definirproc myproc()") == "defproc myproc()"
-        assert app.i18n.translate_script("paracada i en rango(1:5)") == "foreach i en rango(1:5)"
+        # Generator keywords (rango, lignes) translate in call position; the 'in'
+        # connector is English-canonical (the es/fr guides teach English 'in').
+        assert app.i18n.translate_script("paracada i in rango(1:5)") == "foreach i in range(1:5)"
 
         app.i18n.set_locale("fr")
         assert app.i18n.resolve_command("/procedure") == "/proc"
-        assert app.i18n.translate_script("pourchaque line en lignes(doc)") == "foreach line en lignes(doc)"
+        assert app.i18n.translate_script("pourchaque line in lignes(doc)") == "foreach line in lines(doc)"
 
     @pytest.mark.anyio
     async def test_debug_payload_in_script_context(self, app, capsys):

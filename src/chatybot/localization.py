@@ -177,6 +177,17 @@ class LocalizationManager:
                         line,
                     )
 
+            # 1d. Translate generator keywords in call position mid-line (e.g. Arabic
+            # "لكل i in مدى(1:10)" -> "... in range(1:10)"); scoped to range/lines to
+            # avoid rewriting unrelated keywords followed by '('
+            for localized_kw, canonical_kw in reverse_map.items():
+                if canonical_kw in ("range", "lines"):
+                    line = re.sub(
+                        rf"(?<=\s){re.escape(localized_kw)}\(",
+                        f"{canonical_kw}(",
+                        line,
+                    )
+
             # 2. Translate slash commands (e.g. "/ayuda" -> "/help")
             words = line.split(maxsplit=1)
             first_word = words[0]
