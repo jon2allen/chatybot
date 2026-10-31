@@ -1,5 +1,32 @@
 # Cookbook Skills Proposal — Dynamic Skill Loading & Delegation Documentation
 
+**Document Version:** 1.1
+**Date:** September 30, 2026 (date of the last commit touching this file: `dc788da`, 2026-09-30 18:25 -0400)
+**Status:** Implemented (English documentation) — validated against source, `doc/` and `src/chatybot/doc/` trees, and `test/test_skill_tools.py` (14 tests) on October 31, 2026. Translation Phases 2-3 and the doc-tree dedup pre-work remain open; see Implementation Deviations and Open Items below
+**Applies To:** User-facing documentation — `chatdsl_cookbook.md` (Chapter 15, Recipe 8.5, Appendices A/B), `chatdsl_skill.md`, `chatdsl_guide_v1.md`, 6 `cookbook/*.chatdsl` recipe files, and the 5 translated guides
+
+---
+
+## Implementation Deviations (as-built vs. this proposal)
+
+Validated claim-by-claim on 2026-10-31. The technical claims in §2 (tool behavior, line references, recursion protection, return shapes, the deliberate `search_skills` reimplementation) all verify against `src/chatybot/tools/skill_utils.py` exactly. All English documentation deliverables in §4-§6 landed in both doc trees: Chapter 15 (recipes 15.1-15.5), Recipe 8.5, Appendix A rows, Appendix B rows, "The Skills System" section in `chatdsl_skill.md`, "Dynamic Skill Loading" section in `chatdsl_guide_v1.md`, and all 6 `.chatdsl` recipe files.
+
+The deviations:
+
+1. **Subcommand count is wrong: "16" should be 17.** §4.5 says "/skill provides 16 subcommands" but its own table lists 17 rows, and the implementation (`commands/skills.py:32-64`) dispatches 17: list, show, create, edit, delete, enable, disable, search, learn, apply, export, import, restore, on, off, debug, exit. The count was never corrected in the delivered documentation.
+2. **The §3 pre-work (doc-tree dedup) was skipped — and the predicted drift materialized.** Both trees still exist independently (no symlink, no removal). `doc/chatdsl_cookbook.md` (2442 lines) now contains Recipe 13.5 (Prompt-cache key tuning) that `src/chatybot/doc/chatdsl_cookbook.md` (2415 lines) lacks. All content this proposal added was correctly written to both trees, but the Chapter 13 divergence proves the manual-sync burden the proposal warned about.
+3. **Stale references in §2.4:** the README tool table entries cited at `src/chatybot/doc/README.md:716-717` have moved to `:741-742` (README evolved after the proposal); `skill_tool.md` lives at the repo root, not in `doc/`.
+4. **Recipe 13.5 cross-tree divergence is not this proposal's content** but is recorded here as the concrete evidence for Open Item 1.
+
+## Open Items
+
+1. **Resolve the duplicated doc trees** (`doc/` vs `src/chatybot/doc/`) — symlink, remove one, or script the sync. The 13.5 divergence (27-line drift) is the first confirmed casualty; every future doc change doubles the maintenance burden until this is done.
+2. **Phase 2 translations:** add the "Dynamic Skill Loading" section to the 5 translated guides (`chatdsl_guide_v1_{arabic,chinese,french,italian,spanish}.md`). None of the five currently contain skill content (the Spanish guide contains essentially no mention of skills).
+3. **Phase 3 translations:** translate the "The Skills System" section into the 5 languages. No translated skill guides exist at all.
+4. **Subcommand count:** the "16 subcommands" error exists only in this proposal (§4.5) — the delivered `chatdsl_skill.md:1043` correctly reads "The `/skill` command provides 17 subcommands". No doc fix needed; this proposal's §4.5 is retained verbatim as the historical record.
+
+---
+
 ## Date: 2026-09-30
 
 ---
