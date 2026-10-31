@@ -133,6 +133,46 @@ set model = "devstral_1"
 """
     assert mgr_ar.translate_script(script_ar) == expected_ar
 
+
+def test_translate_script_foreach_and_then_keywords():
+    """Verify foreach/endfor/break keyword translation (zh/ar) and mid-line
+    'then' keyword translation ('if ... then 跳出', 'اذن كسر', 'then rompere')."""
+    # Chinese: foreach/endfor/break keywords plus mid-line break after 'then'
+    mgr_zh = LocalizationManager("zh")
+    script_zh = """循环 文件 in 文件列表
+如果 ${num} == "5" then 跳出
+结束循环
+"""
+    expected_zh = """foreach 文件 in 文件列表
+if ${num} == "5" then break
+endfor
+"""
+    assert mgr_zh.translate_script(script_zh) == expected_zh
+
+    # Arabic: foreach/endfor keywords, localized 'then' (اذن), mid-line break
+    mgr_ar = LocalizationManager("ar")
+    script_ar = """لكل عنصر in قائمة
+اذا ${num} == "5" اذن كسر
+نهاية_الحلقة
+"""
+    expected_ar = """foreach عنصر in قائمة
+if ${num} == "5" then break
+endfor
+"""
+    assert mgr_ar.translate_script(script_ar) == expected_ar
+
+    # Italian: existing keyword rompere was previously untranslated mid-line
+    mgr_it = LocalizationManager("it")
+    script_it = 'if ${num} == "5" then rompere\n'
+    assert mgr_it.translate_script(script_it) == 'if ${num} == "5" then break\n'
+
+    # Chinese localized 'then' word (则) mid-line. Note: mid-line slash commands
+    # after 'then' are NOT translated by translate_script (first-word only) -
+    # a known pre-existing limitation; use an English command here.
+    script_zh2 = '如果 ${x} == "yes" 则 /echo "ok"\n'
+    expected_zh2 = 'if ${x} == "yes" then /echo "ok"\n'
+    assert mgr_zh.translate_script(script_zh2) == expected_zh2
+
 @pytest.mark.anyio
 async def test_app_integration_localized_command():
     # Test that ChatybotApp correctly handles localized command strings

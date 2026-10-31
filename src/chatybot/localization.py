@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from typing import Any, ClassVar
 
 
@@ -160,6 +161,21 @@ class LocalizationManager:
                     if stripped.startswith(localized_kw + " ") or stripped == localized_kw:
                         line = line.replace(localized_kw, canonical_kw, 1)
                         break
+
+            # 1b. Translate localized 'then' words mid-line (e.g. Arabic "اذن", Chinese "则")
+            for localized_kw, canonical_kw in reverse_map.items():
+                if canonical_kw == "then":
+                    line = re.sub(rf"(?<=\s){re.escape(localized_kw)}(?=\s|$)", "then", line)
+
+            # 1c. Translate keywords following 'then ' (e.g. "if ... then rompere" -> "... then break",
+            # Chinese "then 跳出", Arabic "اذن كسر" after 1b rewrites اذن to then)
+            for localized_kw, canonical_kw in reverse_map.items():
+                if not localized_kw.startswith("/"):
+                    line = re.sub(
+                        rf"then {re.escape(localized_kw)}(?=\s|$)",
+                        f"then {canonical_kw}",
+                        line,
+                    )
 
             # 2. Translate slash commands (e.g. "/ayuda" -> "/help")
             words = line.split(maxsplit=1)
