@@ -1376,7 +1376,7 @@ Deleted session 'test_model_20260908_083213_2'.
 ```
 
 **Walkthrough**
-1. **Content & Metadata Search (`/session query`):** Searches across all session turns (prompts, responses, tool calls), metadata notes, and scratchpad files using a pluggable query engine (`GrepQueryEngine`).
+1. **Content & Metadata Search (`/session query`):** Searches across all session turns (prompts, responses, tool calls), metadata notes, and scratchpad files using a pluggable query engine (`GrepQueryEngine`). This includes command action events (e.g. `/session show`, `/exit` records) - by design, so a session with zero LLM exchanges (script or command-verb testing) can still match and still has a directory size, while `/session show` reports only LLM exchanges.
 2. **Date Constraints & Relative Filtering:** Supports `since=` (`today`, `yesterday`, `7d`, `24h`), `until=`, or `range=` (`2026-03-01..2026-05-01`).
 3. **Filter-Only Discovery Without Search Terms:** Execute `/session query since=24h ids` or `/session query "*" since=7d` to discover all recent sessions matching the date window without needing dummy search terms.
 4. **Entire Session Storage Footprint:** Every matched session reports its full storage footprint on disk (e.g. `8.2 KB` or exact `size_bytes`) rather than confusing turn snippet sizes. Results are cached via a 3-tier lazy evaluation architecture to eliminate redundant disk I/O.
