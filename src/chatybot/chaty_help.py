@@ -1241,7 +1241,15 @@ class HelpSystem:
             cmd_info = i18n.get_help_string("commands", cmd_help.name, {})
             if isinstance(cmd_info, dict):
                 display_short = cmd_info.get("short_desc", cmd_help.short_desc)
-                display_long = cmd_info.get("long_desc", cmd_help.long_desc)
+                localized_long = cmd_info.get("long_desc")
+                if (
+                    localized_long
+                    and localized_long != cmd_help.long_desc
+                    and getattr(i18n, "locale", "en") != "en"
+                ):
+                    # Bilingual display: keep the canonical English text and
+                    # append the localized translation beneath it.
+                    display_long = f"{cmd_help.long_desc}\n\n{localized_long}"
             
             for loc, canonical in aliases.items():
                 if canonical in display_usage:
