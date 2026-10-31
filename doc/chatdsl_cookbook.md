@@ -1360,14 +1360,18 @@ Deleted session 'test_model_20260908_083213_2'.
 /session query since=24h ids
 
 # 4. Non-destructive turn extraction: inspect turn 1 (prompt & response) of a target session
-# Extracts read-only without interrupting or switching the active session
-/session get ${ERROR_SESSIONS}[0] turn=1 both var=FIRST_TURN
+# Extracts read-only without interrupting or switching the active session.
+# Subscript syntax is ${var[0]} (index INSIDE the braces): ${var}[0] substitutes
+# the whole list and leaves "[0]" as literal text. var= saves a single formatted
+# string (no .prompt/.response dot access), so extract each part separately.
+/session get ${ERROR_SESSIONS[0]} turn=1 prompt var=FIRST_PROMPT
+/session get ${ERROR_SESSIONS[0]} turn=1 response var=FIRST_RESPONSE
 
-/echo "First turn prompt: ${FIRST_TURN}.prompt"
-/echo "First turn response: ${FIRST_TURN}.response"
+/echo "First turn prompt: ${FIRST_PROMPT}"
+/echo "First turn response: ${FIRST_RESPONSE}"
 
 # 5. Extract only the response text into a dedicated variable for downstream processing
-/session get ${ERROR_SESSIONS}[0] turn=1 response var=BOT_ANSWER
+/session get ${ERROR_SESSIONS[0]} turn=1 response var=BOT_ANSWER
 /echo "Extracted response: ${BOT_ANSWER}"
 ```
 
@@ -1378,8 +1382,55 @@ Deleted session 'test_model_20260908_083213_2'.
 4. **Entire Session Storage Footprint:** Every matched session reports its full storage footprint on disk (e.g. `8.2 KB` or exact `size_bytes`) rather than confusing turn snippet sizes. Results are cached via a 3-tier lazy evaluation architecture to eliminate redundant disk I/O.
 5. **Fast Discovery Mode (`ids`):** Passing `ids` displays a compact list of session IDs and their whole-session byte sizes, populating `${SESSION_IDS}` and saving the ID list to `var=` if provided.
 6. **Full-Content Inspection (`full`):** Passing `full` outputs the entire un-truncated exchange instead of 80-character snippets.
-7. **Non-Destructive Extraction (`/session get`):** Inspect turns from any session on disk (or the active session via `active`) without calling `/session use` (which would switch the active session and pollute the context window). Specify `turn=N` (or `turn=all`), and select `prompt`, `response`, `thinking`, or `both`.
+7. **Non-Destructive Extraction (`/session get`):** Inspect turns from any session on disk (or the active session via `active`) without calling `/session use` (which would switch the active session and pollute the context window). Specify `turn=N` (or `turn=all`), and select `prompt`, `response`, `thinking`, or `both`. Note: the size shown in the `/session get` header is the byte length of the extracted text only, not the whole session - whole-session footprints appear in `/session query` output.
 8. **Automated Variable Assignment:** Populates protected variables `${SESSION_QUERY}` and `${SESSION_GET}`, or assign directly to custom script variables via `var=<name>`.
+
+### 10.7 Finding Sessions by Model and Reporting Sizes
+- **Goal:** Find every session saved under a given model alias (`model=` is a case-insensitive substring match on `model_alias`), extract the first exchange of the newest non-empty match, and report whole-session sizes for the first 10 - combining list, get, query, and bounded foreach loops.
+- **Commands:** `/session list model=<substr> all [ids] [var=...]`, `/session get <sid> turn=N prompt|response var=...`, `/session query "" session=<sid> ids`, `foreach`/`endfor`, `if ... then break`, `/calc`, `/setvar`.
+- **Script:** `cookbook/10_7_find_test_sessions.chatdsl`
+- **Run:** `/script doc/cookbook/10_7_find_test_sessions.chatdsl`
+
+```dsl
+# 1. Show all matching sessions (without `all`, only the 10 most recent appear)
+/session list model=test all
+
+# 2. Capture just the session IDs as a variable for downstream steps
+/session list model=test all ids var=test_ids
+
+# 3. Walk the matches newest-first and show the first exchange of the
+#    newest session that actually has content. Empty sessions (0 turns)
+#    fail /session get turn=1 and leave FIRST_PROMPT unset, so the loop
+#    skips them. Note: foreach iterates a bare variable name (test_ids),
+#    and the item var is unset after endfor, so save the match before break.
+foreach sid in test_ids
+/session get ${sid} turn=1 prompt var=FIRST_PROMPT
+if "${FIRST_PROMPT}" != "" then /setvar found_sid ${sid}
+if "${FIRST_PROMPT}" != "" then break
+endfor
+/echo "Newest non-empty test session: ${found_sid}"
+/echo "First turn prompt: ${FIRST_PROMPT}"
+/session get ${found_sid} turn=1 response var=FIRST_RESPONSE
+/echo "First turn response: ${FIRST_RESPONSE}"
+
+# 4. Report the whole-session size of the first 10 matches.
+#    /session query "" matches everything; session= takes an EXACT session
+#    id (not a substring), so query each sid directly. Sizes shown are the
+#    full session directory size (B/KB/MB). /calc counts iterations and
+#    the if breaks the loop at 10. Empty sessions simply report 0 found.
+/setvar size_count 0
+foreach sid in test_ids
+/session query "" session=${sid} ids
+/calc "${size_count} + 1" size_count
+if ${size_count} >= 10 then break
+endfor
+```
+
+**Walkthrough**
+1. **Filter by model (`/session list model=test all`):** `model=` substring-matches the session's `model_alias` (so `test` catches `test_model`); `all` is required because the default shows only the 10 most recent. Results are sorted by `updated_at`, newest first.
+2. **IDs into a variable:** with `ids`, `var=` stores the plain session-ID list (without `ids` it stores full summary dicts).
+3. **Skip-empty loop:** `/session get <sid> turn=1` fails on empty sessions, leaving the target variable unset; unresolved `${VAR}` placeholders are silently stripped by the script pre-substitution, so `if "${FIRST_PROMPT}" != ""` detects the failure. The match must be saved to a separate variable before `break` because foreach deletes its item variable after `endfor`.
+4. **Exact-match size lookup:** `/session query "" session=<sid> ids` lists the session with its full on-disk directory footprint; zero search terms match everything, and `session=` requires the exact sid (no substring). `/calc "${n} + 1" n` plus `if ${n} >= 10 then break` bounds the loop to 10 iterations since `limit=` does not cap ids-mode output.
 
 ---
 

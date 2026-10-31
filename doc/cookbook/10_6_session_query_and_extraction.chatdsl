@@ -15,12 +15,16 @@
 /session query since=24h ids
 
 # 4. Non-destructive turn extraction: inspect turn 1 (prompt & response) of a target session
-# Extracts read-only without interrupting or switching the active session
-/session get ${ERROR_SESSIONS}[0] turn=1 both var=FIRST_TURN
+# Extracts read-only without interrupting or switching the active session.
+# Subscript syntax is ${var[0]} (index INSIDE the braces): ${var}[0] substitutes
+# the whole list and leaves "[0]" as literal text. var= saves a single formatted
+# string (no .prompt/.response dot access), so extract each part separately.
+/session get ${ERROR_SESSIONS[0]} turn=1 prompt var=FIRST_PROMPT
+/session get ${ERROR_SESSIONS[0]} turn=1 response var=FIRST_RESPONSE
 
-/echo "First turn prompt: ${FIRST_TURN}.prompt"
-/echo "First turn response: ${FIRST_TURN}.response"
+/echo "First turn prompt: ${FIRST_PROMPT}"
+/echo "First turn response: ${FIRST_RESPONSE}"
 
 # 5. Extract only the response text into a dedicated variable for downstream processing
-/session get ${ERROR_SESSIONS}[0] turn=1 response var=BOT_ANSWER
+/session get ${ERROR_SESSIONS[0]} turn=1 response var=BOT_ANSWER
 /echo "Extracted response: ${BOT_ANSWER}"

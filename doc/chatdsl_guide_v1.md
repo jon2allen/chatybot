@@ -1306,11 +1306,36 @@ set name = "value"
 ${name}
 ```
 
+List variables (e.g. captured with `/session list ... ids var=ids`) support
+subscripting with the index INSIDE the braces:
+
+```dsl
+${ids[0]}
+```
+
+`${ids}[0]` is NOT a subscript: it substitutes the whole list and leaves
+`[0]` as literal text. Variables saved by commands are plain strings or
+lists - there is no field access (`${x}.prompt` does not exist). Unresolved
+placeholders are silently stripped during script execution, so a variable
+that was never set renders as empty text rather than an error.
+
 ### Conditions
 ```dsl
 if ${x} == "yes" then /command
 if not ${debug} then /echo "quiet"
 ```
+
+### Foreach
+```dsl
+foreach item in my_array
+/echo ${item}
+endfor
+```
+
+The iterable is a bare variable name (not `${my_array}`). The item variable
+is deleted (or restored to its prior value) after `endfor` - save any match
+to a separate variable before `break`. `break` exits the loop early; `if`
+conditions may invoke `break` as their `then` command.
 
 ### Wait
 ```dsl
