@@ -1,5 +1,34 @@
 # Design Proposal: Unified Localization Manager (`LocalizationManager`)
 
+**Document Version:** 1.1
+**Date:** July 23, 2026 (date of the last commit touching this file: `d40bd04`, 2026-07-23 11:35 -0400)
+**Status:** Implemented with deviations — validated against `localization.py`, `chaty_help.py`, `chatybot_app.py`, and `translations.json` on October 31, 2026; see Implementation Deviations and Open Items below
+**Applies To:** `src/chatybot/localization.py`, `src/chatybot/chaty_help.py` (render path), `src/chatybot/translations.json`, `src/chatybot/logging_manager.py` (successor to the unified-logging half)
+
+---
+
+## Implementation Deviations (as-built vs. this proposal)
+
+Validated claim-by-claim on 2026-10-31. What matches: the per-locale catalog with `aliases`/`ui`/command help, `print()` template formatting, `resolve_command` alias resolution (superset: the implementation adds a cross-locale fallback scan), the English fallback for incomplete translations, and the app integration at `chatybot_app.py:99` (`self.i18n = LocalizationManager(locale=lang)`). Notably, the per-command `long_desc` catalog key specified in the schema was only delivered on 2026-10-31 — three months after this proposal.
+
+The deviations:
+
+1. **The "unified localization + logging" core idea was split into two managers.** The proposal has `LocalizationManager` own a stdlib `logging.FileHandler` for background logging. The implementation contains zero logging in `localization.py` — file logging went to a separate `LoggingManager` using pyio-intercept stdout middleware (`logging_manager.py`).
+2. **Help data flow is inverted.** The proposal has `HelpSystem` pull translated `short_desc`/`usage`/`long_desc` from the catalog at registration time (catalog as source of truth, constructor-injected manager). The implementation does the opposite: `chaty_help.py` holds canonical English `CommandHelp` dataclasses and the renderer overlays translations at display time; the help system is a no-arg `get_help_system()` singleton with `i18n` passed per render call. This is the "two sources of truth" tension that the Halloween proposal (§3, item A3 — message keys) recommends resolving by returning to the catalog-driven design specified here.
+3. **The per-command `usage` catalog key never materialized.** Usage lines come from the English canonical text with alias substitution at render time; no catalog entry carries `usage`.
+4. **The `/lang` live language-switching command was never implemented.** No `/lang` or `/language` command exists; the locale is set from configuration at startup only.
+5. **The catalog schema outgrew the proposal:** `commands` became `help.commands`, and the implementation added `keywords` (sub-keyword translation via `translate_script`), `help.headers`, and `help.categories` — none of which are specified here. `set_locale` also gained `LANG_MAP` normalization ("spanish" → "es") beyond the proposal's direct key check.
+6. **The proposal's schema anticipated bilingual help output** only implicitly; as-built, `format_command_detail` renders English `long_desc` followed by the localized translation (added 2026-10-31), which the proposal's single-template design did not cover.
+
+## Open Items
+
+1. **`/lang` live language switching** — the only unimplemented user-facing feature in this proposal; today changing language requires a config change and restart.
+2. **Message-key architecture (A3)** — adopt the catalog-driven help design this proposal originally specified, or formally accept English-in-code as canonical; tracked in `doc/Halloween_proposal.md` §3.
+3. **Unified-logging question** — decide whether localization should also own structured logging (as proposed here) or remain split from `LoggingManager`; the Halloween proposal §5 expands the pyio-intercept chain instead.
+4. **`usage` catalog keys** — either add them or document that usage strings are English-canonical with alias substitution.
+
+---
+
 This document details the unified localization and logging architecture for ChatyBot. It integrates translation catalog lookups, dynamic console output, background debugging logs, command alias resolution (e.g. `/herramienta` -> `/tool`), and localized help messages into a single, cohesive system.
 
 ---
