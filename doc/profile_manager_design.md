@@ -26,6 +26,10 @@ The deviations — the implementation grew past this design:
 1. **`/profile` help args string is incomplete** — `debug_misc.py:409` declares `args="<list|edit|use|delete> [name]"` while all eight subcommands (list, use, clone, delete, export, import, show, edit) are implemented and documented in the help system. Fix the args string or generate it from the handler.
 2. **Update or retire this document**: the "Current State vs Planned" table, the [!IMPORTANT] note, and the raw-text profile model now misdescribe the as-built system (see deviations 1-3). Either regenerate from the current implementation or mark this file historical.
 3. **Document the unmanaged-content delimiter and `@version` upgrade semantics** in the user-facing guides — they affect hand-edited profiles and are currently only in code and tests.
+4. **Salvaged ideas from the removed sibling draft** (`profile_cohere_1.md`, a parallel AI-generated plan for the same system; deleted 2026-10-31, recoverable from git history) — three genuinely unique, never-implemented ideas worth considering:
+   - **TUI macro management**: list/add/edit/delete ChatDSL macros inside the profile editor (the shipped editor has no macro section).
+   - **Editor validation pass**: profile-name uniqueness check, settings-compatibility validation, ChatDSL syntax validation of the managed body, and tool-configuration validation before save (none exist in `create_profile()` or the TUI today).
+   - **TUI navigation tests**: screen transitions, focus management, error display (`test_profile_tui_help.py` covers only the field-help database).
 
 ---
 
