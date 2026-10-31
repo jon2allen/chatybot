@@ -1115,6 +1115,20 @@ definir nom = "valeur"
 ${nom}
 ```
 
+Les variables de liste (p. ex. capturées avec `/session list ... ids var=ids`)
+prennent en charge l'indiçage, avec l'index À L'INTÉRIEUR des accolades :
+
+```dsl
+${ids[0]}
+```
+
+`${ids}[0]` n'est PAS un indiçage : il substitue la liste entière et laisse
+`[0]` comme texte littéral. Les variables enregistrées par les commandes
+sont des chaînes ou des listes simples - l'accès aux champs n'existe pas
+(`${x}.prompt` n'existe pas). Les placeholders non résolus sont supprimés
+silencieusement pendant l'exécution du script, donc une variable jamais
+définie s'affiche comme du texte vide au lieu d'une erreur.
+
 ### Variables Locales (Procédures)
 ```dsl
 local nom = "valeur"
@@ -1128,11 +1142,17 @@ if not ${debug} then /echo "quiet"
 
 ### Boucles Foreach
 ```dsl
-pourchaque fichier in ${liste_fichiers}
+pourchaque fichier in liste_fichiers
     /echo Traitement de ${fichier}...
     # Logique ici
 finpour
 ```
+
+L'itérable est un nom de variable simple, pas `${liste_fichiers}`. La
+variable d'élément est supprimée (ou restaurée à sa valeur antérieure)
+après `finpour` - enregistrez toute correspondance dans une variable
+distincte avant `casser`. `casser` quitte la boucle plus tôt ; les
+conditions `if` peuvent invoquer `casser` comme commande `then`.
 
 ### Sortie de Boucle avec Break
 ```dsl

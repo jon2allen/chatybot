@@ -1115,6 +1115,20 @@ establecer nombre = "valor"
 ${nombre}
 ```
 
+Las variables de lista (p. ej. capturadas con `/session list ... ids var=ids`)
+admiten subíndices, con el índice DENTRO de las llaves:
+
+```dsl
+${ids[0]}
+```
+
+`${ids}[0]` NO es un subíndice: sustituye la lista completa y deja `[0]`
+como texto literal. Las variables guardadas por comandos son cadenas o
+listas simples - no existe el acceso a campos (`${x}.prompt` no existe).
+Los marcadores de posición no resueltos se eliminan silenciosamente
+durante la ejecución del script, por lo que una variable nunca definida
+se muestra como texto vacío en lugar de un error.
+
 ### Variables Locales (Procedimientos)
 ```dsl
 local nombre = "valor"
@@ -1128,11 +1142,17 @@ if not ${debug} then /repetir "quiet"
 
 ### Bucles Foreach
 ```dsl
-foreach archivo in ${lista_archivos}
+foreach archivo in lista_archivos
     /echo Procesando ${archivo}...
     # Lógica aquí
 endfor
 ```
+
+El iterable es un nombre de variable simple, no `${lista_archivos}`. La
+variable de elemento se elimina (o se restaura a su valor anterior) después
+de `endfor` - guarda cualquier coincidencia en una variable separada antes
+de `break`. `break` sale del bucle anticipadamente; las condiciones `if`
+pueden invocar `break` como comando `then`.
 
 ### Salida de Bucle con Break
 ```dsl

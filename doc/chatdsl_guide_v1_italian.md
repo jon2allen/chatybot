@@ -1115,6 +1115,20 @@ imposta nome = "valore"
 ${nome}
 ```
 
+Le variabili lista (ad es. acquisite con `/session list ... ids var=ids`)
+supportano l'indicizzazione, con l'indice DENTRO le parentesi graffe:
+
+```dsl
+${ids[0]}
+```
+
+`${ids}[0]` NON è un'indicizzazione: sostituisce l'intera lista e lascia
+`[0]` come testo letterale. Le variabili salvate dai comandi sono stringhe
+o liste semplici - non esiste l'accesso ai campi (`${x}.prompt` non esiste).
+I segnaposto non risolti vengono rimossi silenziosamente durante
+l'esecuzione dello script, quindi una variabile mai impostata produce testo
+vuoto invece di un errore.
+
 ### Variabili Locali (Procedure)
 ```dsl
 locale nome = "valore"
@@ -1128,11 +1142,17 @@ if not ${debug} then /eco "quiet"
 
 ### Cicli Foreach
 ```dsl
-perogni file in ${lista_file}
+perogni file in lista_file
     /eco Elaborazione ${file}...
     # Logica qui
 finper
 ```
+
+L'iterabile è un nome di variabile semplice, non `${lista_file}`. La
+variabile elemento viene eliminata (o ripristinata al valore precedente)
+dopo `finper` - salva ogni corrispondenza in una variabile separata prima
+di `rompere`. `rompere` esce dal ciclo in anticipo; le condizioni `if`
+possono invocare `rompere` come comando `then`.
 
 ### Uscita dal Ciclo con Break
 ```dsl
