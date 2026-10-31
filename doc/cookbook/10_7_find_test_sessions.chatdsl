@@ -1,0 +1,43 @@
+# Recipe 10.7 - Finding Sessions by Model and Reporting Sizes
+# Goal: Find every session saved under a given model alias (substring match),
+#       extract content from the newest non-empty one, and report whole-session
+#       sizes for the first 10 - exercising /session list, /session get,
+#       /session query, foreach, if/break, and /calc together.
+# Run: /script doc/cookbook/10_7_find_test_sessions.chatdsl
+# Note: model=test is a case-insensitive substring match on model_alias,
+#       so it matches all sessions saved with alias "test_model".
+#       /session list populates ${SESSION_LIST} (full summaries) and
+#       ${SESSION_IDS} (plain sid list).
+
+# 1. Show all matching sessions (without `all`, only the 10 most recent appear)
+/session list model=test all
+
+# 2. Capture just the session IDs as a variable for downstream steps
+/session list model=test all ids var=test_ids
+
+# 3. Walk the matches newest-first and show the first exchange of the
+#    newest session that actually has content. Empty sessions (0 turns)
+#    fail /session get turn=1 and leave FIRST_PROMPT unset, so the loop
+#    skips them. Note: foreach iterates a bare variable name (test_ids),
+#    and the item var is unset after endfor, so save the match before break.
+foreach sid in test_ids
+/session get ${sid} turn=1 prompt var=FIRST_PROMPT
+if "${FIRST_PROMPT}" != "" then /setvar found_sid ${sid}
+if "${FIRST_PROMPT}" != "" then break
+endfor
+/echo "Newest non-empty test session: ${found_sid}"
+/echo "First turn prompt: ${FIRST_PROMPT}"
+/session get ${found_sid} turn=1 response var=FIRST_RESPONSE
+/echo "First turn response: ${FIRST_RESPONSE}"
+
+# 4. Report the whole-session size of the first 10 matches.
+#    /session query "" matches everything; session= takes an EXACT session
+#    id (not a substring), so query each sid directly. Sizes shown are the
+#    full session directory size (B/KB/MB). /calc counts iterations and
+#    the if breaks the loop at 10. Empty sessions simply report 0 found.
+/setvar size_count 0
+foreach sid in test_ids
+/session query "" session=${sid} ids
+/calc "${size_count} + 1" size_count
+if ${size_count} >= 10 then break
+endfor

@@ -1,0 +1,32 @@
+# find_test_delete.chatdsl
+# Goal: Find every session saved under a test model and delete them,
+#       gated by an interactive Y/N confirmation.
+# Run: /script dsl_scripts/find_test_delete.chatdsl
+#       (run interactively - /ask is skipped when stdin is not a TTY)
+# Note: model=test is a case-insensitive substring match on model_alias,
+#       so it targets all sessions saved with alias "test_model".
+#       /ask yesno stores normalized "yes"/"no" (accepts 1/2) into the
+#       named variable and $ASK_RESULT; on skip the variable keeps its
+#       prior value.
+
+# 1. Find the targets (`all` is required - the default shows only 10 recent)
+/session list model=test all ids var=test_ids
+
+# 2. Y/N gate. Default "no" BEFORE the ask, so a skipped prompt
+#    (non-interactive or batch run) deletes NOTHING.
+set confirm = "no"
+/ask yesno "Delete ALL sessions saved with model test?" -> confirm
+
+if "${confirm}" != "yes" then /echo "Aborted - no sessions deleted."
+
+# 3. Delete loop with a per-item guard. A top-level `break` does NOT abort
+#    a script (it prints an error outside a foreach and execution continues),
+#    so the guard-if inside the loop is the safe abort pattern.
+#    /session delete also handles the active session correctly (releases
+#    its lock and clears it) if a match happens to be the active one.
+set deleted_count = 0
+foreach sid in test_ids
+if "${confirm}" == "yes" then /session delete ${sid}
+if "${confirm}" == "yes" then /calc "${deleted_count} + 1" deleted_count
+endfor
+/echo "Deleted ${deleted_count} session(s)."
