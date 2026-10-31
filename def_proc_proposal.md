@@ -1,3 +1,35 @@
+# ChatDSL Procedure System Proposal (`defproc` / `endproc` / `/proc` / `local`)
+
+**Document Version:** 1.1
+**Date:** July 30, 2026 (date of the last commit touching this file: `12bc73a`, 2026-07-30 17:20 -0400)
+**Status:** Implemented — validated against source and `test/test_procs.py` (14 tests green) on October 31, 2026; see Implementation Deviations and Open Items below
+**Applies To:** ChatDSL procedure system — `defproc`/`endproc`/`local` capture in `chatybot_app.py`, `/proc` execution in `commands/proc_macros.py`, `ScriptVars` protected variables in `buffer_manager.py`
+
+---
+
+## Implementation Deviations (as-built vs. this proposal)
+
+Validated claim-by-claim on 2026-10-31. Phase 1 (file-based `/proc`, Save/Restore, `/script` parameter fix) and Phase 2 (inline `defproc`/`endproc`, `local` scope, `PROC_MAX_DEPTH` guard) are implemented as specified, including the `(proc)>` REPL prompt verbatim. The deviations all fall in the reserved-variables section (§9 of the embedded spec):
+
+1. **`PROC_RESULT` has no system behavior.** It is never referenced in source; it works only because any script variable is settable. The "standard return value convention" is unenforced — usable, but nothing reserves it.
+2. **`PROC_MAX_DEPTH` is honored but not in `protected_vars`.** Read from `ScriptVars` with default 20 (invalid values warn and fall back to 20), but the proposal's "must be added to `ScriptVars.protected_vars`" was not done — it is a plain user-writable variable.
+3. **`LAST_ERROR` does not exist.** No reference anywhere in `src/`; the "captures text of last failed command/tool, system-only" variable was not implemented.
+4. **`SYS_*` / `CHATY_*` prefix reservations are not implemented.** `protected_vars` in `buffer_manager.py` is a fixed name list (`AGENTIC_LOOP`, `CHAT_HISTORY`, `LAST_RESPONSE`, `RUN_*`, `DECIDE_*`, etc.); there is no prefix-matching reservation logic.
+5. **`LAST_RESPONSE` is protected as specified** — the one §9 entry fully delivered.
+6. **`local` at top level silently becomes a global.** Outside a procedure there is no stack frame, so `local x = 1` at script top level leaks permanently. The proposal never specified this case.
+7. **Nested `defproc` is a hard error, but script mode does not abort the run.** The implementation prints the error, discards the outer procedure body, and continues processing the rest of the script; REPL mode aborts the capture without defining. The proposal said "print an error and abort" — the script-mode behavior is softer than specified.
+8. **File-based `/proc` search paths are a superset.** As built: memory → `name` → `name.chatdsl` → `procs/name.chatdsl` → `~/.config/chatybot/procs/name.chatdsl`, with wrapper `defproc`/`endproc` lines stripped. The proposal specified only `./procs/name.chatdsl`.
+
+## Open Items
+
+1. **Reserved-variable enforcement:** implement `LAST_ERROR` and `SYS_*`/`CHATY_*` prefix reservations in `buffer_manager.py`, or formally drop them from the spec.
+2. **Decide the reservation status of `PROC_RESULT` and `PROC_MAX_DEPTH`:** add to `protected_vars` (strictly managed) or document them as unreserved conventions.
+3. **Define top-level `local` semantics:** currently a silent global set; either reject it outside procedures or document the behavior.
+4. **Nested `defproc` in scripts:** decide whether the current discard-and-continue behavior is intended, or whether it should abort the script run.
+5. **Doc consistency:** this file now carries the same status/version header convention as `doc/proposal_*.md`; the embedded spec below still reads "Status: Design Review" and is retained verbatim as the historical design record.
+
+---
+
 This is a great technical direction. To make ChatDSL procedures truly powerful and resilient—especially for recursion and complex logic—moving beyond purely global state is essential.
 
 Here is a review and discussion of the best options for handling script variables, local scoping, recursion, and reserved system globals, followed by the fully regenerated specification.
