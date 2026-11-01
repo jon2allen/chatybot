@@ -148,7 +148,7 @@ def _handle_show(ctx: CommandContext, parts: list) -> CommandResult:
             print(f"  Disable: {', '.join(tc['disable_tools'])}")
         print(f"  Auto-loop: {tc.get('auto_loop', False)}, max_turns: {tc.get('max_turns', 25)}")
     else:
-        print("Tool Config: (none — guidance only)")
+        print("Tool Config: (none - guidance only)")
     print(f"{'=' * 60}")
     print(f"\n{skill.get('content', '')}\n")
     return CommandResult.ok()
@@ -466,7 +466,7 @@ def _handle_search(ctx: CommandContext, parts: list) -> CommandResult:
         desc = skill.get("metadata", {}).get("description", "")
         if len(desc) > 60:
             desc = desc[:57] + "..."
-        print(f"  {doc_id}. {name} — {desc}")
+        print(f"  {doc_id}. {name} - {desc}")
     return CommandResult.ok()
 
 

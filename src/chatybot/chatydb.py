@@ -237,7 +237,7 @@ def search_db(query: str) -> None:
         if not results:
             print("No documents in database.")
             return
-        print(f"Empty query — showing all {len(results)} document(s):")
+        print(f"Empty query - showing all {len(results)} document(s):")
         for i, doc in enumerate(results, 1):
             snippet = (doc.get("content") or "")[:100]
             print(
@@ -339,7 +339,7 @@ def dblog(include_thinking: bool = False) -> None:
             last_response = app_instance.last_response
             last_prompt = getattr(app_instance, "last_prompt", "User Prompt") or "User Prompt"
         else:
-            print("Chat history is empty – nothing to log.")
+            print("Chat history is empty - nothing to log.")
             return
     else:
         last_response = CHAT_HISTORY[-1][1]
@@ -472,7 +472,7 @@ def load_var(var_name: str, extra: str | None = None) -> None:
     data_to_load = []
     if extra is None:
         if not SEARCHBUFFER:
-            print("SEARCHBUFFER is empty – nothing to load.")
+            print("SEARCHBUFFER is empty - nothing to load.")
             return
         data_to_load = SEARCHBUFFER
     else:

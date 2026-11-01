@@ -1,6 +1,6 @@
 #! /usr/bin/env python3
 """
-batch.py — /batch and /batchlist commands (Batch API subsystem, Phase 1).
+batch.py - /batch and /batchlist commands (Batch API subsystem, Phase 1).
 
 Implements the command surface of mistral-batch-poc/batch_proposal_v3.md §4.3:
 a staging lifecycle (start → add → end → run → check) with draft inspection
@@ -9,7 +9,7 @@ a global catalog query (/batchlist) modeled after /session list, and crash-safe
 submission against the OpenRouter Batch API.
 
 Naming rationale ("batch_api"): this subsystem wraps asynchronous *provider*
-Batch APIs (OpenRouter now, Mistral in Phase 2) — bulk inference submitted,
+Batch APIs (OpenRouter now, Mistral in Phase 2) - bulk inference submitted,
 polled, and retrieved out-of-band at a 50% discount. It is unrelated to the
 pre-existing "batch" concepts in ChatyBot: batch-n / Batched Top-N is the
 client-side chunk pre-filter in /rerank (doc/BATCH_N_WALKTHROUGH.md), and the
@@ -372,10 +372,10 @@ def _resolve_item_batch(mgr: BatchManager, custom_id: str,
       1. An explicit name token that actually contains the item
          (disambiguates duplicate IDs across batches; the token is consumed
          so edit does not treat it as replacement text).
-      2. The newest EDITABLE (draft) batch containing the item — edit and
+      2. The newest EDITABLE (draft) batch containing the item - edit and
          remove then operate on the draft, while show on a non-draft match
          falls through to (3) and gets a clear lock error.
-      3. The newest batch of any status containing the item — this is what
+      3. The newest batch of any status containing the item - this is what
          makes /batch show <item-id> work on completed batches with no name.
 
     Returns (meta, consumed_name_token) or (None, None) when the item is not
@@ -724,7 +724,7 @@ async def _sc_show(ctx: CommandContext, mgr: BatchManager, rest: str) -> Command
         print(f"[Result]: not retrieved for this item "
               "(no record in results.jsonl).")
     else:
-        print(f"\n(No results yet — batch status: {meta['status']}. "
+        print(f"\n(No results yet - batch status: {meta['status']}. "
               f"Run '/batch check {meta['name']}' to poll/retrieve.)")
     print()
     return CommandResult.ok()
@@ -903,7 +903,7 @@ async def _sc_results(ctx: CommandContext, mgr: BatchManager, rest: str) -> Comm
 
     empty_now = sum(1 for record in records if is_empty_result(record))
     empty_note = f", {empty_now} empty" if empty_now else ""
-    print(f"\n[Results: {meta['name']} — showing {len(page)} of "
+    print(f"\n[Results: {meta['name']} - showing {len(page)} of "
           f"{len(records)} records{empty_note}, status: {meta['status']}]")
     for i, record in enumerate(page, offset + 1):
         print("-" * 60)
@@ -995,7 +995,7 @@ async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandRe
 
 
 # ---------------------------------------------------------------------------
-# /batchlist — global catalog query (mirrors /session list filters)
+# /batchlist - global catalog query (mirrors /session list filters)
 # ---------------------------------------------------------------------------
 
 @command("/batchlist", help="List batches from the global catalog",

@@ -1,6 +1,6 @@
 #! /usr/bin/env python3
 """
-batch_manager.py — Batch API subsystem storage, state machine, and providers.
+batch_manager.py - Batch API subsystem storage, state machine, and providers.
 
 Implements Phase 1 of the Batch API proposal (mistral-batch-poc/batch_proposal_v3.md):
 
@@ -204,7 +204,7 @@ class OpenRouterBatchProvider:
 
     async def get(self, provider_id: str, allow_missing: bool = False) -> dict | None:
         """Fetch one batch record. Right after submission the batch may not be
-        queryable yet (202 + id precedes eventual consistency) — treat 404 as
+        queryable yet (202 + id precedes eventual consistency) - treat 404 as
         'not yet' when allow_missing."""
         url = f"{self.base_url}/batches/{provider_id}"
         async with aiohttp.ClientSession() as session:
@@ -222,7 +222,7 @@ class OpenRouterBatchProvider:
 
     async def cancel(self, provider_id: str) -> dict:
         raise BatchError(
-            "OpenRouter does not support cancelling a submitted batch — it "
+            "OpenRouter does not support cancelling a submitted batch - it "
             "runs to completion (or expires within 24 hours) and bills at "
             "batch rates. Use '/batch cancel <name> force=true' to disown it "
             "locally."
@@ -511,7 +511,7 @@ class BatchManager:
         with /batch end before submission.
 
         Refuses when new_name already belongs to an editable batch (draft/staged)
-        unless force=True — start() would reopen and clear that batch, silently
+        unless force=True - start() would reopen and clear that batch, silently
         destroying its staged items (and un-sealing it if staged)."""
         existing = self.find_by_name(sanitize_batch_name(new_name))
         if existing is not None:
@@ -712,7 +712,7 @@ class BatchManager:
                 hits.append((item["custom_id"], str(verdict), reason))
         if hits:
             raise BatchError(
-                "Security scan failed — staging remains open (status: draft).\n"
+                "Security scan failed - staging remains open (status: draft).\n"
                 "Offending items:\n  " + "\n  ".join(
                     f"{cid}: {reason}" for cid, _v, reason in hits
                 ) + "\n"
@@ -777,7 +777,7 @@ class BatchManager:
                              f"({meta['status']}); nothing to abort.")
         if meta["status"] == STATUS_SUBMITTING:
             print(f"Warning: Batch '{meta['name']}' was in 'submitting' state. "
-                  "A remote batch may still exist and bill — check /batchlist or "
+                  "A remote batch may still exist and bill - check /batchlist or "
                   f"adopt with '/batch run {meta['name']} adopt=<id>' before aborting.")
         import shutil
         shutil.rmtree(self._instance_dir(meta["batch_id"]), ignore_errors=True)
@@ -827,13 +827,13 @@ class BatchManager:
         """Estimate cost, verify the budget and concurrency caps, then submit.
 
         The pre-POST sidecar write (status='submitting', fsynced) happens
-        strictly BEFORE the network socket opens — OpenRouter does not
+        strictly BEFORE the network socket opens - OpenRouter does not
         deduplicate batch POSTs (spike finding §2.1), so a crash between the
         write and the POST leaves a reconcilable orphan rather than a silent
         duplicate."""
         if meta["status"] == STATUS_SUBMITTING:
             raise BatchError(
-                f"Batch '{meta['name']}' is marked as 'submitting' — a previous "
+                f"Batch '{meta['name']}' is marked as 'submitting' - a previous "
                 "submission may have crashed mid-flight. OpenRouter does not "
                 "deduplicate, so a new POST could create a duplicate batch.\n"
                 "Reconcile first: run '/batch check {0}' or inspect provider "
@@ -899,7 +899,7 @@ class BatchManager:
         results.jsonl (one record per custom_id) and records the exact
         usage.cost / provider telemetry into meta and the catalog."""
         if not meta.get("provider_id"):
-            raise BatchError(f"Batch '{meta['name']}' has no provider id — it has not "
+            raise BatchError(f"Batch '{meta['name']}' has no provider id - it has not "
                              "been submitted. Run '/batch run {0}' first.".format(meta["name"]))
         delay = POLL_START_SECONDS
         batch = await provider_obj.get(meta["provider_id"], allow_missing=True)
@@ -976,13 +976,13 @@ class BatchManager:
             if not force:
                 raise BatchError(
                     f"Provider '{meta.get('provider', 'unknown')}' cannot cancel a "
-                    "submitted batch — it will run to completion (or expire within "
+                    "submitted batch - it will run to completion (or expire within "
                     "24 hours) and bill at batch rates.\n"
                     "To remove it from your active batches anyway, re-run with "
                     f"force=true: '/batch cancel {meta['name']} force=true' "
                     "(marks it cancelled locally; the remote job is not stopped)."
                 )
-            print(f"Note: cancelling '{meta['name']}' locally only — the remote "
+            print(f"Note: cancelling '{meta['name']}' locally only - the remote "
                   "job will still run to completion and bill at batch rates.")
         meta["status"] = STATUS_CANCELLED
         meta["finalized_at"] = int(time.time())

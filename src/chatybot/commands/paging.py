@@ -1,5 +1,5 @@
 """
-paging.py — Common pagination, range, duration, and script-variable parsing utilities.
+paging.py - Common pagination, range, duration, and script-variable parsing utilities.
 
 Shared across interactive CLI commands (/batch, /batchlist, /session, /tools, /replay)
 to prevent range/limit parser drift and duplicated duration parsing.

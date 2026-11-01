@@ -264,8 +264,8 @@ class ConfigTUI:
             y = 5 + idx
             
             # Formatting values
-            vendor_str = getattr(model, "vendor", None) or getattr(model, "detected_vendor", "") or "—"
-            temp_str = f"{model.temperature:.2f}" if getattr(model, "temperature", None) is not None else "—"
+            vendor_str = getattr(model, "vendor", None) or getattr(model, "detected_vendor", "") or "-"
+            temp_str = f"{model.temperature:.2f}" if getattr(model, "temperature", None) is not None else "-"
             name_str = model.name
             
             # Truncation limits
@@ -319,7 +319,7 @@ class ConfigTUI:
             ch = stdscr.getch()
             if ch in (10, 13):  # Enter
                 break
-            elif ch == 27:  # Escape — restore original filter (matches edit_text_input)
+            elif ch == 27:  # Escape - restore original filter (matches edit_text_input)
                 current_filter = original_filter
                 break
             elif ch in (curses.KEY_BACKSPACE, 127, 8):
@@ -840,7 +840,7 @@ class ConfigTUI:
             old_val = getattr(model, field_key, None)
             new_val = None
             should_change = False
-            vendor_disp = getattr(model, "vendor", None) or getattr(model, "detected_vendor", "") or "—"
+            vendor_disp = getattr(model, "vendor", None) or getattr(model, "detected_vendor", "") or "-"
 
             if mode == "clear":
                 new_val = parsed_replace_val
@@ -1134,7 +1134,7 @@ class ConfigTUI:
         max_rows = win_h - 9
 
         while True:
-            self.draw_dialog_border(win, f"Preview Bulk Changes — {summary_desc}")
+            self.draw_dialog_border(win, f"Preview Bulk Changes - {summary_desc}")
 
             # Top summary
             selected_count = sum(1 for c in candidates if c["enabled"])

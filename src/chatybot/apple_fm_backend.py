@@ -1,4 +1,4 @@
-"""Apple Foundation Model backend — on-device inference via apple-fm-sdk.
+"""Apple Foundation Model backend - on-device inference via apple-fm-sdk.
 
 This module isolates all platform checks, import guards, and SDK session
 management for the ``apple_fm`` model type. It is imported lazily only when
@@ -51,7 +51,7 @@ def check_available() -> tuple[bool, str]:
     """Check whether the Apple Foundation Model can be used on this system.
 
     Returns:
-        (is_ready, reason) — if not ready, reason explains what to do.
+        (is_ready, reason) - if not ready, reason explains what to do.
     """
     if not is_platform_supported():
         return False, "Apple Foundation Model requires macOS 26+ on Apple Silicon."
@@ -59,13 +59,13 @@ def check_available() -> tuple[bool, str]:
         return False, (
             "apple-fm-sdk is not installed. "
             "Install with: pip install apple-fm-sdk  "
-            "(or: pip install 'chatybot[apple_fm]' — quotes needed in zsh).  "
+            "(or: pip install 'chatybot[apple_fm]' - quotes needed in zsh).  "
             "Requires Xcode 26+ with the SDK agreement accepted."
         )
     return True, ""
 
 
-# Cached model instance — SystemLanguageModel is heavy to create
+# Cached model instance - SystemLanguageModel is heavy to create
 _model = None
 
 # Maps SystemLanguageModelUnavailableReason enum values to human-readable messages
@@ -95,7 +95,7 @@ def get_model() -> tuple[object | None, str]:
     """Get or create the cached SystemLanguageModel.
 
     Returns:
-        (model, error) — if error is non-empty, model is None.
+        (model, error) - if error is non-empty, model is None.
     """
     global _model
     if _model is not None:
@@ -125,7 +125,7 @@ def create_session(
         tools: Optional list of fm.Tool instances for native tool calling.
 
     Returns:
-        (session, error) — if error is non-empty, session is None.
+        (session, error) - if error is non-empty, session is None.
     """
     model, err = get_model()
     if err:

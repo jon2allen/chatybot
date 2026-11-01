@@ -40,7 +40,7 @@ class PatternMatcher:
         ##########################################
         return re.compile(pattern_str, re.IGNORECASE)
 
-    # Dynamic mutation and matches() API — designed but never used in
+    # Dynamic mutation and matches() API - designed but never used in
     # production. PatternMatcher is built once at construction and only
     # .pattern is accessed. Commented out 2026-09-15.
     # def add_word(self, word):

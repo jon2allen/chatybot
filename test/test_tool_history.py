@@ -116,7 +116,7 @@ class TestToolHistory:
         ]
         await app.handle_escape_command("/tool history 3")
         out = capsys.readouterr().out
-        assert "AGENTIC LOOP — Turn 3" in out
+        assert "AGENTIC LOOP - Turn 3" in out
         assert "read and search" in out
         assert "Step 1" in out
         assert "read_file" in out

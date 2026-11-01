@@ -14,9 +14,9 @@ always prompt the user, even during script execution.
 
 Supported question types
 ------------------------
-  "yesno"   — numbered list [1. yes  2. no]; accepts "1", "2", "yes", "no"
-  "choice"  — numbered list from the supplied *choices*; accepts index or text
-  "text"    — free-form input(), no validation
+  "yesno"   - numbered list [1. yes  2. no]; accepts "1", "2", "yes", "no"
+  "choice"  - numbered list from the supplied *choices*; accepts index or text
+  "text"    - free-form input(), no validation
 """
 
 import os
@@ -150,5 +150,5 @@ def _prompt_choice(prompt: str, choices: list[str]) -> str:
         elif raw in choices_lower:
             # Return with the original casing
             return choices[choices_lower.index(raw)]
-        print(f"  Invalid — enter a number (1-{len(choices)}) or one of: {', '.join(choices)}")
+        print(f"  Invalid - enter a number (1-{len(choices)}) or one of: {', '.join(choices)}")
 

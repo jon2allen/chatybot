@@ -1,5 +1,5 @@
 """
-profile_model.py — Chatybot profile data model.
+profile_model.py - Chatybot profile data model.
 
 Provides Pydantic v2 models for loading, validating, and serializing
 chatybot profile (.chatdsl) files.

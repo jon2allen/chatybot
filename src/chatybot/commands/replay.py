@@ -84,7 +84,7 @@ def _render_summary(snapshots) -> None:
         print("No LLM turns found in this session.")
         return
     print("\n" + "=" * 78)
-    print("SESSION REPLAY — SUMMARY TIMELINE")
+    print("SESSION REPLAY - SUMMARY TIMELINE")
     header = f"{'Turn':<6}{'Msgs':<6}{'Uncut Tok':<12}{'Trunc Tok':<12}{'Evicted':<9}{'AnchorWarn':<11}"
     print(header)
     print("-" * 78)
@@ -107,7 +107,7 @@ def _render_summary(snapshots) -> None:
 
 def _render_at(snapshot, system_prompt: str) -> None:
     print("\n" + "=" * 78)
-    print(f"TURN {snapshot.turn_id} — RECONSTRUCTED CONTEXT")
+    print(f"TURN {snapshot.turn_id} - RECONSTRUCTED CONTEXT")
     print("=" * 78)
     print(f"Messages: {snapshot.message_count}  |  Uncut tokens: {snapshot.total_tokens}  "
           f"|  Truncated tokens: {snapshot.truncated_tokens}")

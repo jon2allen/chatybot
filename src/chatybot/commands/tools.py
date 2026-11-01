@@ -673,9 +673,9 @@ async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandRes
         return CommandResult.ok()
 
     elif subcmd == "history":
-        # /tool history [csv [file]] [var=<name>]     — list all agentic loops recorded in the active session
-        # /tool history <turn_id> [csv [file]] [var=<name>] — show detailed tool calls for a specific session turn
-        # /tool history current [csv [file]] [--verbose] [var=<name>] — show the most recent in-memory AGENTIC_LOOP trace
+        # /tool history [csv [file]] [var=<name>]     - list all agentic loops recorded in the active session
+        # /tool history <turn_id> [csv [file]] [var=<name>] - show detailed tool calls for a specific session turn
+        # /tool history current [csv [file]] [--verbose] [var=<name>] - show the most recent in-memory AGENTIC_LOOP trace
         tokens = []
         for p in parts[2:]:
             tokens.extend(p.strip().split())
@@ -844,7 +844,7 @@ async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandRes
                 # Aggregate tool call durations if available
                 loop_duration = sum(r.get("duration_ms", 0) for r in al if isinstance(r, dict))
                 duration_str = f" [{loop_duration:.0f}ms]" if loop_duration else ""
-                print(f"  Turn {t_id}: {count} calls ({successes} ok, {failures} fail){duration_str} — {tools_str}")
+                print(f"  Turn {t_id}: {count} calls ({successes} ok, {failures} fail){duration_str} - {tools_str}")
 
             print("-" * 80)
             print(f"Total: {len(loops)} loop(s), {total_calls} tool calls ({total_success} success, {total_failed} failed)")
@@ -852,7 +852,7 @@ async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandRes
             print("=" * 80)
             return CommandResult.ok()
 
-        # Specific turn_id requested — show detailed tool calls
+        # Specific turn_id requested - show detailed tool calls
         try:
             target_id = int(detail_arg)
         except ValueError:
@@ -915,7 +915,7 @@ async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandRes
         successes = sum(1 for r in al if isinstance(r, dict) and r.get("status") == "success")
         failures = total - successes
 
-        print(f"\n=== AGENTIC LOOP — Turn {target_id} ===")
+        print(f"\n=== AGENTIC LOOP - Turn {target_id} ===")
         prompt_text = matched_turn.get("prompt", "")
         if prompt_text:
             snippet = prompt_text.replace("\n", " ").strip()
@@ -927,7 +927,7 @@ async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandRes
 
         for i, rec in enumerate(al, 1):
             if not isinstance(rec, dict):
-                print(f"[{i}] (invalid record: {type(rec).__name__}) — SKIPPED")
+                print(f"[{i}] (invalid record: {type(rec).__name__}) - SKIPPED")
                 continue
             tool_name = rec.get("tool", "unknown")
             step = rec.get("turn", i)
@@ -940,7 +940,7 @@ async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandRes
                     duration_str = f" ({float(duration_ms):.0f}ms)"
                 except (ValueError, TypeError):
                     duration_str = f" ({duration_ms}ms)"
-            print(f"[{i}] Step {step} · {tool_name} — {status_label}{duration_str}")
+            print(f"[{i}] Step {step} · {tool_name} - {status_label}{duration_str}")
 
             # Show timestamp if available
             ts = rec.get("timestamp")
@@ -1074,7 +1074,7 @@ async def cmd_tool(ctx: CommandContext, parts: list, command: str) -> CommandRes
 
 
 # ---------------------------------------------------------------------------
-# /tool replay — time-travel agentic loop replay
+# /tool replay - time-travel agentic loop replay
 # ---------------------------------------------------------------------------
 
 _TOOL_REPLAY_KEYWORDS = {"at", "diff", "step"}
@@ -1140,7 +1140,7 @@ def _render_tool_replay_summary(snapshots, turn_id):
         print("No agentic loop found to replay.")
         return
     print("\n" + "=" * 78)
-    print(f"AGENTIC LOOP REPLAY — SUMMARY (turn {turn_id})")
+    print(f"AGENTIC LOOP REPLAY - SUMMARY (turn {turn_id})")
     print("=" * 78)
     header = f"{'Step':<6}{'Tool':<20}{'Msgs':<6}{'Uncut Tok':<12}{'Trunc Tok':<12}{'Evicted':<9}{'AnchorWarn':<11}"
     print(header)
@@ -1167,7 +1167,7 @@ def _render_tool_replay_summary(snapshots, turn_id):
 def _render_tool_replay_at(snapshot, system_prompt):
     print("\n" + "=" * 78)
     label = f"STEP {snapshot.step}" if snapshot.step else "STEP 0 (pre-loop baseline)"
-    print(f"AGENTIC LOOP — {label} (turn {snapshot.turn_id})")
+    print(f"AGENTIC LOOP - {label} (turn {snapshot.turn_id})")
     print("=" * 78)
     print(f"Tool: {snapshot.tool or '-'}  |  Status: {snapshot.status or '-'}  "
           f"|  Duration: {snapshot.duration_ms:.0f}ms" if snapshot.step else
@@ -1359,7 +1359,7 @@ async def _handle_tool_replay(ctx: CommandContext, parts: list) -> CommandResult
 
 
 # ---------------------------------------------------------------------------
-# /tool retry — live tool rescue and repair
+# /tool retry - live tool rescue and repair
 # ---------------------------------------------------------------------------
 
 def _extract_retry_candidate(raw_text: str, app) -> dict:

@@ -5,7 +5,7 @@ was sent to the model at any turn in a session, runs
 ContextLimiter.truncate_messages_verbose(), and produces rich diagnostics on
 evicted messages, anchor overflows, and token deltas.
 
-The system prompt is reconstructed from current config as an approximation —
+The system prompt is reconstructed from current config as an approximation -
 the exact prompt at session time is not stored per turn (see
 reconstruct_system_prompt).
 """
@@ -42,7 +42,7 @@ def reconstruct_messages_from_turns(
         include_current: when False, the final turn's assistant response is
             also appended (i.e. reconstruct the context the model received
             before it produced its answer). When True (default), the final
-            turn stops at the user prompt — the context the model saw.
+            turn stops at the user prompt - the context the model saw.
     """
     messages: list[dict[str, Any]] = []
     if system_prompt:
@@ -129,7 +129,7 @@ class SessionReplayer:
     def reconstruct_system_prompt(self, meta: dict, turns: list) -> str:
         """Reconstruct the system prompt that would have been active.
 
-        Approximate — the exact prompt at session time is not stored per
+        Approximate - the exact prompt at session time is not stored per
         turn. Built to mirror chat_completion (chatybot_app.py:1249-1319):
           1. config_manager.system_message (base)
           2. Tool context + agentic instructions (if any turn has agentic_loop)

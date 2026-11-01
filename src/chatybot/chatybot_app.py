@@ -411,7 +411,7 @@ class ChatybotApp:
 
         # Initialize Security Manager (pluggable security policy gateway)
         if self.no_security:
-            print("[Security Warning] Security policy evaluation is DISABLED (--no-security) — all tools execute without policy checks.")
+            print("[Security Warning] Security policy evaluation is DISABLED (--no-security) - all tools execute without policy checks.")
 
         try:
             from .security.manager import SecurityManager
@@ -1455,7 +1455,7 @@ class ChatybotApp:
         Places an ephemeral breakpoint on the LAST tool definition (caching the
         system prompt + tool/MCP schema suite) and on the system message.
         Both mutations deep-copy the mutated container so the caller's
-        conversation history is never modified in place — in-place tagging
+        conversation history is never modified in place - in-place tagging
         would accumulate cache_control markers across turns and eventually
         exceed Anthropic's 4-breakpoint limit.
 
@@ -1797,7 +1797,7 @@ class ChatybotApp:
                         )
                         return ""
 
-        # Apple Foundation Model — on-device, non-OpenAI path
+        # Apple Foundation Model - on-device, non-OpenAI path
         if model_config.get("type") == "apple_fm":
             return await self._apple_fm_completion(prompt, stream=stream)
 
@@ -2866,7 +2866,7 @@ class ChatybotApp:
 
         # --- Build the full prompt text ---
         if isinstance(prompt, list):
-            # Messages list (from tool loop) — concatenate into text
+            # Messages list (from tool loop) - concatenate into text
             parts = []
             for msg in prompt:
                 role = msg.get("role", "user")
@@ -2885,7 +2885,7 @@ class ChatybotApp:
                     parts.append(f"Assistant: {content}")
             full_prompt = "\n\n".join(parts)
         else:
-            # String prompt — do buffer/tool_context prep
+            # String prompt - do buffer/tool_context prep
             full_prompt, _image_list = self.buffer_manager.replace_placeholders(prompt)
 
             if self.buffer_manager.prompt_buffer:
@@ -2926,7 +2926,7 @@ class ChatybotApp:
         if self.tool_mode:
             fm_tools = build_tools(self)
             if not fm_tools:
-                # No tools built — fall back to prompt-injection approach
+                # No tools built - fall back to prompt-injection approach
                 effective_tool_context = self.live_tool_context or self.tool_context
                 if effective_tool_context:
                     if isinstance(prompt, list):
@@ -2947,7 +2947,7 @@ class ChatybotApp:
                     else:
                         system_message = instr
             # If fm_tools were built, the SDK handles tool calling natively.
-            # No prompt injection needed — tools are registered with the session.
+            # No prompt injection needed - tools are registered with the session.
 
         # Skills injection: match triggers and inject skill content + tool config
         if not isinstance(prompt, list):
@@ -6934,7 +6934,7 @@ class ChatybotApp:
 
         for i, rec in enumerate(loop_data, 1):
             if not isinstance(rec, dict):
-                print(f"[{i}] (invalid record: {type(rec).__name__}) — SKIPPED")
+                print(f"[{i}] (invalid record: {type(rec).__name__}) - SKIPPED")
                 continue
             tool_name = rec.get("tool", "unknown")
             step = rec.get("turn", i)
@@ -6947,7 +6947,7 @@ class ChatybotApp:
                     duration_str = f" ({float(duration_ms):.0f}ms)"
                 except (ValueError, TypeError):
                     duration_str = f" ({duration_ms}ms)"
-            print(f"[{i}] Step {step} · {tool_name} — {status_label}{duration_str}")
+            print(f"[{i}] Step {step} · {tool_name} - {status_label}{duration_str}")
 
             cache = rec.get("cache")
             if isinstance(cache, dict) and cache.get("prompt_tokens"):

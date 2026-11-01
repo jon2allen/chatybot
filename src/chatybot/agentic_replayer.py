@@ -11,7 +11,7 @@ agentic loop steps within a single session turn.
 
 The assistant tool-call messages are NOT stored in the agentic_loop records
 (only the tool name, arguments, result, status, timing are). They are
-reconstructed here as JSON code blocks — an approximation of what the model
+reconstructed here as JSON code blocks - an approximation of what the model
 emitted. The tool-result user messages are reconstructed exactly from the
 stored records, matching the format used in ``execute_tool_loop``.
 """

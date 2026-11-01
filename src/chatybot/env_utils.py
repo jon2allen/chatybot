@@ -1,5 +1,5 @@
 """
-env_utils.py — Environment and API Key Resolution Utilities for Chatybot.
+env_utils.py - Environment and API Key Resolution Utilities for Chatybot.
 
 Centralizes .env parsing, directory-precedence loading, and robust API key
 resolution across Chatybot.

@@ -948,9 +948,9 @@ class HelpSystem:
             long_desc=(
                 "Evaluates content against a typed question using a TypeSafe Jev or OpenRouter "
                 "decisions model. Three question types are supported:\n"
-                "  choice — picks one option from a set (returns the selected option)\n"
-                "  score  — rates content on a spectrum (returns a numeric score)\n"
-                "  noul   — yes/no question (returns true/false)\n\n"
+                "  choice - picks one option from a set (returns the selected option)\n"
+                "  score  - rates content on a spectrum (returns a numeric score)\n"
+                "  noul   - yes/no question (returns true/false)\n\n"
                 "Calibration unpacking: confidence and per-option probabilities are flattened "
                 "into dedicated script variables so ChatDSL scripts can gate actions on "
                 "uncertainty without JSON traversal.\n\n"
@@ -1051,7 +1051,7 @@ class HelpSystem:
                 "session history.\n\n"
                 "Model selection is idiomatic: /model <batch-alias> on its own line "
                 "(models need 'batch = true' in chat_config.toml). While a batch model "
-                "is selected, interactive chat is disabled — switch back with "
+                "is selected, interactive chat is disabled - switch back with "
                 "/model <chat-alias>.\n\n"
                 "Lifecycle: start (draft) → add (items) → end (security scan + lock) → "
                 "run (cost guard + submit) → check (poll + retrieve).\n\n"
@@ -1088,8 +1088,8 @@ class HelpSystem:
                 "end [name]": "Security-scan items, compile requests.json, lock the manifest (staged)",
                 "abort [name]": "Discard an open (never-submitted) staging session",
                 "run [name]": "Estimate cost, verify budget, submit [force=true] [adopt=<provider_id>]",
-                "check [name]": "Poll status / retrieve results [wait=true polls until terminal]; the summary, /batch status, and /batchlist surface empty completions (status 200, no content — providers count them as successes and never retry them)",
-                "results [name]": "Print retrieved completions with pagination; exports ${BATCH_RESULTS} [limit=N] [range=start:end] [var=<target>]. Records are in staging (submission) order — providers return results in arbitrary completion order; always match by custom_id",
+                "check [name]": "Poll status / retrieve results [wait=true polls until terminal]; the summary, /batch status, and /batchlist surface empty completions (status 200, no content - providers count them as successes and never retry them)",
+                "results [name]": "Print retrieved completions with pagination; exports ${BATCH_RESULTS} [limit=N] [range=start:end] [var=<target>]. Records are in staging (submission) order - providers return results in arbitrary completion order; always match by custom_id",
                 "cancel <name>": "Cancel an in-flight batch [force=true for providers without a cancel endpoint (OpenRouter): marks it cancelled locally while the remote job still runs to completion]",
                 "retry <name>": "New batch from failed items (Phase 3)",
                 "list": "Alias for /batchlist",

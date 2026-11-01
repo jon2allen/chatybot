@@ -10,18 +10,18 @@ into dedicated script variables so ChatDSL scripts can gate actions on
 uncertainty without JSON traversal.
 
 Global registers:
-  DECIDE       — latest choice/answer/score (or "FALLBACK" if below threshold)
-  DECIDE_CONF  — calibrated confidence (0.00–1.00)
-  DECIDE_PROB  — winning option probability
-  DECIDE_FULL  — unmodified API payload
+  DECIDE       - latest choice/answer/score (or "FALLBACK" if below threshold)
+  DECIDE_CONF  - calibrated confidence (0.00-1.00)
+  DECIDE_PROB  - winning option probability
+  DECIDE_FULL  - unmodified API payload
 
 Per-var registers (when var=<name> is given):
-  <name>              — decision result (or "FALLBACK")
-  <name>_choice       — raw winning choice/boolean/score
-  <name>_conf         — calibrated confidence
-  <name>_confidence   — verbose alias for _conf
-  <name>_prob         — probability of the selected option
-  <name>_prob_<opt>   — probability per candidate option
+  <name>              - decision result (or "FALLBACK")
+  <name>_choice       - raw winning choice/boolean/score
+  <name>_conf         - calibrated confidence
+  <name>_confidence   - verbose alias for _conf
+  <name>_prob         - probability of the selected option
+  <name>_prob_<opt>   - probability per candidate option
 """
 
 import os
@@ -197,7 +197,7 @@ async def cmd_decide(ctx: CommandContext, parts: list, command: str) -> CommandR
 
     elif question_type == "score":
         if scale_match and not levels_match:
-            # scale="min:max" — generate integer levels automatically
+            # scale="min:max" - generate integer levels automatically
             lo, hi = int(scale_match.group(1)), int(scale_match.group(2))
             if lo >= hi:
                 print(f"Error: scale min ({lo}) must be less than max ({hi})")
@@ -330,7 +330,7 @@ async def cmd_decide(ctx: CommandContext, parts: list, command: str) -> CommandR
     top_prob = float(probabilities.get(raw_result, confidence)) if probabilities else confidence
 
     # Evaluate optional fallback threshold.
-    # Noul always returns true/false — the user can gate on _conf in
+    # Noul always returns true/false - the user can gate on _conf in
     # their script.  Threshold gating applies to choice and score only.
     is_fallback = threshold > 0.0 and confidence < threshold and ans_type != "noul"
     final_output = "FALLBACK" if is_fallback else raw_result
@@ -364,7 +364,7 @@ async def cmd_decide(ctx: CommandContext, parts: list, command: str) -> CommandR
     if ans_type == "choice":
         print(f"  Answer:     {final_output}", end="")
         if is_fallback:
-            print(f"  [FALLBACK — confidence {confidence:.2f} < threshold {threshold:.2f}]")
+            print(f"  [FALLBACK - confidence {confidence:.2f} < threshold {threshold:.2f}]")
         elif confidence is not None:
             print(f"  (confidence: {confidence:.2f})")
         else:
@@ -377,7 +377,7 @@ async def cmd_decide(ctx: CommandContext, parts: list, command: str) -> CommandR
     elif ans_type == "score":
         print(f"  Score:      {final_output}", end="")
         if is_fallback:
-            print(f"  [FALLBACK — confidence {confidence:.2f} < threshold {threshold:.2f}]")
+            print(f"  [FALLBACK - confidence {confidence:.2f} < threshold {threshold:.2f}]")
         elif confidence is not None:
             print(f"  (confidence: {confidence:.2f})")
         else:

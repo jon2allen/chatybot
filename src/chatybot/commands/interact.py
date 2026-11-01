@@ -64,9 +64,9 @@ async def cmd_ask(ctx: CommandContext, parts: list, command: str) -> CommandResu
     )
 
     if result["status"] == "skipped":
-        print(f"[ask] Skipped — {result['reason']}")
+        print(f"[ask] Skipped - {result['reason']}")
     elif result["status"] == "error":
-        print(f"[ask] Error — {result['reason']}")
+        print(f"[ask] Error - {result['reason']}")
     else:
         answer = result["answer"]
         if target_var:

@@ -298,7 +298,7 @@ class ContextLimiter:
         messages were evicted. The _orig_idx tags survive because
         truncate_messages performs shallow dict copies (dict(m)) that preserve
         extra keys; if truncate_messages is ever refactored to reconstruct
-        dicts with only role/content, this tracking silently breaks — add a
+        dicts with only role/content, this tracking silently breaks - add a
         regression test.
         """
         if not messages:

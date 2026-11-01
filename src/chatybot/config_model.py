@@ -1,14 +1,14 @@
 """
-config_model.py — Chatybot configuration data model.
+config_model.py - Chatybot configuration data model.
 
 Provides Pydantic v2 models for loading and validating chat_config.toml.
 
 Model hierarchy:
     BaseModelConfig
-    ├── ChatModelConfig    (type = "chat")    — standard LLM chat + optional image generation
-    ├── RerankerModelConfig (type = "reranker") — re-ranking API endpoints
-    ├── DecisionModelConfig (type = "decision") — TypeSafe Jev / OpenRouter decisions
-    └── AppleFMModelConfig  (type = "apple_fm") — Apple on-device Foundation Model
+    ├── ChatModelConfig    (type = "chat")    - standard LLM chat + optional image generation
+    ├── RerankerModelConfig (type = "reranker") - re-ranking API endpoints
+    ├── DecisionModelConfig (type = "decision") - TypeSafe Jev / OpenRouter decisions
+    └── AppleFMModelConfig  (type = "apple_fm") - Apple on-device Foundation Model
 
 Top-level container: ChatConfig
     - image_generation: ImageGenerationSettings
@@ -92,7 +92,7 @@ class BaseModelConfig(BaseModel):
 
     alias: str = ""
     """The TOML table key used to reference this model (e.g. 'mistral_1').
-    Injected at load time from the dict key — not present in the TOML body itself."""
+    Injected at load time from the dict key - not present in the TOML body itself."""
 
     name: str
     """The API model identifier sent in requests (e.g. 'mistral-large-2512')."""
@@ -109,7 +109,7 @@ class BaseModelConfig(BaseModel):
     prompt_cache_key: str | None = None
     """Static prompt cache key override. When omitted, the cache key is bound
     to the active session (or profile) at runtime. Never put secrets in this
-    value — cache keys may appear in provider-side logs."""
+    value - cache keys may appear in provider-side logs."""
 
     input_cost_per_mtok: float | None = None
     """Base input price in USD per million tokens. Optional; enables net
@@ -245,7 +245,7 @@ class ChatModelConfig(BaseModelConfig):
     """
 
     type: Literal["chat"] = "chat"
-    """Discriminator field — always 'chat' for this class."""
+    """Discriminator field - always 'chat' for this class."""
 
     vendor: str | None = None
     """Vendor identifier used to select the correct API adapter.
@@ -281,7 +281,7 @@ class RerankerModelConfig(BaseModelConfig):
     """
 
     type: Literal["reranker"] = "reranker"
-    """Discriminator field — always 'reranker' for this class."""
+    """Discriminator field - always 'reranker' for this class."""
 
 
 # ============================================================================
@@ -298,7 +298,7 @@ class DecisionModelConfig(BaseModelConfig):
     """
 
     type: Literal["decision"] = "decision"
-    """Discriminator field — always 'decision' for this class."""
+    """Discriminator field - always 'decision' for this class."""
 
     endpoint_path: str = "/v1/systemone"
     """Path appended to base_url for the decisions API.
@@ -314,19 +314,19 @@ class AppleFMModelConfig(BaseModelConfig):
     Configuration for Apple's on-device Foundation Model (Apple Intelligence).
 
     This model type runs locally on macOS 26+ via the ``apple-fm-sdk`` Python
-    package. It does not use ``base_url`` or ``api_key`` — inference is fully
+    package. It does not use ``base_url`` or ``api_key`` - inference is fully
     on-device with no network required.
     """
 
     type: Literal["apple_fm"] = "apple_fm"
-    """Discriminator field — always 'apple_fm' for this class."""
+    """Discriminator field - always 'apple_fm' for this class."""
 
     base_url: str = "on-device"
     """Sentinel value; not used for any HTTP request. Overridden from the base
     class to make it optional with a default."""
 
     vendor: str | None = "apple"
-    """Vendor identifier — always 'apple' for this model type."""
+    """Vendor identifier - always 'apple' for this model type."""
 
 
 # ============================================================================

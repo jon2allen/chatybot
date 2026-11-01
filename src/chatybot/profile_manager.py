@@ -1,5 +1,5 @@
 """
-profile_manager.py — Profile Manager Module
+profile_manager.py - Profile Manager Module
 
 Manages discovery, loading, creation, and deletion of chatybot profiles.
 Each profile is stored as a separate .chatdsl file in the profile directory.
