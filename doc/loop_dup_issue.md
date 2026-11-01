@@ -30,12 +30,12 @@ Because Chatybot constructs the chat completion request by appending past turns 
 
 ## Impact on Models
 
-### Gemma 4 (27B) — *Hangs & Infinite Reasoning Loops*
+### Gemma 4 (27B) - *Hangs & Infinite Reasoning Loops*
 * **Symptom**: Gemma 4 successfully completes Steps 1 and 2, but hangs on Step 3 or Step 4.
 * **Mechanism**: When Step 4 starts, the cumulative history payload size exceeds **17,000 tokens** (consisting largely of duplicated tool lists and system instructions). Gemma gets confused by the repeated instructions inside the user history, causing it to fall into repetitive meta-reasoning loops inside its internal `<thought>` block (e.g. repeating commands like `I will run ls -F... I will checkout branch... Actually let me checkout first` indefinitely) without ever outputting the JSON tool call.
-* **Performance Profile**: High response latency (typical turns take 15–33 seconds) because it must parse massive redundant contexts and write long thought tokens.
+* **Performance Profile**: High response latency (typical turns take 15-33 seconds) because it must parse massive redundant contexts and write long thought tokens.
 
-### Cohere North — *High Speed, Heavy Bloat*
+### Cohere North - *High Speed, Heavy Bloat*
 * **Symptom**: North completes the script successfully without hanging.
 * **Mechanism**: North has a large context window (128k) and does not output internal reasoning tokens. However, by Turn 11 of Step 3, the payload carries over **22,000 tokens of redundant schemas**, significantly inflating API cost and processing overhead.
 * **Performance Profile**: Extremely fast response times (typically under 1.5 seconds per turn), but vulnerable to occasional schema slips (e.g. calling `run_command` with an empty `{}` arguments block) before self-correcting.

@@ -853,7 +853,7 @@ except Exception as e:
 
 ### Why OpenRouter?
 
-OpenRouter is more than just a proxy—it's a unified API that gives you access to **hundreds of models** from different providers:
+OpenRouter is more than just a proxy-it's a unified API that gives you access to **hundreds of models** from different providers:
 
 - Google's Florence 2 and Imagen
 - Black Forest Labs' Flux
@@ -1769,7 +1769,7 @@ OpenRouter offers many free models. Some popular free image models:
 
 ### 4. Custom Routs
 
-OpenRouter allows you to create **custom routs**—groups of models with fallback logic:
+OpenRouter allows you to create **custom routs**-groups of models with fallback logic:
 
 ```python
 # Example of using a custom rout

@@ -1,4 +1,4 @@
-# Chatybot Config TUI — Curses Design
+# Chatybot Config TUI - Curses Design
 
 > A terminal UI for managing `chat_config.toml` using Python `curses`.
 > Supports browsing, editing, cloning, and deleting model configurations
@@ -11,13 +11,13 @@
 | #  | Question                        | Decision                                                                 |
 |----|--------------------------------|--------------------------------------------------------------------------|
 | 1  | Entry point                    | `chatybot --config-edit` flag + `chatybot-config` console_script alias   |
-| 2  | External dependencies          | Zero — stdlib `curses` only + existing `config_model.py`                 |
-| 3  | Validation enforcement         | Loose — warn on invalid values (yellow status bar) but allow save        |
+| 2  | External dependencies          | Zero - stdlib `curses` only + existing `config_model.py`                 |
+| 3  | Validation enforcement         | Loose - warn on invalid values (yellow status bar) but allow save        |
 | 4  | Vendor preset location         | Separate `src/chatybot/vendors.py` module for easy additions             |
 
 ---
 
-## Screen 1 — Main Model List
+## Screen 1 - Main Model List
 
 The primary view. Models are listed in a scrollable table with the active
 row highlighted. A status bar at the bottom shows available key bindings.
@@ -31,17 +31,17 @@ row highlighted. A status bar at the bottom shows available key bindings.
 │  #   Alias                  Model Name                       Vendor    Temp    │
 │  ─── ────────────────────── ──────────────────────────────── ──────── ─────    │
 │  1   mistral_1              mistral-large-2512               mistral   0.70    │
-│  2   devstral_1             devstral-2512                    —         0.70    │
-│  3   mistral_35             mistral-medium-2604              —         0.20    │
+│  2   devstral_1             devstral-2512                    -         0.70    │
+│  3   mistral_35             mistral-medium-2604              -         0.20    │
 │ >4   gemini_flash           gemini-2.5-flash                 google    0.00  ◀ │
 │  5   gemini_pro             gemini-2.5-pro                   google    0.00    │
-│  6   gemma_3                gemma-3-27b-it                   —         0.20    │
+│  6   gemma_3                gemma-3-27b-it                   -         0.20    │
 │  7   openai_gpt4            gpt-4o                           openai    0.10    │
-│  8   mistral_pixtral        mistralai/pixtral-large-2411     —         —       │
+│  8   mistral_pixtral        mistralai/pixtral-large-2411     -         -       │
 │  9   openrouter_image       google/gemini-2.5-flash-image    openrtr   0.00    │
 │  10  flux_1                 black-forest-labs/flux.2-klein…  openrtr   0.00    │
-│  11  nova_2                 amazon/nova-2-lite-v1:free       —         0.90    │
-│  12  elephant               inclusionai/ling-2.6-flash:free  —         0.10    │
+│  11  nova_2                 amazon/nova-2-lite-v1:free       -         0.90    │
+│  12  elephant               inclusionai/ling-2.6-flash:free  -         0.10    │
 │  13  nvidia_1               nvidia/nemotron-nano-12b-v2-vl…  openrtr   0.70    │
 │  ·                                                                             │
 │  ·   (scroll for 16 more)                                                      │
@@ -52,7 +52,7 @@ row highlighted. A status bar at the bottom shows available key bindings.
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Key Bindings — Main List
+### Key Bindings - Main List
 
 | Key         | Action                                      |
 |-------------|---------------------------------------------|
@@ -72,7 +72,7 @@ row highlighted. A status bar at the bottom shows available key bindings.
 
 ---
 
-## Screen 2 — Model Editor Window
+## Screen 2 - Model Editor Window
 
 A floating window overlaid on the main list. Fields are displayed in a
 form layout. The cursor moves between fields with `Tab` / `Shift+Tab`.
@@ -94,19 +94,19 @@ Editable fields show the current value inline. Dropdown-style fields
 │  5   gemini │  Base URL:    [https://generativelanguage.go...] │    0.00       │
 │  6   gemma_ │  API Key Env: [GEMINI_API_KEY                 ]  │    0.20       │
 │  7   openai │  Vendor:      < google ▸                  ▼      │    0.10       │
-│  8   mistra │                                                  │    —          │
+│  8   mistra │                                                  │    -          │
 │  9   openro │  ── Parameters ────────────────────────────      │    0.00       │
 │  10  flux_1 │  Temperature: [0.00                           ]  │    0.00       │
 │  11  nova_2 │  Top K:       [1                              ]  │    0.90       │
-│  12  elepha │  Max Tokens:  [                              —]  │    0.10       │
-│  13  nvidia │  Top P:       [                              —]  │    0.70       │
-│             │  Freq Penalty:[                              —]  │               │
-│             │  Pres Penalty:[                              —]  │               │
+│  12  elepha │  Max Tokens:  [                              -]  │    0.10       │
+│  13  nvidia │  Top P:       [                              -]  │    0.70       │
+│             │  Freq Penalty:[                              -]  │               │
+│             │  Pres Penalty:[                              -]  │               │
 │             │                                                  │               │
 │             │  ── Image Generation ──────────────────────       │               │
 │             │  Enabled:     < true ▸                    ▼      │               │
 │             │  Endpoint:    [/images/generations             ]  │               │
-│             │  Modalities:  [                              —]  │               │
+│             │  Modalities:  [                              -]  │               │
 │             │                                                  │               │
 │             │  [  OK  ]    [ Cancel ]    [ Apply ]             │               │
 │             ├──────────────────────────────────────────────────┤               │
@@ -125,19 +125,19 @@ Editable fields show the current value inline. Dropdown-style fields
 | Base URL       | Text input       | Auto-suggests from vendor presets        |
 | API Key Env    | Text input       | Auto-suggests from vendor presets        |
 | Vendor         | Cycle selector   | Known vendors (see below)                |
-| Temperature    | Numeric input    | 0.0 – 2.0, step 0.1                     |
+| Temperature    | Numeric input    | 0.0 - 2.0, step 0.1                     |
 | Top K          | Numeric input    | Integer, nullable                        |
 | Max Tokens     | Numeric input    | Integer, nullable                        |
-| Top P          | Numeric input    | 0.0 – 1.0, nullable                     |
-| Freq Penalty   | Numeric input    | -2.0 – 2.0, nullable                    |
-| Pres Penalty   | Numeric input    | -2.0 – 2.0, nullable                    |
+| Top P          | Numeric input    | 0.0 - 1.0, nullable                     |
+| Freq Penalty   | Numeric input    | -2.0 - 2.0, nullable                    |
+| Pres Penalty   | Numeric input    | -2.0 - 2.0, nullable                    |
 | Img Enabled    | Cycle selector   | `true` / `false`                         |
 | Img Endpoint   | Text input       | Path component, e.g. `/images/generations` |
-| Modalities     | Text input       | Comma-separated list or `—` for none    |
+| Modalities     | Text input       | Comma-separated list or `-` for none    |
 
 ---
 
-## Screen 3 — Clone Dialog
+## Screen 3 - Clone Dialog
 
 A compact floating dialog. Pre-fills all values from the source model.
 The user only needs to change the alias (required) and optionally tweak
@@ -155,7 +155,7 @@ fields before confirming.
           │  ── Quick Overrides ──────────────────────   │
           │  Temperature: [0.10                       ]  │
           │  Top K:       [1                          ]  │
-          │  Max Tokens:  [                          —]  │
+          │  Max Tokens:  [                          -]  │
           │                                              │
           │  [ Clone ]     [ Edit Full ]    [ Cancel ]   │
           │                                              │
@@ -168,13 +168,13 @@ fields before confirming.
 2. Clone dialog opens with the source model's values pre-filled.
 3. User enters a new alias (required, must be unique).
 4. User optionally adjusts temperature / top_k / max_tokens.
-5. **Clone** — creates the model and returns to the main list.
-6. **Edit Full** — creates the model and immediately opens the full editor.
-7. **Cancel** — discards and returns to the main list.
+5. **Clone** - creates the model and returns to the main list.
+6. **Edit Full** - creates the model and immediately opens the full editor.
+7. **Cancel** - discards and returns to the main list.
 
 ---
 
-## Screen 4 — Delete Confirmation
+## Screen 4 - Delete Confirmation
 
 A small confirmation dialog. Shows the alias and model name for clarity.
 
@@ -199,7 +199,7 @@ A small confirmation dialog. Shows the alias and model name for clarity.
 
 ---
 
-## Screen 5 — Vendor / Endpoint Picker
+## Screen 5 - Vendor / Endpoint Picker
 
 When creating a **new model** (`N`) or editing the **Vendor** field,
 a picker window offers known vendor presets. Selecting a vendor
@@ -258,7 +258,7 @@ auto-populates the Base URL and API Key Env fields.
 
 ---
 
-## Screen 6 — Save Confirmation / Unsaved Changes
+## Screen 6 - Save Confirmation / Unsaved Changes
 
 Shown when the user presses `Q` with unsaved changes, or after `S`.
 
@@ -282,7 +282,7 @@ enabling writing to alternative files (e.g. `test_config.toml`).
 
 ---
 
-## Screen 7 — Search / Filter Bar
+## Screen 7 - Search / Filter Bar
 
 Pressing `/` on the main list activates a search bar at the bottom.
 Typing filters the model list in real-time (fuzzy match on alias + name).
@@ -348,14 +348,14 @@ stdscr
 
 ---
 
-## Vendor Presets — `src/chatybot/vendors.py`
+## Vendor Presets - `src/chatybot/vendors.py`
 
 Vendor presets live in a **separate module** (`vendors.py`) so that adding
 a new provider is a single-file edit with no TUI or model code changes.
 
 The TUI imports `VENDOR_PRESETS` from this module for the vendor picker
 and auto-population of Base URL / API Key fields. **Presets are defaults
-only — every field is fully overridable by the user.** For example, a
+only - every field is fully overridable by the user.** For example, a
 `llama_cpp` model could have image support enabled if the user's local
 server supports it.
 
@@ -473,13 +473,13 @@ The TUI operates entirely on the in-memory `ChatConfig` Pydantic model:
 ```
 src/chatybot/
 ├── config_model.py      # Pydantic schema (existing)
-├── config_tui.py        # Curses TUI — main module
+├── config_tui.py        # Curses TUI - main module
 └── vendors.py           # Vendor presets (new)
 ```
 
 ### Entry Points
 
-Two ways to launch — both invoke the same `config_tui.main()` function:
+Two ways to launch - both invoke the same `config_tui.main()` function:
 
 1. **Flag on main app**: `chatybot --config-edit`
    - Parsed in `chatybot_app.py` via argparse
@@ -499,11 +499,11 @@ chatybot-config = "chatybot.config_tui:main"
 
 ### Dependencies
 
-Zero external — only stdlib `curses` + existing project modules:
-- `config_model.py` — load, validate, serialize
-- `vendors.py` — vendor preset lookups
+Zero external - only stdlib `curses` + existing project modules:
+- `config_model.py` - load, validate, serialize
+- `vendors.py` - vendor preset lookups
 
-### Validation Philosophy — Loose Enforcement
+### Validation Philosophy - Loose Enforcement
 
 The TUI validates edits through Pydantic but does **not block** the user:
 
@@ -512,12 +512,12 @@ The TUI validates edits through Pydantic but does **not block** the user:
 | Invalid temperature (e.g. 5.0)| Yellow warning in status bar, field still accepted |
 | Missing required field        | Yellow warning, save proceeds with raw value       |
 | Duplicate alias on clone      | Red error, **blocks** (alias must be unique)       |
-| Unknown vendor string         | No warning — free-form vendor is allowed           |
+| Unknown vendor string         | No warning - free-form vendor is allowed           |
 | Malformed base_url            | Yellow warning, not blocked                        |
 
 The status bar shows warnings like:
 ```
-⚠ Temperature 5.0 outside typical range (0.0–2.0) — saved anyway
+⚠ Temperature 5.0 outside typical range (0.0-2.0) - saved anyway
 ```
 
 This "warn but don't block" approach allows power users to experiment

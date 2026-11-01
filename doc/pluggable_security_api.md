@@ -445,9 +445,9 @@ This stateless, one-shot architecture was chosen deliberately for three foundati
 
 | Engine Implementation | Typical Execution Latency | Practical Impact on Agent Loop |
 |---|---|---|
-| **Compiled Native (Rust `racf-guard`, Go, C/C++)** | **1.5 ms – 3.0 ms** | **Negligible (< 0.5% of tool dispatch cycle)**. Cold startup, policy script parsing, AST generation, and JSON serialization complete almost instantaneously. Compared to model inference and network roundtrips (500 ms – 3,000 ms), the overhead is imperceptible. |
-| **Lightweight Script (Bash, Awk, Coreutils)** | **3.0 ms – 10.0 ms** | **Negligible**. Fast invocation suited for rapid prototyping or simple shell wrappers. |
-| **Interpreted Runtimes (Python, Node.js)** | **50.0 ms – 250.0 ms** | **Noticeable if loading large packages**. Python interpreter startup and module import overhead (e.g. Pydantic, Pandas, cryptography libraries) can introduce perceptible latency if spawned per tool. For Python-based engines, developers should either use minimal standard-library scripts or implement an in-process class via [`BasePolicyEngine`](#8-in-process-python-engine-interface). |
+| **Compiled Native (Rust `racf-guard`, Go, C/C++)** | **1.5 ms - 3.0 ms** | **Negligible (< 0.5% of tool dispatch cycle)**. Cold startup, policy script parsing, AST generation, and JSON serialization complete almost instantaneously. Compared to model inference and network roundtrips (500 ms - 3,000 ms), the overhead is imperceptible. |
+| **Lightweight Script (Bash, Awk, Coreutils)** | **3.0 ms - 10.0 ms** | **Negligible**. Fast invocation suited for rapid prototyping or simple shell wrappers. |
+| **Interpreted Runtimes (Python, Node.js)** | **50.0 ms - 250.0 ms** | **Noticeable if loading large packages**. Python interpreter startup and module import overhead (e.g. Pydantic, Pandas, cryptography libraries) can introduce perceptible latency if spawned per tool. For Python-based engines, developers should either use minimal standard-library scripts or implement an in-process class via [`BasePolicyEngine`](#8-in-process-python-engine-interface). |
 
 ---
 

@@ -1,4 +1,4 @@
-# Recipe 4.4 — Reasoning History Integrity with Strict Models
+# Recipe 4.4 - Reasoning History Integrity with Strict Models
 # Run: /script doc/cookbook/04_4_reasoning_history.chatdsl
 #
 # Some reasoning models (e.g. reflection/Beam-1.0-501B-A23B or DeepSeek R1)

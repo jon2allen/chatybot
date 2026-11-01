@@ -6,7 +6,7 @@ Unreleased
 ----------
 - **TinyDB Persistence & Dispatcher Performance**:
   - **Snapshot-on-Write Optimization**: Moved TinyDB rolling snapshot backups from database activation (`/setdb`) to the first write (`/dblog`) per session, completely eliminating backup churn and rotation on read-only operations and model tools (`db_search`, `db_get`).
-  - **Dispatcher Startup Optimization**: Removed unused `chatydb` import and `log_to_database` hook from `dispatcher.py` (saves ~2–3 ms per tool call).
+  - **Dispatcher Startup Optimization**: Removed unused `chatydb` import and `log_to_database` hook from `dispatcher.py` (saves ~2-3 ms per tool call).
   - **Model DB Tool Hardening**: Isolated scoped model queries from active session databases, eliminated double-serialized JSON strings, suppressed stdout output during tool calls, prevented phantom directory and file creation on missing DB queries, and handled corrupted database files gracefully.
 
 October 15th, 2026 (v0.9.0)
@@ -63,8 +63,8 @@ October 11th, 2026
 September 30th, 2026 (v0.8.8)
 ----------------------------
 - **`/docs` Line-Based Navigation & Search-to-View Workflow**:
-  - Added `line=N` parameter to `/docs <filename>` — centers the target line in a 40-line chunk with context above and below, so search results (which return `filename:line_number`) can be jumped to directly.
-  - Fixed `page=N` being silently ignored in REPL mode — `page=N` (when N > 1) now uses chunked display in both REPL and script contexts instead of falling through to the full-screen pager.
+  - Added `line=N` parameter to `/docs <filename>` - centers the target line in a 40-line chunk with context above and below, so search results (which return `filename:line_number`) can be jumped to directly.
+  - Fixed `page=N` being silently ignored in REPL mode - `page=N` (when N > 1) now uses chunked display in both REPL and script contexts instead of falling through to the full-screen pager.
   - Added Prev/Next navigation footers to both `line=` and `page=` modes, enabling back-and-forth paging through the file from any entry point.
   - Updated `/docs search` output to suggest the exact `line=` command for the first match (e.g. `Jump to first match: /docs chatdsl_cookbook.md line=928`).
   - Updated `/docs` help text, usage string, and examples in `chaty_help.py`.

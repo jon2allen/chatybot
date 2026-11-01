@@ -205,9 +205,9 @@ Because LLM generation limits constrain tool invocation payloads:
 
 | Payload Metric | Typical LLM Interaction | Maximum Limit (Stress Case) |
 |---|---|---|
-| **Token Count** | 500 – 4,000 tokens | 16,384 tokens |
-| **Payload Size** | 2 KB – 16 KB | ~64 KB |
-| **Line Count** | 50 – 400 lines | ~1,500 lines |
+| **Token Count** | 500 - 4,000 tokens | 16,384 tokens |
+| **Payload Size** | 2 KB - 16 KB | ~64 KB |
+| **Line Count** | 50 - 400 lines | ~1,500 lines |
 
 ### Benchmark Projections
 

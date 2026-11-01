@@ -62,7 +62,7 @@ If you want to use `field` mode, ensure `session_strip_thinking` is not set to `
 ## Implementation
 
 - **State**: `self.reasoning_history_mode` in `ChatybotApp.__init__` (default: `"auto"`)
-- **History builder**: `chat_completion()` in `chatybot_app.py` — respects the mode when constructing past assistant messages
-- **Retry**: `_create_with_reasoning_retry()` in `chatybot_app.py` — wraps `client.chat.completions.create()` and retries on the specific 400
-- **Error detection**: `_is_missing_reasoning_error()` — matches the error message pattern without hardcoding model names
+- **History builder**: `chat_completion()` in `chatybot_app.py` - respects the mode when constructing past assistant messages
+- **Retry**: `_create_with_reasoning_retry()` in `chatybot_app.py` - wraps `client.chat.completions.create()` and retries on the specific 400
+- **Error detection**: `_is_missing_reasoning_error()` - matches the error message pattern without hardcoding model names
 - **Command**: `/reasoning_history` in `commands/models.py`

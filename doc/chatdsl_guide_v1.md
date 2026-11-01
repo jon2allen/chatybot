@@ -556,16 +556,16 @@ Chatybot maintains reserved, read-only system variables populated by commands. U
 
 The skills system provides two mechanisms for using skills:
 
-1. **Auto-triggering** — When a user prompt matches a skill's trigger phrases,
+1. **Auto-triggering** - When a user prompt matches a skill's trigger phrases,
    the skill is injected into the system prompt automatically. Toggle with
    `/skill on` and `/skill off`.
 
-2. **On-demand loading** — During the tool loop, the LLM can discover and load
+2. **On-demand loading** - During the tool loop, the LLM can discover and load
    skills using two in-process tools:
 
-   - `search_skills(query, limit)` — Find skills by keyword. Returns metadata
+   - `search_skills(query, limit)` - Find skills by keyword. Returns metadata
      only (name, description, tags) to avoid context pollution.
-   - `call_skill(name)` — Load a skill's full instructions. Applies any
+   - `call_skill(name)` - Load a skill's full instructions. Applies any
      `tool_config` silently and returns a `tool_state` summary.
 
    Enable both with `/tool enable search_skills,call_skill` before starting
