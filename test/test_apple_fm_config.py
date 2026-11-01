@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Unit tests for the apple_fm model type — config layer only.
+Unit tests for the apple_fm model type - config layer only.
 
 These tests do NOT require the apple-fm-sdk package or an Apple Silicon Mac.
 They verify that the config model, TOML loading, and TOML serialization

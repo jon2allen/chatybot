@@ -1,9 +1,9 @@
-# Cookbook Skills Proposal — Dynamic Skill Loading & Delegation Documentation
+# Cookbook Skills Proposal - Dynamic Skill Loading & Delegation Documentation
 
 **Document Version:** 1.1
 **Date:** September 30, 2026 (date of the last commit touching this file: `dc788da`, 2026-09-30 18:25 -0400)
-**Status:** Implemented (English documentation) — validated against source, `doc/` and `src/chatybot/doc/` trees, and `test/test_skill_tools.py` (14 tests) on October 31, 2026. Translation Phases 2-3 and the doc-tree dedup pre-work remain open; see Implementation Deviations and Open Items below
-**Applies To:** User-facing documentation — `chatdsl_cookbook.md` (Chapter 15, Recipe 8.5, Appendices A/B), `chatdsl_skill.md`, `chatdsl_guide_v1.md`, 6 `cookbook/*.chatdsl` recipe files, and the 5 translated guides
+**Status:** Implemented (English documentation) - validated against source, `doc/` and `src/chatybot/doc/` trees, and `test/test_skill_tools.py` (14 tests) on October 31, 2026. Translation Phases 2-3 and the doc-tree dedup pre-work remain open; see Implementation Deviations and Open Items below
+**Applies To:** User-facing documentation - `chatdsl_cookbook.md` (Chapter 15, Recipe 8.5, Appendices A/B), `chatdsl_skill.md`, `chatdsl_guide_v1.md`, 6 `cookbook/*.chatdsl` recipe files, and the 5 translated guides
 
 ---
 
@@ -14,16 +14,16 @@ Validated claim-by-claim on 2026-10-31. The technical claims in §2 (tool behavi
 The deviations:
 
 1. **Subcommand count is wrong: "16" should be 17.** §4.5 says "/skill provides 16 subcommands" but its own table lists 17 rows, and the implementation (`commands/skills.py:32-64`) dispatches 17: list, show, create, edit, delete, enable, disable, search, learn, apply, export, import, restore, on, off, debug, exit. The count was never corrected in the delivered documentation.
-2. **The §3 pre-work (doc-tree dedup) was skipped — and the predicted drift materialized.** Both trees still exist independently (no symlink, no removal). `doc/chatdsl_cookbook.md` (2442 lines) now contains Recipe 13.5 (Prompt-cache key tuning) that `src/chatybot/doc/chatdsl_cookbook.md` (2415 lines) lacks. All content this proposal added was correctly written to both trees, but the Chapter 13 divergence proves the manual-sync burden the proposal warned about.
+2. **The §3 pre-work (doc-tree dedup) was skipped - and the predicted drift materialized.** Both trees still exist independently (no symlink, no removal). `doc/chatdsl_cookbook.md` (2442 lines) now contains Recipe 13.5 (Prompt-cache key tuning) that `src/chatybot/doc/chatdsl_cookbook.md` (2415 lines) lacks. All content this proposal added was correctly written to both trees, but the Chapter 13 divergence proves the manual-sync burden the proposal warned about.
 3. **Stale references in §2.4:** the README tool table entries cited at `src/chatybot/doc/README.md:716-717` have moved to `:741-742` (README evolved after the proposal); `skill_tool.md` lives at the repo root, not in `doc/`.
 4. **Recipe 13.5 cross-tree divergence is not this proposal's content** but is recorded here as the concrete evidence for Open Item 1.
 
 ## Open Items
 
-1. **Resolve the duplicated doc trees** (`doc/` vs `src/chatybot/doc/`) — symlink, remove one, or script the sync. The 13.5 divergence (27-line drift) is the first confirmed casualty; every future doc change doubles the maintenance burden until this is done.
+1. **Resolve the duplicated doc trees** (`doc/` vs `src/chatybot/doc/`) - symlink, remove one, or script the sync. The 13.5 divergence (27-line drift) is the first confirmed casualty; every future doc change doubles the maintenance burden until this is done.
 2. **Phase 2 translations:** add the "Dynamic Skill Loading" section to the 5 translated guides (`chatdsl_guide_v1_{arabic,chinese,french,italian,spanish}.md`). None of the five currently contain skill content (the Spanish guide contains essentially no mention of skills).
 3. **Phase 3 translations:** translate the "The Skills System" section into the 5 languages. No translated skill guides exist at all.
-4. **Subcommand count:** the "16 subcommands" error exists only in this proposal (§4.5) — the delivered `chatdsl_skill.md:1043` correctly reads "The `/skill` command provides 17 subcommands". No doc fix needed; this proposal's §4.5 is retained verbatim as the historical record.
+4. **Subcommand count:** the "16 subcommands" error exists only in this proposal (§4.5) - the delivered `chatdsl_skill.md:1043` correctly reads "The `/skill` command provides 17 subcommands". No doc fix needed; this proposal's §4.5 is retained verbatim as the historical record.
 
 ---
 
@@ -43,10 +43,10 @@ The skills system has evolved across several recent commits:
 | `049c984` | Word-boundary regex trigger matching (prevents false positives) |
 | `ebadbfa` | Skill tracing (`/skill debug`), sticky skill lock (`/skill exit`), trigger validation (min 3 chars, 2 words) |
 | `d80e360` | Dynamic context injection (`!`cmd``) and skills analysis docs |
-| `c506db3` | **`search_skills` and `call_skill` tools** for agentic skill delegation — the focus of this proposal |
+| `c506db3` | **`search_skills` and `call_skill` tools** for agentic skill delegation - the focus of this proposal |
 | `f06d820` | Clear `_turn_skills_loaded` at tool loop end and on KeyboardInterrupt |
 
-Commit `c506db3` added two in-process tools that let the LLM discover and load skills on-demand during the autonomous tool loop. These tools are fully implemented, tested (14 tests in `test/test_skill_tools.py`), registered in `tools_config.toml`, and documented in the `/help` system and `src/chatybot/doc/README.md` changelog. However, they are **not documented** in the cookbook, the skill guide, or the main ChatDSL guide — the three documents users consult most.
+Commit `c506db3` added two in-process tools that let the LLM discover and load skills on-demand during the autonomous tool loop. These tools are fully implemented, tested (14 tests in `test/test_skill_tools.py`), registered in `tools_config.toml`, and documented in the `/help` system and `src/chatybot/doc/README.md` changelog. However, they are **not documented** in the cookbook, the skill guide, or the main ChatDSL guide - the three documents users consult most.
 
 This proposal specifies the documentation updates needed to close that gap.
 
@@ -56,7 +56,7 @@ This proposal specifies the documentation updates needed to close that gap.
 
 Understanding the implementation is essential before writing docs. The following is verified against the source code.
 
-### 2.1 `search_skills` — Discovery Without Context Pollution
+### 2.1 `search_skills` - Discovery Without Context Pollution
 
 **Source:** `src/chatybot/tools/skill_utils.py:13`
 
@@ -68,7 +68,7 @@ def search_skills(query: str = "", limit: int = 10, app: Any = None) -> dict[str
 - Returns compact metadata only: `{"name", "description", "tags"}` per match.
 - Instruction `content` is excluded from both the search corpus and the result set.
 - Empty query or `"*"` returns all enabled skills up to `limit`.
-- This is a **deliberate reimplementation** of `skillsdb.search_skills()` — the database version searches `content` too, which would load instruction text into the model's context during discovery. The tool version avoids this. (Documented in `skill_tool.md:291`.)
+- This is a **deliberate reimplementation** of `skillsdb.search_skills()` - the database version searches `content` too, which would load instruction text into the model's context during discovery. The tool version avoids this. (Documented in `skill_tool.md:291`.)
 
 **Return shape:**
 ```json
@@ -83,7 +83,7 @@ def search_skills(query: str = "", limit: int = 10, app: Any = None) -> dict[str
 }
 ```
 
-### 2.2 `call_skill` — On-Demand Loading With Delegation Safety
+### 2.2 `call_skill` - On-Demand Loading With Delegation Safety
 
 **Source:** `src/chatybot/tools/skill_utils.py:72`
 
@@ -93,13 +93,13 @@ def call_skill(name: str, app: Any = None) -> dict[str, Any]:
 
 - Looks up a skill by name. Case-insensitive with hyphen/underscore normalization (`domain_modeling` -> `domain-modeling`).
 - Returns the skill's full instruction `content` for the model to follow.
-- If the skill has a `tool_config`, it is applied **silently** (no user prompt) — prompting mid-loop is disruptive. A snapshot is saved for `/skill restore`.
+- If the skill has a `tool_config`, it is applied **silently** (no user prompt) - prompting mid-loop is disruptive. A snapshot is saved for `/skill restore`.
 - Returns a `tool_state` summary (`changed`, `changes`, `message`) so the model knows what tools changed.
 - Returns `depth` (current delegation count) so the model can self-monitor.
 
 **Recursion protection** (`skill_utils.py:96-127`):
 - `_turn_skills_loaded` list tracks every skill loaded across the entire tool loop (not per-call), so cycle detection works across turns: Turn 1 loads "A", Turn 2 loads "B", Turn 3 tries "A" again -> cycle detected.
-- `MAX_SKILLS_PER_TURN = 5` — hard limit on delegations per tool loop.
+- `MAX_SKILLS_PER_TURN = 5` - hard limit on delegations per tool loop.
 - Circular delegation returns an error with the full chain: `"Circular skill delegation detected: A -> B -> A"`.
 - Depth limit returns an error with the chain and limit: `"Maximum skill delegations per tool loop (5) reached. Chain: A -> B -> C -> D -> E"`.
 - `_turn_skills_loaded` is cleared at tool loop end and on `KeyboardInterrupt` (commit `f06d820`).
@@ -141,15 +141,15 @@ Before proposing new docs, note what already exists:
 | `src/chatybot/doc/README.md:716-717` | Tool reference table entries for both tools |
 | `src/chatybot/doc/README.md:1203-1206` | Changelog entry with implementation details |
 | `src/chatybot/chaty_help.py:899-947` | `/skill` and `/tool` help text mentioning both tools |
-| `skill_tool.md` | Full implementation specification (735 lines) — developer-facing, not user-facing |
-| `skill_concerns.md` | Architecture and scalability analysis — developer-facing |
-| `prompt_injection.md` | Dynamic context injection spec — developer-facing |
+| `skill_tool.md` | Full implementation specification (735 lines) - developer-facing, not user-facing |
+| `skill_concerns.md` | Architecture and scalability analysis - developer-facing |
+| `prompt_injection.md` | Dynamic context injection spec - developer-facing |
 
 **Not documented anywhere user-facing:**
-- The cookbook (`chatdsl_cookbook.md`) — no skill chapter
-- The skill guide (`chatdsl_skill.md`) — no mention of `/skill` command, skills database, or dynamic loading
-- The main guide (`chatdsl_guide_v1.md`) — only a passing reference to `chatdsl_skill.md`
-- All 5 translated guides — no skill content
+- The cookbook (`chatdsl_cookbook.md`) - no skill chapter
+- The skill guide (`chatdsl_skill.md`) - no mention of `/skill` command, skills database, or dynamic loading
+- The main guide (`chatdsl_guide_v1.md`) - only a passing reference to `chatdsl_skill.md`
+- All 5 translated guides - no skill content
 
 ---
 
@@ -172,7 +172,7 @@ The cookbook is currently identical between both trees. However, `chatdsl_skill.
 
 ## 4. Proposed Documentation Updates
 
-### 4.1 New Cookbook Chapter: Chapter 15 — Dynamic Skill Loading & Delegation
+### 4.1 New Cookbook Chapter: Chapter 15 - Dynamic Skill Loading & Delegation
 
 Add to `chatdsl_cookbook.md` after Chapter 14, before Appendix A. Follow the existing recipe format: Goal, Commands, Script file, Run command, DSL code block, Walkthrough, Variations.
 
@@ -202,7 +202,7 @@ chat --> I want to review some code. Find a relevant skill and use it to review 
 **Walkthrough**
 1. `/tool enable search_skills,call_skill` activates both skill tools. They are in-process tools (no subprocess overhead), dispatched directly in `dispatch_tool()`.
 2. The model calls `search_skills` as a tool call (JSON), e.g. `{"tool": "search_skills", "arguments": {"query": "code review"}}`.
-3. `search_skills` returns compact metadata only — name, description, tags — for each match. No instruction content. Five results cost roughly 150 tokens instead of 3,000.
+3. `search_skills` returns compact metadata only - name, description, tags - for each match. No instruction content. Five results cost roughly 150 tokens instead of 3,000.
 4. The model reads the results and decides which skill to load next.
 
 **What the model sees (example tool result):**
@@ -339,12 +339,12 @@ chat --> I need to debug an error in src/. Find and load a debugging skill.
 
 **Walkthrough**
 1. The model calls `call_skill("debug-error")`. This skill has a `tool_config` that enables `read_file` and `grep_search`.
-2. `call_skill` applies the `tool_config` **silently** — no user prompt. This is intentional: prompting mid-loop is disruptive since the model is in a multi-turn sequence.
-3. A snapshot of the previous tool state is saved (only the first time — subsequent skills don't overwrite the original snapshot).
+2. `call_skill` applies the `tool_config` **silently** - no user prompt. This is intentional: prompting mid-loop is disruptive since the model is in a multi-turn sequence.
+3. A snapshot of the previous tool state is saved (only the first time - subsequent skills don't overwrite the original snapshot).
 4. The result includes `tool_state` with `changed: true` and a list of changes, so the model knows what tools are now available.
 5. After the loop, `/skill restore` rolls back to the original tool configuration saved before the first skill applied its changes.
 
-**Why silent application?** The pre-turn `_apply_skill_tool_config()` path (triggered by `/skill apply`) prompts the user for confirmation. But mid-loop, the model is in a multi-turn autonomous sequence — interrupting to ask for approval at an arbitrary point is disruptive. The snapshot ensures the user can always revert with `/skill restore`.
+**Why silent application?** The pre-turn `_apply_skill_tool_config()` path (triggered by `/skill apply`) prompts the user for confirmation. But mid-loop, the model is in a multi-turn autonomous sequence - interrupting to ask for approval at an arbitrary point is disruptive. The snapshot ensures the user can always revert with `/skill restore`.
 
 **Variations:**
 - A skill's `tool_config` can also set `mode: on/off`, `auto_loop`, and `max_turns`.
@@ -355,7 +355,7 @@ chat --> I need to debug an error in src/. Find and load a debugging skill.
 #### 15.5 Recursion limits and cycle detection
 
 - **Goal:** Understand the safety mechanisms that prevent unbounded skill chaining.
-- **Commands:** (no user commands — these are automatic protections)
+- **Commands:** (no user commands - these are automatic protections)
 - **Script:** `cookbook/15_5_recursion_limits.chatdsl`
 - **Run:** `/script doc/cookbook/15_5_recursion_limits.chatdsl`
 
@@ -406,7 +406,7 @@ chat --> Load the "loop-a" skill and follow its instructions.
 
 ---
 
-### 4.2 Update Chapter 8 — Add Recipe 8.5
+### 4.2 Update Chapter 8 - Add Recipe 8.5
 
 Add a new recipe to the existing Tool Loops chapter that bridges tool loops and skills.
 
@@ -443,7 +443,7 @@ chat --> Analyze the codebase and suggest improvements.
 
 ---
 
-### 4.3 Update Appendix A — Recipe Index
+### 4.3 Update Appendix A - Recipe Index
 
 Add entries for the new recipes to the existing table:
 
@@ -458,13 +458,13 @@ Add entries for the new recipes to the existing table:
 
 ---
 
-### 4.4 Update Appendix B — Cross-Reference Map
+### 4.4 Update Appendix B - Cross-Reference Map
 
 Add a row for the new chapter:
 
 | Cookbook chapter | Corresponding section in `chatdsl_guide_v1.md` |
 |------------------|----------------------------------------------|
-| 15 Dynamic Skill Loading | (new — see Section 4.6 below) |
+| 15 Dynamic Skill Loading | (new - see Section 4.6 below) |
 
 And update the Chapter 8 row:
 
@@ -474,7 +474,7 @@ And update the Chapter 8 row:
 
 ---
 
-### 4.5 Update `chatdsl_skill.md` — Add Skills System Section
+### 4.5 Update `chatdsl_skill.md` - Add Skills System Section
 
 The current `chatdsl_skill.md` is a ChatDSL scripting reference. It does not mention the `/skill` command, the skills database, trigger matching, or dynamic loading. Add a new major section after the existing content.
 
@@ -517,11 +517,11 @@ The `/skill` command provides 16 subcommands:
 Skills have trigger phrases in their metadata. When a user prompt matches a trigger,
 the skill is auto-injected. Trigger matching uses:
 
-- **Word-boundary regex** — prevents false positives (trigger "log" won't match
+- **Word-boundary regex** - prevents false positives (trigger "log" won't match
   "biology" or "catalog").
-- **Specificity ranking** — longer triggers (more words) rank higher. Only the
+- **Specificity ranking** - longer triggers (more words) rank higher. Only the
   most specific matched skill is injected per turn by default.
-- **Validation** — triggers must be at least 3 characters and 2 words.
+- **Validation** - triggers must be at least 3 characters and 2 words.
 
 ### Sticky Skill Lock
 
@@ -534,9 +534,9 @@ the lock and return to normal trigger scanning.
 Two in-process tools let the LLM discover and load skills on-demand during the
 autonomous tool loop:
 
-- **`search_skills`** — Search by keyword (name, description, tags). Returns
+- **`search_skills`** - Search by keyword (name, description, tags). Returns
   compact metadata only, no instruction content. Prevents context pollution.
-- **`call_skill`** — Load a skill's full instructions by name. Applies any
+- **`call_skill`** - Load a skill's full instructions by name. Applies any
   `tool_config` silently. Returns a `tool_state` summary and current `depth`.
 
 These are LLM tool calls, not ChatDSL commands. Enable them with:
@@ -544,7 +544,7 @@ These are LLM tool calls, not ChatDSL commands. Enable them with:
     /tool enable search_skills,call_skill
 
 Then start the tool loop. The model calls these tools as JSON tool calls during
-the loop — the user does not type them as script lines.
+the loop - the user does not type them as script lines.
 
 ### Delegation Safety
 
@@ -568,25 +568,25 @@ and the result set. This duplication is intentional.
 
 ---
 
-### 4.6 Update `chatdsl_guide_v1.md` — Add Dynamic Skill Loading Section
+### 4.6 Update `chatdsl_guide_v1.md` - Add Dynamic Skill Loading Section
 
-Add a new section after the existing "Tool Loops" section in the main guide. Keep it concise — the cookbook has the full recipes, the skill guide has the reference. The main guide needs an overview that points to both.
+Add a new section after the existing "Tool Loops" section in the main guide. Keep it concise - the cookbook has the full recipes, the skill guide has the reference. The main guide needs an overview that points to both.
 
 ```markdown
 ## Dynamic Skill Loading
 
 The skills system provides two mechanisms for using skills:
 
-1. **Auto-triggering** — When a user prompt matches a skill's trigger phrases,
+1. **Auto-triggering** - When a user prompt matches a skill's trigger phrases,
    the skill is injected into the system prompt automatically. Toggle with
    `/skill on` and `/skill off`.
 
-2. **On-demand loading** — During the tool loop, the LLM can discover and load
+2. **On-demand loading** - During the tool loop, the LLM can discover and load
    skills using two in-process tools:
 
-   - `search_skills(query, limit)` — Find skills by keyword. Returns metadata
+   - `search_skills(query, limit)` - Find skills by keyword. Returns metadata
      only (name, description, tags) to avoid context pollution.
-   - `call_skill(name)` — Load a skill's full instructions. Applies any
+   - `call_skill(name)` - Load a skill's full instructions. Applies any
      `tool_config` silently and returns a `tool_state` summary.
 
    Enable both with `/tool enable search_skills,call_skill` before starting
@@ -604,7 +604,7 @@ See the [Cookbook Chapter 15](chatdsl_cookbook.md) for recipes and the
 
 ---
 
-### 4.7 Translated Guides — Phased Approach
+### 4.7 Translated Guides - Phased Approach
 
 The 5 translated guides (`_arabic`, `_chinese`, `_french`, `_italian`, `_spanish`) currently have no skill content. Translating technically precise terminology (recursion limits, cycle detection, `tool_config`, context pollution, silent application) across 5 languages is substantial work.
 
@@ -765,24 +765,24 @@ chat --> Analyze the codebase and suggest improvements.
 
 ## 7. Why These Changes Matter
 
-1. **Discoverability** — Users cannot use `search_skills` and `call_skill` if they don't know they exist. The cookbook is the primary user-facing doc; a chapter there is the standard way features are introduced.
-2. **Correct mental model** — The most important correction is showing these as LLM tool calls within a tool loop, not as ChatDSL script commands. Getting this wrong leads users to type `search_skills query="..."` in scripts and wonder why nothing happens.
-3. **Zero-context-pollution design** — The `search_skills` reimplementation decision (excluding `content` from search and results) is a key performance feature. Users who don't understand this may try to work around it or expect full content in search results.
-4. **Safety features** — Cycle detection and the depth limit are automatic protections, but users need to know they exist to design skills that don't trigger them accidentally, and to understand error messages when they do.
-5. **`/skill restore`** — Tool configuration changes applied silently mid-loop are recoverable, but only if users know about `/skill restore`. Recipe 15.4 makes this explicit.
-6. **Translation sustainability** — Phasing the translation work avoids the pattern seen in commit `dc0cea3` where small corrections require touching all 6 language guides. Stabilize English first, translate once.
+1. **Discoverability** - Users cannot use `search_skills` and `call_skill` if they don't know they exist. The cookbook is the primary user-facing doc; a chapter there is the standard way features are introduced.
+2. **Correct mental model** - The most important correction is showing these as LLM tool calls within a tool loop, not as ChatDSL script commands. Getting this wrong leads users to type `search_skills query="..."` in scripts and wonder why nothing happens.
+3. **Zero-context-pollution design** - The `search_skills` reimplementation decision (excluding `content` from search and results) is a key performance feature. Users who don't understand this may try to work around it or expect full content in search results.
+4. **Safety features** - Cycle detection and the depth limit are automatic protections, but users need to know they exist to design skills that don't trigger them accidentally, and to understand error messages when they do.
+5. **`/skill restore`** - Tool configuration changes applied silently mid-loop are recoverable, but only if users know about `/skill restore`. Recipe 15.4 makes this explicit.
+6. **Translation sustainability** - Phasing the translation work avoids the pattern seen in commit `dc0cea3` where small corrections require touching all 6 language guides. Stabilize English first, translate once.
 
 ---
 
 ## 8. Implementation Order
 
-1. **Resolve doc duplication** (`doc/` vs `src/chatybot/doc/`) — symlink or remove one tree.
+1. **Resolve doc duplication** (`doc/` vs `src/chatybot/doc/`) - symlink or remove one tree.
 2. **Write Chapter 15** in `chatdsl_cookbook.md` (5 recipes + walkthroughs).
 3. **Write Recipe 8.5** in Chapter 8 of `chatdsl_cookbook.md`.
 4. **Create 6 `.chatdsl` recipe files** in `cookbook/`.
 5. **Update Appendices A and B** in `chatdsl_cookbook.md`.
 6. **Add "The Skills System" section** to `chatdsl_skill.md`.
 7. **Add "Dynamic Skill Loading" section** to `chatdsl_guide_v1.md`.
-8. **Review and test** — run each recipe script to verify it works as documented.
+8. **Review and test** - run each recipe script to verify it works as documented.
 9. **Phase 2:** Translate the `chatdsl_guide_v1.md` section into 5 languages.
 10. **Phase 3:** Translate the `chatdsl_skill.md` section into 5 languages.

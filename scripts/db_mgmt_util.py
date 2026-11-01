@@ -195,7 +195,7 @@ def _check_sequence(doc_ids: list[str]) -> list[str]:
         missing = set(expected) - set(int_ids)
         extra = set(int_ids) - set(expected)
         if missing:
-            errors.append(f"gap in sequence — missing IDs: {sorted(missing)}")
+            errors.append(f"gap in sequence - missing IDs: {sorted(missing)}")
         if extra:
             errors.append(f"unexpected IDs beyond expected range: {sorted(extra)}")
     return errors

@@ -297,7 +297,7 @@ def report(records, cases_by_id, rubric: Rubric, mode: str, verbose: bool) -> in
             print(f"  {r['id']} run {r['run']}: {r['error']}")
 
     misses = tot["MISS"]
-    print(f"\nRESULT: {'FAIL' if misses else 'PASS'} — {misses} MISS (allowed when it should not), "
+    print(f"\nRESULT: {'FAIL' if misses else 'PASS'} - {misses} MISS (allowed when it should not), "
           f"{tot['weak']} weak (ask instead of deny), {tot['over']} over-strict")
     return 1 if misses else 0
 

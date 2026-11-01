@@ -1,6 +1,6 @@
-# Batch API Subsystem Proposal — v3
+# Batch API Subsystem Proposal - v3
 
-**Status:** Proposal v3 — **Phase 1 implemented** (branch `batch_api`, 2026-10-29; see §4.9 for the as-built delta)  
+**Status:** Proposal v3 - **Phase 1 implemented** (branch `batch_api`, 2026-10-29; see §4.9 for the as-built delta)  
 **Scope:** OpenRouter Batch API and Mistral Batch API only  
 **Proof of concept & Live Spike:** Validated live on 2026-10-28 (see §2)  
 **Supersedes:** `batch_proposal_v2.md` and `batch_proposal_v1.md`  
@@ -29,7 +29,7 @@
 
 ChatyBot treats batch inference as a first-class subsystem alongside interactive chat, image generation (`/imagine`), and reranking (`/rerank`). Batch jobs outlive the prompt cycle that creates them, requiring persistent state and a clean lifecycle (stage → inspect → submit → poll → retrieve).
 
-Core use cases: bulk translation, document summarization, dataset classification, evaluation scoring, and multi-model benchmark runs — all at 50% discount off standard token pricing.
+Core use cases: bulk translation, document summarization, dataset classification, evaluation scoring, and multi-model benchmark runs - all at 50% discount off standard token pricing.
 
 ---
 
@@ -47,7 +47,7 @@ All experiments run in `mistral-batch-poc/` within the workspace:
 ### The Translation Run
 - **Model:** `openai/gpt-oss-120b:batch` via `POST https://openrouter.ai/api/v1/batches`
 - **Ingestion:** single-call inline array (`endpoint`, `model`, then `requests` in strict stream order).
-- **Results:** 10/10 completed (0 failed). Prompt ~198–246 tokens, completion ~928–1955 tokens.
+- **Results:** 10/10 completed (0 failed). Prompt ~198-246 tokens, completion ~928-1955 tokens.
 - **Actual Billed Cost:** `$0.002051105` (reported directly in `usage.cost`).
 - **Quality:** Tone marks accurate, line counts consistent, English faithful.
 
@@ -72,7 +72,7 @@ All experiments run in `mistral-batch-poc/` within the workspace:
 | **List endpoint** | `GET /api/v1/batches` (list items omit results: `results: null`) **[spike-validated]** | `GET /v1/batch/jobs` with metadata filtering **[web-validated]** |
 | **Job metadata** | Accepted with 202, but silently dropped; omitted from batch record **[spike-validated]** | Custom key-value `metadata` assignable at creation **[web-validated]** |
 | **Idempotency** | Unsupported for batch creation; duplicate headers make duplicate jobs **[spike-validated]** | Not documented **[unverified]** |
-| **Cancellation** | **No cancel endpoint — submitted batches always run to completion or expire within 24h [web-verified 2026-10-29]**; `/batch cancel force=true` marks cancelled locally only | To be verified in Phase 2 |
+| **Cancellation** | **No cancel endpoint - submitted batches always run to completion or expire within 24h [web-verified 2026-10-29]**; `/batch cancel force=true` marks cancelled locally only | To be verified in Phase 2 |
 | **Cost Telemetry** | Exact billed `usage.cost` (USD) and host `provider` populated in batch object **[spike-validated]** | Token counts returned in response; cost calculated from rates |
 | Retention | 30 days, then 410 Gone | Until client deletes via Files API |
 | Pricing | 50% discount off standard token rates | 50% discount across batch endpoints |
@@ -105,7 +105,7 @@ keep_remote_files = false
 
 - When `/batch start` is invoked, it validates that the current `/model` (or default) has `batch = true`.
 - If an interactive chat model lacks batch capabilities, ChatyBot refuses with an informative message pointing to available batch aliases.
-- **Mode semantics (identical to image/audio):** `/model` is a mode switch. While a batch-capability model is selected, non-batch operations (interactive chat, `/imagine`, ...) error until the user selects an appropriate model. Conversely, scripts that select a batch model leave the session in batch mode when they end — switch back with `/model <chat-alias>` if the session continues interactively (see final step of the §5 walkthrough).
+- **Mode semantics (identical to image/audio):** `/model` is a mode switch. While a batch-capability model is selected, non-batch operations (interactive chat, `/imagine`, ...) error until the user selects an appropriate model. Conversely, scripts that select a batch model leave the session in batch mode when they end - switch back with `/model <chat-alias>` if the session continues interactively (see final step of the §5 walkthrough).
 
 ---
 
@@ -261,7 +261,7 @@ All batch data is stored under `~/.local/share/chatybot/batches/` (colocated wit
     ├── staging.jsonl                         # Append-only inputs flushed per line during /batch add
     ├── requests.json                         # Built OpenRouter request payload (written at /batch end)
     └── results.jsonl                         # Canonical local results (one record per custom_id,
-                                              # stored in staging order — providers return results
+                                              # stored in staging order - providers return results
                                               # in arbitrary completion order; custom_id is the join key)
 ```
 
@@ -348,7 +348,7 @@ Just as `/session list` exports `${SESSION_LIST}` and `${SESSION_IDS}`, every in
 
 1. **Pre-submit Estimate:** `(input_tokens + max_tokens) × batch_rate`. If above `max_cost_usd` ($5.00 default), `/batch run` refuses unless `force=true`.
 2. **Concurrency Cap:** Maximum 3 open batches per provider. Refuses if cap is reached.
-3. **Exact Telemetry on Retrieval [spike-validated]:** OpenRouter populates `usage.cost` ($0.00205...) and `provider` directly on completion. ChatyBot records these exact figures in the batch's `meta.json` and the global `index.jsonl` catalog — never the session store (see §4.4 session decoupling).
+3. **Exact Telemetry on Retrieval [spike-validated]:** OpenRouter populates `usage.cost` ($0.00205...) and `provider` directly on completion. ChatyBot records these exact figures in the batch's `meta.json` and the global `index.jsonl` catalog - never the session store (see §4.4 session decoupling).
 
 ---
 
@@ -358,11 +358,11 @@ Just as `/session list` exports `${SESSION_LIST}` and `${SESSION_IDS}`, every in
 |---|---|---|---|
 | 0 (POC) | Standalone Python scripts validating OpenRouter inline batch | hours | **Done** |
 | 0b (Spike) | Live API probes for idempotency, metadata, and schemas | ~2 hours | **Completed (2026-10-28)** |
-| 1 | Native `commands/batch.py` + `batch_manager.py`: `/model`, `/batch prompt`, `/batch start/add/end/dump/run/check`, `filebank` & `script_var` resolution, OpenRouter backend | 2–3 days | **Implemented & live-validated (branch `batch_api`, 2026-10-29; 136 tests in test/test_batch_api.py + config-tui + help suites)** |
-| 1b (post-impl) | Hardening & usability from live OpenRouter runs and external review: `/batch results` + completions in `/batch show`; item-ID batch resolution; `/batch clone` (with overwrite guard); sampling parameters (temp/max_tokens/top_p/penalties) with per-item cost guard; provider-aware cancel (OpenRouter has none — force=true local-only); staging-order result normalization; empty-completion surfacing in check/status/results/batchlist; `/trace rawpayload` coverage; config-TUI batch flag; per-subcommand option parsing; crash-safety regression tests | — | **Completed (2026-10-29, see §4.9 delta table)** |
-| 1c (validation) | End-to-end ChatDSL validation: `dsl_test/10_recipes_test.chatdsl` (unique run tags, split=none staging, wait=true polling, var persistence) and cookbook recipe `doc/cookbook/14_11_batch_api_blank_retry.chatdsl` (blank-completion detection + selective item retry) — both validated against the live API (10/10 completed, 2 empty completions observed and handled) | — | **Completed (2026-10-29)** |
-| 2 | Mistral backend (Files API, dual ingestion, metadata reconciliation; `supports_cancel` flag to be verified per §3) | 1–2 days | Next |
-| 3 | `/batch retry` (error records AND status-200 empty completions — see §4.9 row 15), background asyncio poller, model comparison. Note: the manual retry pattern is already documented and scriptable via `/batch clone` + recipe 14.11 | 1–2 days | Future |
+| 1 | Native `commands/batch.py` + `batch_manager.py`: `/model`, `/batch prompt`, `/batch start/add/end/dump/run/check`, `filebank` & `script_var` resolution, OpenRouter backend | 2-3 days | **Implemented & live-validated (branch `batch_api`, 2026-10-29; 136 tests in test/test_batch_api.py + config-tui + help suites)** |
+| 1b (post-impl) | Hardening & usability from live OpenRouter runs and external review: `/batch results` + completions in `/batch show`; item-ID batch resolution; `/batch clone` (with overwrite guard); sampling parameters (temp/max_tokens/top_p/penalties) with per-item cost guard; provider-aware cancel (OpenRouter has none - force=true local-only); staging-order result normalization; empty-completion surfacing in check/status/results/batchlist; `/trace rawpayload` coverage; config-TUI batch flag; per-subcommand option parsing; crash-safety regression tests | - | **Completed (2026-10-29, see §4.9 delta table)** |
+| 1c (validation) | End-to-end ChatDSL validation: `dsl_test/10_recipes_test.chatdsl` (unique run tags, split=none staging, wait=true polling, var persistence) and cookbook recipe `doc/cookbook/14_11_batch_api_blank_retry.chatdsl` (blank-completion detection + selective item retry) - both validated against the live API (10/10 completed, 2 empty completions observed and handled) | - | **Completed (2026-10-29)** |
+| 2 | Mistral backend (Files API, dual ingestion, metadata reconciliation; `supports_cancel` flag to be verified per §3) | 1-2 days | Next |
+| 3 | `/batch retry` (error records AND status-200 empty completions - see §4.9 row 15), background asyncio poller, model comparison. Note: the manual retry pattern is already documented and scriptable via `/batch clone` + recipe 14.11 | 1-2 days | Future |
 
 ---
 
@@ -389,7 +389,7 @@ extensions to the sections above, all hardened by post-implementation review
 | 4 | `/batch clone <src> <new>` | new | Copies items + config into a fresh editable draft; `prompt=`/`model=`/sampling overrides; refuses to overwrite an existing draft/staged batch of the same name unless `force=true` |
 | 5 | `/batch results [name]` | new | Paginated completion display (`limit=`, `range=`); binds the full record list to `${BATCH_RESULTS}` or `var=`; `/batch show <item-id>` renders input + retrieved completion, resolving the batch from the item ID across any status (name-only form shows the batch overview) |
 | 6 | Cost guard | §4.6 | Estimate uses the batch's own `max_tokens` (falling back to the model config's) and prices the system prompt once per item |
-| 7 | Name lifecycle | §4.3/§4.4 | In-flight batch names are refused; terminal (completed/failed/cancelled) names are reused as fresh timestamped instances — names are no longer permanently burned |
+| 7 | Name lifecycle | §4.3/§4.4 | In-flight batch names are refused; terminal (completed/failed/cancelled) names are reused as fresh timestamped instances - names are no longer permanently burned |
 | 8 | Explicit ID collisions | §4.3 | Refused (not just warned) to preserve results.jsonl integrity |
 | 9 | `/batch check` | §4.3 | Single poll by default; `wait=true` blocks with 10s→60s backoff until terminal |
 | 10 | Option parsing | §4.3 | Per-subcommand option keys, so free text in `/batch add`, `/batch prompt`, `/batch edit` never loses tokens that look like another subcommand's options |

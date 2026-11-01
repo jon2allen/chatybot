@@ -11,7 +11,7 @@ Provide a lightweight, two-stage mechanism for the LLM to discover and load skil
 
 - **No bloated static catalog:** In systems with 50 to 100+ skills, dumping every skill description into the system prompt wastes thousands of tokens, bloats on-device Apple FM models, and causes attention dilution ("skill confusion").
 - **User-directed default:** In most workflows, the user explicitly instructs the model to use a skill (e.g. "use grilling", "help me grill my plan", or `/skill apply grilling`), or a pre-configured meta-skill instructs the model to call specific skills.
-- **On-demand discovery:** When the model or user needs to discover an existing capability, the model calls `search_skills(query="...")` which returns only ~20–35 tokens per match.
+- **On-demand discovery:** When the model or user needs to discover an existing capability, the model calls `search_skills(query="...")` which returns only ~20-35 tokens per match.
 - **On-demand loading:** Only the selected skill's instructions are loaded via `call_skill(name="...")`.
 
 No nested chatybot instance, no new model call, no subprocess. The tools are fast in-process lookups against `skillsdb`.

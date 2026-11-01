@@ -2,8 +2,8 @@
 
 **Document Version:** 1.1
 **Date:** July 30, 2026 (date of the last commit touching this file: `12bc73a`, 2026-07-30 17:20 -0400)
-**Status:** Implemented — validated against source and `test/test_procs.py` (14 tests green) on October 31, 2026; see Implementation Deviations and Open Items below
-**Applies To:** ChatDSL procedure system — `defproc`/`endproc`/`local` capture in `chatybot_app.py`, `/proc` execution in `commands/proc_macros.py`, `ScriptVars` protected variables in `buffer_manager.py`
+**Status:** Implemented - validated against source and `test/test_procs.py` (14 tests green) on October 31, 2026; see Implementation Deviations and Open Items below
+**Applies To:** ChatDSL procedure system - `defproc`/`endproc`/`local` capture in `chatybot_app.py`, `/proc` execution in `commands/proc_macros.py`, `ScriptVars` protected variables in `buffer_manager.py`
 
 ---
 
@@ -11,13 +11,13 @@
 
 Validated claim-by-claim on 2026-10-31. Phase 1 (file-based `/proc`, Save/Restore, `/script` parameter fix) and Phase 2 (inline `defproc`/`endproc`, `local` scope, `PROC_MAX_DEPTH` guard) are implemented as specified, including the `(proc)>` REPL prompt verbatim. The deviations all fall in the reserved-variables section (§9 of the embedded spec):
 
-1. **`PROC_RESULT` has no system behavior.** It is never referenced in source; it works only because any script variable is settable. The "standard return value convention" is unenforced — usable, but nothing reserves it.
-2. **`PROC_MAX_DEPTH` is honored but not in `protected_vars`.** Read from `ScriptVars` with default 20 (invalid values warn and fall back to 20), but the proposal's "must be added to `ScriptVars.protected_vars`" was not done — it is a plain user-writable variable.
+1. **`PROC_RESULT` has no system behavior.** It is never referenced in source; it works only because any script variable is settable. The "standard return value convention" is unenforced - usable, but nothing reserves it.
+2. **`PROC_MAX_DEPTH` is honored but not in `protected_vars`.** Read from `ScriptVars` with default 20 (invalid values warn and fall back to 20), but the proposal's "must be added to `ScriptVars.protected_vars`" was not done - it is a plain user-writable variable.
 3. **`LAST_ERROR` does not exist.** No reference anywhere in `src/`; the "captures text of last failed command/tool, system-only" variable was not implemented.
 4. **`SYS_*` / `CHATY_*` prefix reservations are not implemented.** `protected_vars` in `buffer_manager.py` is a fixed name list (`AGENTIC_LOOP`, `CHAT_HISTORY`, `LAST_RESPONSE`, `RUN_*`, `DECIDE_*`, etc.); there is no prefix-matching reservation logic.
-5. **`LAST_RESPONSE` is protected as specified** — the one §9 entry fully delivered.
+5. **`LAST_RESPONSE` is protected as specified** - the one §9 entry fully delivered.
 6. **`local` at top level silently becomes a global.** Outside a procedure there is no stack frame, so `local x = 1` at script top level leaks permanently. The proposal never specified this case.
-7. **Nested `defproc` is a hard error, but script mode does not abort the run.** The implementation prints the error, discards the outer procedure body, and continues processing the rest of the script; REPL mode aborts the capture without defining. The proposal said "print an error and abort" — the script-mode behavior is softer than specified.
+7. **Nested `defproc` is a hard error, but script mode does not abort the run.** The implementation prints the error, discards the outer procedure body, and continues processing the rest of the script; REPL mode aborts the capture without defining. The proposal said "print an error and abort" - the script-mode behavior is softer than specified.
 8. **File-based `/proc` search paths are a superset.** As built: memory → `name` → `name.chatdsl` → `procs/name.chatdsl` → `~/.config/chatybot/procs/name.chatdsl`, with wrapper `defproc`/`endproc` lines stripped. The proposal specified only `./procs/name.chatdsl`.
 
 ## Open Items
@@ -30,7 +30,7 @@ Validated claim-by-claim on 2026-10-31. Phase 1 (file-based `/proc`, Save/Restor
 
 ---
 
-This is a great technical direction. To make ChatDSL procedures truly powerful and resilient—especially for recursion and complex logic—moving beyond purely global state is essential.
+This is a great technical direction. To make ChatDSL procedures truly powerful and resilient-especially for recursion and complex logic-moving beyond purely global state is essential.
 
 Here is a review and discussion of the best options for handling script variables, local scoping, recursion, and reserved system globals, followed by the fully regenerated specification.
 
@@ -75,7 +75,7 @@ To prevent user scripts from breaking system mechanics, certain global variables
 ### 📄 Regenerated Complete Specification
 
 ```markdown
-# ChatDSL Procedure Design — Complete Specification
+# ChatDSL Procedure Design - Complete Specification
 
 **Date:** 2026-07-30 (updated)
 **Status:** Design Review
@@ -105,7 +105,7 @@ ChatDSL scripts currently support two reuse mechanisms:
 - **No way** to factor out repeated sequences of commands into a named, callable unit with isolated state.
 
 ### Goal
-Add `defproc` to define a named, reusable block of ChatDSL commands, and `/proc` to call it — with named parameter passing, local scoping to prevent state bleeding, and a return value convention.
+Add `defproc` to define a named, reusable block of ChatDSL commands, and `/proc` to call it - with named parameter passing, local scoping to prevent state bleeding, and a return value convention.
 
 ---
 
@@ -115,7 +115,7 @@ Add `defproc` to define a named, reusable block of ChatDSL commands, and `/proc`
 - `execute_script()` in `chatybot_app.py` builds a flat `commands_list` by splitting the script on `\n` and `;;`.
 - Commands are dispatched one-by-one through `execute_script_command()` → `handle_escape_command()`.
 - `/multiline` is handled by an `in_multi_line` state flag + `multi_line_buffer` in the main loop.
-- **All variables are global** — `ScriptVars` is a single dict with no namespacing[cite: 1].
+- **All variables are global** - `ScriptVars` is a single dict with no namespacing[cite: 1].
 - `/script myfile.chatdsl x="v" y="v" z="v"` already injects named variables before running a file, but the regex is **hardcoded to only `x`, `y`, `z`**[cite: 1] (see Section 5).
 
 ---
@@ -123,9 +123,9 @@ Add `defproc` to define a named, reusable block of ChatDSL commands, and `/proc`
 ## 3️⃣ Design Decisions: Keyword Conventions
 
 ### Why No Slashes on `defproc` and `endproc`
-All `/verb` commands in ChatDSL are **imperative actions** — they perform an action immediately (e.g., `/setvar`, `/model`). Structural/declarative keywords already exist **without** a slash (e.g., `set`, `def`, `if`, `wait`).
+All `/verb` commands in ChatDSL are **imperative actions** - they perform an action immediately (e.g., `/setvar`, `/model`). Structural/declarative keywords already exist **without** a slash (e.g., `set`, `def`, `if`, `wait`).
 
-`defproc` and `endproc` are **structural** — they delimit a definition block, not an action. Using slashes would create the first slash-commands that don't perform an immediate action.
+`defproc` and `endproc` are **structural** - they delimit a definition block, not an action. Using slashes would create the first slash-commands that don't perform an immediate action.
 
 ### The Keyword Table
 | Keyword               | Slash? | Role                                      |
@@ -160,7 +160,7 @@ endproc
 
 #### Key Points:
 
-* `defproc name(p1, p2)` opens the block — params are optional.
+* `defproc name(p1, p2)` opens the block - params are optional.
 * `local name = value` defines an internal variable that will be purged upon `endproc`.
 * `endproc` on its own line closes and commits the procedure.
 * `/proc name key=val ...` executes a defined procedure.
@@ -274,7 +274,7 @@ A `defproc` keyword encountered inside a proc body is a **hard error**. The exec
 
 ## 1️⃣1️⃣ Recommended Two-Phase Plan
 
-### Phase 1 — File-Based `/proc` (Option D) + Param Fix
+### Phase 1 - File-Based `/proc` (Option D) + Param Fix
 
 **Deliverables:**
 
@@ -282,7 +282,7 @@ A `defproc` keyword encountered inside a proc body is a **hard error**. The exec
 * Add `/proc name [key=val ...]` that resolves to `./procs/name.chatdsl`.
 * Implement Save/Restore mechanism for parameters injected into `ScriptVars`.
 
-### Phase 2 — Inline `defproc` / `endproc` + `local` Scope
+### Phase 2 - Inline `defproc` / `endproc` + `local` Scope
 
 **Deliverables:**
 

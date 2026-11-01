@@ -2,7 +2,7 @@
 
 ## Status
 
-Open — needs review
+Open - needs review
 
 ## Date
 
@@ -47,7 +47,7 @@ All `$REPO_PATH`, `$0`, `$1` references are stripped or emptied.
 
 `buffer_manager.replace_placeholders_legacy` (line 606) calls
 `replace_placeholders` with `clear_unresolved=True` (line 608). The
-`clear_unresolved` logic (lines 586–594) removes all unresolved `$VAR` and
+`clear_unresolved` logic (lines 586-594) removes all unresolved `$VAR` and
 `${VAR}` patterns from the text:
 
 ```python
@@ -92,7 +92,7 @@ on this list.
 
 ## Related Files
 
-- `src/chatybot/buffer_manager.py:490` — `replace_placeholders`
-- `src/chatybot/buffer_manager.py:606` — `replace_placeholders_legacy`
-- `src/chatybot/chatybot_app.py:2562` — skip list for substitution
-- `src/chatybot/commands/decide.py:46` — combined regex parser
+- `src/chatybot/buffer_manager.py:490` - `replace_placeholders`
+- `src/chatybot/buffer_manager.py:606` - `replace_placeholders_legacy`
+- `src/chatybot/chatybot_app.py:2562` - skip list for substitution
+- `src/chatybot/commands/decide.py:46` - combined regex parser

@@ -1,8 +1,8 @@
-# /str_search Implementation — Design Decisions
+# /str_search Implementation - Design Decisions
 
 ## Overview
 
-`/str_search` is a slash command that searches for substring patterns within text variables, returning match counts or positions. It follows the same architecture as `/calc` — a slash command handler in `chatybot_app.py`, a standalone tool function in `tools/str_utils.py`, TOML dispatcher config, help registration, localization aliases, and a protected default variable.
+`/str_search` is a slash command that searches for substring patterns within text variables, returning match counts or positions. It follows the same architecture as `/calc` - a slash command handler in `chatybot_app.py`, a standalone tool function in `tools/str_utils.py`, TOML dispatcher config, help registration, localization aliases, and a protected default variable.
 
 ## Design Decisions
 
@@ -16,7 +16,7 @@ Three options were considered:
 | **2: Count + Positions** | `int` or `[(start, end)]` | Medium | Log analysis, text processing |
 | 3: Full regex with groups | `list[str]` | Highest | Advanced pattern matching |
 
-Option 2 was selected because it covers the most common use cases (counting occurrences, finding where matches are) without requiring regex knowledge. The `m` mode returns `(start, end)` tuples, which are useful for downstream processing (slicing, highlighting). Regex was intentionally avoided to keep the interface simple and safe — `re.escape()` is used internally so patterns are treated as literal strings.
+Option 2 was selected because it covers the most common use cases (counting occurrences, finding where matches are) without requiring regex knowledge. The `m` mode returns `(start, end)` tuples, which are useful for downstream processing (slicing, highlighting). Regex was intentionally avoided to keep the interface simple and safe - `re.escape()` is used internally so patterns are treated as literal strings.
 
 ### 2. Flags as a Single Combinable String
 
@@ -28,7 +28,7 @@ Rather than separate boolean parameters, flags are passed as a single string (e.
 
 This matches the convention of tools like `grep -i`, `sed`, etc. The parser validates that the flag token contains only characters from the set `{c, m, i, C, M, I, G}`. If the third token doesn't match this pattern, it's treated as a variable name instead.
 
-**Rationale:** Keeps the syntax compact. `/str_search "error" ${LOG} ic my_count` reads naturally. The alternative — named flags like `case=true mode=count` — would be more verbose and break the pattern established by `/calc`.
+**Rationale:** Keeps the syntax compact. `/str_search "error" ${LOG} ic my_count` reads naturally. The alternative - named flags like `case=true mode=count` - would be more verbose and break the pattern established by `/calc`.
 
 ### 3. Variable Resolution: The ${LOG} Problem
 
@@ -62,11 +62,11 @@ text_var = self.buffer_manager.replace_placeholders_legacy(text_var, clear_unres
 # text_var is now "error info error warn error" (the VALUE, not the variable name)
 var_name = text_var
 if var_name.startswith("${") and var_name.endswith("}"):
-    var_name = var_name[2:-1]  # Never triggers — no ${} wrapper left!
+    var_name = var_name[2:-1]  # Never triggers - no ${} wrapper left!
 text_value = self.buffer_manager.get_script_var(var_name)  # Looks up "error info error warn error" → None
 ```
 
-`replace_placeholders_legacy("${LOG}")` resolves to the variable's **value**. After resolution, `text_var` is the literal string `"error info error warn error"`. The `${}` wrapper is gone, so the `startswith("${")` check fails, and the code tries to look up `"error info error warn error"` as a variable name — which doesn't exist.
+`replace_placeholders_legacy("${LOG}")` resolves to the variable's **value**. After resolution, `text_var` is the literal string `"error info error warn error"`. The `${}` wrapper is gone, so the `startswith("${")` check fails, and the code tries to look up `"error info error warn error"` as a variable name - which doesn't exist.
 
 **This worked in production** (where `replace_placeholders_legacy` was called before the handler by `handle_command`), but **failed in tests** (where the handler receives raw `${LOG}` and calls `replace_placeholders_legacy` on it itself, double-resolving).
 
@@ -92,7 +92,7 @@ In both cases `text_var` arrives as `${LOG}` because:
 - Production: exclusion list prevents resolution before handler
 - Test: raw string passed directly
 
-The pattern is the same as `/calc` — the handler resolves variables **internally** rather than relying on pre-resolution.
+The pattern is the same as `/calc` - the handler resolves variables **internally** rather than relying on pre-resolution.
 
 #### Why the Exclusion List Still Matters
 

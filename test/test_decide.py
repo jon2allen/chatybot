@@ -43,7 +43,7 @@ def _mock_noul_response(answer=True, confidence=0.92, with_confidence_field=True
     """Mock a noul response.
 
     The real TypeSafe Jev API returns {"type": "noul", "noul": 0.92} with no
-    separate confidence field — the noul probability IS the confidence.
+    separate confidence field - the noul probability IS the confidence.
     Set with_confidence_field=False to simulate the real API format.
     """
     q = {"type": "noul"}
@@ -313,7 +313,7 @@ async def test_state_with_echo_quote_pattern(capsys):
         # Simulate variable substitution: replace ${bash1} with its content.
         # We do a targeted replacement rather than replace_placeholders_legacy
         # because that method strips all unresolved $VAR patterns (like
-        # $REPO_PATH, $0) from the bash script content — a pre-existing
+        # $REPO_PATH, $0) from the bash script content - a pre-existing
         # substitution system issue separate from the regex parsing fix.
         cmd = cmd.replace("${bash1}", bash_script)
         await app.handle_escape_command(cmd)

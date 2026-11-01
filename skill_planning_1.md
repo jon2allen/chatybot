@@ -1,4 +1,4 @@
-# Skills Database Planning — Session 1
+# Skills Database Planning - Session 1
 
 ## Date: 2026-09-23
 
@@ -17,10 +17,10 @@ Web searches were conducted across multiple queries covering Claude Code, Cursor
 Anthropic published the **SKILL.md format** as an open standard (now at agentskills.io). A skill is a folder containing a `SKILL.md` file with YAML frontmatter (name, description required) plus a markdown body, with optional `scripts/`, `references/`, and `assets/` subdirectories. It uses **progressive disclosure**: at startup the agent loads only name + description (~100 tokens), then pulls in the full body (~2,000 tokens) only when a task matches. This format is now adopted by 25+ tools.
 
 Key sources:
-- Agent Skills Overview — agentskills.io
-- Claude Code Docs — code.claude.com/docs/en/skills
-- Anthropic Skills repo — github.com/anthropics/skills
-- SKILL.md Format Specification — agensi.io/learn/agent-skills-open-standard
+- Agent Skills Overview - agentskills.io
+- Claude Code Docs - code.claude.com/docs/en/skills
+- Anthropic Skills repo - github.com/anthropics/skills
+- SKILL.md Format Specification - agensi.io/learn/agent-skills-open-standard
 
 ---
 
@@ -28,10 +28,10 @@ Key sources:
 
 | Platform | Storage | Discovery | Centralized? |
 |---|---|---|---|
-| **Claude Code** | Filesystem: `~/.claude/skills/` (user) + `.claude/skills/` (repo) | Auto-scan at startup; model loads on demand | No — purely local files |
-| **Cursor** | Filesystem: `.cursor/rules/*.mdc` files (legacy `.cursorrules`) | Rule types: Always, Auto-Attached (glob), Agent-Requested, Manual | No — version-controlled files |
-| **Devin** | Cloud-hosted Knowledge Base + SKILL.md files committed to repos | Knowledge items have trigger descriptions; auto-retrieved when triggers match during sessions | Yes — closest precedent |
-| **Vibe** | Filesystem: `~/.vibe/skills/` + project `.vibe/skills/`; plugin packages | Auto-scan + plugin marketplace | No — local files + plugins |
+| **Claude Code** | Filesystem: `~/.claude/skills/` (user) + `.claude/skills/` (repo) | Auto-scan at startup; model loads on demand | No - purely local files |
+| **Cursor** | Filesystem: `.cursor/rules/*.mdc` files (legacy `.cursorrules`) | Rule types: Always, Auto-Attached (glob), Agent-Requested, Manual | No - version-controlled files |
+| **Devin** | Cloud-hosted Knowledge Base + SKILL.md files committed to repos | Knowledge items have trigger descriptions; auto-retrieved when triggers match during sessions | Yes - closest precedent |
+| **Vibe** | Filesystem: `~/.vibe/skills/` + project `.vibe/skills/`; plugin packages | Auto-scan + plugin marketplace | No - local files + plugins |
 
 #### Claude Code
 
@@ -45,51 +45,51 @@ Sources:
 - code.claude.com/docs/en/skills
 - platform.claude.com/docs/en/agents-and-tools/agent-skills/overview
 - github.com/anthropics/claude-code (skill-development SKILL.md)
-- hidekazu-konishi.com — Claude Code Skills Complete Guide
-- totalum.app — Claude Code Skills in 2026
+- hidekazu-konishi.com - Claude Code Skills Complete Guide
+- totalum.app - Claude Code Skills in 2026
 
 #### Cursor
 
 Cursor Project Rules are Markdown-based `.mdc` files that live in `.cursor/rules/` and tell Cursor how to behave for specific projects, file types, frameworks, and workflows. The legacy `.cursorrules` file in the project root still works but is no longer recommended.
 
 Rule types:
-- **Always** — loaded into context for every interaction
-- **Auto-Attached** — triggered by glob pattern matching files in the editor
-- **Agent-Requested** — the agent decides to load based on task relevance
-- **Manual** — only loaded when explicitly referenced via `@rulename`
+- **Always** - loaded into context for every interaction
+- **Auto-Attached** - triggered by glob pattern matching files in the editor
+- **Agent-Requested** - the agent decides to load based on task relevance
+- **Manual** - only loaded when explicitly referenced via `@rulename`
 
 Rules are version-controlled files scoped to the codebase. No central database. Teams share rules via the repository.
 
 Sources:
 - cursor.com/docs
-- dev.to — Mastering Cursor Rules
-- kirill-markin.com — Cursor IDE Rules for AI
+- dev.to - Mastering Cursor Rules
+- kirill-markin.com - Cursor IDE Rules for AI
 - github.com/PatrickJS/awesome-cursorrules
 
 #### Devin
 
 Devin maintains a cloud-hosted, database-backed knowledge store with:
 
-- **Trigger-based retrieval** — each item has a trigger description; Devin pulls it in only when relevant during a session
-- **Scoping hierarchy** — no repo / one repo / all repos, then Organization scope (default) and Enterprise scope
-- **Promotion** — org-level items can be promoted to enterprise scope
-- **AI-generated suggestions** — Devin suggests new knowledge from session feedback
-- **Macros** — `!macro-name` shortcuts to load context bundles
-- **Knowledge is deprecated** — being migrated into Skills-in-Plugins (SKILL.md files committed to repos), but the centralized cloud-store model remains
+- **Trigger-based retrieval** - each item has a trigger description; Devin pulls it in only when relevant during a session
+- **Scoping hierarchy** - no repo / one repo / all repos, then Organization scope (default) and Enterprise scope
+- **Promotion** - org-level items can be promoted to enterprise scope
+- **AI-generated suggestions** - Devin suggests new knowledge from session feedback
+- **Macros** - `!macro-name` shortcuts to load context bundles
+- **Knowledge is deprecated** - being migrated into Skills-in-Plugins (SKILL.md files committed to repos), but the centralized cloud-store model remains
 
 Devin Knowledge is a shared library of triggers, procedures, and constraints the agent retrieves during sessions. Knowledge can be scoped to a single organization or to an entire enterprise. If an organization-level knowledge item proves useful enough to share across the entire enterprise, you can promote it directly from the knowledge editor.
 
-Devin also supports Skills as SKILL.md files committed directly into repositories — step-by-step instructions for repeatable workflows, discovered automatically by Devin, and followed exactly whenever the relevant task comes up.
+Devin also supports Skills as SKILL.md files committed directly into repositories - step-by-step instructions for repeatable workflows, discovered automatically by Devin, and followed exactly whenever the relevant task comes up.
 
 Enterprise admins centrally manage roles, IdP groups, IP access lists, and organization-wide Knowledge and Playbook standards at the Enterprise level.
 
 Sources:
 - docs.devin.ai/product-guides/knowledge
 - fast.io/resources/devin-knowledge-guide/
-- medium.com/@nitinmatani22 — Devin's Knowledge Base
-- medium.com/@nitinmatani22 — Devin AI Skills: The SKILL.md Files
+- medium.com/@nitinmatani22 - Devin's Knowledge Base
+- medium.com/@nitinmatani22 - Devin AI Skills: The SKILL.md Files
 - cognition.com/blog/how-cognition-uses-devin-to-build-devin
-- innfactory.ai — Devin: Cognition's AI Coding Agent Harness
+- innfactory.ai - Devin: Cognition's AI Coding Agent Harness
 - fast.io/resources/devin-enterprise-guide/
 
 #### Vibe (Mistral)
@@ -120,12 +120,12 @@ Source: docs.cloud.google.com/gemini-enterprise-agent-platform/build/skill-regis
 
 #### 3. skills.sh (community/open registry)
 
-An open-source package registry (like npm for skills) hosting tens of thousands of skills. Install via `npx skills add`. It is a centralized distribution layer, not a runtime database — skills still get installed to local filesystem. Works across 11 AI coding agents including Claude Code, Cursor, Windsurf, Copilot, Codex, and more.
+An open-source package registry (like npm for skills) hosting tens of thousands of skills. Install via `npx skills add`. It is a centralized distribution layer, not a runtime database - skills still get installed to local filesystem. Works across 11 AI coding agents including Claude Code, Cursor, Windsurf, Copilot, Codex, and more.
 
 Sources:
 - skills.sh
 - productcool.com/product/skills-sh
-- open-vsx.org — Skills.sh Agent Skills Manager extension
+- open-vsx.org - Skills.sh Agent Skills Manager extension
 
 #### 4. "Canonicalize-then-fan-out" pattern (emerging community practice)
 
@@ -136,7 +136,7 @@ A Reddit thread on r/dataengineering (2026) captured the team-level pain: "We ha
 Sources:
 - agentpatterns.ai/workflows/central-repo-shared-agent-standards/
 - jfrog.com/learn/ai-security/agent-skills-repository/
-- reddit.com/r/dataengineering — How are you centralizing knowledge/context from AI agents?
+- reddit.com/r/dataengineering - How are you centralizing knowledge/context from AI agents?
 
 #### 5. Academic Research
 
@@ -156,10 +156,10 @@ The industry is moving from scattered local files toward centralized stores. If 
 
 ### TinyDB Layer
 
-- `src/chatybot/tinydb1/corpus_manager.py` — `CorpusManager` class wraps TinyDB
+- `src/chatybot/tinydb1/corpus_manager.py` - `CorpusManager` class wraps TinyDB
   - Single table `items`, fields: type, name, content, metadata
   - Methods: `add_item`, `get_item`, `get_items_by_type`, `get_items_by_metadata`, `update_item`, `delete_item`, `search_items`, `get_all_items`
-- `src/chatybot/chatydb.py` — Global DB facade (697 lines)
+- `src/chatybot/chatydb.py` - Global DB facade (697 lines)
   - DB files at `~/.local/share/chatybot/db/<name>.json`
   - Global `_manager` (CorpusManager), `_db_path`, `_active_db_name`
   - `set_db(name)` opens/activates, `list_dbs()`, `search_db()`, `dblog()`, `dbprint()`, `load_var()`, `save_var()`
@@ -168,15 +168,15 @@ The industry is moving from scattered local files toward centralized stores. If 
 
 ### Command System
 
-- `src/chatybot/commands/registry.py` — `@command` decorator, `CommandRegistry`, `CommandResult`, `CommandContext`
+- `src/chatybot/commands/registry.py` - `@command` decorator, `CommandRegistry`, `CommandResult`, `CommandContext`
 - Commands registered at import time into module-level `registry`
 - `CommandContext` has: `buffer_manager`, `config_manager`, `i18n`, `session_store`, `app`
-- `handle_escape_command` in `chatybot_app.py:5570` — resolves i18n alias, checks registry, falls through to legacy elif chain
+- `handle_escape_command` in `chatybot_app.py:5570` - resolves i18n alias, checks registry, falls through to legacy elif chain
 
 ### Session System
 
-- `src/chatybot/session_interface.py` — `BaseSessionStore` ABC
-- `src/chatybot/session_store_jsonl.py` — JSONL implementation
+- `src/chatybot/session_interface.py` - `BaseSessionStore` ABC
+- `src/chatybot/session_store_jsonl.py` - JSONL implementation
 - Sessions at `~/.local/share/chatybot/sessions/`
 - Session turns store: `prompt`, `response`, `thinking`, `model_alias`, `timestamp`, `agentic_loop`, `type`
 - `/session` command has subcommands: start, auto, stop, status, history, note, save, list, use, show, export, info, delete, merge, compress, prune, replay, query, get
@@ -191,16 +191,16 @@ At `chatybot_app.py:1394`:
 
 ### DB Tools (LLM-callable)
 
-- `src/chatybot/tools/db_tools.py` — `db_search`, `db_get`, `db_list`, `db_summary`
+- `src/chatybot/tools/db_tools.py` - `db_search`, `db_get`, `db_list`, `db_summary`
 - These are LLM tool-call functions, registered via `tools_config.toml`
 
 ### Storage Layout
 
 ```
 ~/.local/share/chatybot/
-├── db/              — TinyDB JSON files (content/chat databases)
-├── sessions/        — session files (JSONL)
-├── scratch/         — scratchpad
+├── db/              - TinyDB JSON files (content/chat databases)
+├── sessions/        - session files (JSONL)
+├── scratch/         - scratchpad
 ~/.config/chatybot/
 ├── chat_config.toml
 ├── tools_config.toml
@@ -273,18 +273,18 @@ The key Devin patterns worth adopting: trigger-based retrieval (not always-on), 
 
 **`/skill` command** (new command verb with subcommands):
 ```
-/skill list                    — list all skills (name + description + enabled)
-/skill show <name>             — show full skill content
-/skill create                  — launch wizard
-/skill edit <name>             — edit skill content in $EDITOR
-/skill delete <name>           — delete a skill
-/skill enable <name>           — enable a skill
-/skill disable <name>          — disable a skill
-/skill search <query>          — search skills by name/content/tags
-/skill learn [name]            — learn a skill from current session
-/skill apply <name>            — manually inject a skill into the next prompt
-/skill export <name> <file>    — export to SKILL.md format
-/skill import <file>           — import from SKILL.md file
+/skill list                    - list all skills (name + description + enabled)
+/skill show <name>             - show full skill content
+/skill create                  - launch wizard
+/skill edit <name>             - edit skill content in $EDITOR
+/skill delete <name>           - delete a skill
+/skill enable <name>           - enable a skill
+/skill disable <name>          - disable a skill
+/skill search <query>          - search skills by name/content/tags
+/skill learn [name]            - learn a skill from current session
+/skill apply <name>            - manually inject a skill into the next prompt
+/skill export <name> <file>    - export to SKILL.md format
+/skill import <file>           - import from SKILL.md file
 ```
 
 **Wizard** (`/skill create`): Interactive prompt sequence:
@@ -298,7 +298,7 @@ The key Devin patterns worth adopting: trigger-based retrieval (not always-on), 
 
 **Session learning** (`/skill learn`): Extracts the successful prompt+response pattern from the current session turns. The user reviews and names it. The skill content is derived from the session's effective prompt and the assistant's successful approach.
 
-**Comparison to Devin**: This mirrors Devin's model most closely — a centralized store independent of any specific working database, with trigger-based retrieval and session learning.
+**Comparison to Devin**: This mirrors Devin's model most closely - a centralized store independent of any specific working database, with trigger-based retrieval and session learning.
 
 | Pros | Cons |
 |---|---|
@@ -336,7 +336,7 @@ The key Devin patterns worth adopting: trigger-based retrieval (not always-on), 
 
 | Pros | Cons |
 |---|---|
-| Zero infrastructure changes — uses existing CorpusManager | Skills locked to active DB; no global skills |
+| Zero infrastructure changes - uses existing CorpusManager | Skills locked to active DB; no global skills |
 | Skills co-located with related content | Must `/setdb` before skills work |
 | `/dbprint`, `/searchdb` already work with type filter | Skills mixed with chat logs in same file |
 | Easiest to implement | No cross-DB skill sharing |
@@ -345,7 +345,7 @@ The key Devin patterns worth adopting: trigger-based retrieval (not always-on), 
 
 ---
 
-### Option 3: Hybrid — Global Skills DB + Per-DB Skill Overrides
+### Option 3: Hybrid - Global Skills DB + Per-DB Skill Overrides
 
 ```
 ~/.local/share/chatybot/
@@ -362,10 +362,10 @@ The key Devin patterns worth adopting: trigger-based retrieval (not always-on), 
 
 **`/skill` command**: Extended with scope awareness:
 ```
-/skill list [global|local|all]    — list skills by scope
-/skill create [global|local]      — create in global or current DB
-/skill promote <name>             — promote a local skill to global
-/skill learn [name] [global|local] — learn from session
+/skill list [global|local|all]    - list skills by scope
+/skill create [global|local]      - create in global or current DB
+/skill promote <name>             - promote a local skill to global
+/skill learn [name] [global|local] - learn from session
 ```
 
 **Wizard**: Same as Option 1, but asks "global or local?" at the start.
@@ -374,11 +374,11 @@ The key Devin patterns worth adopting: trigger-based retrieval (not always-on), 
 
 **Session learning**: Can learn to either global or local scope.
 
-**Comparison to Devin**: This maps directly to Devin's scoping hierarchy — global skills = Enterprise/Organization scope, per-DB skills = repo-scoped knowledge, promote = Devin's "Promote to Enterprise."
+**Comparison to Devin**: This maps directly to Devin's scoping hierarchy - global skills = Enterprise/Organization scope, per-DB skills = repo-scoped knowledge, promote = Devin's "Promote to Enterprise."
 
 | Pros | Cons |
 |---|---|
-| Most flexible — global + per-project skills | Most complex to implement |
+| Most flexible - global + per-project skills | Most complex to implement |
 | Direct analog to Devin's scoping model | Merge logic adds complexity |
 | Skills travel with their project DB | Two storage locations to manage |
 | Promotion path from local to global | More testing surface |
@@ -404,13 +404,13 @@ The key Devin patterns worth adopting: trigger-based retrieval (not always-on), 
 **Session learning is the primary entry point**, not an add-on:
 
 ```
-/skill learn                    — analyze current session, propose skill
-/skill learn <turn_range>       — learn from specific turns (e.g. "3-7")
-/skill learn --auto              — auto-extract without confirmation
-/skill review                   — review pending learned skills (accept/reject)
-/skill list [pending|active]    — list skills by status
-/skill apply <name>             — inject skill into next prompt
-/skill wizard                   — manual creation (fallback)
+/skill learn                    - analyze current session, propose skill
+/skill learn <turn_range>       - learn from specific turns (e.g. "3-7")
+/skill learn --auto              - auto-extract without confirmation
+/skill review                   - review pending learned skills (accept/reject)
+/skill list [pending|active]    - list skills by status
+/skill apply <name>             - inject skill into next prompt
+/skill wizard                   - manual creation (fallback)
 ```
 
 **Learning process**: The system takes the session turns, identifies the user's intent (from prompts) and the successful approach (from responses), and generates a SKILL.md-style document. The skill is saved with `metadata.source = "session:<id>"` and `metadata.status = "pending"` until reviewed.
@@ -422,7 +422,7 @@ The key Devin patterns worth adopting: trigger-based retrieval (not always-on), 
 | Pros | Cons |
 |---|---|
 | Skills grounded in real sessions | Learning quality depends on session quality |
-| Most natural UX — learn from what worked | Requires LLM call to extract skill from session |
+| Most natural UX - learn from what worked | Requires LLM call to extract skill from session |
 | Skills have provenance (which session) | Manual creation is secondary, less polished |
 | Novel approach, differentiator from Devin | More complex learning logic |
 
@@ -460,11 +460,11 @@ The key Devin patterns worth adopting: trigger-based retrieval (not always-on), 
 
 Option 3 is the most Devin-like but is over-engineered for a first implementation. Option 4 is the most novel but depends on reliable skill extraction from sessions, which adds an LLM dependency and quality risk. Option 2 is the quickest but the "must `/setdb` first" constraint will be friction.
 
-The `/skill` command verb is a clear yes — it follows the existing command pattern exactly, and the subcommand structure mirrors `/session` and `/tool`. The wizard and session learning both fit as subcommands (`/skill create`, `/skill learn`) without needing separate command verbs.
+The `/skill` command verb is a clear yes - it follows the existing command pattern exactly, and the subcommand structure mirrors `/session` and `/tool`. The wizard and session learning both fit as subcommands (`/skill create`, `/skill learn`) without needing separate command verbs.
 
 ---
 
-## Part 7: Gap Resolution — Concerns Addressed
+## Part 7: Gap Resolution - Concerns Addressed
 
 ### Concern 1 (RED): Two System Prompt Code Paths
 
@@ -515,7 +515,7 @@ If Path B (Apple FM) is not a priority for v1, the plan should explicitly state 
 
 ### Concern 2 (YELLOW): Trigger Matching Algorithm
 
-**Finding**: The original plan said "check if the user prompt matches any skill's triggers" without specifying the algorithm. `CorpusManager.search_items()` uses regex case-insensitive search on `name` and `content` fields via TinyDB's `Query().search()` — but that searches item content, not trigger phrases stored in metadata.
+**Finding**: The original plan said "check if the user prompt matches any skill's triggers" without specifying the algorithm. `CorpusManager.search_items()` uses regex case-insensitive search on `name` and `content` fields via TinyDB's `Query().search()` - but that searches item content, not trigger phrases stored in metadata.
 
 **Resolution**: For v1, use **case-insensitive substring matching** of each trigger phrase against the user prompt. This is simple, predictable, and aligns with the existing `search_db()` pattern in `chatydb.py` (which does `q in name.lower()` substring matching).
 
@@ -532,7 +532,7 @@ def get_matching_skills(user_prompt: str) -> list[dict]:
 
     Trigger phrases should be short, distinctive phrases the user
     would type (e.g. "review code", "write a test", "refactor this").
-    Single-word triggers like "test" will match broadly — users should
+    Single-word triggers like "test" will match broadly - users should
     use more specific phrases to avoid false positives.
     """
     prompt_lower = user_prompt.lower()
@@ -549,12 +549,12 @@ def get_matching_skills(user_prompt: str) -> list[dict]:
 
 **Design implications for trigger phrases**:
 - Triggers are substrings, not regex or wildcards
-- "review code" matches "can you review code in auth.py" — good
-- "test" matches "latest test results" — likely a false positive
+- "review code" matches "can you review code in auth.py" - good
+- "test" matches "latest test results" - likely a false positive
 - Users should write 2+ word triggers for precision
 - The wizard should show a warning for single-word triggers
 
-**Future enhancement** (not v1): fuzzy matching, TF-IDF similarity, or LLM-based semantic matching could improve precision. But substring matching is the right v1 choice — it is debuggable, has zero latency, and users can reason about it.
+**Future enhancement** (not v1): fuzzy matching, TF-IDF similarity, or LLM-based semantic matching could improve precision. But substring matching is the right v1 choice - it is debuggable, has zero latency, and users can reason about it.
 
 ---
 
@@ -566,7 +566,7 @@ if metadata is not None:
     updates['metadata'] = metadata  # full replacement, not a merge
 ```
 
-This means `/skill enable <name>` and `/skill disable <name>` cannot just call `update_item(item_id, metadata={"enabled": True})` — that would wipe all other metadata fields (triggers, tags, description, etc.).
+This means `/skill enable <name>` and `/skill disable <name>` cannot just call `update_item(item_id, metadata={"enabled": True})` - that would wipe all other metadata fields (triggers, tags, description, etc.).
 
 **Resolution**: Add a `patch_metadata` helper to `CorpusManager`:
 
@@ -606,7 +606,7 @@ def _patch_skill_metadata(manager, item_id, key, value):
 
 ### Concern 4 (YELLOW): Startup Initialization
 
-**Finding**: `chatydb.py` uses lazy initialization — the `_manager` global is `None` until `set_db()` is called. There is no DB initialization in `ChatybotApp.__init__`. The DB is opened on-demand when the user runs `/setdb` or when a tool call references a database.
+**Finding**: `chatydb.py` uses lazy initialization - the `_manager` global is `None` until `set_db()` is called. There is no DB initialization in `ChatybotApp.__init__`. The DB is opened on-demand when the user runs `/setdb` or when a tool call references a database.
 
 **Resolution**: The skills DB should follow the same lazy pattern but with one difference: it should auto-initialize on first use, not require an explicit `/skill init` command.
 
@@ -658,7 +658,7 @@ def _invalidate_cache():
 
 **Startup sequence**:
 - `ChatybotApp.__init__`: No change needed. Skills DB is not opened at startup.
-- First `chat_completion` or `_apple_fm_completion` call: `_inject_skills` calls `_get_enabled_skills()` which lazy-opens the DB and caches the index. If `skills.json` does not exist, it is created empty. The cost is one TinyDB open on the first completion — negligible.
+- First `chat_completion` or `_apple_fm_completion` call: `_inject_skills` calls `_get_enabled_skills()` which lazy-opens the DB and caches the index. If `skills.json` does not exist, it is created empty. The cost is one TinyDB open on the first completion - negligible.
 - First `/skill` command: Same lazy open via `_ensure_manager()`.
 
 **Cache invalidation**: Every mutating `/skill` subcommand (`create`, `edit`, `delete`, `enable`, `disable`, `learn`) calls `_invalidate_cache()` after writing. The next completion call rebuilds the cache.
@@ -757,17 +757,17 @@ async def cmd_skill(ctx: CommandContext, parts: list, command: str) -> CommandRe
 
 **Resolution**: Explicit definitions:
 
-- **Triggers** (`metadata.triggers`): A list of phrases used for **automated matching**. Before each completion, the user's prompt is checked against each trigger phrase via case-insensitive substring match. If any trigger matches, the skill's full content is injected into the system prompt for that turn. Triggers are the "activation mechanism" — they determine *when* a skill is loaded. Example: `["review code", "code review", "check my code"]`.
+- **Triggers** (`metadata.triggers`): A list of phrases used for **automated matching**. Before each completion, the user's prompt is checked against each trigger phrase via case-insensitive substring match. If any trigger matches, the skill's full content is injected into the system prompt for that turn. Triggers are the "activation mechanism" - they determine *when* a skill is loaded. Example: `["review code", "code review", "check my code"]`.
 
 - **Tags** (`metadata.tags`): A list of keywords used for **human browsing and organization**. Tags have no behavioral effect on matching or injection. They are used by `/skill search` and `/skill list` for filtering and grouping. Tags help the user find and manage skills but do not affect what the LLM sees. Example: `["coding", "review", "quality"]`.
 
 The wizard should explain this distinction when asking for each field:
 - Step 3 (Triggers): "Enter trigger phrases that should activate this skill (comma-separated). These are matched against your prompt text. Use 2+ word phrases for precision. Example: review code, code review"
-- Step 4 (Tags): "Enter tags for organization and search (comma-separated). Tags do not affect activation — use triggers for that. Example: coding, review, quality"
+- Step 4 (Tags): "Enter tags for organization and search (comma-separated). Tags do not affect activation - use triggers for that. Example: coding, review, quality"
 
 ---
 
-## Part 8: Localization Analysis — New Words for /skill Command
+## Part 8: Localization Analysis - New Words for /skill Command
 
 ### Localization System Architecture
 
@@ -786,12 +786,12 @@ Web searches confirmed that the AI/LLM community uses established translations o
 | Language | Word for "Skill" | Evidence from Web Search |
 |---|---|---|
 | **Spanish** | habilidad (pl. habilidades) | Google Cloud docs (es): "Las habilidades de los agentes son paquetes reutilizables de instrucciones"; alphaXiv (es): "una habilidad es más que una simple llamada a una función"; Salesforce (es): "habilidades prediseñadas" |
-| **French** | compétence (pl. compétences) | alphaXiv (fr): "compétences externes — des collections de documentation"; ActuIA (fr): "Skills agentiques: quatre cadres de compétences pour LLM"; "bibliothèque de compétences (skill library)" |
+| **French** | compétence (pl. compétences) | alphaXiv (fr): "compétences externes - des collections de documentation"; ActuIA (fr): "Skills agentiques: quatre cadres de compétences pour LLM"; "bibliothèque de compétences (skill library)" |
 | **Chinese** | 技能 (ji néng) | alphaXiv (zh): "大语言模型（LLM）智能体越来越依赖于'技能'"; Zhihu (zh): "通过'技能'武装智能体"; "技能" is the standard term in Chinese AI documentation |
 | **Italian** | competenza (pl. competenze) | Botpress (it): "agenti LLM" with "competenze"; standard Italian AI terminology uses "competenza" for agent capabilities |
-| **Arabic** | مهارة (pl. مهارات) | Skillstore (ar): "مهارة AI — سوق مهارات الذكاء الاصطناعي"; "مهارات وكيل قابلة لإعادة الاستخدام" (reusable agent skills); TrueFoundry (ar): "مركزة مهارات الوكلاء" |
+| **Arabic** | مهارة (pl. مهارات) | Skillstore (ar): "مهارة AI - سوق مهارات الذكاء الاصطناعي"; "مهارات وكيل قابلة لإعادة الاستخدام" (reusable agent skills); TrueFoundry (ar): "مركزة مهارات الوكلاء" |
 
-**Key finding**: The term "skill" in the AI agent context is well-established in all 5 non-English locales. The translations are not ad-hoc — they appear in Google Cloud documentation, academic papers (alphaXiv translations), and commercial AI platforms. The word "skill" itself is also sometimes left untranslated in technical contexts (especially in Chinese and Arabic communities), but the native terms are widely used and understood.
+**Key finding**: The term "skill" in the AI agent context is well-established in all 5 non-English locales. The translations are not ad-hoc - they appear in Google Cloud documentation, academic papers (alphaXiv translations), and commercial AI platforms. The word "skill" itself is also sometimes left untranslated in technical contexts (especially in Chinese and Arabic communities), but the native terms are widely used and understood.
 
 ### Existing Translations for /skill Subcommands
 
@@ -844,11 +844,11 @@ Analysis of `translations.json` shows which subcommand keywords already exist an
 | `edit` | edit | *(exists: editar)* | *(exists: editer)* | *(exists: 编辑)* | *(exists: modifica)* | *(exists: عدل)* |
 
 **Translation rationale** (validated by web search):
-- **create**: Standard cognate in es/fr/it; 创建 (chuàngjiàn) in zh; إنشاء (inshā') in ar — all standard terms in AI tool documentation
+- **create**: Standard cognate in es/fr/it; 创建 (chuàngjiàn) in zh; إنشاء (inshā') in ar - all standard terms in AI tool documentation
 - **learn**: aprender/apprendre/impara are the standard translations for "learn" in tech contexts; 学习 (xuéxí) in zh; تعلم (ta'allum) in ar
-- **apply**: aplicar/appliquer/applica are direct cognates; 应用 (yìngyòng) in zh; تطبيق (tatbīq) in ar — all used in AI/ML contexts
+- **apply**: aplicar/appliquer/applica are direct cognates; 应用 (yìngyòng) in zh; تطبيق (tatbīq) in ar - all used in AI/ML contexts
 - **import**: importar/importer/importa are standard; 导入 (dǎorù) in zh; استيراد (istīrād) in ar
-- **wizard**: "asistente"/"assistant" (es/fr) — the wizard pattern is commonly translated as "assistant" in Spanish and French software; 向导 (xiàngdǎo, "guide") in zh; procedura guidata ("guided procedure") in it; معالج (mu'ālij, "wizard/sorcerer" but standard software term for "wizard") in ar
+- **wizard**: "asistente"/"assistant" (es/fr) - the wizard pattern is commonly translated as "assistant" in Spanish and French software; 向导 (xiàngdǎo, "guide") in zh; procedura guidata ("guided procedure") in it; معالج (mu'ālij, "wizard/sorcerer" but standard software term for "wizard") in ar
 
 #### 3. New UI strings (all locales)
 
@@ -916,33 +916,33 @@ self.register_command(CommandHelp(
 
 ---
 
-## Part 9: Default Skills — What Should Ship with Chatybot
+## Part 9: Default Skills - What Should Ship with Chatybot
 
 ### Design Principles for Default Skills
 
 Default skills should satisfy these criteria:
 
-1. **Address a real pain point** — a multi-step workflow that users currently do manually or get wrong
-2. **Encode institutional knowledge** — something a new user would not discover from `/help` alone
-3. **Trigger naturally** — the user's prompt should contain phrases that match without contortion
-4. **Not duplicate a single command** — if a workflow is one command, it does not need a skill
-5. **Be grounded in existing capabilities** — use only tools, commands, and patterns that already work in chatybot
+1. **Address a real pain point** - a multi-step workflow that users currently do manually or get wrong
+2. **Encode institutional knowledge** - something a new user would not discover from `/help` alone
+3. **Trigger naturally** - the user's prompt should contain phrases that match without contortion
+4. **Not duplicate a single command** - if a workflow is one command, it does not need a skill
+5. **Be grounded in existing capabilities** - use only tools, commands, and patterns that already work in chatybot
 
 ### Chatybot Capability Inventory (Relevant to Skills)
 
 | Capability | Commands/Tools | Complexity |
 |---|---|---|
-| Multi-model comparison | `/model`, `/save`, `/filebank1-5`, `/multiline` | High — manual filebank juggling |
-| Agentic tool loop | `/tool on`, `/tool enable`, `/tool auto`, `/tool max_turns`, `/tool loop` | High — 5-step setup |
-| DB search-inject | `/setdb`, `/searchdb`, `/loadvar`, `${var}` in prompt, `/dblog` | Medium — syntax-heavy |
-| Session query/extract | `/session query`, `/session get` | Medium — powerful but underused |
-| Semantic reranking | `/documents`, `/rerank` | Medium — setup required |
-| Structured decisions | `/decide` with choice/score/noul | Medium — complex arg syntax |
-| Batch file processing | `/run ls`, `foreach`, `/file`, `/save`, `/clearfile` | Medium — foreach + lines() |
-| ChatDSL scripting | `set`, `if`, `foreach`, `defproc`, `/proc`, `/script` | High — full DSL |
-| Image generation | `/imagine`, `/imagesize`, `/imagequality` | Low — single command |
-| Profile authoring | `/profile edit`, file format | Medium — format knowledge |
-| Code extraction | `/notemode`, `/codeonly`, `/save` | Low — toggle commands |
+| Multi-model comparison | `/model`, `/save`, `/filebank1-5`, `/multiline` | High - manual filebank juggling |
+| Agentic tool loop | `/tool on`, `/tool enable`, `/tool auto`, `/tool max_turns`, `/tool loop` | High - 5-step setup |
+| DB search-inject | `/setdb`, `/searchdb`, `/loadvar`, `${var}` in prompt, `/dblog` | Medium - syntax-heavy |
+| Session query/extract | `/session query`, `/session get` | Medium - powerful but underused |
+| Semantic reranking | `/documents`, `/rerank` | Medium - setup required |
+| Structured decisions | `/decide` with choice/score/noul | Medium - complex arg syntax |
+| Batch file processing | `/run ls`, `foreach`, `/file`, `/save`, `/clearfile` | Medium - foreach + lines() |
+| ChatDSL scripting | `set`, `if`, `foreach`, `defproc`, `/proc`, `/script` | High - full DSL |
+| Image generation | `/imagine`, `/imagesize`, `/imagequality` | Low - single command |
+| Profile authoring | `/profile edit`, file format | Medium - format knowledge |
+| Code extraction | `/notemode`, `/codeonly`, `/save` | Low - toggle commands |
 
 ### Recommended Default Skills (7 Skills)
 
@@ -1034,7 +1034,7 @@ Variables to set before running:
 
 **Purpose**: Autonomous research agent that reads files, reranks for relevance, and logs findings to a database.
 
-**Why it is a default**: This is cookbook recipe 14_1, the most complex single recipe. It combines tool loop + reranking + database logging — three subsystems that users do not naturally combine. The skill encodes the correct sequence and parameter values.
+**Why it is a default**: This is cookbook recipe 14_1, the most complex single recipe. It combines tool loop + reranking + database logging - three subsystems that users do not naturally combine. The skill encodes the correct sequence and parameter values.
 
 **Triggers**: `["research agent", "research this", "autonomous research", "gather information", "research topic"]`
 
@@ -1103,7 +1103,7 @@ When the user asks to debug an error or stack trace:
 
 **Purpose**: Batch-translate files in a directory from one language to another using foreach iteration.
 
-**Why it is a default**: Batch file processing is cookbook recipe 14_5. It combines `/run ls`, `foreach`, `lines()`, `/file`, `/save`, and `/clearfile` — a sequence that is error-prone to write from scratch. The skill provides the correct template with variable substitution.
+**Why it is a default**: Batch file processing is cookbook recipe 14_5. It combines `/run ls`, `foreach`, `lines()`, `/file`, `/save`, and `/clearfile` - a sequence that is error-prone to write from scratch. The skill provides the correct template with variable substitution.
 
 **Triggers**: `["batch translate", "translate files", "translate all files", "batch process files", "translate directory"]`
 
@@ -1235,13 +1235,13 @@ When the user asks to write tests:
 
 | Candidate | Why Excluded |
 |---|---|
-| "explain code" | Single prompt, no multi-step workflow — just send the code as context |
-| "generate image" | Single command `/imagine` — no skill needed |
-| "switch language" | Single command — i18n is already handled by the localization system |
+| "explain code" | Single prompt, no multi-step workflow - just send the code as context |
+| "generate image" | Single command `/imagine` - no skill needed |
+| "switch language" | Single command - i18n is already handled by the localization system |
 | "create profile" | Profile format is documented in `/docs` and `/profile edit` provides a TUI |
-| "run shell command" | Single command `/run` — no skill needed |
+| "run shell command" | Single command `/run` - no skill needed |
 | "session management" | `/session` already has comprehensive subcommands |
-| "rerank documents" | Two commands (`/documents`, `/rerank`) but straightforward — documented in cookbook |
+| "rerank documents" | Two commands (`/documents`, `/rerank`) but straightforward - documented in cookbook |
 | "decide" | Single command with complex args but self-contained |
 
 ### Seeding Mechanism
@@ -1295,7 +1295,7 @@ def _seed_default_skills(manager: CorpusManager) -> None:
 
 **Re-seeding**: If the user deletes all skills, the defaults are not re-seeded. The user can manually restore them with `/skill import <file>` if a default skills export file is provided in the `doc/` directory. Alternatively, a `/skill reset` subcommand could re-seed defaults.
 
-**Disabling defaults**: Users can disable any default skill with `/skill disable <name>`. The skill remains in the database but is not triggered. This respects user autonomy — defaults are suggestions, not impositions.
+**Disabling defaults**: Users can disable any default skill with `/skill disable <name>`. The skill remains in the database but is not triggered. This respects user autonomy - defaults are suggestions, not impositions.
 
 ---
 
@@ -1323,9 +1323,9 @@ def _seed_default_skills(manager: CorpusManager) -> None:
 
 ### The Problem
 
-The default skills proposed in Part 9 contain slash commands like `/tool on`, `/tool enable read_file grep_search`, `/tool auto on`, `/tool loop 25 force`. These are chatybot escape commands — they are processed by `handle_escape_command` in the command handler, not by the LLM.
+The default skills proposed in Part 9 contain slash commands like `/tool on`, `/tool enable read_file grep_search`, `/tool auto on`, `/tool loop 25 force`. These are chatybot escape commands - they are processed by `handle_escape_command` in the command handler, not by the LLM.
 
-But skills are injected into the **system prompt** as text (Part 7, `_inject_skills`). The system prompt is read by the LLM — it cannot execute slash commands. The LLM sees the text but cannot run `/tool on`.
+But skills are injected into the **system prompt** as text (Part 7, `_inject_skills`). The system prompt is read by the LLM - it cannot execute slash commands. The LLM sees the text but cannot run `/tool on`.
 
 This is a fundamental mismatch: the skill content as written in Part 9 reads like a ChatDSL script, but the injection point is the system prompt, which is LLM context, not executable code.
 
@@ -1333,22 +1333,22 @@ This is a fundamental mismatch: the skill content as written in Part 9 reads lik
 
 The tool system has three layers:
 
-**Layer 1 — Tool mode (on/off)**:
-- `app.tool_mode` (bool) — when True, tool definitions are injected into the system prompt via `generate_tool_context()`
+**Layer 1 - Tool mode (on/off)**:
+- `app.tool_mode` (bool) - when True, tool definitions are injected into the system prompt via `generate_tool_context()`
 - `/tool on` calls `generate_tool_context()`, sets `app.tool_mode = True`, stores context in `TOOL_CONTEXT` script var
 - The system prompt assembly at line 1395 checks `if self.tool_mode and effective_tool_context:` and prepends the tool context
 
-**Layer 2 — Tool enable/disable (per-tool)**:
-- `app.tool_overrides` (dict[str, bool]) — per-tool override of the config default
+**Layer 2 - Tool enable/disable (per-tool)**:
+- `app.tool_overrides` (dict[str, bool]) - per-tool override of the config default
 - `/tool enable read_file` sets `app.tool_overrides["read_file"] = True`
-- `generate_tool_context()` reads overrides: `is_enabled = self.tool_overrides.get(tool_name, config_enabled)` — only enabled tools appear in the context string
+- `generate_tool_context()` reads overrides: `is_enabled = self.tool_overrides.get(tool_name, config_enabled)` - only enabled tools appear in the context string
 
-**Layer 3 — Auto-loop**:
-- `app.tool_auto` (bool) — when True, after each completion, if tool calls are detected in the response, the agentic loop auto-launches
-- `app.max_turns` (int) — max iterations for the tool loop
+**Layer 3 - Auto-loop**:
+- `app.tool_auto` (bool) - when True, after each completion, if tool calls are detected in the response, the agentic loop auto-launches
+- `app.max_turns` (int) - max iterations for the tool loop
 - At line 2203: `if self.tool_auto and self.extract_tool_calls(full_response): await self.execute_tool_loop(max_turns=self.max_turns)`
 
-**Key insight**: All three layers are app-level state mutations. They happen via command handlers (user types `/tool on`), not via the LLM. The LLM only sees the *result* — the tool definitions in its system prompt and the ability to output tool calls.
+**Key insight**: All three layers are app-level state mutations. They happen via command handlers (user types `/tool on`), not via the LLM. The LLM only sees the *result* - the tool definitions in its system prompt and the ability to output tool calls.
 
 ### Three Approaches to Resolve This
 
@@ -1406,7 +1406,7 @@ def _apply_skill_tool_config(self, config: dict) -> None:
     """Apply tool configuration from a skill's metadata.
 
     This mutates app state (tool_mode, tool_overrides, tool_auto, max_turns).
-    The changes persist for the current session — they are NOT auto-reverted
+    The changes persist for the current session - they are NOT auto-reverted
     after the skill-triggered prompt completes. Users can manually revert
     with /tool off or /tool disable.
     """
@@ -1458,14 +1458,14 @@ and line number, explain the problem, and suggest a fix. Prioritize:
 security vulnerabilities, logic bugs, error handling, then style.
 ```
 
-**Persistence**: Tool config changes persist for the session. This is intentional — if the user is reviewing code, they probably want tools to stay on for follow-up questions. The user can revert with `/tool off` or `/tool disable <name>`.
+**Persistence**: Tool config changes persist for the session. This is intentional - if the user is reviewing code, they probably want tools to stay on for follow-up questions. The user can revert with `/tool off` or `/tool disable <name>`.
 
-**Conflict resolution**: If multiple skills match, the first matched skill's `tool_config` is applied. If a skill has no `tool_config`, tool state is unchanged — the skill is pure guidance only.
+**Conflict resolution**: If multiple skills match, the first matched skill's `tool_config` is applied. If a skill has no `tool_config`, tool state is unchanged - the skill is pure guidance only.
 
 | Pros | Cons |
 |---|---|
-| Clean separation: metadata configures tools, content guides LLM | Tool state persists after skill prompt — user must manually revert |
-| No new execution path needed — reuses existing app state mutations | Multiple matching skills with conflicting tool_config: first wins, no merge |
+| Clean separation: metadata configures tools, content guides LLM | Tool state persists after skill prompt - user must manually revert |
+| No new execution path needed - reuses existing app state mutations | Multiple matching skills with conflicting tool_config: first wins, no merge |
 | Skill content is pure LLM guidance (no slash commands) | No automatic rollback (could add in future via a "session save/restore" pattern) |
 | User can override any skill-applied config with manual /tool commands | |
 
@@ -1488,26 +1488,26 @@ Skills contain ChatDSL that runs *before* the user's prompt is sent. The skill c
 
 **Injection**: Before sending the user's prompt, `execute_command_list(skill_content)` runs the skill's ChatDSL lines. Then the user's prompt is sent normally.
 
-**Problem**: This requires a new execution path in `chat_completion` — currently there is no "pre-prompt script execution" hook. It also mixes executable code with LLM guidance in the same field, making it hard to maintain. And if the script has errors, the user's prompt is delayed or blocked.
+**Problem**: This requires a new execution path in `chat_completion` - currently there is no "pre-prompt script execution" hook. It also mixes executable code with LLM guidance in the same field, making it hard to maintain. And if the script has errors, the user's prompt is delayed or blocked.
 
 | Pros | Cons |
 |---|---|
-| Skill content is executable — can run any command | Requires new pre-prompt execution path |
+| Skill content is executable - can run any command | Requires new pre-prompt execution path |
 | Familiar to ChatDSL users | Mixes executable code and guidance in one field |
 | Can do anything ChatDSL can do | Error handling: script failures block the prompt |
-| | Harder to audit — skill content is code, not just text |
+| | Harder to audit - skill content is code, not just text |
 
-#### Approach C: Hybrid — Metadata Config + Guidance Content
+#### Approach C: Hybrid - Metadata Config + Guidance Content
 
 Skills have two fields: `setup` (metadata-driven config, applied by the hook) and `content` (LLM guidance, injected into system prompt).
 
 This is essentially Approach A but with the tool config explicitly separated into metadata rather than embedded in the content. The content field is always pure LLM guidance.
 
-This is what Approach A already does — the `tool_config` is in metadata, and `content` is pure guidance. The distinction is already clean.
+This is what Approach A already does - the `tool_config` is in metadata, and `content` is pure guidance. The distinction is already clean.
 
 ### Recommendation
 
-**Approach A** is the right choice. It is the simplest, reuses existing app state mutations, and keeps skill content as pure LLM guidance. The `tool_config` metadata field is optional — skills that do not need tools (like `compare-models` or `db-research-log`) simply omit it.
+**Approach A** is the right choice. It is the simplest, reuses existing app state mutations, and keeps skill content as pure LLM guidance. The `tool_config` metadata field is optional - skills that do not need tools (like `compare-models` or `db-research-log`) simply omit it.
 
 ### Revised Default Skill Content (Part 9 Skills, Updated)
 
@@ -1608,7 +1608,7 @@ The skill content from Part 9 must be rewritten. The slash commands move to `too
 }
 ```
 
-#### compare-models (revised — no tool_config needed)
+#### compare-models (revised - no tool_config needed)
 
 ```python
 {
@@ -1621,30 +1621,30 @@ The skill content from Part 9 must be rewritten. The slash commands move to `too
         "tags": ["models", "comparison", "evaluation", "testing"],
         "enabled": True,
         "source": "default"
-        # No tool_config — this skill is guidance only, no agentic tools needed
+        # No tool_config - this skill is guidance only, no agentic tools needed
     }
 }
 ```
 
-#### batch-translate (revised — no tool_config needed)
+#### batch-translate (revised - no tool_config needed)
 
 ```python
 {
     "type": "skill",
     "name": "batch-translate",
-    "content": "To batch-translate files: (1) List files with /run ls -1 ${source_dir} and capture the output with /setvar filelist {LAST_COMPLETION}. (2) Set the target model with /model ${target_model}. (3) Iterate with: foreach name in lines(${filelist}) — for each file, load it with /file ${source_dir}/${name}, send the translation prompt, save with /save ${output_dir}/${name}, then /clearfile. (4) Break on empty names. The user should set source_dir, output_dir, target_language, and target_model variables.",
+    "content": "To batch-translate files: (1) List files with /run ls -1 ${source_dir} and capture the output with /setvar filelist {LAST_COMPLETION}. (2) Set the target model with /model ${target_model}. (3) Iterate with: foreach name in lines(${filelist}) - for each file, load it with /file ${source_dir}/${name}, send the translation prompt, save with /save ${output_dir}/${name}, then /clearfile. (4) Break on empty names. The user should set source_dir, output_dir, target_language, and target_model variables.",
     "metadata": {
         "description": "Batch-translate files in a directory using foreach iteration",
         "triggers": ["batch translate", "translate files", "translate all files", "batch process files", "translate directory"],
         "tags": ["translation", "batch", "automation", "foreach"],
         "enabled": True,
         "source": "default"
-        # No tool_config — this skill is guidance for ChatDSL scripting, not agentic tools
+        # No tool_config - this skill is guidance for ChatDSL scripting, not agentic tools
     }
 }
 ```
 
-#### db-research-log (revised — no tool_config needed)
+#### db-research-log (revised - no tool_config needed)
 
 ```python
 {
@@ -1657,7 +1657,7 @@ The skill content from Part 9 must be rewritten. The slash commands move to `too
         "tags": ["database", "research", "logging", "tinydb"],
         "enabled": True,
         "source": "default"
-        # No tool_config — this skill is guidance for DB commands, not agentic tools
+        # No tool_config - this skill is guidance for DB commands, not agentic tools
     }
 }
 ```
@@ -1713,7 +1713,7 @@ When a skill without `tool_config` triggers:
 
 **Problem**: `_apply_skill_tool_config` silently mutates app state. The user has no idea that tool mode was turned on, which tools were enabled or disabled, or that auto-loop was activated. This is surprising and potentially dangerous (e.g., a skill enabling `run_command` without the user knowing).
 
-**Solution**: Before applying `tool_config`, prompt the user with a summary of what will change and ask for confirmation. Use `input()` directly — the same pattern used by `/session delete --all` (session.py:578) and `/tool retry` parameter editing (tools.py:1728).
+**Solution**: Before applying `tool_config`, prompt the user with a summary of what will change and ask for confirmation. Use `input()` directly - the same pattern used by `/session delete --all` (session.py:578) and `/tool retry` parameter editing (tools.py:1728).
 
 **Implementation** (updated `_apply_skill_tool_config`):
 
@@ -1742,7 +1742,7 @@ def _apply_skill_tool_config(self, config: dict, skill_name: str) -> bool:
         changes.append(f"Set max_turns to {config['max_turns']}")
 
     if not changes:
-        # Nothing to change — tool state already matches
+        # Nothing to change - tool state already matches
         return True
 
     # Prompt the user
@@ -1818,11 +1818,11 @@ Apply these tool changes? (Y/n): n
 [assistant responds with skill guidance but no tools available...]
 ```
 
-**Non-interactive context**: When stdin is not a TTY (script execution, pipe, CI), `input()` raises `EOFError`. The handler catches this and skips tool configuration — the skill guidance is still injected, but tools are not configured. This matches the existing pattern in `/ask` (interact.py:34) which is "silently skipped when stdin is not a TTY."
+**Non-interactive context**: When stdin is not a TTY (script execution, pipe, CI), `input()` raises `EOFError`. The handler catches this and skips tool configuration - the skill guidance is still injected, but tools are not configured. This matches the existing pattern in `/ask` (interact.py:34) which is "silently skipped when stdin is not a TTY."
 
 ### Persistence and Restore
 
-**Default behavior**: Tool changes persist for the session. Once a skill configures tools, they stay configured until the user manually changes them. This is intentional — if the user is reviewing code, they probably want tools to stay on for follow-up questions.
+**Default behavior**: Tool changes persist for the session. Once a skill configures tools, they stay configured until the user manually changes them. This is intentional - if the user is reviewing code, they probably want tools to stay on for follow-up questions.
 
 **Snapshot for restore**: Before applying tool changes, `_save_tool_state_snapshot()` saves the previous state:
 
@@ -1858,10 +1858,10 @@ def _restore_tool_state_snapshot(self) -> bool:
 **`/skill restore` subcommand**: Reverts to the tool state that existed before the last skill-triggered tool change:
 
 ```
-/skill restore    — restore previous tool configuration
+/skill restore    - restore previous tool configuration
 ```
 
-**One-shot snapshot**: The snapshot is overwritten each time a new skill applies tool config. Only one level of undo is supported — `/skill restore` restores to the state before the most recent skill-triggered change, not to some original baseline. If the user triggers two skills in sequence, the second overwrites the first's snapshot.
+**One-shot snapshot**: The snapshot is overwritten each time a new skill applies tool config. Only one level of undo is supported - `/skill restore` restores to the state before the most recent skill-triggered change, not to some original baseline. If the user triggers two skills in sequence, the second overwrites the first's snapshot.
 
 **No automatic restore**: The tool state is NOT automatically restored after the skill-triggered prompt completes. The user must explicitly run `/skill restore` if they want to revert. This avoids surprising the user by silently changing their tool configuration back while they are in the middle of a follow-up question that still needs tools.
 
@@ -1870,7 +1870,7 @@ def _restore_tool_state_snapshot(self) -> bool:
 A skill record in TinyDB has four fields persisted by `CorpusManager.add_item()`:
 
 ```python
-# corpus_manager.py:48 — what gets stored
+# corpus_manager.py:48 - what gets stored
 item_data = {
     'type': 'skill',           # distinguishes from other item types
     'name': 'code-review',      # identity for /skill show, /skill delete
@@ -1908,7 +1908,7 @@ item_data = {
 The `## Skill: code-review\n` header that appears in the system prompt is NOT stored. It is constructed at injection time:
 
 ```python
-# _inject_skills — header is built here, not stored
+# _inject_skills - header is built here, not stored
 skill_block = "\n\n".join(
     f"## Skill: {s['name']}\n{s['content']}" for s in matched
 )
@@ -1923,7 +1923,7 @@ The skill record serves two independent audiences:
 - **The LLM** reads `content` (the guidance text). It does not see `tool_config`. It sees the resulting tool definitions in its system prompt (built by `generate_tool_context()`), but it never sees the `tool_config` metadata that caused those tools to be enabled.
 - **The app** reads `metadata.tool_config` (the tool setup). It does not pass this to the LLM. It mutates `app.tool_mode`, `app.tool_overrides`, `app.tool_auto`, `app.max_turns` before the prompt is sent.
 
-There is no inference from one to the other. The skill author explicitly declares both: the guidance text for the LLM, and the tool configuration for the app. The text "Read the relevant files using tools" does not cause tools to be enabled — the `tool_config.enable_tools` list does.
+There is no inference from one to the other. The skill author explicitly declares both: the guidance text for the LLM, and the tool configuration for the app. The text "Read the relevant files using tools" does not cause tools to be enabled - the `tool_config.enable_tools` list does.
 
 ### End-to-End Flow for a Skill with tool_config
 
@@ -1970,7 +1970,7 @@ get_matching_skills("review code in auth.py")
         launches execute_tool_loop(max_turns=25)
 ```
 
-### tool_config Is Optional — Three Scenarios
+### tool_config Is Optional - Three Scenarios
 
 A skill creator does not have to specify tools. The `tool_config` field is optional, giving the creator full control over tool behavior:
 
@@ -2051,12 +2051,12 @@ User types "write a story about a lighthouse":
 #### How the code handles all three
 
 ```python
-# _inject_skills — the check is simple
+# _inject_skills - the check is simple
 tool_config = skill.get("metadata", {}).get("tool_config")
 if tool_config:
     # Scenarios 1 and 3: tool_config exists, apply it
     self._apply_skill_tool_config(tool_config, skill["name"])
-# else: Scenario 2 — no tool_config field, skip entirely
+# else: Scenario 2 - no tool_config field, skip entirely
 #       tool state is untouched
 ```
 
@@ -2066,7 +2066,7 @@ The `/skill create` wizard asks about tool configuration as an optional step:
 
 ```
 Step 5: Tool configuration (optional)
-  Press Enter to skip (no tool changes — pure guidance skill).
+  Press Enter to skip (no tool changes - pure guidance skill).
   Or enter configuration:
     mode=on|off  enable=tool1,tool2  disable=tool3,tool4  auto=y|n  max=25
 
@@ -2086,7 +2086,7 @@ If the user enters a configuration, it is parsed into the `tool_config` dict and
 
 | Skill has tool_config? | tool_config.mode | What happens to tools | Use case |
 |---|---|---|---|
-| No (null/absent) | N/A | Unchanged — tools stay as they are | Guidance-only skills (compare-models, batch-translate, db-research-log) |
+| No (null/absent) | N/A | Unchanged - tools stay as they are | Guidance-only skills (compare-models, batch-translate, db-research-log) |
 | Yes | `"on"` | Tools enabled, specific tools enabled/disabled, auto-loop configured | Agentic skills (code-review, debug-error, write-test, research-agent) |
 | Yes | `"off"` | Tools turned off | Creative/conversational skills where tools are a distraction |
 

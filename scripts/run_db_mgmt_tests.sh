@@ -82,7 +82,7 @@ run_test() {
 
 echo "=== Running tests ==="
 
-# Good source — should pass.
+# Good source - should pass.
 run_test "good source (large_json_test.json)" "$SOURCE_DB" 0
 
 # Read manifest and run each fixture.
@@ -103,7 +103,7 @@ with open('$MANIFEST') as f:
         print(f\"{entry['file']}\t{entry['description']}\t{entry['expected_exit']}\")
 ")
 
-# File not found — should fail.
+# File not found - should fail.
 run_test "file not found" "$FIXTURES_DIR/does_not_exist.json" 1
 
 # --- summary ----------------------------------------------------------------

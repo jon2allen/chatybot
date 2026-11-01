@@ -61,7 +61,7 @@ class TestIsInteractive(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# ask_user — batch/script skipping
+# ask_user - batch/script skipping
 # ---------------------------------------------------------------------------
 
 class TestAskUserSkip(unittest.TestCase):
@@ -91,7 +91,7 @@ class TestAskUserSkip(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# ask_user — success paths
+# ask_user - success paths
 # ---------------------------------------------------------------------------
 
 class TestAskUserSuccess(unittest.TestCase):

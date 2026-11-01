@@ -85,9 +85,9 @@ Reasoning/thinking models (e.g. DeepSeek-R1, Mistral Thinking) produce `<think>.
 | `/session save` | `[name]` | Set custom display name for current session or save explicitly. | `/session save final_debug` |
 | `/session show` | `[--thinking\|-t]` | Show formatted view of active session exchanges. | `/session show -t` |
 | `/session export` | `<filepath.md> [--thinking\|-t]` | Export full session transcript to a Markdown file. | `/session export my_notes.md -t` |
-| `/session list` | — | List saved sessions showing filename (`model_timestamp`), first prompt slug, and turn count. | `/session list` |
-| `/session status` | — | Show active session ID, custom name, turn count, and file path. | `/session status` |
-| `/session off` | — | Pause session recording for current session. | `/session off` |
+| `/session list` | - | List saved sessions showing filename (`model_timestamp`), first prompt slug, and turn count. | `/session list` |
+| `/session status` | - | Show active session ID, custom name, turn count, and file path. | `/session status` |
+| `/session off` | - | Pause session recording for current session. | `/session off` |
 
 ### Session Markdown Export (`/session export <file.md>`)
 
@@ -174,7 +174,7 @@ Assistant: Found 12 usages across chatybot_app.py and tests.
 ### On-Disk Filename vs. `/session list` Output Format
 
 * **Disk Filename Convention**: `<model_alias>_<YYYYMMDD_HHMMSS>.json` (e.g. `mistral_1_20260802_223045.json`).
-* **Metadata Content**: Stores `first_prompt_slug` (slugified first 6–8 words of Turn 1) inside the JSON header.
+* **Metadata Content**: Stores `first_prompt_slug` (slugified first 6-8 words of Turn 1) inside the JSON header.
 * **`/session list` Display Format**:
   ```
   Available Sessions:

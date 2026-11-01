@@ -426,7 +426,7 @@ async def test_session_list_since_filter(app, capsys):
     import time
     from datetime import datetime, timedelta
 
-    # Create a session now — it will have a recent updated_at
+    # Create a session now - it will have a recent updated_at
     await app.handle_escape_command("/session start recent_session")
     app.append_session_turn("Recent prompt", "Recent response")
 
@@ -476,12 +476,12 @@ async def test_session_list_since_invalid_unit(app, capsys):
 
     capsys.readouterr()
 
-    # Bad unit — should print error and fall back to showing all (no since filter applied)
+    # Bad unit - should print error and fall back to showing all (no since filter applied)
     await app.handle_escape_command("/session list since=7x all")
     captured = capsys.readouterr()
     assert "Invalid since= unit" in captured.out
 
-    # Bad value — non-numeric
+    # Bad value - non-numeric
     await app.handle_escape_command("/session list since=abcd all")
     captured = capsys.readouterr()
     assert "Invalid since=" in captured.out
@@ -512,7 +512,7 @@ async def test_session_ids_always_populated(app, capsys):
 
     capsys.readouterr()
 
-    # Normal full-output list — SESSION_IDS must still be populated
+    # Normal full-output list - SESSION_IDS must still be populated
     await app.handle_escape_command("/session list all")
     capsys.readouterr()
 
@@ -574,7 +574,7 @@ async def test_session_ids_var_receives_sid_list(app, capsys):
 
 @pytest.mark.anyio
 async def test_session_ids_is_protected(app, capsys):
-    """SESSION_IDS must be a protected variable — user scripts cannot overwrite it."""
+    """SESSION_IDS must be a protected variable - user scripts cannot overwrite it."""
     await app.handle_escape_command("/session start protected_test")
     app.append_session_turn("P", "R")
     await app.handle_escape_command("/session list all")

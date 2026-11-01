@@ -39,7 +39,7 @@ endfor
 
 ## 2️⃣ Architecture & Execution Model
 
-Because `execute_script()` evaluates a flat list of commands sequentially, we cannot use standard pointer jumping without building a complex Abstract Syntax Tree (AST). Instead, we will use a **Capture and Replay** model—the exact same strategy planned for inline `defproc` bodies.
+Because `execute_script()` evaluates a flat list of commands sequentially, we cannot use standard pointer jumping without building a complex Abstract Syntax Tree (AST). Instead, we will use a **Capture and Replay** model-the exact same strategy planned for inline `defproc` bodies.
 
 ### The State Machine
 

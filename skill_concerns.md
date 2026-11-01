@@ -82,8 +82,8 @@ As the skill database scales beyond a handful of default skills to hundreds or t
 | **1. Token-Set Inverted Index** | Word boundary tokenization (`\b\w+\b`) mapped to skill ID sets | $O(\text{words in prompt})$ | High (enforces discrete word matching) | Zero dependencies. Uses native Python sets. |
 | **2. Aho-Corasick Automaton** | Finite state machine Trie built from all trigger patterns | $O(L_{\text{prompt}} + K_{\text{matches}})$ | High (with boundary validation checkpoints) | Nanosecond speed; requires `pyahocorasick` or a lightweight 60-line Trie. |
 | **3. BM25 / TF-IDF Ranked Scoring** | Statistical term weighting across triggers, name, and description | Sub-millisecond | Very High (requires relevance threshold cutoff, e.g. $> 0.65$) | Rank-orders multiple matches; selects only top-$K$. |
-| **4. Semantic Vector Embeddings** | Cosine similarity between prompt embedding and skill description | 5–20 ms | Highest (paraphrase and synonym resilient) | Requires embedding model / ChromaDB lookup. |
-| **5. Two-Stage Hybrid (Trie + /decide Gate)** | Fast Trie filter to pick 0–3 candidates, then `/decide` model gate | Fast ($O(1)$ fast path) | Maximum Precision | Leverages Chatybot's built-in structured decision engine. |
+| **4. Semantic Vector Embeddings** | Cosine similarity between prompt embedding and skill description | 5-20 ms | Highest (paraphrase and synonym resilient) | Requires embedding model / ChromaDB lookup. |
+| **5. Two-Stage Hybrid (Trie + /decide Gate)** | Fast Trie filter to pick 0-3 candidates, then `/decide` model gate | Fast ($O(1)$ fast path) | Maximum Precision | Leverages Chatybot's built-in structured decision engine. |
 
 ---
 
@@ -150,6 +150,6 @@ In an agentic sub-agent model:
 | Phase | Milestone | Priority | Effort |
 | :--- | :--- | :--- | :--- |
 | **Phase 1 (Completed)** | TinyDB skills database, `/skill` command suite, default skills, tool confirmation diffs, SKILL.md export/import, tests. | Done | Complete |
-| **Phase 2 (Immediate Guardrails)** | Implement **Option 1 (Token-Set / Inverted Index)** to eliminate false substring triggers; add `app.active_skill` **sticky session lock** to prevent mid-session trigger hijacking. | High | 1–2 days |
-| **Phase 3 (Triage & Ranking)** | Add BM25 or `/decide` disambiguation when multiple skills trigger simultaneously. | Medium | 2–3 days |
-| **Phase 4 (Sub-Agent Engine)** | Implement `call_subagent(skill_name, task)` allowing skills to spawn ephemeral, sandboxed Chatybot child instances that return structured results. | Strategic | 1–2 weeks |
+| **Phase 2 (Immediate Guardrails)** | Implement **Option 1 (Token-Set / Inverted Index)** to eliminate false substring triggers; add `app.active_skill` **sticky session lock** to prevent mid-session trigger hijacking. | High | 1-2 days |
+| **Phase 3 (Triage & Ranking)** | Add BM25 or `/decide` disambiguation when multiple skills trigger simultaneously. | Medium | 2-3 days |
+| **Phase 4 (Sub-Agent Engine)** | Implement `call_subagent(skill_name, task)` allowing skills to spawn ephemeral, sandboxed Chatybot child instances that return structured results. | Strategic | 1-2 weeks |

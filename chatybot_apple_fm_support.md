@@ -281,8 +281,8 @@ tools_config.toml
 apple_fm_backend.py :: build_tools(app)
     Reads tools_config.toml via app._load_tools_config()
     For each enabled tool:
-      1. _create_generable_class() — builds @fm.generable class from TOML params
-      2. _create_tool_wrapper() — creates fm.Tool subclass
+      1. _create_generable_class() - builds @fm.generable class from TOML params
+      2. _create_tool_wrapper() - creates fm.Tool subclass
          - name and description from TOML
          - arguments_schema returns the generable class schema
          - call() extracts args, builds JSON, delegates to app.dispatch_tool()
@@ -362,15 +362,15 @@ tokens, leaving only 1300-2700 tokens for everything else. This is
 extremely tight. The following scenarios will likely overflow the context
 window:
 
-- **Listing a large directory** — `ls .` in a project root with hundreds of
+- **Listing a large directory** - `ls .` in a project root with hundreds of
   files produces output that exceeds the remaining budget.
-- **Reading a file** — any file larger than a few hundred lines will
+- **Reading a file** - any file larger than a few hundred lines will
   overflow.
-- **Multi-turn conversations** — after 3-4 turns, accumulated history
+- **Multi-turn conversations** - after 3-4 turns, accumulated history
   consumes most of the budget.
-- **Running shell commands** — command output is often large and
+- **Running shell commands** - command output is often large and
   unpredictable.
-- **Multiple tool calls in one turn** — each tool result adds to the
+- **Multiple tool calls in one turn** - each tool result adds to the
   context.
 
 ### 7.4 Recommended Practices
@@ -645,14 +645,14 @@ notation) before producing the final response.
 ### 12.3 Test Suite Results
 
 ```
-test/test_apple_fm_config.py  — 15 passed
-test/test_apple_fm_tools.py   — 26 passed (26 skipped without SDK)
-Full suite (excluding pre-existing failures) — 831 passed
+test/test_apple_fm_config.py  - 15 passed
+test/test_apple_fm_tools.py   - 26 passed (26 skipped without SDK)
+Full suite (excluding pre-existing failures) - 831 passed
 ```
 
 Pre-existing failures unrelated to apple_fm:
-- `test/test_capability_error.py` — coroutine mock issue in the unmodified codebase
-- `test/test_tool_scratch.py` — scratch directory has leftover files from prior runs
+- `test/test_capability_error.py` - coroutine mock issue in the unmodified codebase
+- `test/test_tool_scratch.py` - scratch directory has leftover files from prior runs
 
 ---
 

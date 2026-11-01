@@ -157,7 +157,7 @@ class TestDynamicInjection:
 
     def test_no_reentrancy(self, manager):
         """Output containing !`cmd` should not be recursively executed."""
-        # echo a string that looks like an injection — should NOT be executed
+        # echo a string that looks like an injection - should NOT be executed
         result = manager.expand_dynamic_injections("!`echo '!`whoami`'`")
         # The inner !`whoami` is part of the command string passed to echo,
         # but shlex.split will see it as part of the argument.

@@ -211,7 +211,7 @@ class FakeProvider:
                  empty_custom_ids=None):
         self.fail_submit = fail_submit
         self.final_status = final_status
-        # Items whose completion body is empty (status 200, no content) —
+        # Items whose completion body is empty (status 200, no content) -
         # mirroring the real-world gpt-oss/OpenRouter behavior.
         self.empty_custom_ids = set(empty_custom_ids or ())
         self.batches = {}
@@ -536,7 +536,7 @@ class TestBatchLocalization:
 
 
 # ---------------------------------------------------------------------------
-# Command verb lint (PatternMatcher) — batch verbs must be caught unescaped
+# Command verb lint (PatternMatcher) - batch verbs must be caught unescaped
 # ---------------------------------------------------------------------------
 
 class TestBatchVerbLint:
@@ -603,7 +603,7 @@ class TestReviewFixes:
     """One test per confirmed issue from the external review."""
 
     def test_fix_start_id_collision_no_infinite_loop(self, mgr, batches_dir, monkeypatch):
-        """1.1 — stale instance dirs with colliding timestamps must not hang."""
+        """1.1 - stale instance dirs with colliding timestamps must not hang."""
         import chatybot.batch_manager as bm
         monkeypatch.setattr(bm.time, "time", lambda: 1793000000)
         # Simulate stale dirs: one without an index entry at ts, one at ts+1
@@ -613,7 +613,7 @@ class TestReviewFixes:
         assert meta["batch_id"] == "btch-1793000002-dupe"
 
     def test_fix_estimate_counts_prompt_per_item(self, mgr):
-        """1.2 — the system prompt is sent once per item; the estimate must
+        """1.2 - the system prompt is sent once per item; the estimate must
         multiply prompt chars by the item count."""
         meta = mgr.start("costy", model_alias="m", model_name="n",
                          provider="openrouter", prompt="p" * 200)  # 200 chars/item
@@ -624,7 +624,7 @@ class TestReviewFixes:
         assert est == pytest.approx(450 * 1.0 / 1_000_000 * 0.5)
 
     def test_fix_run_uses_batch_model_not_active(self, mgr, capsys, monkeypatch):
-        """1.3 — /batch run must work after the user switched the active chat
+        """1.3 - /batch run must work after the user switched the active chat
         model back to a non-batch alias; pricing uses the batch's model."""
         ctx = make_ctx(mgr)
         asyncio.run(run_cmd(ctx, "/batch start priced"))
@@ -641,7 +641,7 @@ class TestReviewFixes:
         assert "cost estimate" in out
 
     def test_fix_terminal_name_reuse_creates_fresh_instance(self, mgr, capsys):
-        """2.1 — a completed batch must not burn its name forever."""
+        """2.1 - a completed batch must not burn its name forever."""
         meta = mgr.start("reusable", model_alias="m", model_name="n",
                          provider="openrouter", prompt="p")
         mgr.add_items(meta, ["x"], id_prefix="reusable_")
@@ -658,7 +658,7 @@ class TestReviewFixes:
         assert meta["batch_id"] in ids and fresh["batch_id"] in ids
 
     def test_fix_inflight_name_still_refused(self, mgr):
-        """2.1 — in-flight batches remain immutable (name refused while open)."""
+        """2.1 - in-flight batches remain immutable (name refused while open)."""
         meta = mgr.start("inflight", model_alias="m", model_name="n",
                          provider="openrouter")
         mgr.add_items(meta, ["x"], id_prefix="inflight_")
@@ -670,7 +670,7 @@ class TestReviewFixes:
                       provider="openrouter")
 
     def test_fix_add_does_not_guess_batch_name(self, mgr, capsys):
-        """2.2 — text starting with a word matching an existing batch name
+        """2.2 - text starting with a word matching an existing batch name
         must not be split into a (batch-name, partial-text) pair."""
         ctx = make_ctx(mgr)
         asyncio.run(run_cmd(ctx, "/batch start report"))   # older batch: 'report'
@@ -687,7 +687,7 @@ class TestReviewFixes:
         assert len(mgr.list_items(mgr.resolve("report"))) == 1
 
     def test_fix_missing_model_alias_friendly_error(self, mgr, capsys):
-        """2.4 — a batch whose model alias was removed from chat_config.toml
+        """2.4 - a batch whose model alias was removed from chat_config.toml
         must produce a BatchError message, not an unhandled ValueError."""
         ctx = make_ctx(mgr)
         asyncio.run(run_cmd(ctx, "/batch start orphaned"))
@@ -702,7 +702,7 @@ class TestReviewFixes:
         assert "no longer exists in chat_config.toml" in out
 
     def test_fix_bulk_sequencing_is_linear_and_correct(self, mgr):
-        """3.1 — auto-IDs stay sequential across bulk adds and follow-up calls."""
+        """3.1 - auto-IDs stay sequential across bulk adds and follow-up calls."""
         meta = mgr.start("bulk", model_alias="m", model_name="n",
                          provider="openrouter")
         added = mgr.add_items(meta, [f"t{i}" for i in range(200)], id_prefix="bulk_")
@@ -716,7 +716,7 @@ class TestReviewFixes:
         assert nxt[0]["custom_id"] == "bulk_0202"
 
     def test_fix_zh_ar_clear_keywords(self):
-        """4 — zh and ar must have at least one keyword mapping to 'clear'."""
+        """4 - zh and ar must have at least one keyword mapping to 'clear'."""
         from chatybot.localization import LocalizationManager
         i18n = LocalizationManager()
         i18n.set_locale("zh")
@@ -1323,7 +1323,7 @@ class TestSamplingFixes:
         return ctx
 
     def test_plain_reopen_preserves_sampling(self, mgr, capsys):
-        """P1 — reopening a draft must not revert user-set sampling to the
+        """P1 - reopening a draft must not revert user-set sampling to the
         model-config default."""
         ctx = self._ctx_with_model_temp(mgr, model_temperature=0.3)
         asyncio.run(run_cmd(ctx, "/batch start keep1 temp=0.9"))
@@ -1347,7 +1347,7 @@ class TestSamplingFixes:
         assert mgr.resolve("inherit2")["temperature"] == 0.7
 
     def test_run_estimate_uses_batch_max_tokens(self, mgr, capsys, monkeypatch):
-        """P2 — the pre-submit cost estimate must use the batch's own
+        """P2 - the pre-submit cost estimate must use the batch's own
         max_tokens, not the model config's."""
         ctx = self._ctx_with_model_temp(mgr)  # model max_tokens: 1024
         asyncio.run(run_cmd(ctx, "/batch start priced2 max_tokens=100"))
@@ -1365,7 +1365,7 @@ class TestSamplingFixes:
         assert f"${wrong:.4f}" not in out
 
     def test_prompt_text_with_sampling_tokens_intact(self, mgr, capsys):
-        """P3 — '/batch prompt' free text must not lose temp=/max_tokens=
+        """P3 - '/batch prompt' free text must not lose temp=/max_tokens=
         tokens to option parsing."""
         ctx = make_ctx(mgr)
         asyncio.run(run_cmd(ctx, '/batch prompt "output temp=0.5 and top_p=0.9 in prose"'))
@@ -1375,7 +1375,7 @@ class TestSamplingFixes:
         assert meta.get("temperature") is None  # not parsed as an option
 
     def test_edit_text_with_sampling_tokens_intact(self, mgr, capsys):
-        """P3 — '/batch edit' replacement text keeps temp= tokens."""
+        """P3 - '/batch edit' replacement text keeps temp= tokens."""
         ctx = make_ctx(mgr)
         asyncio.run(run_cmd(ctx, "/batch start ed3"))
         asyncio.run(run_cmd(ctx, "/batch add original"))

@@ -196,7 +196,7 @@ async def test_cmd_docs_line_param(capsys):
 async def test_cmd_docs_line_param_repl(capsys):
     """Test /docs <filename> line=N works in REPL (non-script) mode, not just script mode."""
     app = _make_app(capsys)
-    # Deliberately NOT setting script_context — simulates REPL mode
+    # Deliberately NOT setting script_context - simulates REPL mode
 
     await app.handle_escape_command("/docs chatdsl_cookbook.md line=200")
     out = capsys.readouterr().out
@@ -219,7 +219,7 @@ async def test_cmd_docs_line_param_repl(capsys):
 async def test_cmd_docs_page_param_repl(capsys):
     """Test /docs <filename> page=N works in REPL (non-script) mode, not just script mode."""
     app = _make_app(capsys)
-    # Deliberately NOT setting script_context — simulates REPL mode
+    # Deliberately NOT setting script_context - simulates REPL mode
 
     await app.handle_escape_command("/docs chatdsl_cookbook.md page=2")
     out = capsys.readouterr().out

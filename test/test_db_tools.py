@@ -317,7 +317,7 @@ class TestDbList:
         """Save and restore the real db directory"""
         original_db_dir = os.path.expanduser("~/.local/share/chatybot/db")
         yield
-        # No cleanup needed — we mock os.path.exists and os.listdir
+        # No cleanup needed - we mock os.path.exists and os.listdir
 
     def test_db_list_no_directory(self):
         """Returns empty list when db directory does not exist"""

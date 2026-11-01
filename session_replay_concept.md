@@ -1,4 +1,4 @@
-# Time-Travel Context Replay (`/session replay`) — Implementation Plan
+# Time-Travel Context Replay (`/session replay`) - Implementation Plan
 
 ## 1. Overview & Architecture
 
@@ -125,7 +125,7 @@ def truncate_messages_verbose(
     # NOTE: _orig_idx tags survive because truncate_messages does a shallow
     # dict copy (result = [dict(m) for m in messages]) which preserves extra
     # keys. If truncate_messages is ever refactored to reconstruct dicts with
-    # only role/content, this tracking silently breaks — add a regression test.
+    # only role/content, this tracking silently breaks - add a regression test.
     clean_copy = [dict(m) for m in tagged_messages]
     truncated_tagged, did_truncate_ret = self.truncate_messages(
         clean_copy, limit=limit, target_pct=target_pct
@@ -260,12 +260,12 @@ The system prompt is not stored per-turn in the turn record. It is reconstructed
 def reconstruct_system_prompt(self, meta: dict, turns: list[dict]) -> str:
     """
     Reconstruct the system prompt that would have been active.
-    Approximate — the exact prompt at session time is not stored.
+    Approximate - the exact prompt at session time is not stored.
 
     Built from (mirrors chat_completion lines 1249-1319):
       1. config_manager.system_message (base)
       2. Tool context + agentic instructions (if any turn has agentic_loop)
-      3. Model-specific suffixes (gemma4, nanbeige — detected from model_alias)
+      3. Model-specific suffixes (gemma4, nanbeige - detected from model_alias)
       4. Reasoning mode settings
 
     The result is flagged as approximate in the CLI output.

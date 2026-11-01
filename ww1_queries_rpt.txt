@@ -54,7 +54,7 @@ ITEMS (15 total):
     ---
     ### **Western Front**
     1. **Second Battle of the Aisne**  
-       - **Dates**: April–May 1917  
+       - **Dates**: April-May 1917  
        - **Location**: Northern France  
        - **Summary**: A German offensive aimed at breaking through Allied lines, part of the broader **Operation Michael**. It initially succeeded but stalled due to logistical challenges and Allied counterattacks.
     2. **Battle of Arras**  
@@ -66,17 +66,17 @@ ITEMS (15 total):
        - **Location**: Western Front (Messines Ridge, Belgium)  
        - **Summary**: British forces detonated 19 mines under German lines, causing massive casualties and capturing the ridge. A precursor to the larger Passchendaele campaign.
     4. **Battle of Passchendaele (Third Battle of Ypres)**  
-       - **Dates**: July 31 – November 10, 1917  
+       - **Dates**: July 31 - November 10, 1917  
        - **Location**: Western Front (Ypres sector, Belgium)  
        - **Summary**: A prolonged and brutal Allied offensive led by British General Plumer. The battle resulted in heavy casualties on both sides and minimal territorial gains.
     5. **Battle of Cambrai**  
-       - **Dates**: November 20 – December 7, 1917  
+       - **Dates**: November 20 - December 7, 1917  
        - **Location**: Western Front (Cambrai region, France)  
        - **Summary**: The first large-scale use of tanks in warfare. Initial British gains were later reversed by German counterattacks.
     ---
     ### **Italian Front**
     6. **Battle of Caporetto**  
-       - **Dates**: October 24 – November 19, 1917  
+       - **Dates**: October 24 - November 19, 1917  
        - **Location**: Southern Italy (Isonzo Front, near the Piave River)  
        - **Summary**: A devastating Austro-German offensive that led to the collapse of Italian defenses. Italy suffered heavy losses and retreated significantly.
     ---
@@ -108,44 +108,44 @@ ITEMS (15 total):
     Name: last_chat
     Here are the major battles of **World War I** that took place in **1917**, along with their dates and locations:
     ### **Western Front**
-    1. **Battle of Arras** (April 9 – May 16, 1917)
+    1. **Battle of Arras** (April 9 - May 16, 1917)
        - **Location:** Arras, France
-       - Notable actions: Canadian Corps captured Vimy Ridge (April 9–12).
-    2. **Second Battle of the Aisne (Nivelle Offensive)** (April 16 – May 9, 1917)
+       - Notable actions: Canadian Corps captured Vimy Ridge (April 9-12).
+    2. **Second Battle of the Aisne (Nivelle Offensive)** (April 16 - May 9, 1917)
        - **Location:** Aisne River, France
        - French offensive under General Nivelle; high casualties led to mutinies.
-    3. **Battle of Messines** (June 7–14, 1917)
+    3. **Battle of Messines** (June 7-14, 1917)
        - **Location:** Messines Ridge, Belgium
        - British detonated massive mines under German lines.
-    4. **Third Battle of Ypres (Passchendaele)** (July 31 – November 10, 1917)
+    4. **Third Battle of Ypres (Passchendaele)** (July 31 - November 10, 1917)
        - **Location:** Ypres Salient, Belgium
        - Prolonged British offensive in muddy, horrific conditions.
-    5. **Battle of Cambrai** (November 20 – December 7, 1917)
+    5. **Battle of Cambrai** (November 20 - December 7, 1917)
        - **Location:** Cambrai, France
        - First large-scale use of tanks in warfare.
     ### **Eastern Front**
-    6. **Kerensky Offensive (July Offensive)** (July 1–19, 1917)
+    6. **Kerensky Offensive (July Offensive)** (July 1-19, 1917)
        - **Location:** Galicia (Eastern Europe)
        - Last Russian offensive; failed due to low morale and revolution.
     ### **Italian Front**
-    7. **Battle of Caporetto (Twelfth Battle of the Isonzo)** (October 24 – November 19, 1917)
+    7. **Battle of Caporetto (Twelfth Battle of the Isonzo)** (October 24 - November 19, 1917)
        - **Location:** Kobarid (Caporetto), Slovenia (then Austria-Hungary)
        - Central Powers (Germany & Austria-Hungary) crushed Italian forces.
     ### **Middle Eastern Front**
-    8. **First Battle of Gaza** (March 26–27, 1917)
+    8. **First Battle of Gaza** (March 26-27, 1917)
        - **Location:** Gaza, Ottoman Palestine
        - British failed to capture Gaza from the Ottomans.
-    9. **Second Battle of Gaza** (April 17–19, 1917)
+    9. **Second Battle of Gaza** (April 17-19, 1917)
        - **Location:** Gaza, Ottoman Palestine
        - Another British failure; led to a stalemate.
-    10. **Third Battle of Gaza** (October 31 – November 7, 1917)
+    10. **Third Battle of Gaza** (October 31 - November 7, 1917)
         - **Location:** Gaza & Beersheba, Ottoman Palestine
         - British breakthrough under General Allenby.
-    11. **Battle of Jerusalem** (November 17 – December 30, 1917)
+    11. **Battle of Jerusalem** (November 17 - December 30, 1917)
         - **Location:** Jerusalem, Ottoman Palestine
         - British captured Jerusalem from the Ottomans.
     ### **Other Theaters**
-    12. **Battle of Ramadi** (September 28–29, 1917)
+    12. **Battle of Ramadi** (September 28-29, 1917)
         - **Location:** Mesopotamia (Iraq)
         - British defeated Ottoman forces.
     Would you like details on any specific battle?
@@ -159,27 +159,27 @@ ITEMS (15 total):
     Name: last_chat
     Here are some of the major World War I battles that took place in 1917, along with their dates and locations:
     1. **Battle of Arras**
-       - **Dates:** April 9 – May 16, 1917
+       - **Dates:** April 9 - May 16, 1917
        - **Location:** Arras, France
        - **Significance:** A British-led offensive that included the famous attack on Vimy Ridge by Canadian forces. It was part of a larger Allied plan to break through German lines.
     2. **Second Battle of the Aisne (Nivelle Offensive)**
-       - **Dates:** April 16 – May 9, 1917
+       - **Dates:** April 16 - May 9, 1917
        - **Location:** Aisne, France
        - **Significance:** A French-led offensive under General Robert Nivelle, which aimed to achieve a decisive victory but resulted in heavy French casualties and mutinies.
     3. **Battle of Messines**
-       - **Dates:** June 7 – 14, 1917
+       - **Dates:** June 7 - 14, 1917
        - **Location:** Messines, Belgium (near Ypres)
        - **Significance:** A British offensive that successfully captured the Messines Ridge, marked by the detonation of 19 massive underground mines.
     4. **Battle of Passchendaele (Third Battle of Ypres)**
-       - **Dates:** July 31 – November 10, 1917
+       - **Dates:** July 31 - November 10, 1917
        - **Location:** Ypres, Belgium
        - **Significance:** A prolonged and costly British offensive in Flanders, fought in extremely muddy conditions. It resulted in heavy casualties for minimal territorial gains.
     5. **Battle of Caporetto (Twelfth Battle of the Isonzo)**
-       - **Dates:** October 24 – November 19, 1917
+       - **Dates:** October 24 - November 19, 1917
        - **Location:** Near Kobarid (Caporetto), Italy
        - **Significance:** A major Austro-German offensive that routed Italian forces, leading to a significant retreat and near-collapse of the Italian front.
     6. **Battle of Cambrai**
-       - **Dates:** November 20 – December 7, 1917
+       - **Dates:** November 20 - December 7, 1917
        - **Location:** Cambrai, France
        - **Significance:** Notable for the first large-scale, effective use of tanks in warfare. Initial British gains were later reversed by German counterattacks.
     These battles were pivotal in shaping the course of the war in 1917, a year marked by significant Allied offensives and shifting strategies.
@@ -193,32 +193,32 @@ ITEMS (15 total):
     Name: last_chat
     Okay, here's a list of major World War One battles that took place in 1917, with dates and locations.  1917 was a particularly brutal and pivotal year in the war, marked by massive offensives and significant shifts in strategy.  I've broken it down geographically for clarity.  It's important to note that "battle" can be defined in different ways (a single day's fighting vs. a months-long campaign), so this is a selection of the most significant engagements.
     **Western Front (France & Belgium)**
-    *   **The Nivelle Offensive (April 16 – May 9, 1917):**  A Franco-British offensive intended to break through the German lines.  It was a disastrous failure, leading to widespread mutinies in the French army.
+    *   **The Nivelle Offensive (April 16 - May 9, 1917):**  A Franco-British offensive intended to break through the German lines.  It was a disastrous failure, leading to widespread mutinies in the French army.
         *   **Location:** Aisne River area, Champagne region, France.  Included the **Second Battle of the Aisne** (April 16-18) and the **Battle of Chemin des Dames** (April 16-May 9).
-    *   **Battle of Arras (April 9 – May 16, 1917):** A British offensive launched concurrently with Nivelle's, intended to support the French and draw German forces away.  Achieved some initial success but ultimately bogged down.
+    *   **Battle of Arras (April 9 - May 16, 1917):** A British offensive launched concurrently with Nivelle's, intended to support the French and draw German forces away.  Achieved some initial success but ultimately bogged down.
         *   **Location:** Arras, Pas-de-Calais, France.  Included the capture of Vimy Ridge (April 9-12) - a significant Canadian victory.
-    *   **Battle of Bullecourt (May 3 – 23, 1917):** Part of the British attempt to follow up on Arras.  Two main phases, both resulting in heavy Australian casualties.
+    *   **Battle of Bullecourt (May 3 - 23, 1917):** Part of the British attempt to follow up on Arras.  Two main phases, both resulting in heavy Australian casualties.
         *   **Location:** Bullecourt, Pas-de-Calais, France.
-    *   **Third Battle of Ypres (Passchendaele) (July 31 – November 6, 1917):**  A prolonged and incredibly costly British-led offensive in terrible conditions (mud, rain).  Gained limited territory at enormous human cost.
-        *   **Location:** Ypres Salient, West Flanders, Belgium.  Key phases included the **Battle of Langemarck** (August 16-18), **Battle of the Menin Road Ridge** (September 20-25), **Battle of Polygon Wood** (September 26-28), and the final push to capture Passchendaele village (October 26 – November 6).
-    *   **Battle of Cambrai (November 20 – December 7, 1917):**  A British offensive that used tanks on a large scale for the first time.  Initially successful, but a German counterattack regained most of the ground.  Important for demonstrating the potential of tanks.
+    *   **Third Battle of Ypres (Passchendaele) (July 31 - November 6, 1917):**  A prolonged and incredibly costly British-led offensive in terrible conditions (mud, rain).  Gained limited territory at enormous human cost.
+        *   **Location:** Ypres Salient, West Flanders, Belgium.  Key phases included the **Battle of Langemarck** (August 16-18), **Battle of the Menin Road Ridge** (September 20-25), **Battle of Polygon Wood** (September 26-28), and the final push to capture Passchendaele village (October 26 - November 6).
+    *   **Battle of Cambrai (November 20 - December 7, 1917):**  A British offensive that used tanks on a large scale for the first time.  Initially successful, but a German counterattack regained most of the ground.  Important for demonstrating the potential of tanks.
         *   **Location:** Cambrai, Nord-Pas-de-Calais, France.
     **Eastern Front (Russia, Romania, etc.)**
-    *   **Mărăști (July 24 – August 3, 1917):** A major Romanian-German battle.  The Romanians, with some Russian support, successfully defended against a Central Powers offensive.
+    *   **Mărăști (July 24 - August 3, 1917):** A major Romanian-German battle.  The Romanians, with some Russian support, successfully defended against a Central Powers offensive.
         *   **Location:** Mărăști, Romania.
-    *   **Kerensky Offensive (July 18 – August 1, 1917):** A large-scale Russian offensive launched by the Provisional Government under Alexander Kerensky.  It was a disastrous failure, contributing to the decline of the Russian army and the rise of the Bolsheviks.
+    *   **Kerensky Offensive (July 18 - August 1, 1917):** A large-scale Russian offensive launched by the Provisional Government under Alexander Kerensky.  It was a disastrous failure, contributing to the decline of the Russian army and the rise of the Bolsheviks.
         *   **Location:** Galicia (modern-day Ukraine and Poland).
-    *   **Battle of Riga (September 1 – September 5, 1917):** A German offensive that captured the city of Riga.
+    *   **Battle of Riga (September 1 - September 5, 1917):** A German offensive that captured the city of Riga.
         *   **Location:** Riga, Latvia.
     **Italian Front (Italy & Austria-Hungary)**
-    *   **Battle of Caporetto (October 24 – November 19, 1917):**  A major Austro-Hungarian and German offensive that inflicted a devastating defeat on the Italian army.  Led to a significant retreat by the Italians and a crisis in the Italian government. Also known as the Twelfth Battle of the Isonzo.
+    *   **Battle of Caporetto (October 24 - November 19, 1917):**  A major Austro-Hungarian and German offensive that inflicted a devastating defeat on the Italian army.  Led to a significant retreat by the Italians and a crisis in the Italian government. Also known as the Twelfth Battle of the Isonzo.
         *   **Location:** Caporetto (Kobarid), Slovenia (then part of Austria-Hungary).  The offensive spread across a wide front along the Isonzo River.
     **Middle Eastern Front**
-    *   **Second Battle of Gaza (April 17 – May 19, 1917):** British attempt to capture Gaza from the Ottoman Empire.  Failed.
+    *   **Second Battle of Gaza (April 17 - May 19, 1917):** British attempt to capture Gaza from the Ottoman Empire.  Failed.
         *   **Location:** Gaza, Palestine (modern-day Israel/Palestine).
     *   **Battle of Beersheba (October 31, 1917):** A successful British cavalry charge that captured Beersheba, a key Ottoman stronghold.  A turning point in the Sinai and Palestine Campaign.
         *   **Location:** Beersheba, Palestine (modern-day Israel).
-    *   **Battle of Jerusalem (December 8 – 9, 1917):** British forces captured Jerusalem from the Ottoman Empire.
+    *   **Battle of Jerusalem (December 8 - 9, 1917):** British forces captured Jerusalem from the Ottoman Empire.
         *   **Location:** Jerusalem, Palestine (modern-day Israel).
     **Other Notable Actions**
     *   **Various Naval Battles:**  Continued U-boat warfare by Germany against Allied shipping.
@@ -237,32 +237,32 @@ ITEMS (15 total):
     Name: last_chat
     Okay, here's a list of major World War One battles that took place in 1917, with dates and locations.  1917 was a particularly brutal and pivotal year in the war, marked by massive offensives and significant shifts in strategy.  I've broken it down geographically for clarity.  It's important to note that "battle" can be defined in different ways (a single day's fighting vs. a months-long campaign), so this is a selection of the most significant engagements.
     **Western Front (France & Belgium)**
-    *   **The Nivelle Offensive (April 16 – May 9, 1917):**  A Franco-British offensive intended to break through the German lines.  It was a disastrous failure, leading to widespread mutinies in the French army.
+    *   **The Nivelle Offensive (April 16 - May 9, 1917):**  A Franco-British offensive intended to break through the German lines.  It was a disastrous failure, leading to widespread mutinies in the French army.
         *   **Location:** Aisne River area, Champagne region, France.  Included the **Second Battle of the Aisne** (April 16-18) and the **Battle of Chemin des Dames** (April 16-May 9).
-    *   **Battle of Arras (April 9 – May 16, 1917):** A British offensive launched concurrently with Nivelle's, intended to support the French and draw German forces away.  Achieved some initial success but ultimately bogged down.
+    *   **Battle of Arras (April 9 - May 16, 1917):** A British offensive launched concurrently with Nivelle's, intended to support the French and draw German forces away.  Achieved some initial success but ultimately bogged down.
         *   **Location:** Arras, Pas-de-Calais, France.  Included the capture of Vimy Ridge (April 9-12) - a significant Canadian victory.
-    *   **Battle of Bullecourt (May 3 – 23, 1917):** Part of the British attempt to follow up on Arras.  Two main phases, both resulting in heavy Australian casualties.
+    *   **Battle of Bullecourt (May 3 - 23, 1917):** Part of the British attempt to follow up on Arras.  Two main phases, both resulting in heavy Australian casualties.
         *   **Location:** Bullecourt, Pas-de-Calais, France.
-    *   **Third Battle of Ypres (Passchendaele) (July 31 – November 6, 1917):**  A prolonged and incredibly costly British-led offensive in terrible conditions (mud, rain).  Gained limited territory at enormous human cost.
-        *   **Location:** Ypres Salient, West Flanders, Belgium.  Key phases included the **Battle of Langemarck** (August 16-18), **Battle of the Menin Road Ridge** (September 20-25), **Battle of Polygon Wood** (September 26-28), and the final push to capture Passchendaele village (October 26 – November 6).
-    *   **Battle of Cambrai (November 20 – December 7, 1917):**  A British offensive that used tanks on a large scale for the first time.  Initially successful, but a German counterattack regained most of the ground.  Important for demonstrating the potential of tanks.
+    *   **Third Battle of Ypres (Passchendaele) (July 31 - November 6, 1917):**  A prolonged and incredibly costly British-led offensive in terrible conditions (mud, rain).  Gained limited territory at enormous human cost.
+        *   **Location:** Ypres Salient, West Flanders, Belgium.  Key phases included the **Battle of Langemarck** (August 16-18), **Battle of the Menin Road Ridge** (September 20-25), **Battle of Polygon Wood** (September 26-28), and the final push to capture Passchendaele village (October 26 - November 6).
+    *   **Battle of Cambrai (November 20 - December 7, 1917):**  A British offensive that used tanks on a large scale for the first time.  Initially successful, but a German counterattack regained most of the ground.  Important for demonstrating the potential of tanks.
         *   **Location:** Cambrai, Nord-Pas-de-Calais, France.
     **Eastern Front (Russia, Romania, etc.)**
-    *   **Mărăști (July 24 – August 3, 1917):** A major Romanian-German battle.  The Romanians, with some Russian support, successfully defended against a Central Powers offensive.
+    *   **Mărăști (July 24 - August 3, 1917):** A major Romanian-German battle.  The Romanians, with some Russian support, successfully defended against a Central Powers offensive.
         *   **Location:** Mărăști, Romania.
-    *   **Kerensky Offensive (July 18 – August 1, 1917):** A large-scale Russian offensive launched by the Provisional Government under Alexander Kerensky.  It was a disastrous failure, contributing to the decline of the Russian army and the rise of the Bolsheviks.
+    *   **Kerensky Offensive (July 18 - August 1, 1917):** A large-scale Russian offensive launched by the Provisional Government under Alexander Kerensky.  It was a disastrous failure, contributing to the decline of the Russian army and the rise of the Bolsheviks.
         *   **Location:** Galicia (modern-day Ukraine and Poland).
-    *   **Battle of Riga (September 1 – September 5, 1917):** A German offensive that captured the city of Riga.
+    *   **Battle of Riga (September 1 - September 5, 1917):** A German offensive that captured the city of Riga.
         *   **Location:** Riga, Latvia.
     **Italian Front (Italy & Austria-Hungary)**
-    *   **Battle of Caporetto (October 24 – November 19, 1917):**  A major Austro-Hungarian and German offensive that inflicted a devastating defeat on the Italian army.  Led to a significant retreat by the Italians and a crisis in the Italian government. Also known as the Twelfth Battle of the Isonzo.
+    *   **Battle of Caporetto (October 24 - November 19, 1917):**  A major Austro-Hungarian and German offensive that inflicted a devastating defeat on the Italian army.  Led to a significant retreat by the Italians and a crisis in the Italian government. Also known as the Twelfth Battle of the Isonzo.
         *   **Location:** Caporetto (Kobarid), Slovenia (then part of Austria-Hungary).  The offensive spread across a wide front along the Isonzo River.
     **Middle Eastern Front**
-    *   **Second Battle of Gaza (April 17 – May 19, 1917):** British attempt to capture Gaza from the Ottoman Empire.  Failed.
+    *   **Second Battle of Gaza (April 17 - May 19, 1917):** British attempt to capture Gaza from the Ottoman Empire.  Failed.
         *   **Location:** Gaza, Palestine (modern-day Israel/Palestine).
     *   **Battle of Beersheba (October 31, 1917):** A successful British cavalry charge that captured Beersheba, a key Ottoman stronghold.  A turning point in the Sinai and Palestine Campaign.
         *   **Location:** Beersheba, Palestine (modern-day Israel).
-    *   **Battle of Jerusalem (December 8 – 9, 1917):** British forces captured Jerusalem from the Ottoman Empire.
+    *   **Battle of Jerusalem (December 8 - 9, 1917):** British forces captured Jerusalem from the Ottoman Empire.
         *   **Location:** Jerusalem, Palestine (modern-day Israel).
     **Other Notable Actions**
     *   **Various Naval Battles:**  Continued U-boat warfare by Germany against Allied shipping.
@@ -285,59 +285,59 @@ ITEMS (15 total):
     Wait, the Russian Revolution happened in March and November 1917, so the Brusilov Offensive was before the revolution. Then there's the Battle of Jerusalem in December 1917, part of the Sinai and Palestine Campaign. That was a British victory against the Ottomans. Also, the Battle of Beersheba, which was earlier in October 1917, also in Palestine. 
     Wait, but the user asked specifically for battles in 1917. So I need to confirm the dates. Let me check each one. Passchendaele was from July to November 1917. Messines was June 1917. Arras was April 1917. Cambrai was November 1917. Brusilov Offensive was June 1916 to September 1916? Wait, no, maybe I'm mixing up dates. Wait, the Brusilov Offensive was in 1916. Wait, no, maybe it was 1916. Wait, I need to verify that. Let me think. The Brusilov Offensive was a Russian operation in 1916, so maybe I'm confusing it with another battle. Hmm. Alternatively, maybe there was a battle in 1917 on the Eastern Front. The Russian Revolution started in March 1917, so the Eastern Front battles might have been affected by that. Maybe the Battle of the Masurian Lakes in 1914, but that's earlier. Wait, perhaps the Battle of the Bug River in 1917? Or the Battle of the Vistula? I might be mixing up dates here. Alternatively, maybe the Brusilov Offensive was in 1916, so perhaps the user is referring to another Eastern Front battle in 1917. Alternatively, maybe the Battle of Caporetto, but that was in 1917, but it's in Italy. Wait, Caporetto was in October-November 1917, part of the Italian Front. So that's another one. 
     So compiling all these: 
-    1. Battle of the Somme (1916) – no, 1917? Wait, no, the Somme was 1916. Then the Third Battle of Ypres, which is Passchendaele, 1917. Messines, June 1917. Arras, April 1917. Cambrai, November 1917. Brusilov Offensive – maybe not 1917. Then the Battle of Jerusalem (December 1917), Beersheba (October 1917), and Caporetto (October-November 1917). Also, the Eastern Front might have had the Battle of the Vistula in 1917, but I'm not sure. Alternatively, the Battle of the Bug River in 1917. Let me check. 
+    1. Battle of the Somme (1916) - no, 1917? Wait, no, the Somme was 1916. Then the Third Battle of Ypres, which is Passchendaele, 1917. Messines, June 1917. Arras, April 1917. Cambrai, November 1917. Brusilov Offensive - maybe not 1917. Then the Battle of Jerusalem (December 1917), Beersheba (October 1917), and Caporetto (October-November 1917). Also, the Eastern Front might have had the Battle of the Vistula in 1917, but I'm not sure. Alternatively, the Battle of the Bug River in 1917. Let me check. 
     Wait, the Brusilov Offensive was in 1916. So perhaps in 1917, the Eastern Front saw the Battle of the Vistula in June 1917, where the Russians tried to counter the German advance. Also, the Battle of the Bug River in 1917. But I'm not entirely sure about the exact dates. Alternatively, maybe the Battle of the Aisne in 1917? No, that was earlier. 
     Also, the Battle of the Marne in 1914. The Second Battle of the Marne was in 1918. So not 1917. 
     So compiling the list:
-    - Battle of Arras (April 9–May 16, 1917) – Western Front, France
-    - Battle of Messines (June 7–10, 1917) – Western Front, Belgium
-    - Third Battle of Ypres (Passchendaele) (July 31–November 10, 1917) – Western Front, Belgium
-    - Battle of Cambrai (November 20–December 7, 1917) – Western Front, France
-    - Battle of Beersheba (October 31, 1917) – Sinai and Palestine, Middle East
-    - Battle of Jerusalem (December 1917) – part of the Sinai and Palestine Campaign
-    - Caporetto (October 24–November 19, 1917) – Italian Front, near Soissons, Italy
+    - Battle of Arras (April 9-May 16, 1917) - Western Front, France
+    - Battle of Messines (June 7-10, 1917) - Western Front, Belgium
+    - Third Battle of Ypres (Passchendaele) (July 31-November 10, 1917) - Western Front, Belgium
+    - Battle of Cambrai (November 20-December 7, 1917) - Western Front, France
+    - Battle of Beersheba (October 31, 1917) - Sinai and Palestine, Middle East
+    - Battle of Jerusalem (December 1917) - part of the Sinai and Palestine Campaign
+    - Caporetto (October 24-November 19, 1917) - Italian Front, near Soissons, Italy
     - On the Eastern Front, maybe the Battle of the Vistula (June 1917) and the Battle of the Bug River (August 1917), but I need to confirm these. Alternatively, the Brusilov Offensive was 1916, so maybe the Russian withdrawal in 1917 led to battles like the Battle of the Western Dvina in 1917. 
     Wait, the Brusilov Offensive was in 1916, so in 1917, the Russians were in a defensive position. The Battle of the Western Dvina in 1917 was part of the German offensive. Also, the Battle of the Dnieper in 1917. But I'm not entirely certain. 
     I should also consider the Battle of the Somme in 1917, but that's the same as the Third Battle of Ypres. Wait, no, the Third Battle of Ypres is Passchendaele. The Battle of the Somme was 1916. 
     So, to make sure, the major battles in 1917 would include:
-    1. Battle of the Aisne (1917) – but I think that was earlier. Wait, no, the Aisne battles were in 1914 and 1917? Maybe the Second Battle of the Aisne in 1917, part of the Nivelle Offensive. 
+    1. Battle of the Aisne (1917) - but I think that was earlier. Wait, no, the Aisne battles were in 1914 and 1917? Maybe the Second Battle of the Aisne in 1917, part of the Nivelle Offensive. 
     Wait, the Nivelle Offensive was in April-May 1917, which included the Battle of Arras. So that's already listed. 
     So, the list would include:
-    - Battle of Arras (April 9–May 16, 1917)
-    - Battle of Messines (June 7–10, 1917)
-    - Third Battle of Ypres (Passchendaele) (July 31–November 10, 1917)
-    - Battle of Cambrai (November 20–December 7, 1917)
+    - Battle of Arras (April 9-May 16, 1917)
+    - Battle of Messines (June 7-10, 1917)
+    - Third Battle of Ypres (Passchendaele) (July 31-November 10, 1917)
+    - Battle of Cambrai (November 20-December 7, 1917)
     - Battle of Beersheba (October 31, 1917)
     - Battle of Jerusalem (December 1917)
-    - Caporetto (October 24–November 19, 1917)
+    - Caporetto (October 24-November 19, 1917)
     - On the Eastern Front: Battle of the Vistula (June 1917), Battle of the Bug River (August 1917), and the Battle of the Western Dvina (1917). But I need to verify the exact dates and names. 
     Alternatively, the Brusilov Offensive was in 1916, so maybe the Eastern Front in 1917 had the Battle of the Vistula in June 1917, which was a German offensive. Also, the Battle of the Dnieper in August 1917. 
     I think that's a comprehensive list. Now, I need to present them with dates and locations, making sure the dates are accurate. Let me check each one:
-    - Battle of Arras: April 9–May 16, 1917, Western Front, France.
-    - Battle of Messines: June 7–10, 1917, Western Front, Belgium.
-    - Third Battle of Ypres (Passchendaele): July 31 – November 10, 1917, Western Front, Belgium.
-    - Battle of Cambrai: November 20 – December 7, 1917, Western Front, France.
+    - Battle of Arras: April 9-May 16, 1917, Western Front, France.
+    - Battle of Messines: June 7-10, 1917, Western Front, Belgium.
+    - Third Battle of Ypres (Passchendaele): July 31 - November 10, 1917, Western Front, Belgium.
+    - Battle of Cambrai: November 20 - December 7, 1917, Western Front, France.
     - Battle of Beersheba: October 31, 1917, Sinai and Palestine, Middle East.
     - Battle of Jerusalem: December 1917, part of the Sinai and Palestine Campaign.
-    - Caporetto: October 24 – November 19, 1917, Italian Front, near Soissons, Italy.
+    - Caporetto: October 24 - November 19, 1917, Italian Front, near Soissons, Italy.
     - On the Eastern Front: The Battle of the Vistula (June 1917), Battle of the Bug River (August 1917), and the Battle of the Western Dvina (1917). However, I'm not entirely certain about the exact dates and names here. Maybe the Battle of the Dnieper in 1917. Alternatively, the Battle of the Masurian Lakes in 1914, but that's too early. 
     Alternatively, the Brusilov Offensive was in 1916, so maybe the Russian withdrawal in 1917 led to battles like the Battle of the Western Dvina in 1917. 
     I think that's the best I can do. I'll list the ones I'm more certain about and note the Eastern Front battles with some uncertainty.
     Here is a list of major World War I battles that took place in 1917, including their dates and locations:
     1. **Battle of Arras**  
-       - **Dates:** April 9–May 16, 1917  
+       - **Dates:** April 9-May 16, 1917  
        - **Location:** Western Front, France  
        - **Details:** A British offensive aimed at breaking through German lines, notable for the use of tanks and the capture of Vimy Ridge. The battle resulted in heavy casualties and limited gains.
     2. **Battle of Messines**  
-       - **Dates:** June 7–10, 1917  
+       - **Dates:** June 7-10, 1917  
        - **Location:** Western Front, Belgium  
        - **Details:** A British and Commonwealth offensive that successfully captured the Messines Ridge, using mines to destroy German fortifications. It was a precursor to the larger Third Battle of Ypres.
     3. **Third Battle of Ypres (Passchendaele)**  
-       - **Dates:** July 31 – November 10, 1917  
+       - **Dates:** July 31 - November 10, 1917  
        - **Location:** Western Front, Belgium  
        - **Details:** A prolonged and brutal campaign marked by mud, heavy artillery, and trench warfare. The Allies captured the village of Passchendaele but at immense cost, with over 500,000 casualties on both sides.
     4. **Battle of Cambrai**  
-       - **Dates:** November 20 – December 7, 1917  
+       - **Dates:** November 20 - December 7, 1917  
        - **Location:** Western Front, France  
        - **Details:** The first major use of tanks in a coordinated offensive. While initially successful, the Allies failed to hold the gains, and the battle highlighted the limitations of tank technology at the time.
     5. **Battle of Beersheba**  
@@ -349,7 +349,7 @@ ITEMS (15 total):
        - **Location:** Southern Palestine, Middle East  
        - **Details:** The British captured Jerusalem after a successful campaign against the Ottoman Empire, marking a turning point in the Middle Eastern theater.
     7. **Battle of Caporetto**  
-       - **Dates:** October 24 – November 19, 1917  
+       - **Dates:** October 24 - November 19, 1917  
        - **Location:** Italian Front, near Soissons, Italy  
        - **Details:** A major Austro-German offensive that shattered Italian defenses, leading to a devastating retreat. The battle demonstrated the effectiveness of new tactics, including stormtroopers.
     8. **Eastern Front Battles (1917)**  
@@ -368,44 +368,44 @@ ITEMS (15 total):
     Name: last_chat
     Here are the major battles of **World War I** that took place in **1917**, along with their dates and locations:
     ### **Western Front**
-    1. **Battle of Arras** (April 9 – May 16, 1917)
+    1. **Battle of Arras** (April 9 - May 16, 1917)
        - **Location:** Arras, France
-       - Notable actions: Canadian Corps captured Vimy Ridge (April 9–12).
-    2. **Second Battle of the Aisne (Nivelle Offensive)** (April 16 – May 9, 1917)
+       - Notable actions: Canadian Corps captured Vimy Ridge (April 9-12).
+    2. **Second Battle of the Aisne (Nivelle Offensive)** (April 16 - May 9, 1917)
        - **Location:** Aisne River, France
        - Failed French offensive leading to mutinies in the French Army.
-    3. **Battle of Messines** (June 7–14, 1917)
+    3. **Battle of Messines** (June 7-14, 1917)
        - **Location:** Messines Ridge, Belgium
        - British detonated massive mines under German lines.
-    4. **Third Battle of Ypres (Passchendaele)** (July 31 – November 10, 1917)
+    4. **Third Battle of Ypres (Passchendaele)** (July 31 - November 10, 1917)
        - **Location:** Ypres Salient, Belgium
        - Costly Allied offensive in muddy conditions.
-    5. **Battle of Cambrai** (November 20 – December 7, 1917)
+    5. **Battle of Cambrai** (November 20 - December 7, 1917)
        - **Location:** Cambrai, France
        - First large-scale use of tanks by the British.
     ### **Eastern Front**
-    6. **Kerensky Offensive (July Offensive)** (July 1–19, 1917)
+    6. **Kerensky Offensive (July Offensive)** (July 1-19, 1917)
        - **Location:** Galicia (modern Ukraine/Poland)
        - Last Russian offensive before the Bolshevik Revolution.
     ### **Italian Front**
-    7. **Battle of Caporetto (Twelfth Battle of the Isonzo)** (October 24 – November 19, 1917)
+    7. **Battle of Caporetto (Twelfth Battle of the Isonzo)** (October 24 - November 19, 1917)
        - **Location:** Kobarid (Caporetto), Slovenia (then Austria-Hungary)
        - Major Central Powers victory over Italy.
     ### **Middle Eastern Front**
-    8. **First Battle of Gaza** (March 26–27, 1917)
+    8. **First Battle of Gaza** (March 26-27, 1917)
        - **Location:** Gaza, Ottoman Palestine
        - British failure to capture Gaza.
-    9. **Second Battle of Gaza** (April 17–19, 1917)
+    9. **Second Battle of Gaza** (April 17-19, 1917)
        - **Location:** Gaza, Ottoman Palestine
        - Another British defeat.
-    10. **Third Battle of Gaza** (October 31 – November 7, 1917)
+    10. **Third Battle of Gaza** (October 31 - November 7, 1917)
         - **Location:** Gaza & Beersheba, Ottoman Palestine
         - British breakthrough leading to Jerusalem’s capture.
-    11. **Battle of Jerusalem** (November 17 – December 30, 1917)
+    11. **Battle of Jerusalem** (November 17 - December 30, 1917)
         - **Location:** Jerusalem, Ottoman Palestine
         - British forces captured the city.
     ### **Other Theaters**
-    12. **Battle of Ramadi** (September 28–29, 1917)
+    12. **Battle of Ramadi** (September 28-29, 1917)
         - **Location:** Mesopotamia (modern Iraq)
         - British victory over Ottoman forces.
     Would you like details on any specific battle?
@@ -419,27 +419,27 @@ ITEMS (15 total):
     Name: last_chat
     Here are the major World War I battles that took place in 1917, along with their dates and locations:
     1. **Battle of Arras**
-       - **Dates:** April 9 – May 16, 1917
+       - **Dates:** April 9 - May 16, 1917
        - **Location:** Arras, France
        - **Notable Events:** A British-led offensive that included the capture of Vimy Ridge by Canadian forces.
     2. **Second Battle of the Aisne (Nivelle Offensive)**
-       - **Dates:** April 16 – May 9, 1917
+       - **Dates:** April 16 - May 9, 1917
        - **Location:** Aisne, France
        - **Notable Events:** A French offensive led by General Robert Nivelle, which resulted in heavy casualties and mutinies in the French army.
     3. **Battle of Messines**
-       - **Dates:** June 7 – June 14, 1917
+       - **Dates:** June 7 - June 14, 1917
        - **Location:** Messines, Belgium (near Ypres)
        - **Notable Events:** A British offensive that began with the detonation of 19 massive mines under German lines, leading to a successful capture of the Messines Ridge.
     4. **Battle of Passchendaele (Third Battle of Ypres)**
-       - **Dates:** July 31 – November 10, 1917
+       - **Dates:** July 31 - November 10, 1917
        - **Location:** Near Ypres, Belgium
        - **Notable Events:** A prolonged and costly Allied offensive in extremely muddy conditions, aimed at breaking through German lines. It resulted in heavy casualties on both sides.
     5. **Battle of Cambrai**
-       - **Dates:** November 20 – December 7, 1917
+       - **Dates:** November 20 - December 7, 1917
        - **Location:** Cambrai, France
        - **Notable Events:** A British offensive that marked the first large-scale, effective use of tanks in warfare. Initial gains were significant, but German counterattacks recaptured much of the lost ground.
     6. **Battle of Caporetto (Twelfth Battle of the Isonzo)**
-       - **Dates:** October 24 – November 19, 1917
+       - **Dates:** October 24 - November 19, 1917
        - **Location:** Near Kobarid (Caporetto), Italy
        - **Notable Events:** A major Austro-German offensive that resulted in a devastating defeat for the Italian army, leading to significant territorial losses.
     These battles were significant in shaping the course of World War I, with varying degrees of success and failure for the parties involved.
@@ -457,7 +457,7 @@ ITEMS (15 total):
     *   **First Battle of the Aisne (April 16 - May 9, 1917):** Chemin des Dames, France. A major French offensive intended to break the German lines. It was a disastrous failure, resulting in massive French casualties and mutinies.  (Part of the Nivelle Offensive)
     *   **Second Battle of the Aisne (May 28 - June 9, 1917):**  Chemin des Dames, France.  A further attempt by the French to break through, also failing and exacerbating the mutiny crisis.
     *   **Battle of Messines (June 7 - 14, 1917):**  West Flanders, Belgium. A British offensive that successfully captured the Messines Ridge, using extensive mining operations to detonate massive mines under German positions.  A significant, though localized, victory.
-    *   **Third Battle of Ypres (Passchendaele) (July 31 - November 6, 1917):**  West Flanders, Belgium.  One of the most infamous battles of the war. A British-led offensive aimed at breaking through to the Belgian coast.  It was fought in horrific conditions – constant rain turned the battlefield into a swamp, resulting in immense casualties for minimal gains.  Passchendaele (a small village) became symbolic of the battle's futility.
+    *   **Third Battle of Ypres (Passchendaele) (July 31 - November 6, 1917):**  West Flanders, Belgium.  One of the most infamous battles of the war. A British-led offensive aimed at breaking through to the Belgian coast.  It was fought in horrific conditions - constant rain turned the battlefield into a swamp, resulting in immense casualties for minimal gains.  Passchendaele (a small village) became symbolic of the battle's futility.
     *   **Battle of Langemarck (August 16-18, 1917):** Part of the Third Battle of Ypres. Initial phase of the offensive, focused on capturing Langemarck.
     *   **Battle of Polygon Wood (September 26-27, 1917):** Part of the Third Battle of Ypres. Another phase of the offensive, with limited gains.
     *   **First Battle of Cambrai (November 20 - December 7, 1917):**  Cambrai, France. A British offensive that used tanks on a large scale for the first time.  Initially successful in breaking through German lines, the offensive was ultimately repulsed, but demonstrated the potential of tank warfare.
@@ -571,31 +571,31 @@ ITEMS (15 total):
     I think that's the main list. Let me make sure there aren't others. Maybe the Battle of La Malmaison? No, that's 1914. The Battle of the Somme was 1916. So 1917's main ones are covered here. I should present them with dates and locations clearly.
     Here is a list of the **major World War One battles** that took place in **1917**, including their dates and locations:
     1. **Battle of Vimy Ridge**  
-       - **Dates:** April 9–12, 1917  
+       - **Dates:** April 9-12, 1917  
        - **Location:** Near Lens, France  
        - **Significance:** A pivotal Allied victory led by Canadian forces, marking a key moment in Canadian military history.
     2. **Battle of Arras**  
-       - **Dates:** April 9–May 16, 1917  
+       - **Dates:** April 9-May 16, 1917  
        - **Location:** Arras, France  
        - **Significance:** A British offensive that captured Vimy Ridge but ultimately failed to break German lines.
     3. **Battle of the Chemin des Dames**  
-       - **Dates:** April 16–25, 1917  
+       - **Dates:** April 16-25, 1917  
        - **Location:** Aisne, France  
        - **Significance:** A disastrous French offensive that led to widespread mutinies in the French army.
     4. **Battle of Messines**  
-       - **Dates:** June 7–14, 1917  
+       - **Dates:** June 7-14, 1917  
        - **Location:** Messines Ridge, near Ypres, Belgium  
        - **Significance:** A successful British attack using tunneling to detonate mines, capturing the ridge.
     5. **Battle of Passchendaele (Third Battle of Ypres)**  
-       - **Dates:** July 31–November 10, 1917  
+       - **Dates:** July 31-November 10, 1917  
        - **Location:** Ypres, Belgium  
        - **Significance:** A prolonged and brutal campaign marked by horrific casualties and muddy conditions, ending in a limited Allied gain.
     6. **Battle of Cambrai**  
-       - **Dates:** November 20–December 7, 1917  
+       - **Dates:** November 20-December 7, 1917  
        - **Location:** Cambrai, France  
        - **Significance:** Notable for the first large-scale use of tanks, leading to temporary breakthroughs but ultimately inconclusive.
     7. **Battle of Caporetto**  
-       - **Dates:** October 24–November 19, 1917  
+       - **Dates:** October 24-November 19, 1917  
        - **Location:** Near Trieste, Italy  
        - **Significance:** A catastrophic defeat for Italy, with Austrian-German forces breaking through Italian lines using new tactics.
     These battles highlight the intense and often devastating nature of trench warfare in 1917, with significant developments in tactics (e.g., tanks at Cambrai) and shifting fronts across Western and Italian fronts.
@@ -609,47 +609,47 @@ ITEMS (15 total):
     Name: last_chat
     Here are the major battles of **World War I** that took place in **1917**, along with their dates and locations:
     ### **Western Front**
-    1. **Battle of Arras** (April 9 – May 16, 1917)
+    1. **Battle of Arras** (April 9 - May 16, 1917)
        - **Location:** Arras, France
-       - Notable for the Canadian Corps' capture of Vimy Ridge (April 9–12).
-    2. **Nivelle Offensive (Second Battle of the Aisne / Chemin des Dames)** (April 16 – May 9, 1917)
+       - Notable for the Canadian Corps' capture of Vimy Ridge (April 9-12).
+    2. **Nivelle Offensive (Second Battle of the Aisne / Chemin des Dames)** (April 16 - May 9, 1917)
        - **Location:** Aisne River, France
        - A failed French offensive leading to widespread mutinies in the French Army.
-    3. **Battle of Messines** (June 7–14, 1917)
+    3. **Battle of Messines** (June 7-14, 1917)
        - **Location:** Messines Ridge, Belgium
        - British detonation of 19 massive mines under German lines.
-    4. **Third Battle of Ypres (Passchendaele)** (July 31 – November 10, 1917)
+    4. **Third Battle of Ypres (Passchendaele)** (July 31 - November 10, 1917)
        - **Location:** Ypres Salient, Belgium
        - A brutal Allied offensive with heavy casualties and muddy conditions.
-    5. **Battle of Cambrai** (November 20 – December 7, 1917)
+    5. **Battle of Cambrai** (November 20 - December 7, 1917)
        - **Location:** Cambrai, France
        - First large-scale use of tanks in warfare (British Mark IV tanks).
     ### **Eastern Front**
-    6. **Kerensky Offensive (July Offensive)** (July 1–19, 1917)
+    6. **Kerensky Offensive (July Offensive)** (July 1-19, 1917)
        - **Location:** Galicia (modern Ukraine/Poland)
        - Last major Russian offensive; ended in failure and contributed to the Russian Revolution.
-    7. **Battle of Riga** (September 1–5, 1917)
+    7. **Battle of Riga** (September 1-5, 1917)
        - **Location:** Riga, Latvia
        - German forces captured Riga from the Russians.
     ### **Italian Front**
-    8. **Battle of Caporetto (Twelfth Battle of the Isonzo)** (October 24 – November 19, 1917)
+    8. **Battle of Caporetto (Twelfth Battle of the Isonzo)** (October 24 - November 19, 1917)
        - **Location:** Kobarid (Caporetto), Slovenia (then part of Austria-Hungary)
        - A disastrous Italian defeat against Austro-German forces.
     ### **Middle Eastern Front**
-    9. **First Battle of Gaza** (March 26–27, 1917)
+    9. **First Battle of Gaza** (March 26-27, 1917)
        - **Location:** Gaza, Ottoman Palestine
        - British failure to capture Gaza.
-    10. **Second Battle of Gaza** (April 17–19, 1917)
+    10. **Second Battle of Gaza** (April 17-19, 1917)
         - **Location:** Gaza, Ottoman Palestine
         - Another British failure, leading to a stalemate.
-    11. **Third Battle of Gaza** (October 31 – November 7, 1917)
+    11. **Third Battle of Gaza** (October 31 - November 7, 1917)
         - **Location:** Gaza-Beersheba line, Ottoman Palestine
         - British breakthrough, leading to the capture of Jerusalem in December.
     12. **Battle of Beersheba** (October 31, 1917)
         - **Location:** Beersheba (modern Be'er Sheva, Israel)
         - Famous Australian Light Horse cavalry charge.
     ### **Other Theaters**
-    13. **Battle of Ramadi** (September 28–29, 1917)
+    13. **Battle of Ramadi** (September 28-29, 1917)
         - **Location:** Mesopotamia (modern Iraq)
         - British forces captured Ramadi from the Ottomans.
     Would you like more details on any of these battles?
@@ -663,31 +663,31 @@ ITEMS (15 total):
     Name: last_chat
     Here are the major World War I battles that took place in 1917, along with their dates and locations:
     1. **Battle of Arras**
-       - **Dates:** April 9 – May 16, 1917
+       - **Dates:** April 9 - May 16, 1917
        - **Location:** Arras, France
-       - **Notable Feature:** Included the Battle of Vimy Ridge (April 9–12), a significant victory for Canadian forces.
+       - **Notable Feature:** Included the Battle of Vimy Ridge (April 9-12), a significant victory for Canadian forces.
     2. **Second Battle of the Aisne (Nivelle Offensive)**
-       - **Dates:** April 16 – May 9, 1917
+       - **Dates:** April 16 - May 9, 1917
        - **Location:** Aisne River, France
        - **Notable Feature:** A failed French offensive led by General Robert Nivelle, resulting in heavy casualties and mutinies in the French army.
     3. **Battle of Messines**
-       - **Dates:** June 7–14, 1917
+       - **Dates:** June 7-14, 1917
        - **Location:** Messines Ridge, near Ypres, Belgium
        - **Notable Feature:** A successful British offensive that used massive underground mines to destroy German positions.
     4. **Battle of Passchendaele (Third Battle of Ypres)**
-       - **Dates:** July 31 – November 10, 1917
+       - **Dates:** July 31 - November 10, 1917
        - **Location:** Near Ypres, Belgium
        - **Notable Feature:** Known for its horrific conditions, including heavy rain turning the battlefield into mud. Resulted in high casualties for minimal territorial gains.
     5. **Battle of Cambrai**
-       - **Dates:** November 20 – December 7, 1917
+       - **Dates:** November 20 - December 7, 1917
        - **Location:** Cambrai, France
        - **Notable Feature:** The first large-scale, effective use of tanks in warfare by the British. Initial gains were later reversed by German counterattacks.
     6. **Battle of Caporetto (Twelfth Battle of the Isonzo)**
-       - **Dates:** October 24 – November 19, 1917
+       - **Dates:** October 24 - November 19, 1917
        - **Location:** Near Kobarid (Caporetto), on the Austro-Italian front
        - **Notable Feature:** A major Austro-Hungarian and German offensive that resulted in a devastating defeat for the Italian army, leading to significant territorial losses.
     7. **Battle of Jerusalem**
-       - **Dates:** November 17 – December 30, 1917
+       - **Dates:** November 17 - December 30, 1917
        - **Location:** Jerusalem, Palestine (modern-day Israel)
        - **Notable Feature:** Part of the Sinai and Palestine Campaign, resulting in the capture of Jerusalem by British forces led by General Edmund Allenby.
     These battles were significant in shaping the course of World War I, highlighting the evolving strategies and the immense human cost of the conflict.
@@ -701,13 +701,13 @@ ITEMS (15 total):
     Name: last_chat
     Okay, here's a list of major World War One battles that took place in 1917, with dates and locations.  1917 was a particularly brutal and pivotal year in the war, marked by significant offensives and growing war weariness.  I've broken it down geographically for clarity.  It's important to note that "battle" can be defined in different ways (a single day's fighting vs. a months-long campaign), so this is a selection of the most significant engagements.
     **Western Front (France & Belgium)**
-    *   **The Nivelle Offensive (April 16 – May 9, 1917):**  A Franco-British offensive intended to break through the German lines.  It was a disastrous failure, leading to widespread mutinies in the French army.
+    *   **The Nivelle Offensive (April 16 - May 9, 1917):**  A Franco-British offensive intended to break through the German lines.  It was a disastrous failure, leading to widespread mutinies in the French army.
         *   **Location:** Aisne River area, Champagne region, France.  Included the **Second Battle of the Aisne** and the **Battle of Chemin des Dames**.
-    *   **Battle of Arras (April 9 – May 16, 1917):** A British offensive launched concurrently with Nivelle's, aiming to support the French and draw German forces away.  Achieved some initial success, but ultimately bogged down.
+    *   **Battle of Arras (April 9 - May 16, 1917):** A British offensive launched concurrently with Nivelle's, aiming to support the French and draw German forces away.  Achieved some initial success, but ultimately bogged down.
         *   **Location:** Arras, Pas-de-Calais, France.  Included the capture of Vimy Ridge (a key Canadian victory).
     *   **Battle of Vimy Ridge (April 9-12, 1917):** Part of the larger Arras Offensive, this was the first time all four Canadian divisions fought together as a unified force. A significant Canadian victory.
         *   **Location:** Vimy Ridge, near Arras, France.
-    *   **Third Battle of Ypres (Passchendaele) (July 31 – November 6, 1917):**  A prolonged and incredibly costly British-led offensive in terrible conditions (mud, rain, shell craters).  Gained limited territory at enormous human cost.
+    *   **Third Battle of Ypres (Passchendaele) (July 31 - November 6, 1917):**  A prolonged and incredibly costly British-led offensive in terrible conditions (mud, rain, shell craters).  Gained limited territory at enormous human cost.
         *   **Location:** Ypres Salient, West Flanders, Belgium.  Key locations included Passchendaele Ridge.
     *   **Battle of Langemarck (August 16-18, 1917):** The initial phase of the Third Battle of Ypres.
         *   **Location:** Langemarck, Belgium
@@ -720,14 +720,14 @@ ITEMS (15 total):
     **Eastern Front (Russia, Romania, etc.)**
     *   **February Revolution (February/March 1917):** While not a traditional battle, the widespread unrest and eventual overthrow of the Tsarist regime in Russia had a massive impact on the Eastern Front, leading to the eventual Russian withdrawal from the war.
         *   **Location:** Russia (primarily Petrograd - St. Petersburg)
-    *   **Brusilov Offensive (June 4 – September 20, 1917):** A major Russian offensive that initially achieved significant gains against Austria-Hungary, but ultimately exhausted Russian resources and contributed to the collapse of the Russian army.
+    *   **Brusilov Offensive (June 4 - September 20, 1917):** A major Russian offensive that initially achieved significant gains against Austria-Hungary, but ultimately exhausted Russian resources and contributed to the collapse of the Russian army.
         *   **Location:** Southwestern Russia (primarily Galicia and Bukovina).
     *   **Battle of Tarigrad (June-September 1917):** A Romanian offensive, supported by Russia, aimed at breaking through the Central Powers lines. It was ultimately unsuccessful.
         *   **Location:** Tarigrad (now Targoviste), Romania.
     **Italian Front (Italy & Austria-Hungary)**
-    *   **Battle of Caporetto (October 24 – November 19, 1917):** A devastating Austro-Hungarian and German offensive that broke through the Italian lines, causing a major Italian retreat and nearly collapsing the Italian front.
+    *   **Battle of Caporetto (October 24 - November 19, 1917):** A devastating Austro-Hungarian and German offensive that broke through the Italian lines, causing a major Italian retreat and nearly collapsing the Italian front.
         *   **Location:** Caporetto (now Kobarid), Slovenia/Italy.  The offensive covered a wide area along the Isonzo River.
-    *   **Battle of Monte Grappa (November 10 – December 17, 1917):**  Following the disaster at Caporetto, the Italians established a new defensive line on Monte Grappa and successfully held off further Austro-Hungarian advances.
+    *   **Battle of Monte Grappa (November 10 - December 17, 1917):**  Following the disaster at Caporetto, the Italians established a new defensive line on Monte Grappa and successfully held off further Austro-Hungarian advances.
         *   **Location:** Monte Grappa, Veneto, Italy.
     **Middle Eastern Front**
     *   **Second Battle of Gaza (April 17-19, 1917):** A British attempt to capture Gaza from the Ottoman Empire, which ended in failure.

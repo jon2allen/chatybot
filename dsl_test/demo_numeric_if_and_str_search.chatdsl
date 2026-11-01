@@ -85,7 +85,7 @@ if "${SCORE}" < 50 then /proc handle_low_score
 /dump verdict
 
 # ============================================================
-# Part 3: /str_search — Substring Searching
+# Part 3: /str_search - Substring Searching
 # ============================================================
 
 /echo === /str_search Substring Search ===

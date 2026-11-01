@@ -39,13 +39,13 @@ def _save_raw(text: str, path: str) -> None:
 
 
 def gen_truncated(data, src_path) -> str:
-    """Truncated JSON — file cut mid-content."""
+    """Truncated JSON - file cut mid-content."""
     with open(src_path, "r", encoding="utf-8") as f:
         return f.read()[:5000]
 
 
 def gen_no_table(data, src_path) -> dict:
-    """Missing 'items' table — data stored under wrong key."""
+    """Missing 'items' table - data stored under wrong key."""
     return {"_default": data["items"]}
 
 
@@ -64,7 +64,7 @@ def gen_wrong_type(data, src_path) -> dict:
 
 
 def gen_gap(data, src_path) -> dict:
-    """Gap in doc_id sequence — record 20 deleted."""
+    """Gap in doc_id sequence - record 20 deleted."""
     d = json.loads(json.dumps(data))
     del d["items"]["20"]
     return d
@@ -78,7 +78,7 @@ def gen_bad_meta_type(data, src_path) -> dict:
 
 
 def gen_duplicate_id(data, src_path) -> dict:
-    """Duplicate doc_id — copy record 1 to a new key '1' won't work in JSON,
+    """Duplicate doc_id - copy record 1 to a new key '1' won't work in JSON,
     so instead copy record 1's content into record 2, making id 2 a dup of 1
     conceptually.  For a true duplicate-key test we corrupt by inserting a
     second key that parses to the same int (e.g. "01")."""
@@ -138,7 +138,7 @@ def main(argv: list[str] | None = None) -> int:
         else:
             _save(result, out_path)
         manifest.append((filename, desc, expected_exit))
-        print(f"  created {filename:30s} — {desc}")
+        print(f"  created {filename:30s} - {desc}")
 
     # Write manifest for the test harness to consume.
     manifest_path = os.path.join(out_dir, "manifest.json")

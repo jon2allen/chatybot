@@ -1,4 +1,4 @@
-# ChatDSL Procedure System — Implementation & User Guide
+# ChatDSL Procedure System - Implementation & User Guide
 
 **Document:** `proc_implementation_guide.md`  
 **Date:** 2026-07-30  
@@ -52,7 +52,7 @@ Procedure 'quick_summary' defined with params: [subject]
 ```
 
 ### Interactive Prompt Execution inside Procedures
-When `/proc` runs—whether invoked from a script or interactively from the REPL prompt—plain text lines (such as `what are five cities in Italy`) are automatically dispatched to `chat_completion`. Answers appear on screen and update `CHAT_HISTORY`, making downstream commands like `/save file.txt` work seamlessly.
+When `/proc` runs-whether invoked from a script or interactively from the REPL prompt-plain text lines (such as `what are five cities in Italy`) are automatically dispatched to `chat_completion`. Answers appear on screen and update `CHAT_HISTORY`, making downstream commands like `/save file.txt` work seamlessly.
 
 ### File-Based Fallback Resolution
 When `/proc name` is called, the executor checks:
@@ -105,7 +105,7 @@ If recursion exceeds `PROC_MAX_DEPTH`, execution unwinds safely and prints an er
 
 ### Recommended Return Value Patterns
 
-#### Pattern A — Caller-Named Output (`out=varname`) *(Primary & Recursion-Safe)*
+#### Pattern A - Caller-Named Output (`out=varname`) *(Primary & Recursion-Safe)*
 The caller passes an `out="my_var"` parameter. Inside the proc, use `set ${out} = ...`:
 
 ```chatdsl
@@ -118,7 +118,7 @@ endproc
 # ${doubled_number} is now "42"
 ```
 
-#### Pattern B — `PROC_RESULT` Convenience *(Simple, Single-Level)*
+#### Pattern B - `PROC_RESULT` Convenience *(Simple, Single-Level)*
 ```chatdsl
 defproc get_topic_info(topic)
   Tell me a fun fact about ${topic}.

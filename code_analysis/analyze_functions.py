@@ -141,7 +141,7 @@ class Collector(ast.NodeVisitor):
     """Walks one module: records function defs, call targets, and references.
 
     A "reference" is a name used anywhere other than as the callable in a
-    Call — e.g. passed as a callback argument, assigned to an attribute
+    Call - e.g. passed as a callback argument, assigned to an attribute
     (monkeypatch), or used as a default. References count as "alive" just
     like calls, because they mean the function is reachable at runtime.
     """
@@ -169,7 +169,7 @@ class Collector(ast.NodeVisitor):
         # detect non-builtin inheritance -> methods are likely overrides
         if self._has_nonbuiltin_base(node.bases):
             self.override_classes.add(node.name)
-        # visit decorators (e.g. @dataclass, @register) — they may call
+        # visit decorators (e.g. @dataclass, @register) - they may call
         # factory functions that would otherwise look dead
         for dec in node.decorator_list:
             self.visit(dec)
@@ -228,7 +228,7 @@ class Collector(ast.NodeVisitor):
             enclosing_func=enclosing,
         )
         self.functions.append(info)
-        # visit decorators — @register_engine("grep") is a Call that must be
+        # visit decorators - @register_engine("grep") is a Call that must be
         # collected, otherwise the factory looks dead
         for dec in node.decorator_list:
             self.visit(dec)
@@ -247,7 +247,7 @@ class Collector(ast.NodeVisitor):
             target = func.attr
         if target is not None:
             self.call_targets.append(target)
-        # collect names passed as arguments / keyword values — these are
+        # collect names passed as arguments / keyword values - these are
         # references (callbacks, registrations, serializers), not calls.
         for arg in node.args:
             self._collect_reference(arg)
@@ -263,7 +263,7 @@ class Collector(ast.NodeVisitor):
 
     def visit_Assign(self, node: ast.Assign) -> None:
         # detect monkeypatch: `module.attr = func_name` (Attribute target,
-        # Name value) — the RHS function is referenced/alive.
+        # Name value) - the RHS function is referenced/alive.
         if len(node.targets) == 1 and isinstance(node.targets[0], ast.Attribute):
             for val in [node.value] if not isinstance(node.value, ast.Tuple) else (
                 node.value.elts if isinstance(node.value, (ast.Tuple, ast.List)) else [node.value]
@@ -272,7 +272,7 @@ class Collector(ast.NodeVisitor):
         self.generic_visit(node)
 
     def visit_Dict(self, node: ast.Dict) -> None:
-        # dispatch tables / registries: `ACTIONS = {"start": _sc_start}` —
+        # dispatch tables / registries: `ACTIONS = {"start": _sc_start}` -
         # the dict VALUES are references (the functions are reachable via
         # the table). Keys are strings/None, skip them.
         for value in node.values:

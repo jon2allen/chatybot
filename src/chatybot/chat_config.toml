@@ -310,7 +310,7 @@ vendor = "huggingface"
 # ============================================================================
 # Requires macOS 26+, Apple Silicon, Apple Intelligence enabled, and the
 # apple-fm-sdk Python package (pip install chatybot[apple_fm]).
-# No base_url or api_key needed — inference runs fully on-device.
+# No base_url or api_key needed - inference runs fully on-device.
 
 [models.apple_fm]
 type = "apple_fm"
@@ -322,7 +322,7 @@ temperature = 0.7
 # BATCH API MODELS
 # ============================================================================
 # Asynchronous bulk inference via the provider Batch API (/batch commands).
-# NOTE: batch models are intentionally placed at the end of this file — the
+# NOTE: batch models are intentionally placed at the end of this file - the
 # first [models.*] entry becomes the default active model, and batch-only
 # models disable interactive chat while selected (mode semantics mirror
 # image-generation models).

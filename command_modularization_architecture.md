@@ -80,7 +80,7 @@ def register(registry: dict, app: "ChatybotApp"):
 
 * **Pros:** Drastically reduces `chatybot_app.py` size; files are logically organized by feature area; easy to locate code.
 * **Cons:** Still tightly coupled if passing full `app` reference; requires manual registration boilerplate per module; doesn't solve documentation synchronization.
-* **Estimated Effort:** ~3–4 days.
+* **Estimated Effort:** ~3-4 days.
 
 ---
 
@@ -120,7 +120,7 @@ class BaseCommand(ABC):
 
 * **Pros:** Strong typing; completely eliminates the `EXECUTE_PROMPT` string sentinel bug; self-documenting; enables pre/post execution hooks and arg validation; high testability.
 * **Cons:** Higher boilerplate for simple 2-line commands (e.g. `/seed 42`); 60+ individual classes can feel verbose.
-* **Estimated Effort:** ~5–7 days.
+* **Estimated Effort:** ~5-7 days.
 
 ---
 
@@ -144,7 +144,7 @@ async def cmd_model(ctx: "CommandContext", args: list[str]) -> CommandResult:
 
 * **Pros:** Lowest boilerplate; Pythonic; co-locates help and aliases with the implementation; easy to read and maintain; clean O(1) registry dispatch.
 * **Cons:** Requires clear module-loading semantics; global registry state needs careful design for multi-instance testing.
-* **Estimated Effort:** ~3–4 days.
+* **Estimated Effort:** ~3-4 days.
 
 ---
 
@@ -169,7 +169,7 @@ class ImagineCommand:
 
 * **Pros:** Standardizes flag parsing (`--flag`, `-f`); auto-validates integer/string/path arguments; auto-generates detailed syntax help and error messages.
 * **Cons:** Slower migration due to custom ChatDSL string conventions; high overhead for commands without flags.
-* **Estimated Effort:** ~5–8 days.
+* **Estimated Effort:** ~5-8 days.
 
 ---
 
@@ -188,7 +188,7 @@ def load_installed_plugins(app):
 
 * **Pros:** Maximum extensibility; user-created commands; strict decoupling.
 * **Cons:** Significant architectural overhead; requires a frozen, public API (`CommandContext` stability); premature optimization if third-party plugins are not an immediate requirement.
-* **Estimated Effort:** ~2–3 weeks.
+* **Estimated Effort:** ~2-3 weeks.
 
 ---
 
@@ -201,7 +201,7 @@ def load_installed_plugins(app):
 | **Fixes `EXECUTE_PROMPT` Bug** | ❌ No | ⚠️ Partial | ✅ **Yes** | ✅ **Yes** | ✅ **Yes** | ✅ **Yes** |
 | **Co-located Documentation** | ❌ No | ❌ No | ✅ Yes | ✅ **Yes** | ✅ Yes | ✅ Yes |
 | **Testability (Mocking Context)** | ❌ Hard | ⚠️ Medium | ✅ **Easy** | ✅ **Easy** | ✅ **Easy** | ✅ Very Easy |
-| **Implementation Risk / Effort** | 1 Day | 3–4 Days | 5–7 Days | **3–4 Days** | 5–8 Days | 2–3 Weeks |
+| **Implementation Risk / Effort** | 1 Day | 3-4 Days | 5-7 Days | **3-4 Days** | 5-8 Days | 2-3 Weeks |
 
 ---
 
@@ -487,7 +487,7 @@ To safely refactor without breaking existing workflows or freezing development:
 3. Wire `CommandRegistry.dispatch()` into `ChatybotApp.handle_escape_command()` as a fallback delegator.
 
 ### Phase 2: Migrate High-Volume Leaf Domains
-1. Migrate `commands/image.py` (lines 4216–4776, ~550 lines extracted).
+1. Migrate `commands/image.py` (lines 4216-4776, ~550 lines extracted).
 2. Migrate `commands/models.py` (~400 lines extracted).
 3. Migrate `commands/buffer.py` (/filebank, /imagebank, /vars).
 

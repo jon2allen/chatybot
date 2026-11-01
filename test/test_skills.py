@@ -342,7 +342,7 @@ class TestSkillsdbExportImport:
         assert skillsdb.export_skill_to_skillmd("exportable", export_path) is True
         assert os.path.exists(export_path)
 
-        # Import as a new skill — delete original first since names must be unique
+        # Import as a new skill - delete original first since names must be unique
         original = skillsdb.get_skill_by_name("exportable")
         skillsdb.delete_skill(getattr(original, "doc_id", original.get("doc_id")))
         doc_id = skillsdb.import_skill_from_skillmd(export_path)
@@ -358,7 +358,7 @@ class TestSkillsdbExportImport:
 class TestDefaultSkills:
     def test_default_skills_seeded(self):
         """When the DB is first created, default skills should be seeded."""
-        # Force lazy init — this should create the DB and seed defaults
+        # Force lazy init - this should create the DB and seed defaults
         manager = skillsdb._ensure_manager()
         skills = skillsdb.list_skills()
         skill_names = [s["name"] for s in skills]

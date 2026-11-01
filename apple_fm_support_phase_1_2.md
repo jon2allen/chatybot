@@ -1,4 +1,4 @@
-# Apple Foundation Model Support — Phase 1 & 2 Implementation Report
+# Apple Foundation Model Support - Phase 1 & 2 Implementation Report
 
 **Date:** 2026-09-13
 **Status:** Implemented and verified end-to-end. Config-layer tests passing. Apple FM chat confirmed working on macOS 26.6.2 with apple-fm-sdk 0.2.1.
@@ -9,7 +9,7 @@
 
 This report documents the integration of Apple's on-device Foundation Model
 (`apple-fm-sdk`) into chatybot as a new model type: `/model apple_fm`. The
-model runs locally on macOS 26+ via Apple Intelligence — no API key, no
+model runs locally on macOS 26+ via Apple Intelligence - no API key, no
 network, no `base_url`.
 
 Phases 1 (config layer) and 2 (inference path) are complete. The existing
@@ -51,7 +51,7 @@ reached for apple_fm models. The branch happens at the top of
 
 ## Files Changed
 
-### Phase 1 — Config Layer
+### Phase 1 - Config Layer
 
 | File | Change |
 |---|---|
@@ -60,7 +60,7 @@ reached for apple_fm models. The branch happens at the top of
 | `src/chatybot/chat_config.toml` | Added `[models.apple_fm]` entry with `type`, `name`, `context_limit = 4096`, `temperature = 0.7`. |
 | `pyproject.toml` | Added `[project.optional-dependencies] apple_fm = ["apple-fm-sdk"]`. |
 
-### Phase 2 — Inference Path
+### Phase 2 - Inference Path
 
 | File | Change |
 |---|---|
@@ -86,12 +86,12 @@ class AppleFMModelConfig(BaseModelConfig):
     vendor: Optional[str] = "apple"
 ```
 
-- Extends `BaseModelConfig` (not `ChatModelConfig`) — apple_fm has no image
+- Extends `BaseModelConfig` (not `ChatModelConfig`) - apple_fm has no image
   generation, no `image_endpoint`, no `image_modalities`.
 - `base_url` is overridden from required to `"on-device"` sentinel. The
   `detected_vendor` heuristic in `BaseModelConfig` would otherwise fail to
   classify it.
-- `api_key` inherits as `Optional[str] = None` from the base — no key needed.
+- `api_key` inherits as `Optional[str] = None` from the base - no key needed.
 - `context_limit` and `temperature` are inherited from the base class.
 
 ### 2. Multiplatform Strategy
@@ -130,7 +130,7 @@ work. Explicit opt-in is better.
 | Linux / Windows | Works | Error: requires macOS 26+ |
 
 The switch always succeeds (it's just config state). Errors surface on
-first prompt — matching how chatybot handles other model errors (API key
+first prompt - matching how chatybot handles other model errors (API key
 missing, etc.).
 
 ### 3. Backend Module: `apple_fm_backend.py`
@@ -138,12 +138,12 @@ missing, etc.).
 All `apple_fm_sdk` imports are isolated in this single module. The rest of
 chatybot never imports the SDK directly. The module provides:
 
-- `is_platform_supported()` — macOS 26+ check
-- `check_available()` → `(bool, reason)` — combined platform + import check
-- `get_model()` → `(model, error)` — cached `SystemLanguageModel` singleton
-- `create_session(instructions)` → `(session, error)` — fresh
+- `is_platform_supported()` - macOS 26+ check
+- `check_available()` → `(bool, reason)` - combined platform + import check
+- `get_model()` → `(model, error)` - cached `SystemLanguageModel` singleton
+- `create_session(instructions)` → `(session, error)` - fresh
   `LanguageModelSession` per completion
-- `respond(session, prompt)` → `str` — wraps `session.respond()`
+- `respond(session, prompt)` → `str` - wraps `session.respond()`
 
 A fresh session is created per completion call so that conversation
 history is managed by chatybot (not accumulated by the SDK session). This
@@ -212,7 +212,7 @@ Install: `pip install chatybot[apple_fm]` or `pip install apple-fm-sdk`
 | System message | Implemented (passed as session instructions) |
 | Tool mode / agentic loop | Implemented (prompt-injection approach) |
 | Streaming | Implemented via `session.stream_response()` async iterator |
-| Native `fm.Tool` calling | Implemented — `build_tools()` bridges `tools_config.toml` tools to `fm.Tool` subclasses, delegates `call()` to `dispatch_tool()` |
+| Native `fm.Tool` calling | Implemented - `build_tools()` bridges `tools_config.toml` tools to `fm.Tool` subclasses, delegates `call()` to `dispatch_tool()` |
 | TPS metrics / token counts | Not yet (SDK doesn't expose usage the same way) |
 | Config TUI support | Vendor preset registered; full TUI flow untested |
 
@@ -221,14 +221,14 @@ Install: `pip install chatybot[apple_fm]` or `pip install apple-fm-sdk`
 ## Test Results
 
 ```
-test/test_apple_fm_config.py — 15 passed in 0.07s
-test/test_config_manager.py  — 15 passed in 0.06s
-Full suite (excluding pre-existing failures) — 814 passed in 74.59s
+test/test_apple_fm_config.py - 15 passed in 0.07s
+test/test_config_manager.py  - 15 passed in 0.06s
+Full suite (excluding pre-existing failures) - 814 passed in 74.59s
 ```
 
 Pre-existing failures (not caused by these changes):
-- `test/test_capability_error.py` — coroutine mock issue, fails on unmodified codebase
-- `test/test_tool_scratch.py` — scratch directory has leftover files from prior runs
+- `test/test_capability_error.py` - coroutine mock issue, fails on unmodified codebase
+- `test/test_tool_scratch.py` - scratch directory has leftover files from prior runs
 
 ### End-to-End Verification (2026-09-13)
 
@@ -250,14 +250,14 @@ Assistant: Sure! Here are five cities in Spain:
 Execution time: 1.49 seconds
 ```
 
-Response string format (`str(response)`) confirmed working — returns plain
+Response string format (`str(response)`) confirmed working - returns plain
 text, no `.content` attribute access needed.
 
 ---
 
 ## How to Test End-to-End
 
-### Step 1 — Install the SDK
+### Step 1 - Install the SDK
 
 ```bash
 cd /Users/jon2allen/github/chatybot
@@ -273,7 +273,7 @@ Or via the optional extra (quotes required in zsh to avoid bracket globbing):
 Requires Xcode 26+ with the SDK agreement accepted. If Xcode prompts to
 accept the agreement, open the Xcode app and accept it.
 
-### Step 2 — Verify the backend module
+### Step 2 - Verify the backend module
 
 ```bash
 .venv/bin/python -c "
@@ -290,20 +290,20 @@ Ready: True
 Reason:
 ```
 
-### Step 3 — Run chatybot
+### Step 3 - Run chatybot
 
 ```bash
 .venv/bin/chatybot
 ```
 
-### Step 4 — Switch and chat
+### Step 4 - Switch and chat
 
 ```
 /model apple_fm
 hello, how are you?
 ```
 
-### Step 5 — Verify model info
+### Step 5 - Verify model info
 
 ```
 /model info apple_fm
@@ -346,7 +346,7 @@ Temperature:     0.7
    chatybot's existing `dispatch_tool()`, so all tool execution (subprocess
    dispatch, MCP, built-in tools) works unchanged. The built-in `ask_user`
    tool is also registered natively. The SDK handles the tool loop internally
-   — the model calls tools, the SDK executes `call()`, feeds results back,
+   - the model calls tools, the SDK executes `call()`, feeds results back,
    and the model continues until it produces a final response. No
    prompt-injection or `execute_tool_loop()` needed.
 
@@ -358,7 +358,7 @@ Temperature:     0.7
 
 ## Next Phases
 
-### Phase 4 — Polish
+### Phase 4 - Polish
 - Config TUI: full apple_fm model creation flow
 - `/model info apple_fm`: show "On-device" instead of base_url
 - Error messages: detect specific `is_available()` reasons and map to

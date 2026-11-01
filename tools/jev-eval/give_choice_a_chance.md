@@ -1,4 +1,4 @@
-# Choice vs Noul for Jev Security — Implementation and Trade-offs
+# Choice vs Noul for Jev Security - Implementation and Trade-offs
 
 **Date:** 2026-10-16
 **Context:** Follow-up analysis to `jev_proof_of_concept.md`, comparing the
@@ -10,7 +10,7 @@
 
 ### The API shapes
 
-**Noul** (what the POC uses today) — one question per rule, 9 questions per request:
+**Noul** (what the POC uses today) - one question per rule, 9 questions per request:
 
 ```json
 // Request
@@ -20,7 +20,7 @@
   ...
 }
 
-// Response — each answer is a raw float probability, no separate confidence
+// Response - each answer is a raw float probability, no separate confidence
 "answers": {
   "git_push":     {"type": "noul", "noul": 0.94},
   "system_dirs": {"type": "noul", "noul": 0.07},
@@ -31,7 +31,7 @@
 The probability IS the confidence. There is no separate field. You get 9
 independent floats, one per rule.
 
-**Choice** — one question, three options, one request:
+**Choice** - one question, three options, one request:
 
 ```json
 // Request
@@ -47,7 +47,7 @@ independent floats, one per rule.
   }
 }
 
-// Response — a selected option plus a full probability distribution
+// Response - a selected option plus a full probability distribution
 "answers": {
   "verdict": {
     "type": "choice",
@@ -67,7 +67,7 @@ strictest verdict across all 9 rules. The reasons are per-rule:
 which rule fired and why.
 
 ```python
-# Current noul approach — 9 independent judgments, strictest wins
+# Current noul approach - 9 independent judgments, strictest wins
 for rule in rubric.rules:
     p = scores[rule.id]
     if p >= trigger:    v = rule.verdict        # deny or ask
@@ -82,7 +82,7 @@ tell you how close it was to a different verdict, but you do not know which
 rule drove the decision.
 
 ```python
-# Choice approach — one judgment, model does the aggregation
+# Choice approach - one judgment, model does the aggregation
 choice = answer["choice"]           # "allow", "ask", or "deny"
 probs  = answer["probabilities"]    # {"allow": 0.08, "ask": 0.88, "deny": 0.04}
 
@@ -96,15 +96,15 @@ if choice == "ask" and probs.get("deny", 0) > 0.3:
 
 The `jev_eval.py` harness would change in three places:
 
-1. **`rubric.toml`** — instead of 9 rules with individual questions, you would
+1. **`rubric.toml`** - instead of 9 rules with individual questions, you would
    have one question with three `criteria` options. The rubric becomes the
    option descriptions, not per-rule questions.
 
-2. **`Rubric.verdict()`** — instead of iterating 9 scores and taking the
+2. **`Rubric.verdict()`** - instead of iterating 9 scores and taking the
    strictest, you read the `choice` field directly. The threshold logic
-   (`trigger` / `ask`) disappears — the model does the bucketing internally.
+   (`trigger` / `ask`) disappears - the model does the bucketing internally.
 
-3. **`parse_noul()`** — replaced by `parse_choice()`, which reads
+3. **`parse_noul()`** - replaced by `parse_choice()`, which reads
    `answer["choice"]` and `answer["probabilities"]`.
 
 Everything else (corpus, grading, reporting) stays the same.
@@ -113,7 +113,7 @@ Everything else (corpus, grading, reporting) stays the same.
 
 ## 2. Dangers of not using noul (using choice instead)
 
-### 2.1 Loss of per-rule auditability — the biggest problem
+### 2.1 Loss of per-rule auditability - the biggest problem
 
 With noul, a DENY verdict comes with reasons: `git_push=0.94 -> deny,
 system_dirs=0.07, secrets=0.06`. You know the command was denied because it
@@ -132,15 +132,15 @@ choice approach can only say "the model classified it as dangerous."
 
 ### 2.2 No independent rule thresholds
 
-With noul, each rule has its own position on the 0–1 spectrum, and you apply
+With noul, each rule has its own position on the 0-1 spectrum, and you apply
 thresholds independently. The `destructive_git` rule (verdict=ask) can fire at
-0.78 while `git_push` (verdict=deny) fires at 0.94 — both contribute to the
+0.78 while `git_push` (verdict=deny) fires at 0.94 - both contribute to the
 final verdict, but with different severities. You can tune each rule's
 effective threshold by rewording its question (as the POC did from v1 to v2).
 
 With choice, the model does the aggregation internally. You cannot tune the
 sensitivity of individual rules. If `git push` is being missed, you cannot
-tighten just the git-push question — you have to reword the entire `deny`
+tighten just the git-push question - you have to reword the entire `deny`
 option description, which affects every other deny case too.
 
 ### 2.3 No per-rule detection statistics
@@ -165,13 +165,13 @@ is a narrow semantic judgment. The model can be accurate on each one
 independently.
 
 The choice question asks the model to simultaneously weigh all security
-dimensions — git push, system dirs, secrets, exfiltration, mass delete,
-destructive git, data loss, security bypass, and a catch-all — and collapse
+dimensions - git push, system dirs, secrets, exfiltration, mass delete,
+destructive git, data loss, security bypass, and a catch-all - and collapse
 them into one of three buckets. This is a harder judgment because the model
 must internally prioritize and aggregate. The POC's run 1 showed that focused
 questions outperform broad ones: the v1 rubric's broad `data_loss` question
 caused false positives on `sed -i` (0.68) because "overwrite" was in the
-question. A single choice question has the same problem at a larger scale —
+question. A single choice question has the same problem at a larger scale -
 every word in the option descriptions affects every category.
 
 ### 2.5 No "uncertain zone" per rule
@@ -182,7 +182,7 @@ contributes ASK to the final verdict. This means "the model is not sure if
 this is a git push, so ask a human." Each rule has its own uncertainty band.
 
 With choice, the model picks one bucket. If it is torn between `ask` and
-`deny`, it picks one — you only see the probabilities after the fact. You can
+`deny`, it picks one - you only see the probabilities after the fact. You can
 hack around this (if `deny` probability > 0.3 even though `ask` was chosen,
 escalate to deny), but this is a post-hoc heuristic on top of a single
 decision, not a principled per-rule uncertainty band.
@@ -198,12 +198,12 @@ on all other rules.
 ### 2.7 The probability distribution is less calibrated than independent noul scores
 
 The noul scores in the POC showed a clean gap: harmless at most 0.44,
-dangerous at least 0.67. This gap exists because each question is focused —
+dangerous at least 0.67. This gap exists because each question is focused -
 "Does this push to a remote?" has a clear yes/no answer for most commands.
 
 A choice distribution compresses all dimensions into three numbers that must
 sum to 1.0. A command that is dangerous on one dimension (git push) but benign
-on all others might get `deny: 0.72, ask: 0.20, allow: 0.08` — the deny
+on all others might get `deny: 0.72, ask: 0.20, allow: 0.08` - the deny
 probability is diluted by the 8 benign dimensions. With noul,
 `git_push=0.94` stands alone, undiluted.
 
@@ -230,7 +230,7 @@ remains the source of truth for the actual verdict.
 
 The noul approach is the right one for security. Its per-rule independence,
 per-rule auditability, per-rule thresholds, and per-rule detection stats are
-not just nice-to-haves — they are the mechanism that let you diagnose
+not just nice-to-haves - they are the mechanism that let you diagnose
 failures, tune the rubric, and explain verdicts to users. Choice collapses
 all of that into one opaque decision. The only scenario where choice wins is
 if you need to cut token cost or latency and are willing to give up the
@@ -275,7 +275,7 @@ P(ask) + P(deny) ≥ 0.5.
      case) and at least 0.89 on dangerous ones. Noul's gap was 0.44 to 0.67.
    - **§2.4 (a harder problem) showed no effect** on this test set.
    - **Choice is thinner on deny vs ask.** `mkfs.ext4 /dev/sdb1`, `shred -u ~/Documents/*` and the
-     `security.toml` edit had P(deny) of only 0.59–0.62 (0.53–0.56 inside the combined request).
+     `security.toml` edit had P(deny) of only 0.59-0.62 (0.53-0.56 inside the combined request).
      A dip would give ASK, not ALLOW, since P(ask+deny) stayed near 1.0.
    - The only miss was `find . -name '*.tmp' -delete` rated ASK. The choice "allow" text listed
      caches but not temporary files; this was fixed after the run (see below).
@@ -284,11 +284,11 @@ P(ask) + P(deny) ≥ 0.5.
    (`find … *.tmp -delete` and `git rebase main`), both harmless or borderline. Adding the choice
    question did not change the noul answers.
 4. **Cost and speed slightly favor choice** (about 20% fewer tokens and about 40 ms faster than
-   noul), which does not matter at about $0.03–0.04 per 1,000 checks.
+   noul), which does not matter at about $0.03-0.04 per 1,000 checks.
 
 ### Verdict
 
-- **Keep noul as the engine.** Choice's accuracy is now shown, but §2.1–2.3 still hold: noul gives a
+- **Keep noul as the engine.** Choice's accuracy is now shown, but §2.1-2.3 still hold: noul gives a
   named reason, a catch rate per rule, and rules that can be tuned one at a time.
 - **Do not use choice as an "allow means skip the rules" first pass (§3).** Generic choice showed
   that confident wrong answers happen.
