@@ -2,7 +2,7 @@
 
 A task-oriented, recipe-driven companion to the ChatDSL reference docs. Where
 [`chatdsl_guide_v1.md`](chatdsl_guide_v1.md) describes *what the language is*,
-this cookbook shows *how to build things with it* — one runnable recipe at a
+this cookbook shows *how to build things with it* - one runnable recipe at a
 time.
 
 Every recipe ships a complete `.chatdsl` script in [`cookbook/`](cookbook/) plus
@@ -11,7 +11,7 @@ existing examples, parser, and docs.
 
 > **Status:** English-first, structured to mirror the multilingual guide set so
 > it can be translated later. Recipes are runnable but require user
-> verification against live model endpoints — model aliases (`mistral_1`,
+> verification against live model endpoints - model aliases (`mistral_1`,
 > `gemma_3`, `gemini_flash`, `devstral_1`, `bge_reranker_f16`, ...) are taken
 > from the repo's existing examples and profiles; substitute your own.
 
@@ -20,26 +20,26 @@ existing examples, parser, and docs.
 ## Table of Contents
 
 - [How to use this cookbook](#how-to-use-this-cookbook)
-- [Chapter 1 — Foundations](#chapter-1--foundations)
-- [Chapter 2 — Control Flow](#chapter-2--control-flow)
-- [Chapter 3 — Context & Buffer Patterns](#chapter-3--context--buffer-patterns)
-- [Chapter 4 — Multi-Model Comparison](#chapter-4--multi-model-comparison)
-- [Chapter 5 — Rerank & Retrieval](#chapter-5--rerank--retrieval)
-- [Chapter 6 — Database & Persistent Memory](#chapter-6--database--persistent-memory)
-- [Chapter 7 — Shell Execution & Automation](#chapter-7--shell-execution--automation)
-- [Chapter 8 — Tool Loops & Agentic Mode](#chapter-8--tool-loops--agentic-mode)
-- [Chapter 9 — Image Generation & Vision](#chapter-9--image-generation--vision)
-- [Chapter 10 — Profiles & Reusable Setups](#chapter-10--profiles--reusable-setups)
-- [Chapter 11 — Macros & Reusable Prompts](#chapter-11--macros--reusable-prompts)
-- [Chapter 12 — Localization & Multilingual Authoring](#chapter-12--localization--multilingual-authoring)
-- [Chapter 13 — Diagnostics, Debugging & Performance](#chapter-13--diagnostics-debugging--performance)
-- [Chapter 14 — Novel Use Cases](#chapter-14--novel-use-cases)
-- [Chapter 15 — Dynamic Skill Loading & Delegation](#chapter-15--dynamic-skill-loading--delegation)
-- [Chapter 16 — Pluggable Security & Policy Guardrails](#chapter-16--pluggable-security--policy-guardrails)
-- [Appendix A — Recipe index](#appendix-a--recipe-index)
-- [Appendix B — Cross-reference map](#appendix-b--cross-reference-map)
-- [Appendix C — Common pitfalls checklist](#appendix-c--common-pitfalls-checklist)
-- [Appendix D — Where to go next](#appendix-d--where-to-go-next)
+- [Chapter 1 - Foundations](#chapter-1--foundations)
+- [Chapter 2 - Control Flow](#chapter-2--control-flow)
+- [Chapter 3 - Context & Buffer Patterns](#chapter-3--context--buffer-patterns)
+- [Chapter 4 - Multi-Model Comparison](#chapter-4--multi-model-comparison)
+- [Chapter 5 - Rerank & Retrieval](#chapter-5--rerank--retrieval)
+- [Chapter 6 - Database & Persistent Memory](#chapter-6--database--persistent-memory)
+- [Chapter 7 - Shell Execution & Automation](#chapter-7--shell-execution--automation)
+- [Chapter 8 - Tool Loops & Agentic Mode](#chapter-8--tool-loops--agentic-mode)
+- [Chapter 9 - Image Generation & Vision](#chapter-9--image-generation--vision)
+- [Chapter 10 - Profiles & Reusable Setups](#chapter-10--profiles--reusable-setups)
+- [Chapter 11 - Macros & Reusable Prompts](#chapter-11--macros--reusable-prompts)
+- [Chapter 12 - Localization & Multilingual Authoring](#chapter-12--localization--multilingual-authoring)
+- [Chapter 13 - Diagnostics, Debugging & Performance](#chapter-13--diagnostics-debugging--performance)
+- [Chapter 14 - Novel Use Cases](#chapter-14--novel-use-cases)
+- [Chapter 15 - Dynamic Skill Loading & Delegation](#chapter-15--dynamic-skill-loading--delegation)
+- [Chapter 16 - Pluggable Security & Policy Guardrails](#chapter-16--pluggable-security--policy-guardrails)
+- [Appendix A - Recipe index](#appendix-a--recipe-index)
+- [Appendix B - Cross-reference map](#appendix-b--cross-reference-map)
+- [Appendix C - Common pitfalls checklist](#appendix-c--common-pitfalls-checklist)
+- [Appendix D - Where to go next](#appendix-d--where-to-go-next)
 
 ---
 
@@ -62,7 +62,7 @@ Recipes that accept parameters show the `Usage:` line in their header comment.
 - `#` starts a full-line or inline comment (outside `/multiline` bodies).
 - `${name}` is a script variable; `{filebankN}` and `{imagebankN}` are buffer
   references inside prompts; `{param}` (no `$`) is a macro template parameter.
-- `/echo` prints to stdout with variable expansion and makes no LLM call — use
+- `/echo` prints to stdout with variable expansion and makes no LLM call - use
   it to mark progress.
 - Recipes build on earlier ones. Chapter 1 is prerequisite for Chapters 2-4;
   Chapter 5's rerank recipes build on each other; Chapter 14 composes everything.
@@ -75,7 +75,7 @@ Goal · Commands exercised · Script path · Run command · Walkthrough · Varia
 
 ---
 
-## Chapter 1 — Foundations
+## Chapter 1 - Foundations
 
 Warm-up recipes that establish the mental model: a line is a command, a chat
 input, or a comment; the main buffer is one-shot; file banks persist.
@@ -99,7 +99,7 @@ What are the three tiers of a modern web application? Answer in three bullet poi
 2. `/system` sets the system message; it persists across prompts until changed.
 3. A bare line (no `/`, not `set`/`if`/`wait`/`#`) is a chat input sent to the LLM.
 4. `/save` writes the last LLM response to a file.
-5. `/echo` is a local print with variable expansion — no model call.
+5. `/echo` is a local print with variable expansion - no model call.
 
 **Variations:** swap `/model gemini_flash` for a different vendor; add `/temp 0.3` before the prompt.
 
@@ -122,7 +122,7 @@ Identify all endpoint security vulnerabilities in this file. Summarize each with
 
 **Walkthrough**
 1. The two-step `if` guard assigns the parameter `x` if non-empty, else a default.
-2. `/file` loads a file into the **main buffer**, which is prepended to the *next* prompt and then consumed — it does not persist like a file bank.
+2. `/file` loads a file into the **main buffer**, which is prepended to the *next* prompt and then consumed - it does not persist like a file bank.
 3. The prompt line follows immediately; the buffer text is injected before it.
 
 **Variations:** point `x` at a markdown spec; ask for a different analysis (e.g., "list all undocumented endpoints").
@@ -149,7 +149,7 @@ List every performance optimization introduced in the second version.
 
 **Walkthrough**
 1. `/filebankN` loads a file into a persistent slot (1-5) that survives across LLM calls until overwritten or cleared.
-2. `{filebank1}` is a *prompt-level* reference (note: no `$`) — the bank's text is substituted into the prompt.
+2. `{filebank1}` is a *prompt-level* reference (note: no `$`) - the bank's text is substituted into the prompt.
 3. Two parameters (`x`, `y`) make the script reusable.
 
 **Variations:** add a third bank for a test suite; ask the model to produce a unified version.
@@ -206,7 +206,7 @@ List ${count} key ideas behind ${topic}.
 
 ---
 
-## Chapter 2 — Control Flow
+## Chapter 2 - Control Flow
 
 The biggest gap in the existing examples: only `for_test1.chatdsl` exercises
 loops and procedures. These recipes fill that gap.
@@ -233,7 +233,7 @@ Translate the following into ${target_lang}:
 ```
 
 **Walkthrough**
-1. Every `if` is single-line: `if cond then cmd`. There is no `else` — emulate with mutually exclusive conditions.
+1. Every `if` is single-line: `if cond then cmd`. There is no `else` - emulate with mutually exclusive conditions.
 2. The two-step guard (assign from param, then assign default if empty) makes parameters optional.
 3. Order matters: the default check must follow the param assignment.
 
@@ -378,7 +378,7 @@ Explain the concept of speculative decoding in two clear sentences.
 
 ---
 
-## Chapter 3 — Context & Buffer Patterns
+## Chapter 3 - Context & Buffer Patterns
 
 ### 3.1 The /clearfile discipline
 - **Goal:** show why `/clearfile` before re-loading prevents context pollution.
@@ -465,7 +465,7 @@ Spanish: ${spanish_dish}
 **Walkthrough**
 1. Use a reranker model (`bge_reranker_f16`) for extraction, a generative model for synthesis.
 2. `{LAST_RESPONSE}` captures the rerank output into a variable for later injection.
-3. `top_n=1` keeps the context sparse — only the single most relevant chunk per query.
+3. `top_n=1` keeps the context sparse - only the single most relevant chunk per query.
 
 **Variations:** add a third rerank query; raise `top_n` for denser context.
 
@@ -495,14 +495,14 @@ Write a Python function that returns the nth Fibonacci number.
 
 ---
 
-## Chapter 4 — Multi-Model Comparison
+## Chapter 4 - Multi-Model Comparison
 
 This is the flagship pattern that `dufu_poetry_analysis.chatdsl`,
 `logic_problems.chatdsl`, `cpp_algorithms.chatdsl`, `nvme.chatdsl`, and
 `beijing5.chatdsl` all hand-roll. These recipes abstract and name it.
 
 ### 4.1 The comparison pattern, step by step
-- **Goal:** the canonical shape — run 2 models on an identical prompt, judge, score.
+- **Goal:** the canonical shape - run 2 models on an identical prompt, judge, score.
 - **Commands:** `set`, `/model`, `/multiline`, `/save`, `/filebank1..3`, `{filebankN}`.
 - **Script:** `cookbook/04_1_comparison_pattern.chatdsl`
 - **Run:** `/script doc/cookbook/04_1_comparison_pattern.chatdsl`
@@ -579,7 +579,7 @@ Compare {filebank1} and {filebank2} for clarity, accuracy, and completeness on $
 
 **Walkthrough**
 1. Three parameters (`x`=topic, `y`=model A, `z`=model B) drive the whole script.
-2. Swap any alias without editing the body — useful for recurring benchmarks.
+2. Swap any alias without editing the body - useful for recurring benchmarks.
 
 **Variations:** wrap the A/B runs in a `foreach` over an array of models for an N-way comparison.
 
@@ -655,7 +655,7 @@ illustrating the first advantage you identified.
 
 ---
 
-## Chapter 5 — Rerank & Retrieval
+## Chapter 5 - Rerank & Retrieval
 
 ### 5.1 rerank basics
 - **Goal:** tour `top_n`, `split`, and `return` modes.
@@ -794,7 +794,7 @@ See the script for the complete listing; it generalizes `generate_and_rerank_men
 
 ---
 
-## Chapter 6 — Database & Persistent Memory
+## Chapter 6 - Database & Persistent Memory
 
 ### 6.1 Create/connect a DB
 - **Goal:** `/setdb`, `/dblist`, `/dblog` the response loop.
@@ -862,7 +862,7 @@ What is the recommended transition plan for password policy?
 
 ---
 
-## Chapter 7 — Shell Execution & Automation
+## Chapter 7 - Shell Execution & Automation
 
 The `/run` command and its capture variables are documented but appear in no
 existing example script. These recipes fill that gap.
@@ -934,7 +934,7 @@ ${log}
 
 ---
 
-## Chapter 8 — Tool Loops & Agentic Mode
+## Chapter 8 - Tool Loops & Agentic Mode
 
 ### 8.1 Enabling tools
 - **Goal:** turn on tools and configure limits.
@@ -975,14 +975,14 @@ ${log}
 ```
 
 **Walkthrough**
-1. `/tool prompt` prints the active tool context and agentic instructions before you launch — review them here.
+1. `/tool prompt` prints the active tool context and agentic instructions before you launch - review them here.
 2. `/tool prompt live_edit` (or `/tool prompt edit_live`) opens your configured text editor (using `$VISUAL`, `$EDITOR`, or `tools_config.toml` setting). You can edit tool schemas above the marker and custom system instructions below the marker; changes take effect immediately for the active session.
 3. `/tool loop 50 force` runs up to 50 autonomous turns; `force` skips per-turn confirmation.
 4. Interrupt safely with the session's interrupt key if it goes off track.
 
 **Variations:**
-- `/tool prompt live_edit` — Open live editor to customize injected tool descriptions or agentic behavior on the fly.
-- `/tool prompt` — Verify active overrides with the `[Live Edit Override Active]` banner.
+- `/tool prompt live_edit` - Open live editor to customize injected tool descriptions or agentic behavior on the fly.
+- `/tool prompt` - Verify active overrides with the `[Live Edit Override Active]` banner.
 - To revert overrides and restore `tools_config.toml` defaults, clear the text in the live editor or reset the session.
 
 ### 8.3 Agentic scratchpad & disposable script execution (/tool scratch)
@@ -1085,7 +1085,7 @@ chat --> Analyze the codebase and suggest improvements.
 
 ---
 
-## Chapter 9 — Image Generation & Vision
+## Chapter 9 - Image Generation & Vision
 
 No existing example generates or reads images. These recipes cover both.
 
@@ -1152,7 +1152,7 @@ endfor
 
 ---
 
-## Chapter 10 — Profiles & Reusable Setups
+## Chapter 10 - Profiles & Reusable Setups
 
 ### 10.1 Authoring a profile
 - **Goal:** show the profile file format with metadata and a configured environment.
@@ -1194,9 +1194,9 @@ A narrative recipe (no script). Chatybot ships three profiles in
 
 | Profile | Model | Tools | Reasoning | Effort | Best for |
 |---------|-------|-------|-----------|--------|----------|
-| `general` | `mistral_1` | off | off | — | General assistance, no tools |
+| `general` | `mistral_1` | off | off | - | General assistance, no tools |
 | `coding` | `devstral_1` | auto on, max_turns 75 | on | none | Coding, debugging |
-| `explorer` | (current) | run_command/write_file/replace_file_content/setdb **disabled** | off | — | Read-only codebase exploration |
+| `explorer` | (current) | run_command/write_file/replace_file_content/setdb **disabled** | off | - | Read-only codebase exploration |
 
 **Commands:** `/profile list`, `/profile use <name>`, `/profile clone <name>`,
 `/profile delete <name>`, `/profile export <name> <path>`, `/profile import <path>`,
@@ -1383,7 +1383,7 @@ Deleted session 'test_model_20260908_083213_2'.
 
 ---
 
-## Chapter 11 — Macros & Reusable Prompts
+## Chapter 11 - Macros & Reusable Prompts
 
 No existing example script invokes a macro with `%name(...)`. These recipes
 fix that.
@@ -1408,7 +1408,7 @@ Explain multi-head attention intuitively.
 
 **Walkthrough**
 1. `def name(params) = "template"` defines a macro; invoke with `%name(args)`.
-2. Inside macro templates, parameters are `{param}` (no `$`) — distinct from script variables `${name}`.
+2. Inside macro templates, parameters are `{param}` (no `$`) - distinct from script variables `${name}`.
 3. No-param macros are invoked with `%name()`.
 
 **Variations:** define a multi-arg macro `def compare(a, b) = "Compare {a} and {b}..."`.
@@ -1456,7 +1456,7 @@ Review the code in {filebank1} for bugs.
 
 ---
 
-## Chapter 12 — Localization & Multilingual Authoring
+## Chapter 12 - Localization & Multilingual Authoring
 
 Aliases are verified in [`multilingual_cross_reference.md`](multilingual_cross_reference.md)
 for EN/ES/FR/ZH/IT. Arabic (AR) is listed in `chatdsl_guide_v1.md` but not in
@@ -1478,7 +1478,7 @@ Traduce la siguiente frase al ingles: "El cielo esta nublado."
 
 **Walkthrough**
 1. `/language` switches the command alias set; aliases come from `translations.json`.
-2. The script body (prompts) is still your own text — only the slash-command keywords are localized.
+2. The script body (prompts) is still your own text - only the slash-command keywords are localized.
 
 **Variations:** try `/language fr` with `/modele`, `/systeme`, `/sauvegarder`.
 
@@ -1524,7 +1524,7 @@ Traduci in inglese: ${phrase}
 
 ---
 
-## Chapter 13 — Diagnostics, Debugging & Performance
+## Chapter 13 - Diagnostics, Debugging & Performance
 
 ### 13.1 Tracing
 - **Goal:** turn on traces and read them.
@@ -1625,7 +1625,7 @@ What are the trade-offs of LSM trees compared to B-Trees?
 
 ---
 
-## Chapter 14 — Novel Use Cases
+## Chapter 14 - Novel Use Cases
 
 Compositions with no counterpart among the existing ~40 repo examples. Each
 combines feature areas the repo never combines.
@@ -1679,7 +1679,7 @@ endfor
 ```
 
 **Walkthrough**
-1. Each iteration feeds the previous critique back into the next `/imagine` prompt — a feedback loop the repo never shows.
+1. Each iteration feeds the previous critique back into the next `/imagine` prompt - a feedback loop the repo never shows.
 2. Initialize `set critique = ""` so the first iteration has an empty critique to incorporate.
 
 ### 14.3 LLM-as-judge ensemble vote
@@ -1716,7 +1716,7 @@ ${q}
 
 **Walkthrough**
 1. Three models answer; their outputs are concatenated into one variable and treated as a corpus.
-2. The reranker scores each chunk against the question as the query — cheaper and faster than an LLM judge.
+2. The reranker scores each chunk against the question as the query - cheaper and faster than an LLM judge.
 3. The `set answers` concatenation trick feeds multiple files as one variable.
 
 ### 14.4 CI/CD changelog generator
@@ -1745,7 +1745,7 @@ ${diffstat}
 ```
 
 **Walkthrough**
-1. Two `/run` captures compose into one prompt — `/run` is undocumented in any existing example.
+1. Two `/run` captures compose into one prompt - `/run` is undocumented in any existing example.
 2. Produces a ready-to-edit release doc; extendable to `/run gh pr create` (user-authorizes).
 
 ### 14.5 Batch file processor
@@ -1835,7 +1835,7 @@ Risks: ${chunk2}
 
 **Walkthrough**
 1. First rerank pass selects relevant slices from the large doc; the LLM summarizes them.
-2. Second rerank pass (over the summary) distills an executive overview — rerank as reduction, scalable to more passes for very long docs.
+2. Second rerank pass (over the summary) distills an executive overview - rerank as reduction, scalable to more passes for very long docs.
 
 ### 14.8 Multi-locale marketing copy pipeline
 - **Combines:** `/language` + `foreach` over locales + content gen.
@@ -1857,7 +1857,7 @@ endfor
 
 **Walkthrough**
 1. `/language` switches command aliases per iteration; the prompt asks for output in the target locale.
-2. Produces one file per locale — a translatable asset bundle.
+2. Produces one file per locale - a translatable asset bundle.
 3. Only EN/ES/FR/ZH/IT aliases are verified; add AR after confirming its aliases.
 
 ### 14.9 Self-improving prompt via macro + judge
@@ -1933,13 +1933,13 @@ Summarize the consensus algorithms mentioned and who discussed them.
 
 **Walkthrough**
 1. `/run find` discovers notes; per-file rerank keeps only relevant slices and `/dblog` persists them.
-2. The final `/searchdb` + `/loadvar` turns the KB into an answer — an ingest → index → retrieve → answer pipeline in one script.
+2. The final `/searchdb` + `/loadvar` turns the KB into an answer - an ingest → index → retrieve → answer pipeline in one script.
 
 ---
 
-## Chapter 15 — Dynamic Skill Loading & Delegation
+## Chapter 15 - Dynamic Skill Loading & Delegation
 
-Skills are reusable instructions stored in a TinyDB database. Two in-process tools — `search_skills` and `call_skill` — let the LLM discover and load skills on-demand during the autonomous tool loop. These are **LLM tool calls** (JSON), not ChatDSL script commands. The user enables them with `/tool enable` and the model calls them during `/tool loop`.
+Skills are reusable instructions stored in a TinyDB database. Two in-process tools - `search_skills` and `call_skill` - let the LLM discover and load skills on-demand during the autonomous tool loop. These are **LLM tool calls** (JSON), not ChatDSL script commands. The user enables them with `/tool enable` and the model calls them during `/tool loop`.
 
 ### 15.1 Discovering skills with `search_skills`
 - **Goal:** Let the model discover available skills by keyword during an autonomous tool loop, without loading full instruction content into context.
@@ -1962,7 +1962,7 @@ chat --> I want to review some code. Find a relevant skill and use it to review 
 **Walkthrough**
 1. `/tool enable search_skills,call_skill` activates both skill tools. They are in-process tools (no subprocess overhead), dispatched directly in `dispatch_tool()`.
 2. The model calls `search_skills` as a tool call (JSON), e.g. `{"tool": "search_skills", "arguments": {"query": "code review"}}`.
-3. `search_skills` returns compact metadata only — name, description, tags — for each match. No instruction content. Five results cost roughly 150 tokens instead of 3,000.
+3. `search_skills` returns compact metadata only - name, description, tags - for each match. No instruction content. Five results cost roughly 150 tokens instead of 3,000.
 4. The model reads the results and decides which skill to load next.
 
 **What the model sees (example tool result):**
@@ -2090,12 +2090,12 @@ chat --> I need to debug an error in src/. Find and load a debugging skill.
 
 **Walkthrough**
 1. The model calls `call_skill("debug-error")`. This skill has a `tool_config` that enables `read_file` and `grep_search`.
-2. `call_skill` applies the `tool_config` **silently** — no user prompt. This is intentional: prompting mid-loop is disruptive since the model is in a multi-turn sequence.
-3. A snapshot of the previous tool state is saved (only the first time — subsequent skills don't overwrite the original snapshot).
+2. `call_skill` applies the `tool_config` **silently** - no user prompt. This is intentional: prompting mid-loop is disruptive since the model is in a multi-turn sequence.
+3. A snapshot of the previous tool state is saved (only the first time - subsequent skills don't overwrite the original snapshot).
 4. The result includes `tool_state` with `changed: true` and a list of changes, so the model knows what tools are now available.
 5. After the loop, `/skill restore` rolls back to the original tool configuration saved before the first skill applied its changes.
 
-**Why silent application?** The pre-turn `_apply_skill_tool_config()` path (triggered by `/skill apply`) prompts the user for confirmation. But mid-loop, the model is in a multi-turn autonomous sequence — interrupting to ask for approval at an arbitrary point is disruptive. The snapshot ensures the user can always revert with `/skill restore`.
+**Why silent application?** The pre-turn `_apply_skill_tool_config()` path (triggered by `/skill apply`) prompts the user for confirmation. But mid-loop, the model is in a multi-turn autonomous sequence - interrupting to ask for approval at an arbitrary point is disruptive. The snapshot ensures the user can always revert with `/skill restore`.
 
 **Variations:**
 - A skill's `tool_config` can also set `mode: on/off`, `auto_loop`, and `max_turns`.
@@ -2103,7 +2103,7 @@ chat --> I need to debug an error in src/. Find and load a debugging skill.
 
 ### 15.5 Recursion limits and cycle detection
 - **Goal:** Understand the safety mechanisms that prevent unbounded skill chaining.
-- **Commands:** (no user commands — these are automatic protections)
+- **Commands:** (no user commands - these are automatic protections)
 - **Script:** `cookbook/15_5_recursion_limits.chatdsl`
 - **Run:** `/script doc/cookbook/15_5_recursion_limits.chatdsl`
 
@@ -2154,7 +2154,7 @@ chat --> Load the "loop-a" skill and follow its instructions.
 
 ---
 
-## Chapter 16 — Pluggable Security & Policy Guardrails
+## Chapter 16 - Pluggable Security & Policy Guardrails
 
 Chatybot features an extensible Pluggable Security Architecture that intercepts and evaluates tool execution requests against enterprise and workspace security policies before dispatch. Backed by security policy engines such as `racf-guard`, tool calls are categorized into standardized resource classes (`EXEC`, `FS_READ`, `FS_WRITE`, `NET`, `PROCESS`, `CONTENT`) and evaluated for an `ALLOW`, `ASK`, or `DENY` verdict.
 
@@ -2282,7 +2282,7 @@ if "${TOOL_DISPATCH_EXIT_CODE}" == "0" then /echo Permitted workspace write conf
 
 ---
 
-## Appendix A — Recipe index
+## Appendix A - Recipe index
 
 | # | Recipe | Commands exercised | Generalizes / source |
 |---|--------|---------------------|----------------------|
@@ -2361,7 +2361,7 @@ if "${TOOL_DISPATCH_EXIT_CODE}" == "0" then /echo Permitted workspace write conf
 
 ---
 
-## Appendix B — Cross-reference map
+## Appendix B - Cross-reference map
 
 | Cookbook chapter | Corresponding section in `chatdsl_guide_v1.md` |
 |------------------|----------------------------------------------|
@@ -2379,37 +2379,37 @@ if "${TOOL_DISPATCH_EXIT_CODE}" == "0" then /echo Permitted workspace write conf
 | 12 Localization | Multi-Language Support; `multilingual_cross_reference.md` |
 | 13 Diagnostics | Diagnostics & Monitoring; Diagnostics Commands |
 | 14 Novel Use Cases | (no existing counterpart) |
-| 15 Dynamic Skill Loading | (new — see Dynamic Skill Loading section in `chatdsl_guide_v1.md`) |
-| 16 Pluggable Security | (new — see `pluggable_security.md` and `tools/racf-guard/README.md`) |
+| 15 Dynamic Skill Loading | (new - see Dynamic Skill Loading section in `chatdsl_guide_v1.md`) |
+| 16 Pluggable Security | (new - see `pluggable_security.md` and `tools/racf-guard/README.md`) |
 
 ---
 
-## Appendix C — Common pitfalls checklist
+## Appendix C - Common pitfalls checklist
 
 - **Multiline terminator:** a block opened with `/multiline` ends at a line containing `;;` *or* a second `/multiline`. Don't mix.
 - **Three brace syntaxes, don't confuse them:**
-  - `${name}` — script variable.
-  - `{filebankN}` / `{imagebankN}` — buffer references inside prompts.
-  - `{param}` — macro template parameter (no `$`).
+  - `${name}` - script variable.
+  - `{filebankN}` / `{imagebankN}` - buffer references inside prompts.
+  - `{param}` - macro template parameter (no `$`).
 - **`/clearfile` hygiene:** the main buffer is one-shot but stale text can leak if you don't clear between phases. Banks need `/filebankN clear`.
 - **Quote paths that may contain spaces:** `/save "${dir}/${file}"`.
-- **No `\` escapes** in variable values — they're disallowed for prompt stability.
+- **No `\` escapes** in variable values - they're disallowed for prompt stability.
 - **`if` is single-line only:** `if cond then cmd`. No `else`; emulate with mutually exclusive conditions.
-- **Comments inside `/multiline` bodies are text**, not comments — `#` only comments outside a block.
+- **Comments inside `/multiline` bodies are text**, not comments - `#` only comments outside a block.
 - **`/echo` is local:** it prints with variable expansion and makes no LLM call.
 - **`/ask` in batch / background runs:** interactive prompts require a foreground terminal TTY. In headless batch mode (pipes, CI runners, or background jobs `&`), `/ask` bypasses without prompting to avoid freezing or SIGTTIN suspension. Always initialize default fallback variables in scripts that may run in batch.
 - **Security blocks in automated scripts:** When a policy denies or cancels a tool call, `${TOOL_DISPATCH_EXIT_CODE}` is set to non-zero (`1` or `-1`) and `${TOOL_DISPATCH_ERROR}` contains the denial reason. For unattended runs expecting `ASK` verdicts, pass `-y` / `--auto-approve`.
 
 ---
 
-## Appendix D — Where to go next
+## Appendix D - Where to go next
 
-- [`chatdsl_guide_v1.md`](chatdsl_guide_v1.md) — the comprehensive reference (keyword tables, error messages, best practices).
-- [`CHATDSL_TECHNICAL_GUIDE.md`](CHATDSL_TECHNICAL_GUIDE.md) — core concepts, buffer system, the comparison pattern.
-- [`pluggable_security.md`](pluggable_security.md) — pluggable security architecture, IPC protocol, and configuration guide.
-- [`chatdsl_skill.md`](chatdsl_skill.md) — skill-oriented reference.
-- [`RERANK_FEATURE_SPEC.md`](RERANK_FEATURE_SPEC.md) — full rerank options and sources.
-- [`BATCH_N_WALKTHROUGH.md`](BATCH_N_WALKTHROUGH.md) — batched directory rerank scaling.
-- [`multilingual_cross_reference.md`](multilingual_cross_reference.md) — command alias tables for EN/ES/FR/ZH/IT.
-- [`chatdsl_macro_implementation.md`](chatdsl_macro_implementation.md) — macro grammar and implementation.
+- [`chatdsl_guide_v1.md`](chatdsl_guide_v1.md) - the comprehensive reference (keyword tables, error messages, best practices).
+- [`CHATDSL_TECHNICAL_GUIDE.md`](CHATDSL_TECHNICAL_GUIDE.md) - core concepts, buffer system, the comparison pattern.
+- [`pluggable_security.md`](pluggable_security.md) - pluggable security architecture, IPC protocol, and configuration guide.
+- [`chatdsl_skill.md`](chatdsl_skill.md) - skill-oriented reference.
+- [`RERANK_FEATURE_SPEC.md`](RERANK_FEATURE_SPEC.md) - full rerank options and sources.
+- [`BATCH_N_WALKTHROUGH.md`](BATCH_N_WALKTHROUGH.md) - batched directory rerank scaling.
+- [`multilingual_cross_reference.md`](multilingual_cross_reference.md) - command alias tables for EN/ES/FR/ZH/IT.
+- [`chatdsl_macro_implementation.md`](chatdsl_macro_implementation.md) - macro grammar and implementation.
 - Multilingual guides: `chatdsl_guide_v1_chinese.md`, `_french.md`, `_italian.md`, `_spanish.md`, `_arabic.md`.

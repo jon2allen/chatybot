@@ -20,7 +20,7 @@ October 23rd, 2026
     - Added Chapter 4 Recipe 4.4 and runnable script `cookbook/04_4_reasoning_history.chatdsl`.
     - Documented configuration and model-specific options in `doc/reasoning_history.md`.
 - **Command Registration & ChatDSL Synchronization**:
-  - Synchronized `TParser.VALID_ESCAPE_COMMANDS` in `chatdsl_parse.py` to support `/reasoning_history`, `/docs`, `/doc`, `/ask`, `/continue`, `/source`, `/max_tokens`, and `/loadimage1`–`/loadimage5`.
+  - Synchronized `TParser.VALID_ESCAPE_COMMANDS` in `chatdsl_parse.py` to support `/reasoning_history`, `/docs`, `/doc`, `/ask`, `/continue`, `/source`, `/max_tokens`, and `/loadimage1`-`/loadimage5`.
   - Registered missing `/documents` and `/rerank` commands under category `database` in `chaty_help.py`.
   - Registered `/listimages`, `/showimage`, and `/loadimage` under category `image` in `chaty_help.py`.
 
@@ -96,13 +96,13 @@ October 21st, 2026 (v0.9.1)
   - Jev and chain logs are on by default (`~/.config/chatybot/logs/jev_security.jsonl`, `security_chain.jsonl`); `log_path = ""` turns them off.
   - The Jev log records every call with a `source` (api, cache, self_protect, skip_tools, error); cached decisions keep their scores and are returned as copies.
   - ASK outcomes (approved, declined, auto-approved via `-y` or `non_interactive_ask`, blocked non-interactive) are logged with the decision's `request_id` via `SecurityManager.record_outcome`, called from tool dispatch. Decisions now carry `request_id` (not part of the engine wire protocol).
-  - Malformed Jev probabilities (NaN, ±inf, outside 0–1, choice distributions that do not sum to 1) are treated as missing and give ASK instead of ALLOW.
+  - Malformed Jev probabilities (NaN, ±inf, outside 0-1, choice distributions that do not sum to 1) are treated as missing and give ASK instead of ALLOW.
   - Test that fails if `default_jev_security.toml` and `tools/jev-eval/rubric.toml` drift apart.
   - `tools/jev-eval/jev_eval.py --from-log`: summarise live logs, re-grade saved Jev scores with new thresholds, and `--export` cases worth labelling as draft corpus entries.
 
 - **TinyDB Persistence & Dispatcher Performance**:
   - **Snapshot-on-Write Optimization**: Moved TinyDB rolling snapshot backups from database activation (`/setdb`) to the first write (`/dblog`) per session, completely eliminating backup churn and rotation on read-only operations and model tools (`db_search`, `db_get`).
-  - **Dispatcher Startup Optimization**: Removed unused `chatydb` import and `log_to_database` hook from `dispatcher.py` (saves ~2–3 ms per tool call).
+  - **Dispatcher Startup Optimization**: Removed unused `chatydb` import and `log_to_database` hook from `dispatcher.py` (saves ~2-3 ms per tool call).
   - **Model DB Tool Hardening**: Isolated scoped model queries from active session databases, eliminated double-serialized JSON strings, suppressed stdout output during tool calls, prevented phantom directory and file creation on missing DB queries, and handled corrupted database files gracefully.
 
 October 15th, 2026 (v0.9.0)
@@ -159,8 +159,8 @@ October 11th, 2026
 September 30th, 2026 (v0.8.8)
 ----------------------------
 - **`/docs` Line-Based Navigation & Search-to-View Workflow**:
-  - Added `line=N` parameter to `/docs <filename>` — centers the target line in a 40-line chunk with context above and below, so search results (which return `filename:line_number`) can be jumped to directly.
-  - Fixed `page=N` being silently ignored in REPL mode — `page=N` (when N > 1) now uses chunked display in both REPL and script contexts instead of falling through to the full-screen pager.
+  - Added `line=N` parameter to `/docs <filename>` - centers the target line in a 40-line chunk with context above and below, so search results (which return `filename:line_number`) can be jumped to directly.
+  - Fixed `page=N` being silently ignored in REPL mode - `page=N` (when N > 1) now uses chunked display in both REPL and script contexts instead of falling through to the full-screen pager.
   - Added Prev/Next navigation footers to both `line=` and `page=` modes, enabling back-and-forth paging through the file from any entry point.
   - Updated `/docs search` output to suggest the exact `line=` command for the first match (e.g. `Jump to first match: /docs chatdsl_cookbook.md line=928`).
   - Updated `/docs` help text, usage string, and examples in `chaty_help.py`.

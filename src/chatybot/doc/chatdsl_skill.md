@@ -1067,11 +1067,11 @@ The `/skill` command provides 17 subcommands:
 Skills have trigger phrases in their metadata. When a user prompt matches a trigger,
 the skill is auto-injected. Trigger matching uses:
 
-- **Word-boundary regex** — prevents false positives (trigger "log" won't match
+- **Word-boundary regex** - prevents false positives (trigger "log" won't match
   "biology" or "catalog").
-- **Specificity ranking** — longer triggers (more words) rank higher. Only the
+- **Specificity ranking** - longer triggers (more words) rank higher. Only the
   most specific matched skill is injected per turn by default.
-- **Validation** — triggers must be at least 3 characters and 2 words.
+- **Validation** - triggers must be at least 3 characters and 2 words.
 
 ### Sticky Skill Lock
 
@@ -1084,9 +1084,9 @@ the lock and return to normal trigger scanning.
 Two in-process tools let the LLM discover and load skills on-demand during the
 autonomous tool loop:
 
-- **`search_skills`** — Search by keyword (name, description, tags). Returns
+- **`search_skills`** - Search by keyword (name, description, tags). Returns
   compact metadata only, no instruction content. Prevents context pollution.
-- **`call_skill`** — Load a skill's full instructions by name. Applies any
+- **`call_skill`** - Load a skill's full instructions by name. Applies any
   `tool_config` silently. Returns a `tool_state` summary and current `depth`.
 
 These are LLM tool calls, not ChatDSL commands. Enable them with:
@@ -1094,7 +1094,7 @@ These are LLM tool calls, not ChatDSL commands. Enable them with:
     /tool enable search_skills,call_skill
 
 Then start the tool loop. The model calls these tools as JSON tool calls during
-the loop — the user does not type them as script lines.
+the loop - the user does not type them as script lines.
 
 ### Delegation Safety
 

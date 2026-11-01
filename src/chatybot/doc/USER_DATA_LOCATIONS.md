@@ -23,7 +23,7 @@ up, and to know what is safe to delete.
 | `logs/jev_security.jsonl` | `security/jev` | JEV decision log |
 
 Back this directory up if you care about your configuration. The `.env`
-file holds secrets — exclude it from shared backups.
+file holds secrets - exclude it from shared backups.
 
 ## State and data: `~/.local/share/chatybot/`
 
@@ -58,12 +58,12 @@ only batch data and was retired when batches moved to the XDG data dir
 
 Crosschecked against a live installation:
 
-- `~/.config/chatybot/` — `chat_config.toml`, `tools_config.toml`,
+- `~/.config/chatybot/` - `chat_config.toml`, `tools_config.toml`,
   `security.toml` (+ `.bak`), `jev_security.toml`, `profiles/` (5
   profiles), `logs/` (both security logs active).
-- `~/.local/share/chatybot/` — `sessions/`, `batches/` (6 instances:
+- `~/.local/share/chatybot/` - `sessions/`, `batches/` (6 instances:
   4 completed, 2 in progress; catalog `index.jsonl` intact), `db/` (11
   stores), `scratch/`, `skills.json`, `test/`.
-- `~/.chatybot/` — empty; safe to delete.
-- `~/chatybot_images` — not created (image `default_dir` configured
+- `~/.chatybot/` - empty; safe to delete.
+- `~/chatybot_images` - not created (image `default_dir` configured
   elsewhere or images unused).

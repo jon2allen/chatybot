@@ -96,7 +96,7 @@ chatybot is an interactive command-line tool that enables seamless communication
 - `pip` package manager
 - `parsley` library
 - API keys for your preferred LLMs (OpenAI, Anthropic, etc.)
-- Terminal emulator with at least **80 columns** (minimum `80x24`; **100–120 columns** recommended for optimal REPL and TUI operation)
+- Terminal emulator with at least **80 columns** (minimum `80x24`; **100-120 columns** recommended for optimal REPL and TUI operation)
 
 ### **Installation Steps**
 
@@ -406,7 +406,7 @@ chatybot --no-tools
 /prompt template.txt    # Load a prompt template
 /system "Act as a tutor" # Set system message
 ```
-When used interactively, `/prompt` displays the file content (truncated to 500 chars) and asks for confirmation before executing. In script context (inside a `.chatdsl` script), `/prompt` auto-executes without confirmation — the prompt is sent to the model immediately.
+When used interactively, `/prompt` displays the file content (truncated to 500 chars) and asks for confirmation before executing. In script context (inside a `.chatdsl` script), `/prompt` auto-executes without confirmation - the prompt is sent to the model immediately.
 
 ### **Scripting & Dynamic Sourcing**
 Create a script file (`setup.chatdsl`):
@@ -418,11 +418,11 @@ chat --> Generate documentation for this project
 ```
 
 #### **Executing Scripts (`/script` vs `/source`)**
-* **`/script <file> [key="value"]...`** — Executes a script with optional runtime parameter bindings:
+* **`/script <file> [key="value"]...`** - Executes a script with optional runtime parameter bindings:
   ```bash
   /script setup.chatdsl project="my_app"
   ```
-* **`/source <file>`** — Dynamically executes a script directly in the **current interactive session** (like Unix shell `source` / `.`):
+* **`/source <file>`** - Dynamically executes a script directly in the **current interactive session** (like Unix shell `source` / `.`):
   ```bash
   /source ~/.chatybot_profile
   /source setup_env.chatdsl
@@ -484,7 +484,7 @@ Skills are reusable, trigger-activated instructions stored in a dedicated TinyDB
 /skill on                   # Re-enable auto-triggering for this session
 ```
 
-`/skill off` is a session-scoped toggle — it does not modify individual skill records in the database. When auto-triggering is off, no skills are injected based on trigger phrase matching. Manual injection via `/skill apply` still works regardless of the toggle state. The toggle resets to `on` on the next session.
+`/skill off` is a session-scoped toggle - it does not modify individual skill records in the database. When auto-triggering is off, no skills are injected based on trigger phrase matching. Manual injection via `/skill apply` still works regardless of the toggle state. The toggle resets to `on` on the next session.
 
 ### **Semantic Reranking**
 chatybot supports real-time semantic document reranking via the `EasyRerank` library. This allows you to automatically split massive document sources (directories, database records, variables, or conversation history) into semantic chunks, score them against a target query using local or remote cross-encoder models, and inject only the most relevant context back into LLM prompts.
@@ -831,8 +831,8 @@ Chatybot supports high-performance conversation session persistence across resta
 
 #### **Pluggable Session Storage Architecture**
 Sessions are persisted by default using a high-performance **JSON Lines (`jsonl`)** directory structure with $O(1)$ turn appends, atomic metadata writes, and in-memory directory caching:
-* `~/.local/share/chatybot/sessions/<session_id>/meta.json` — Lightweight session metadata (timestamps, turn count, notes, custom names, model alias).
-* `~/.local/share/chatybot/sessions/<session_id>/turns.jsonl` — Append-only interaction exchanges (or `turns.jsonl.gz` when compressed).
+* `~/.local/share/chatybot/sessions/<session_id>/meta.json` - Lightweight session metadata (timestamps, turn count, notes, custom names, model alias).
+* `~/.local/share/chatybot/sessions/<session_id>/turns.jsonl` - Append-only interaction exchanges (or `turns.jsonl.gz` when compressed).
 
 A legacy single-file flat JSON store (`monolithic`) is also supported via `session_storage_engine = "monolithic"` in `tools_config.toml` / `chat_config.toml`. A standalone CLI migration tool (`bin/migrate_sessions` or `chatybot-migrate-sessions`) seamlessly upgrades legacy workspaces.
 
@@ -864,17 +864,17 @@ A legacy single-file flat JSON store (`monolithic`) is also supported via `sessi
 
 > [!NOTE]
 > **`since=` filter syntax**: Use `d` (days), `h` (hours), or `m` (minutes) as the unit suffix.
-> All filters compound as **AND** — e.g. `since=7d model=gemini compressed` returns only sessions
+> All filters compound as **AND** - e.g. `since=7d model=gemini compressed` returns only sessions
 > matching all three criteria. The output header shows the active filter set for confirmation.
 >
 > **Protected variables set by `/session list`**:
-> - `${SESSION_LIST}` — always set; list of session summary dicts (`sid`, `cname`, `slug`, `turns_cnt`, `upd`, `snote`, `compressed`, `model_alias`).
-> - `${SESSION_IDS}` — always set; flat `list[str]` of session IDs in the same order as `SESSION_LIST`. Ready for `foreach` without any further extraction.
+> - `${SESSION_LIST}` - always set; list of session summary dicts (`sid`, `cname`, `slug`, `turns_cnt`, `upd`, `snote`, `compressed`, `model_alias`).
+> - `${SESSION_IDS}` - always set; flat `list[str]` of session IDs in the same order as `SESSION_LIST`. Ready for `foreach` without any further extraction.
 >
 > When `var=<name>` is used with `ids`, the named variable receives the **sid list** (same as `${SESSION_IDS}`).
 > Without `ids`, `var=` receives the **full dict list** (same as `${SESSION_LIST}`).
 
-**Scripting example — delete all old devstral sessions:**
+**Scripting example - delete all old devstral sessions:**
 ```dsl
 /session list since=30d model=devstral ids all
 foreach sid in ${SESSION_IDS}
@@ -1011,7 +1011,7 @@ Reconstruct and inspect the exact prompt array and truncation state sent to the 
 *Replay Timeline Overview*:
 ```text
 ==============================================================================
-AGENTIC LOOP REPLAY — SUMMARY (turn 17)
+AGENTIC LOOP REPLAY - SUMMARY (turn 17)
 ==============================================================================
 Step  Tool                Msgs  Uncut Tok   Trunc Tok   Evicted  AnchorWarn 
 ------------------------------------------------------------------------------
@@ -1312,14 +1312,14 @@ To switch back to the built-in Python security engine:
 
 Security enforcement can be disabled temporarily or per-invocation:
 
-#### **Method 1: CLI Flag (`--no-security`) — Recommended**
+#### **Method 1: CLI Flag (`--no-security`) - Recommended**
 Bypass policy evaluation for a single session, script, or benchmark run:
 ```bash
 chatybot --no-security
 ```
 When active, Chatybot prints:
 ```text
-[Security Warning] Security policy evaluation is DISABLED (--no-security) — all tools execute without policy checks.
+[Security Warning] Security policy evaluation is DISABLED (--no-security) - all tools execute without policy checks.
 ```
 
 #### **Method 2: Unattended Automation (`-y` / `--auto-approve`)**

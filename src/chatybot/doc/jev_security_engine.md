@@ -40,7 +40,7 @@ A calibrated, semantic decision engine for governing autonomous AI agent tool ca
 
 ## 1. The Problem: Heuristic Security's Cat-and-Mouse Game
 
-When an AI coding agent is given tool access — the ability to run shell commands, write files, inspect repositories, and query network endpoints — the application inherits the Confused Deputy Problem in its purest form.
+When an AI coding agent is given tool access - the ability to run shell commands, write files, inspect repositories, and query network endpoints - the application inherits the Confused Deputy Problem in its purest form.
 
 Traditional systems attempt to constrain agents using two classic approaches:
 
@@ -61,7 +61,7 @@ The Jev engine solves this by introducing a security engine with semantic compre
 
 ## 2. What is TypeSafe Jev?
 
-TypeSafe Jev (`typesafe/jev-1.13`) is not a generative conversational model, nor is it an embedding endpoint. Jev is a calibrated, typed decision model — the first of TypeSafe's "System One" class.
+TypeSafe Jev (`typesafe/jev-1.13`) is not a generative conversational model, nor is it an embedding endpoint. Jev is a calibrated, typed decision model - the first of TypeSafe's "System One" class.
 
 Unlike standard generative LLMs (which output arbitrary markdown text and require brittle JSON scraping), Jev is purpose-built to answer structured questions over a target state:
 
@@ -302,9 +302,9 @@ Generic choice is unsafe: it allowed `cat /etc/hosts` and `ls ~/.ssh` and rated 
 
 The limits in this section come from TypeSafe's documentation and have not been independently verified here. The OpenRouter model listing shows a 262K context window for `typesafe/jev-1.13`; check the current documentation before planning a very large rubric.
 
-TypeSafe documents no hard cap on the number of questions in a single Jev request — the constraint is purely token budget. For `typesafe/jev-1.13`, the per-request context limit is 64,000 tokens covering the state plus all questions combined, with a secondary limit of 32,000 tokens for the state plus the longest single question. Above roughly 32,000 bytes of total request text, Jev switches into long-context mode, which TypeSafe says is slower and less accurate than staying within the default limits. There is also a 255-option cap on choice questions, but that does not apply to noul-type rules.
+TypeSafe documents no hard cap on the number of questions in a single Jev request - the constraint is purely token budget. For `typesafe/jev-1.13`, the per-request context limit is 64,000 tokens covering the state plus all questions combined, with a secondary limit of 32,000 tokens for the state plus the longest single question. Above roughly 32,000 bytes of total request text, Jev switches into long-context mode, which TypeSafe says is slower and less accurate than staying within the default limits. There is also a 255-option cap on choice questions, but that does not apply to noul-type rules.
 
-Measured against the actual rubric, each noul rule costs about 314 bytes (~79 tokens), the preamble is 236 bytes, and a typical action state runs 440-950 bytes (capped at 8,000 bytes by `max_content_chars`). The current 9-rule payload totals roughly 3,800 bytes, or about 950 tokens — around 1.5% of the hard limit and 12% of the soft 32,000-byte threshold. That puts the practical ceiling at roughly 75-100 rules before hitting the long-context mode where accuracy degrades, and the hard ceiling at around 800 rules before exhausting the 64,000-token budget. The per-question limit never binds: even at max state, the state plus the longest question is only ~2,079 tokens, far under 32,000. Any realistic security rubric, even 30-50 rules, stays well inside both limits.
+Measured against the actual rubric, each noul rule costs about 314 bytes (~79 tokens), the preamble is 236 bytes, and a typical action state runs 440-950 bytes (capped at 8,000 bytes by `max_content_chars`). The current 9-rule payload totals roughly 3,800 bytes, or about 950 tokens - around 1.5% of the hard limit and 12% of the soft 32,000-byte threshold. That puts the practical ceiling at roughly 75-100 rules before hitting the long-context mode where accuracy degrades, and the hard ceiling at around 800 rules before exhausting the 64,000-token budget. The per-question limit never binds: even at max state, the state plus the longest question is only ~2,079 tokens, far under 32,000. Any realistic security rubric, even 30-50 rules, stays well inside both limits.
 
 ---
 
@@ -325,7 +325,7 @@ The engine requires an API key. By default it reads `OPENROUTER_API_KEY` from th
 
 ## 10. Provider Configuration: OpenRouter vs TypeSafe Direct
 
-By default, the Jev engine sends requests to OpenRouter's Decisions API. This is configurable — you can point at TypeSafe's direct API instead, or any compatible endpoint. All three of these are `[jev]` config keys in `security.toml`:
+By default, the Jev engine sends requests to OpenRouter's Decisions API. This is configurable - you can point at TypeSafe's direct API instead, or any compatible endpoint. All three of these are `[jev]` config keys in `security.toml`:
 
 | Config key | Default (OpenRouter) | TypeSafe Direct |
 |---|---|---|
@@ -365,7 +365,7 @@ The model is a single config key. Set `model` under `[jev]` in `security.toml`:
 model = "typesafe/jev-1.14"
 ```
 
-The `SecurityManager` reads this at startup and passes it to the `JevPolicyEngine`, which uses it as the `model` field in every request body sent to the decisions endpoint. The default is `typesafe/jev-1.13` if the key is absent. No code change required — just edit the config and restart the app.
+The `SecurityManager` reads this at startup and passes it to the `JevPolicyEngine`, which uses it as the `model` field in every request body sent to the decisions endpoint. The default is `typesafe/jev-1.13` if the key is absent. No code change required - just edit the config and restart the app.
 
 **Re-test before switching.** The rubric wording and thresholds were validated against `typesafe/jev-1.13` only. Run the test set against the new model first and compare it with the latest baseline:
 
@@ -452,8 +452,8 @@ The phrase "in any form" and the list of vectors (via -C, a script, alias, subsh
 
 | Verdict | Use for |
 |---|---|
-| `deny` | Irreversible damage, exfiltration, credential access, security bypass — actions that should never proceed without a policy change |
-| `ask` | Potentially legitimate but risky actions — destructive git, file deletion, shell chaining — where a human should confirm |
+| `deny` | Irreversible damage, exfiltration, credential access, security bypass - actions that should never proceed without a policy change |
+| `ask` | Potentially legitimate but risky actions - destructive git, file deletion, shell chaining - where a human should confirm |
 
 ### Adding a New Rule
 
@@ -764,7 +764,7 @@ The cache key is a SHA-256 hash of the tool name, parameters, mode, and context.
 
 ## 20. Shadow Mode: Trialling Jev Without Enforcing
 
-The chain engine supports `mode = "shadow"` for any stage. A shadow stage is evaluated and logged but never changes the result — it passes through whatever the previous stage decided.
+The chain engine supports `mode = "shadow"` for any stage. A shadow stage is evaluated and logged but never changes the result - it passes through whatever the previous stage decided.
 
 This lets you trial Jev on real sessions without letting it block anything:
 

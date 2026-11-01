@@ -2,13 +2,13 @@
 # Run: /script doc/cookbook/14_10_batch_api_translation.chatdsl
 #
 # WHY "batch_api": this recipe drives the asynchronous *provider* Batch API
-# (/batch commands) — bulk inference submitted to OpenRouter (Mistral in a
+# (/batch commands) - bulk inference submitted to OpenRouter (Mistral in a
 # later phase), polled out-of-band, and retrieved at a 50% discount. Do not
 # confuse it with the other "batch" concepts in ChatyBot:
-#   * batch-n / "Batched Top-N" — the client-side chunk pre-filter that
+#   * batch-n / "Batched Top-N" - the client-side chunk pre-filter that
 #     /rerank applies to directory sources (limit_batch_size windows; see
 #     doc/BATCH_N_WALKTHROUGH.md). Purely local; no provider batch job.
-#   * Recipe 14.5 "batch file processor" — a client-side foreach loop over
+#   * Recipe 14.5 "batch file processor" - a client-side foreach loop over
 #     files making sequential, interactive (online) LLM calls.
 # batch_api = async bulk inference at the provider. This recipe = batch_api.
 #

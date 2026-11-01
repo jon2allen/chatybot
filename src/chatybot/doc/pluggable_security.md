@@ -11,7 +11,7 @@ Chatybot checks **every tool call** made by a model (built-in tools and MCP tool
 > **Non-interactive and script execution.** The `ASK` prompt normally reads from stdin via `input()`. When running non-interactively (ChatDSL scripts `--script`, single run `--run`, or headless environments where stdin is not a TTY):
 > - If `-y` / `--yes` / `--auto-approve` is passed on the CLI, `ASK` verdicts are automatically approved.
 > - Otherwise, the dispatcher consults `non_interactive_ask` in `security.toml` (`"deny"` by default, or `"allow"`). When set to `"deny"`, the tool is immediately blocked with an explanatory error without hanging or calling `input()`.
-> - **Critical invariant:** neither `-y` nor `non_interactive_ask` can override Tier 0 protections or Tier 1 `DENY` rules — hard denials are always enforced.
+> - **Critical invariant:** neither `-y` nor `non_interactive_ask` can override Tier 0 protections or Tier 1 `DENY` rules - hard denials are always enforced.
 
 The policy engine is **pluggable**: the default is an in-process Python engine (`builtin`), but it can be swapped for an external program (`binary`).
 
@@ -97,7 +97,7 @@ The confirmation prompt runs via `asyncio.to_thread`, so it does not block the e
 
 ### Non-interactive and script execution (`-y` / `--yes`)
 
-In unattended environments — running ChatDSL scripts (`--script`), one-shot executions (`--run`), headless CI jobs, or cron commands where `sys.stdin.isatty()` is false — interactive confirmation via `input()` is not possible.
+In unattended environments - running ChatDSL scripts (`--script`), one-shot executions (`--run`), headless CI jobs, or cron commands where `sys.stdin.isatty()` is false - interactive confirmation via `input()` is not possible.
 
 Chatybot provides two controls to resolve `ASK` verdicts in non-interactive contexts:
 
@@ -155,7 +155,7 @@ The builtin engine uses **deny-overrides** evaluation (the model used by AWS IAM
 
 The first tier that matches decides. Consequence: a specific `deny` always beats a general `allow`.
 
-Within a single tier, rules are evaluated in **file order** and the first matching rule wins — its reason is the one surfaced. If two `deny` rules both match, only the earlier one's reason is returned; later rules in the same tier are not consulted.
+Within a single tier, rules are evaluated in **file order** and the first matching rule wins - its reason is the one surfaced. If two `deny` rules both match, only the earlier one's reason is returned; later rules in the same tier are not consulted.
 
 ```toml
 dsl_rules = [
@@ -166,7 +166,7 @@ dsl_rules = [
 
 `zaragoza.md` → **DENY** (Tier 1 wins over Tier 3). `notes.md` → **ALLOW**.
 
-### Tier 0 — Protected paths & Policy Self-Protection
+### Tier 0 - Protected paths & Policy Self-Protection
 
 ```toml
 [builtin.path_restrictions]
@@ -178,22 +178,22 @@ denied_paths = ["/etc", "/var/root", "/boot", "/System", "~/.ssh", "~/.gnupg", "
 - Every path-like argument is checked: `path`, `file`, `target`, `dir`, `directory`, `filename`, `filepath`, `source`, `destination`, `dest`, and any key ending in `path`, `file`, or `dir` (e.g. `target_file`).
 - Paths are expanded (`~`) and made absolute; matching is a case-insensitive prefix match on whole path components (`/etc` blocks `/etc/passwd`, not `/etcetera`).
 
-> **`run_command` is not covered by path restrictions.** Tier 0 path protection applies only to the filesystem tools listed above. A shell command such as `cat /etc/passwd` or `rm ~/.ssh/config` bypasses `denied_paths` entirely — it is caught only by the command-pattern substring match (next section) or by DSL rules. If you need to block shell access to protected paths, add explicit DSL rules such as `deny run command with /etc in it`.
+> **`run_command` is not covered by path restrictions.** Tier 0 path protection applies only to the filesystem tools listed above. A shell command such as `cat /etc/passwd` or `rm ~/.ssh/config` bypasses `denied_paths` entirely - it is caught only by the command-pattern substring match (next section) or by DSL rules. If you need to block shell access to protected paths, add explicit DSL rules such as `deny run command with /etc in it`.
 
-### Tier 0 — Catastrophic command patterns
+### Tier 0 - Catastrophic command patterns
 
 ```toml
 [builtin.command_rules]
 denied_patterns = ["rm -rf /", "rm -rf /*", ":(){ :|:& };:", "mkfs", "dd if=/dev/zero", "> /dev/sda", "> /dev/disk", "chatybot"]
 ```
 
-Applies to `run_command`. Matching is a **case-insensitive substring** match — intentionally over-broad. `man mkfs` or `echo "rm -rf /"` will also be blocked. False positives here are considered safer than false negatives.
+Applies to `run_command`. Matching is a **case-insensitive substring** match - intentionally over-broad. `man mkfs` or `echo "rm -rf /"` will also be blocked. False positives here are considered safer than false negatives.
 
 `"chatybot"` is strictly blocked to prevent an LLM from invoking sub-processes (e.g. `chatybot --script foo.chatdsl -y` or `python -m chatybot --run "..." -y`) to circumvent interactive confirmations or escalate privileges.
 
 The engine's built-in code defaults (`DEFAULT_DENIED_COMMAND_PATTERNS`) include both the fork-bomb pattern `:(){ :|:& };:` and `"chatybot"` even when the config file omits them.
 
-### Tier 4 — Baseline tool verdicts
+### Tier 4 - Baseline tool verdicts
 
 Defaults (from `BuiltinPolicyEngine.DEFAULT_TOOL_RULES`):
 
@@ -404,7 +404,7 @@ Because of **deny-overrides tiering**:
 "deny read file with zaragoza in it",
 ```
 
-Deny-overrides makes the specific deny win regardless of line order. There is no way for an `allow` to punch a hole in a `deny` — if you need an exception, narrow the deny rule instead.
+Deny-overrides makes the specific deny win regardless of line order. There is no way for an `allow` to punch a hole in a `deny` - if you need an exception, narrow the deny rule instead.
 
 ### Inspect file contents being written
 
@@ -507,7 +507,7 @@ Modeled after mainframe access control concepts from **IBM z/OS RACF (Resource A
 - Command matching is pattern-based, not shell-parsed. Prefix and substring rules cannot distinguish quoted arguments from active shell operators (e.g. `git commit -m "fix; update"` matches `;` and prompts with `ASK` as a harmless false positive).
 - Compound and multiline commands containing newlines (`\n`, `\r`) are intercepted before allow rules and require confirmation.
 - Tier 0 path checks resolve `~` and relative paths but do not resolve symlinks.
-- `run_command` is not covered by Tier 0 path restrictions — a shell command can read or modify protected paths unless a DSL rule or command pattern catches it.
+- `run_command` is not covered by Tier 0 path restrictions - a shell command can read or modify protected paths unless a DSL rule or command pattern catches it.
 - **Fail-closed on initialization error:** If `SecurityManager()` raises during startup (e.g. corrupt config, syntax error), Chatybot falls back to an emergency fail-closed manager that blocks all tool executions unless explicitly run with `--no-security`.
 - **Non-interactive sessions require explicit auto-approval or policy configuration.** By default (`non_interactive_ask = "deny"`), non-interactive sessions fail fast on `ASK` verdicts without blocking on input. Operators must explicitly pass `-y` / `--yes` or set `non_interactive_ask = "allow"` for automated script execution.
 - `modified_parameters` from external engines is carried in the decision but not yet applied by the dispatcher.
