@@ -26,7 +26,13 @@ import logging
 import os
 import time
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+
+# Python 3.11+ has UTC in datetime; for 3.10 use timezone.utc
+try:
+    from datetime import UTC
+except ImportError:
+    UTC = timezone.utc
 from typing import Any
 
 from chatybot.security.base import BasePolicyEngine

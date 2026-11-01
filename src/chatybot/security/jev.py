@@ -27,7 +27,13 @@ import urllib.error
 import urllib.request
 from collections import OrderedDict
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+
+# Python 3.11+ has UTC in datetime; for 3.10 use timezone.utc
+try:
+    from datetime import UTC
+except ImportError:
+    UTC = timezone.utc
 from typing import Any
 
 from chatybot.payload_trace import print_request_payload, print_response_payload

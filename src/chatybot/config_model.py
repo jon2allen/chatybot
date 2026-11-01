@@ -24,9 +24,15 @@ Usage:
 
 from __future__ import annotations
 
-import tomllib
+import sys
 from pathlib import Path
 from typing import Annotated, Literal
+
+# Python 3.11+ has tomllib in stdlib; for 3.10 use tomli
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    import tomli as tomllib
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 

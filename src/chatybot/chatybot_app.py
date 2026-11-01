@@ -387,9 +387,9 @@ class ChatybotApp:
                     tools_cfg = tomllib.load(f)
             except Exception:
                 try:
-                    import toml
-                    with open(config_path, 'r') as f:
-                        tools_cfg = toml.load(f)
+                    import tomli as tomllib
+                    with open(config_path, 'rb') as f:
+                        tools_cfg = tomllib.load(f)
                 except Exception:
                     print("could not load tools_config.toml, continuing ")
                     tools_cfg = {}
@@ -7001,9 +7001,9 @@ class ChatybotApp:
                 return tomllib.load(f)
         except (ImportError, FileNotFoundError, Exception):
             try:
-                import toml
-                with open(config_path, 'r') as f:
-                    return toml.load(f)
+                import tomli as tomllib
+                with open(config_path, 'rb') as f:
+                    return tomllib.load(f)
             except (ImportError, FileNotFoundError, Exception):
                 return {}
 

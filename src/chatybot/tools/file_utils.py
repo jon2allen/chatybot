@@ -414,21 +414,32 @@ def _resolve_backup_context(app: Any = None) -> tuple[bool, bool, str, str | Non
             active_session_id = os.environ["CHATYBOT_ACTIVE_SESSION_ID"]
 
         # Fallback check directly in tools_config.toml if not passed via env
+        tomllib = None
         try:
-            import tomllib
-            cfg_path = os.path.expanduser("~/.config/chatybot/tools_config.toml")
-            if not os.path.exists(cfg_path):
-                cfg_path = os.path.join(os.path.dirname(__file__), "..", "tools_config.toml")
-            if os.path.exists(cfg_path):
-                with open(cfg_path, "rb") as f:
-                    cfg = tomllib.load(f)
-                cfg_sec = cfg.get("config", {})
-                if "backup_file_on_write" in cfg_sec and "CHATYBOT_BACKUP_ON_WRITE" not in os.environ:
-                    backup_enabled = cfg_sec.get("backup_file_on_write", True)
-                if "session_dir" in cfg_sec and not os.environ.get("CHATYBOT_SESSION_DIR"):
-                    session_dir = os.path.expanduser(str(cfg_sec.get("session_dir")))
-        except Exception:
-            pass
+            import tomllib as _tomllib
+            tomllib = _tomllib
+        except ImportError:
+            try:
+                import tomli as _tomllib
+                tomllib = _tomllib
+            except ImportError:
+                pass
+        
+        if tomllib is not None:
+            try:
+                cfg_path = os.path.expanduser("~/.config/chatybot/tools_config.toml")
+                if not os.path.exists(cfg_path):
+                    cfg_path = os.path.join(os.path.dirname(__file__), "..", "tools_config.toml")
+                if os.path.exists(cfg_path):
+                    with open(cfg_path, "rb") as f:
+                        cfg = tomllib.load(f)
+                    cfg_sec = cfg.get("config", {})
+                    if "backup_file_on_write" in cfg_sec and "CHATYBOT_BACKUP_ON_WRITE" not in os.environ:
+                        backup_enabled = cfg_sec.get("backup_file_on_write", True)
+                    if "session_dir" in cfg_sec and not os.environ.get("CHATYBOT_SESSION_DIR"):
+                        session_dir = os.path.expanduser(str(cfg_sec.get("session_dir")))
+            except Exception:
+                pass
 
     return backup_enabled, enable_chat_history, session_dir, active_session_id
 

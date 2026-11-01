@@ -7,7 +7,7 @@ name = "chatybot"
 version = "0.9.1"
 description = "A CLI-based AI chat assistant"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 license = "MIT"
 authors = [{ name = "Jon Allen" }]
 dependencies = [
@@ -21,6 +21,7 @@ dependencies = [
     "psutil",
     "mcp<2.0.0",
     "mathparse>=0.2.8",
+    "tomli; python_version < '3.11'",
     "pyreadline3; sys_platform == 'win32'",
     "windows-curses; sys_platform == 'win32'"
 ]

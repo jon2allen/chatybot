@@ -66,13 +66,22 @@ class ToolsConfig:
     @classmethod
     def from_toml(cls, toml_path: str) -> "ToolsConfig":
         """Load tools configuration from TOML file."""
+        tomllib = None
         try:
-            import tomllib
+            import tomllib as _tomllib
+            tomllib = _tomllib
         except ImportError:
-            import tomli as tomllib
+            try:
+                import tomli as _tomllib
+                tomllib = _tomllib
+            except ImportError:
+                pass
         
         config = cls(toml_path)
         
+        if tomllib is None:
+            return config
+            
         try:
             with open(toml_path, 'rb') as f:
                 data = tomllib.load(f)

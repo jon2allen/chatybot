@@ -9,8 +9,12 @@ import logging
 import os
 import shutil
 import time
-import tomllib
 from typing import Any
+
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib
 
 from chatybot.tool_args import unwrap_tool_args
 from chatybot.security.adapters.stdio_binary import StdioBinaryPolicyEngine

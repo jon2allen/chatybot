@@ -60,7 +60,7 @@ def serialize_toml(data: dict, prefix: str = "") -> str:
     return "\n".join(lines)
 
 def load_toml(path: str) -> dict:
-    """Loads a TOML file using tomllib or toml fallback."""
+    """Loads a TOML file using tomllib (Python 3.11+) or tomli fallback."""
     if not os.path.exists(path):
         return {}
     try:
@@ -68,9 +68,9 @@ def load_toml(path: str) -> dict:
         with open(path, 'rb') as f:
             return tomllib.load(f)
     except ImportError:
-        import toml
-        with open(path, 'r', encoding='utf-8') as f:
-            return toml.load(f)
+        import tomli as tomllib
+        with open(path, 'rb') as f:
+            return tomllib.load(f)
 
 _synced_files = set()
 

@@ -41,17 +41,17 @@ def load_configs(config_path: str) -> dict[str, Any]:
     if not os.path.exists(config_path):
         raise FileNotFoundError(f"Configuration file missing: {config_path}")
 
-    if tomllib:
+    if tomllib is not None:
         with open(config_path, "rb") as f:
             return tomllib.load(f)
     else:
-        # Try with toml package for older Python versions
+        # Try with tomli package for older Python versions (Python < 3.11)
         try:
-            import toml
-            with open(config_path, "r", encoding="utf-8") as f:
-                return toml.load(f)
+            import tomli
+            with open(config_path, "rb") as f:
+                return tomli.load(f)
         except ImportError:
-            raise RuntimeError("The 'toml' package is required to parse tool definitions. Install with 'pip install toml'.")
+            raise RuntimeError("The 'tomli' package is required to parse tool definitions for Python < 3.11. Install with 'pip install tomli'.")
 
 
 from decimal import Decimal
