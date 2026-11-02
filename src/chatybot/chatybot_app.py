@@ -1810,6 +1810,21 @@ class ChatybotApp:
                   "interactive model with /model <chat-alias>.")
             return ""
 
+        # Eager session creation: create the session before the first
+        # completion so the prompt cache key binds to the session
+        # (chatybot-{model}_{date}) from the very first query instead of
+        # starting on the profile fallback key and switching after the first
+        # turn completes. Mirrors the conditions under which
+        # append_session_turn would otherwise create the session.
+        if (
+            self.session_mode != "off"
+            and self.enable_chat_history
+            and not self.in_tool_loop
+            and self.active_session_id is None
+            and isinstance(prompt, str)
+        ):
+            self._ensure_active_session(prompt)
+
         client = self.get_openai_client(model_alias)
         model_name = model_config["name"]
 
