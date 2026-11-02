@@ -98,14 +98,56 @@ def _hit_pct(cached: int, prompt: int) -> float:
 
 
 def iter_session_dirs(sessions_dir: str) -> list[str]:
-    """Session directory names that contain a turns.jsonl, newest first."""
+    """Session directory names that contain a turns.jsonl, newest first by modification time."""
     entries = []
-    for name in os.listdir(sessions_dir):
+    try:
+        dir_entries = os.listdir(sessions_dir)
+    except OSError:
+        return []
+    for name in dir_entries:
         path = os.path.join(sessions_dir, name)
-        if os.path.isfile(os.path.join(path, "turns.jsonl")):
-            entries.append((os.path.getmtime(path), name))
+        turns_path = os.path.join(path, "turns.jsonl")
+        if os.path.isfile(turns_path):
+            try:
+                # Prefer mtime of turns.jsonl for accurate activity ordering, fallback to dir
+                mtime = os.path.getmtime(turns_path)
+            except OSError:
+                mtime = os.path.getmtime(path)
+            entries.append((mtime, name))
     entries.sort(reverse=True)
     return [name for _, name in entries]
+
+
+def _session_matches_model(session_dir: str, turns_path: str, model_filter: str) -> bool:
+    """Check if session used a model matching model_filter prefix."""
+    meta_path = os.path.join(session_dir, "meta.json")
+    if os.path.isfile(meta_path):
+        try:
+            with open(meta_path, encoding="utf-8") as f:
+                meta = json.load(f)
+            if isinstance(meta, dict) and meta.get("model_alias"):
+                alias = str(meta["model_alias"])
+                # meta model_alias can be composite (e.g., 'modelA_modelB')
+                aliases = alias.split("_")
+                if alias.startswith(model_filter) or any(a.startswith(model_filter) for a in aliases):
+                    return True
+        except (OSError, json.JSONDecodeError):
+            pass
+
+    # Fallback to inspecting turns.jsonl if meta.json is absent or inconclusive
+    try:
+        with open(turns_path, encoding="utf-8") as handle:
+            for line in handle:
+                try:
+                    turn = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(turn, dict) and turn.get("model_alias"):
+                    if str(turn["model_alias"]).startswith(model_filter):
+                        return True
+    except OSError:
+        pass
+    return False
 
 
 def load_session_names(
@@ -115,18 +157,10 @@ def load_session_names(
     optionally filtered by model alias prefix."""
     selected: list[tuple[str, str]] = []
     for name in iter_session_dirs(sessions_dir):
-        path = os.path.join(sessions_dir, name, "turns.jsonl")
-        if model_filter:
-            models = set()
-            for line in open(path, encoding="utf-8"):
-                try:
-                    turn = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if isinstance(turn, dict) and turn.get("model_alias"):
-                    models.add(str(turn["model_alias"]))
-            if not any(m.startswith(model_filter) for m in models):
-                continue
+        session_dir = os.path.join(sessions_dir, name)
+        path = os.path.join(session_dir, "turns.jsonl")
+        if model_filter and not _session_matches_model(session_dir, path, model_filter):
+            continue
         selected.append((name, path))
         if len(selected) >= last:
             break
@@ -453,14 +487,23 @@ def main() -> int:
 
     selected: list[tuple[str, str]] = []
     if args.session:
-        if os.path.isfile(args.session):
-            name = os.path.basename(os.path.dirname(os.path.abspath(args.session)))
-            selected.append((name, os.path.abspath(args.session)))
+        session_arg = os.path.expanduser(args.session)
+        if os.path.isfile(session_arg):
+            name = os.path.basename(os.path.dirname(os.path.abspath(session_arg)))
+            selected.append((name, os.path.abspath(session_arg)))
+        elif os.path.isdir(session_arg) and os.path.isfile(os.path.join(session_arg, "turns.jsonl")):
+            name = os.path.basename(os.path.abspath(session_arg))
+            selected.append((name, os.path.join(os.path.abspath(session_arg), "turns.jsonl")))
         else:
             for name in iter_session_dirs(args.sessions_dir):
                 if args.session in name:
-                    selected.append((name, os.path.join(args.sessions_dir, name, "turns.jsonl")))
-                    break
+                    session_dir = os.path.join(args.sessions_dir, name)
+                    turns_path = os.path.join(session_dir, "turns.jsonl")
+                    if args.model and not _session_matches_model(session_dir, turns_path, args.model):
+                        continue
+                    selected.append((name, turns_path))
+                    if len(selected) >= args.last:
+                        break
             if not selected:
                 print(f"error: no session matching {args.session!r}", file=sys.stderr)
                 return 1
