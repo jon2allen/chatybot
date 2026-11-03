@@ -2,6 +2,43 @@
 
 All notable changes, release milestones, and version history for **Chatybot** are documented in this file.
 
+November 3rd, 2026 (v0.9.2)
+---------------------------
+- **Asynchronous Batch API Subsystem (`/batch`)**:
+  - Full lifecycle batch job management: staging (`/batch add`), sealing (`/batch end`), submission (`/batch submit`), polling (`/batch check`), status inspection (`/batch status`), results extraction (`/batch results`), and job duplication (`/batch clone`).
+  - Provider integration via OpenRouter backend with support for custom sampling parameters (`temperature`, `max_tokens`, `top_p`, `frequency_penalty`, `presence_penalty`).
+  - Native pre-submit cost estimation and budget guard (`max_cost_usd`) preventing unexpected credit depletion.
+  - Automatic detection and surfacing of empty 200 completions across check, status, and batch listing views.
+  - Paginated results display with filtering options (`filter=all|clean|empty|error`).
+  - Conforms to standard XDG storage layout (`~/.local/share/chatybot/batches`).
+  - Integrated batch model toggles into the interactive configuration TUI (`--config-edit`).
+  - ChatDSL Cookbook Chapter 14 recipes: Recipe 14.10 (Batch API translation) and Recipe 14.11 (Batch API blank completions and retry).
+- **Multi-Vendor Prompt Caching & Cache Key Controls (`/cachekey`)**:
+  - Native prompt cache management and fine-grained breakpoint controls via `/cachekey <status|on|off|clear>`.
+  - Telemetry reporting for cached tokens, written tokens, and cache hit rate percentage per turn and per agentic tool loop.
+  - Configurable vendor cache multipliers in model configurations for transparent cost estimation.
+  - Dedicated per-completion prompt cache analysis reporting script and eager session initialization ensuring cache keys bind from turn 1.
+  - ChatDSL Cookbook Chapter 13 recipes for prompt-cache key tuning and optimization.
+- **High-Performance Localization Engine & Bilingual Help**:
+  - Bilingual detailed command help: displays canonical English command instructions followed by localized translations across Spanish, French, Chinese, Italian, and Arabic.
+  - 100% translation catalog coverage for all commands across all five supported non-English locales in `translations.json`.
+  - Replaced linear keyword scanning with an O(1) first-word dictionary dispatch table in `translate_script`, accelerating script preprocessing by ~300x.
+  - Quote-aware condition token scanner (`_find_then_token`) protecting quoted strings from unintended translation.
+  - Mid-line translation support for slash commands and control keywords following `then` in conditional statements (e.g. `si ... entonces /ayuda` -> `if ... then /help`).
+  - Completed loop keyword translations (`foreach`, `endfor`, `break`) and generator expressions (`range`, `lines`) across all multilingual user guides.
+- **ChatDSL Utility Scripts & Syntax Refinements**:
+  - Added dedicated `dsl_scripts/` directory for executable production utilities (`find_test_session.chatdsl`, `find_test_delete.chatdsl`).
+  - Corrected list subscript syntax (`${var[0]}`) and documented variable scoping rules in `chatdsl_guide_v1.md`.
+  - Formalized `foreach` loop semantics (bare iterable identifiers, loop variable scope).
+  - Added Cookbook Recipe 10.7 for model session discovery and whole-session size reporting.
+- **Platform Compatibility & Core Hardenings**:
+  - Added Python 3.10 runtime support with automatic `tomli` fallback.
+  - Added `/reasoning_history` command with four formatting modes (`auto`, `strip`, `keep`, `field`) for strict Jinja chat template compatibility.
+  - Subprocess execution controls and line-by-line tool output inspection.
+  - MCP client protected path checking and tool argument envelope normalization.
+  - Microsecond timestamps and filename-aware sorting for TinyDB rolling backups.
+  - Bumped version to 0.9.2 across `pyproject.toml`, `src/chatybot/__init__.py`, and `chatybot_app.py`.
+
 October 23rd, 2026
 ------------------
 - **Reasoning History Integrity & Strict Chat Template Compatibility (`/reasoning_history`)**:

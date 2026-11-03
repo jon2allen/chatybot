@@ -86,13 +86,17 @@ chatybot is an interactive command-line tool that enables seamless communication
 - **Enhanced Session Filtering & Sorting** - `/session list` sorting by latest activity, model filtering (`model=...`), age filtering (`since=Nd/h/m`), and range pagination (`limit=...`, `range=start:end`)
 - **Non-Destructive Session Query & Turn Extraction** - Search past session turns, conversation history, notes, and scratchpads with boolean AND/OR matching, date constraints (`since=`, `until=`, `range=`), fast discovery (`ids`), and entire session byte size tracking (`/session query`, `session_search`). Extract turn prompts, responses, or reasoning traces read-only without switching sessions or polluting context (`/session get`, `session_get`).
 - **Pluggable Security Architecture & Policy Guardrails** - Pre-execution security interception for all agentic tool calls and shell operations via built-in Python Security DSL, TypeSafe Jev AI policy engine, multi-engine chaining (`engine = "chain"`), or high-performance external engines (e.g. `racf-guard`). Standardized resource classification (`EXEC`, `FS_READ`, `FS_WRITE`, `NET`, `PROCESS`, `CONTENT`), tri-state verdicts (`ALLOW`, `ASK`, `DENY`), post-execution output secret scanning and egress filtering, refusal memory with configurable loop refusal limits (`max_refusals_per_loop`), automated Jev setup wizard (`--setup-jev`), unattended script auto-approval (`-y` / `--auto-approve`), verbose debug tracing (`--security`), and full multilingual localization.
+- **Asynchronous Batch API Subsystem** - Stage, submit, monitor, and retrieve bulk completions asynchronously at reduced cost via OpenRouter, featuring native pre-submit cost estimation, budget limits (`max_cost_usd`), empty completion detection, and paginated result inspection (`/batch`).
+- **Multi-Vendor Prompt Caching & Cache Key Controls** - Native prompt cache management, per-completion and per-loop hit-rate telemetry, configurable vendor cache multipliers, and fine-grained cache key tuning (`/cachekey`).
+- **High-Performance Localization Engine & Bilingual Help** - O(1) dictionary-based script translation with ~300x faster preprocessing, quote-aware conditional translation, and bilingual help rendering canonical English alongside localized explanations across 5 languages (`es`, `fr`, `zh`, `it`, `ar`).
+- **ChatDSL Utility Scripts** - Dedicated utility script repository (`dsl_scripts/`) for administrative workflows, safe interactive confirmation gates, session content extraction, and whole-session storage footprint reporting.
 
 ---
 
 ## **Installation**
 
 ### **Prerequisites**
-- Python 3.11+
+- Python 3.10+
 - `pip` package manager
 - `parsley` library
 - API keys for your preferred LLMs (OpenAI, Anthropic, etc.)
@@ -342,6 +346,8 @@ chatybot --no-tools
 | `/script <path>` | Execute a script | `/script setup.dsl` |
 | `/source <path>` | Execute a script dynamically in the current session | `/source ~/.chatybot_profile` |
 | `/profile [subcommand]` | Manage session profiles dynamically (list, use, clone, delete, export, import, show, edit) | `/profile use coding` |
+| `/batch <subcommand>` | Stage, submit, monitor, and inspect asynchronous batch processing jobs | `/batch status` |
+| `/cachekey <status\|on\|off\|clear>` | Inspect and manage prompt cache breakpoints, session isolation, and hit rates | `/cachekey status` |
 | `/run <command>` | Execute a shell command and capture stdout/stderr/exit code | `/run ls -la` |
 | `/run_safe` | Enable safe mode for shell execution (blocks dangerous commands) | `/run_safe` |
 | `/run_unsafe [askfirst]` | Disable safe mode (runs directly; optional `askfirst` prompts Y/N) | `/run_unsafe` |
