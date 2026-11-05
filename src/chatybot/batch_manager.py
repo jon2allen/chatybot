@@ -2,7 +2,8 @@
 """
 batch_manager.py - Batch API subsystem storage, state machine, and providers.
 
-Implements Phase 1 of the Batch API proposal (mistral-batch-poc/batch_proposal_v3.md):
+Implements Phase 1 (OpenRouter) and Phase 2 (Mistral inline batching) of the
+Batch API proposal (mistral-batch-poc/batch_proposal_v3.md):
 
 * Dedicated instance directory per batch under ``~/.local/share/chatybot/batches/`` plus a
   global ``index.jsonl`` catalog (proposal §4.4, Option 1).
@@ -79,6 +80,22 @@ OPENROUTER_STATUS_MAP = {
 
 OPENROUTER_API_BASE = "https://openrouter.ai/api/v1"
 OPENROUTER_ENDPOINT = "/v1/chat/completions"
+
+# Mistral status → canonical local status (proposal §3; CANCELLATION_REQUESTED
+# is an intermediate state after POST .../cancel that the proposal missed).
+MISTRAL_STATUS_MAP = {
+    "QUEUED": STATUS_SUBMITTED,
+    "RUNNING": STATUS_IN_PROGRESS,
+    "SUCCESS": STATUS_COMPLETED,
+    "FAILED": STATUS_FAILED,
+    "TIMEOUT_EXCEEDED": STATUS_EXPIRED,
+    "CANCELLATION_REQUESTED": STATUS_CANCELLED,
+    "CANCELLED": STATUS_CANCELLED,
+}
+
+MISTRAL_API_BASE = "https://api.mistral.ai/v1"
+MISTRAL_CHAT_ENDPOINT = "/v1/chat/completions"
+MISTRAL_INLINE_LIMIT = 10_000
 
 # Poll backoff (mirrors the validated POC runner)
 POLL_START_SECONDS = 10
@@ -191,9 +208,13 @@ class OpenRouterBatchProvider:
                 raise self._http_error(resp.status, text, url)
             return json.loads(text) if text else {}
 
-    async def submit(self, requests: list[dict], model_name: str) -> dict:
+    async def submit(self, requests: list[dict], model_name: str, *,
+                     metadata: dict | None = None) -> dict:
         """Submit a new batch. Key order matters: endpoint and model must be
-        serialized BEFORE the requests array or OpenRouter returns HTTP 400."""
+        serialized BEFORE the requests array or OpenRouter returns HTTP 400.
+
+        ``metadata`` is accepted for interface parity with Mistral but is not
+        sent - OpenRouter silently drops top-level metadata (spike finding §2.2)."""
         payload = {
             "endpoint": OPENROUTER_ENDPOINT,
             "model": model_name,
@@ -271,6 +292,255 @@ class OpenRouterBatchProvider:
             "cost_usd": usage.get("cost"),
             "host_backend": batch.get("provider"),
         }
+
+    async def fetch_results(self, batch: dict, provider_id: str) -> list[dict]:
+        """Return inline results from the batch object, re-fetching if empty.
+
+        OpenRouter embeds results directly in the completed batch object;
+        a second GET is needed when the first poll caught completion before
+        the results array was populated (spike finding §2.3)."""
+        results = batch.get("results") or []
+        if not results:
+            refetched = await self.get(provider_id)
+            results = (refetched or {}).get("results") or []
+        return results
+
+
+# ---------------------------------------------------------------------------
+# Mistral Batch provider (Phase 2 - inline batching only)
+# ---------------------------------------------------------------------------
+
+class MistralBatchProvider:
+    """Async client for the Mistral Batch API (inline batching, Phase 2).
+
+    Mistral differs from OpenRouter in several ways (proposal §3, verified
+    2026-11-04 against live docs):
+
+    - Dual ingestion: inline (<10k items) or file upload (up to ~1M).
+      Phase 2 implements **inline only**; file upload is deferred. Batches
+      exceeding ``MISTRAL_INLINE_LIMIT`` are refused with a clear message.
+    - Results are retrieved via the Files API (``output_file`` / ``error_file``
+      file IDs), not inline in the batch object. ``fetch_results`` downloads
+      and parses them.
+    - Cancellation is supported (``POST /v1/batch/jobs/{id}/cancel``); the
+      job transitions through ``CANCELLATION_REQUESTED`` before ``CANCELLED``.
+    - Metadata is persisted server-side (enables ``client_token``-based
+      orphan reconciliation, unlike OpenRouter's heuristic match).
+    - No exact ``usage.cost``; token counts are returned in result lines but
+      cost must be computed from rates (future enhancement - returns None).
+    """
+
+    name = "mistral"
+    supports_cancel = True
+
+    def __init__(self, api_key: str, base_url: str | None = None, *,
+                 trace_raw_payload: bool = False,
+                 logging_manager: Any = None):
+        self.api_key = api_key
+        self.base_url = (base_url or MISTRAL_API_BASE).rstrip("/")
+        self.trace_raw_payload = trace_raw_payload
+        self.logging_manager = logging_manager
+
+    def _headers(self) -> dict[str, str]:
+        return {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+
+    @staticmethod
+    def _http_error(status: int, body: str, url: str) -> BatchError:
+        return BatchError(f"HTTP {status} from {url}: {body[:500]}")
+
+    async def _request(self, session: aiohttp.ClientSession, method: str, url: str,
+                       json_body: dict | None = None,
+                       allow_missing_404: bool = False) -> dict | None:
+        if trace_enabled(self.trace_raw_payload):
+            if json_body is not None:
+                print_request_payload(
+                    url,
+                    json_body,
+                    self.api_key,
+                    logging_manager=self.logging_manager,
+                    label=f"Batch API Request Payload ({method}):",
+                )
+            else:
+                masked_key = _mask_key(self.api_key)
+                header_line = f"Headers: {{'Authorization': 'Bearer {masked_key}', 'Content-Type': 'application/json'}}"
+                trace_text = (
+                    f"Batch API Request ({method}):\n"
+                    f"-----------------------------\n"
+                    f"{method} {url}\n"
+                    f"{header_line}\n"
+                    f"---- end of payload ---"
+                )
+                print(trace_text)
+                if self.logging_manager and hasattr(self.logging_manager, "log_message"):
+                    try:
+                        self.logging_manager.log_message(trace_text)
+                    except Exception:
+                        pass
+
+        async with session.request(method, url, headers=self._headers(),
+                                   json=json_body, timeout=aiohttp.ClientTimeout(total=HTTP_TIMEOUT_SECONDS)) as resp:
+            if resp.status == 404 and allow_missing_404:
+                if trace_enabled(self.trace_raw_payload):
+                    print_response_payload(
+                        resp.status,
+                        "(404 Not Found - batch not queryable yet)",
+                        logging_manager=self.logging_manager,
+                        label=f"Batch API Response Payload ({method} {url}):",
+                    )
+                return None
+
+            text = await resp.text()
+            if trace_enabled(self.trace_raw_payload):
+                print_response_payload(
+                    resp.status,
+                    text,
+                    logging_manager=self.logging_manager,
+                    label=f"Batch API Response Payload ({method} {url}):",
+                )
+            if resp.status >= 400:
+                raise self._http_error(resp.status, text, url)
+            return json.loads(text) if text else {}
+
+    async def submit(self, requests: list[dict], model_name: str, *,
+                     metadata: dict | None = None) -> dict:
+        """Submit a new inline batch job.
+
+        Mistral supports inline batching for fewer than 10,000 requests;
+        larger batches require the file-upload path (not yet implemented).
+        Metadata is persisted server-side, enabling client_token reconciliation.
+        """
+        if len(requests) > MISTRAL_INLINE_LIMIT:
+            raise BatchError(
+                f"Inline batch limit exceeded: {len(requests)} items (max "
+                f"{MISTRAL_INLINE_LIMIT}). The file-upload path is not yet "
+                "implemented (Phase 2b). Split the batch into smaller runs "
+                "or use fewer items."
+            )
+        payload: dict[str, Any] = {
+            "model": model_name,
+            "endpoint": MISTRAL_CHAT_ENDPOINT,
+            "requests": requests,
+        }
+        if metadata:
+            payload["metadata"] = metadata
+        async with aiohttp.ClientSession() as session:
+            return await self._request(session, "POST",
+                                        f"{self.base_url}/batch/jobs", payload)
+
+    async def get(self, provider_id: str, allow_missing: bool = False) -> dict | None:
+        """Fetch one batch job record by its UUID."""
+        url = f"{self.base_url}/batch/jobs/{provider_id}"
+        async with aiohttp.ClientSession() as session:
+            return await self._request(session, "GET", url,
+                                        allow_missing_404=allow_missing)
+
+    async def list(self) -> list[dict]:
+        """List batch jobs (supports metadata-based filtering server-side)."""
+        async with aiohttp.ClientSession() as session:
+            data = await self._request(session, "GET",
+                                        f"{self.base_url}/batch/jobs")
+            return data.get("data") or []
+
+    async def cancel(self, provider_id: str) -> dict:
+        """Request cancellation of a running batch job.
+
+        The job transitions to CANCELLATION_REQUESTED then CANCELLED.
+        """
+        url = f"{self.base_url}/batch/jobs/{provider_id}/cancel"
+        async with aiohttp.ClientSession() as session:
+            return await self._request(session, "POST", url)
+
+    async def _download_file(self, file_id: str) -> str:
+        """Download a file's text content via the Mistral Files API."""
+        url = f"{self.base_url}/files/{file_id}/content"
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=self._headers(),
+                                   timeout=aiohttp.ClientTimeout(total=HTTP_TIMEOUT_SECONDS)) as resp:
+                text = await resp.text()
+                if resp.status >= 400:
+                    raise self._http_error(resp.status, text, url)
+                return text
+
+    async def fetch_results(self, batch: dict, provider_id: str) -> list[dict]:
+        """Download results from the Mistral Files API.
+
+        Mistral returns results via ``output_file`` and ``error_file`` (file
+        IDs), not inline in the batch object like OpenRouter. Each file is
+        JSONL - one result record per line, joined by ``custom_id``.
+        """
+        output_file_id = batch.get("output_file")
+        if not output_file_id:
+            return []
+        content = await self._download_file(output_file_id)
+        results = []
+        for line in content.strip().split("\n"):
+            if line:
+                results.append(json.loads(line))
+        # Include error records if a separate error file exists
+        error_file_id = batch.get("error_file")
+        if error_file_id:
+            error_content = await self._download_file(error_file_id)
+            for line in error_content.strip().split("\n"):
+                if line:
+                    results.append(json.loads(line))
+        return results
+
+    # -- normalization -----------------------------------------------------
+
+    @staticmethod
+    def normalize_status(batch: dict) -> str:
+        return MISTRAL_STATUS_MAP.get(batch.get("status", ""),
+                                       batch.get("status", ""))
+
+    @staticmethod
+    def counts_of(batch: dict) -> tuple[int | None, int | None, int | None]:
+        return (batch.get("total_requests"),
+                batch.get("succeeded_requests"),
+                batch.get("failed_requests"))
+
+    @staticmethod
+    def normalize_result(entry: dict) -> dict:
+        """Map a Mistral result line onto the canonical local result shape:
+        {custom_id, status_code, content, error}.
+
+        Mistral's output file format follows the OpenAI batch convention
+        (``response.body.choices``) but may also use ``output.choices``;
+        both are handled.
+        """
+        out: dict[str, Any] = {"custom_id": entry.get("custom_id")}
+        resp = entry.get("response")
+        if isinstance(resp, dict) and "body" in resp:
+            body = resp["body"]
+            out["status_code"] = resp.get("status_code", 200)
+            choices = body.get("choices") or []
+            out["content"] = choices[0].get("message", {}).get("content") if choices else None
+        elif isinstance(resp, dict) and "choices" in resp:
+            out["status_code"] = 200
+            choices = resp.get("choices") or []
+            out["content"] = choices[0].get("message", {}).get("content") if choices else None
+        else:
+            output = entry.get("output")
+            if isinstance(output, dict):
+                choices = output.get("choices") or []
+                out["status_code"] = 200
+                out["content"] = choices[0].get("message", {}).get("content") if choices else None
+            else:
+                out["status_code"] = entry.get("status_code", 500)
+                out["content"] = None
+                out["error"] = entry.get("error") or json.dumps(entry, ensure_ascii=False)[:500]
+        if entry.get("error") and "error" not in out:
+            out["error"] = entry["error"]
+        return out
+
+    @staticmethod
+    def telemetry_of(batch: dict) -> dict:
+        """Mistral does not return exact ``usage.cost``; token counts are in
+        individual result lines and cost must be computed from rates. Returns
+        None for both fields until per-model pricing is wired in."""
+        return {"cost_usd": None, "host_backend": None}
 
 
 # ---------------------------------------------------------------------------
@@ -815,7 +1085,7 @@ class BatchManager:
         if meta["status"] == STATUS_DRAFT:
             raise BatchError(f"Batch '{meta['name']}' is still a draft. Run '/batch end' "
                              "to seal and security-scan it first.")
-        if meta["status"] != STATUS_STAGED:
+        if meta["status"] not in (STATUS_STAGED, STATUS_SUBMIT_FAILED):
             raise BatchError(f"Batch '{meta['name']}' is not in staged state "
                              f"(status: {meta['status']}).")
 
@@ -868,7 +1138,10 @@ class BatchManager:
         try:
             with open(self._requests_path(meta["batch_id"]), "r", encoding="utf-8") as f:
                 payload = json.load(f)
-            batch = await provider_obj.submit(payload["requests"], meta["model"])
+            batch = await provider_obj.submit(
+                payload["requests"], meta["model"],
+                metadata={"client_token": meta["batch_id"]},
+            )
         except Exception as e:
             meta["status"] = STATUS_SUBMIT_FAILED
             self._write_meta(meta)
@@ -928,10 +1201,13 @@ class BatchManager:
 
         results = []
         if status == STATUS_COMPLETED:
-            results = batch.get("results") or []
-            if not results:
-                refetched = await provider_obj.get(meta["provider_id"])
-                results = (refetched or {}).get("results") or []
+            if hasattr(provider_obj, "fetch_results"):
+                results = await provider_obj.fetch_results(batch, meta["provider_id"])
+            else:
+                results = batch.get("results") or []
+                if not results:
+                    refetched = await provider_obj.get(meta["provider_id"])
+                    results = (refetched or {}).get("results") or []
             normalized = [provider_obj.normalize_result(r) for r in results]
             # Providers return results in COMPLETION order, which is arbitrary
             # and varies run to run. Sort into the staging (submission) order
@@ -1044,12 +1320,25 @@ def split_text(content: str, mode: str = "lines") -> list[str]:
 
 def make_provider(model_config: dict, api_key: str, *,
                   trace_raw_payload: bool = False,
-                  logging_manager: Any = None) -> OpenRouterBatchProvider:
-    """Build the Phase 1 OpenRouter provider from a chat_config model entry."""
-    base_url = model_config.get("base_url") or OPENROUTER_API_BASE
+                  logging_manager: Any = None) -> Any:
+    """Build the batch provider from a chat_config model entry.
+
+    Dispatches on the ``vendor`` field: ``openrouter`` (Phase 1) or
+    ``mistral`` (Phase 2, inline batching only).
+    """
+    vendor = (model_config.get("vendor") or "openrouter").lower()
+    base_url = model_config.get("base_url")
+    if vendor == "mistral":
+        return MistralBatchProvider(
+            api_key=api_key,
+            base_url=base_url or MISTRAL_API_BASE,
+            trace_raw_payload=trace_raw_payload,
+            logging_manager=logging_manager,
+        )
+    # Default: OpenRouter (Phase 1)
     return OpenRouterBatchProvider(
         api_key=api_key,
-        base_url=base_url,
+        base_url=base_url or OPENROUTER_API_BASE,
         trace_raw_payload=trace_raw_payload,
         logging_manager=logging_manager,
     )

@@ -1043,7 +1043,7 @@ class HelpSystem:
             usage="/batch <status|start|clone|prompt|add|items|ids|show|edit|remove|clear|dump|end|abort|run|check|results|retry|list|cancel> [name] [key=value ...]",
             long_desc=(
                 "Batch API jobs: asynchronous bulk inference submitted to a provider "
-                "Batch API (OpenRouter in Phase 1, Mistral in Phase 2) at a 50% discount "
+                "Batch API (OpenRouter or Mistral) at a 50% discount "
                 "off standard token rates. Jobs outlive the prompt cycle that creates "
                 "them: stage items into a draft, seal with a security scan, submit, then "
                 "poll and retrieve results. Storage lives under ~/.local/share/chatybot/batches/ "
@@ -1089,7 +1089,7 @@ class HelpSystem:
                 "abort [name]": "Discard an open (never-submitted) staging session",
                 "run [name]": "Estimate cost, verify budget, submit [force=true] [adopt=<provider_id>]",
                 "check [name]": "Poll status / retrieve results [wait=true polls until terminal]; the summary, /batch status, and /batchlist surface empty completions (status 200, no content - providers count them as successes and never retry them)",
-                "results [name]": "Print retrieved completions with pagination; exports ${BATCH_RESULTS} [limit=N] [range=start:end] [var=<target>]. Records are in staging (submission) order - providers return results in arbitrary completion order; always match by custom_id",
+                "results [name]": "Print retrieved completions with pagination [detail]; exports ${BATCH_RESULTS} [limit=N] [range=start:end] [var=<target>]. Records are in staging (submission) order - providers return results in arbitrary completion order; always match by custom_id. With 'detail', shows template prompt, input text, and result together",
                 "cancel <name>": "Cancel an in-flight batch [force=true for providers without a cancel endpoint (OpenRouter): marks it cancelled locally while the remote job still runs to completion]",
                 "retry <name>": "New batch from failed items (Phase 3)",
                 "list": "Alias for /batchlist",

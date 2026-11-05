@@ -23,12 +23,15 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from chatybot.batch_manager import (  # noqa: E402
     BatchError,
     BatchManager,
+    MistralBatchProvider,
+    OpenRouterBatchProvider,
     STATUS_COMPLETED,
     STATUS_DRAFT,
     STATUS_STAGED,
     STATUS_SUBMITTING,
     STATUS_SUBMITTED,
     STATUS_SUBMIT_FAILED,
+    make_provider,
 )
 from chatybot.commands import batch as batch_cmds  # noqa: E402
 from chatybot.commands.context import CommandContext  # noqa: E402
@@ -217,7 +220,7 @@ class FakeProvider:
         self.batches = {}
         self.calls = []
 
-    async def submit(self, requests, model_name):
+    async def submit(self, requests, model_name, *, metadata=None):
         self.calls.append(("submit", model_name, len(requests)))
         if self.fail_submit:
             raise RuntimeError("HTTP 402: insufficient credits")
@@ -270,6 +273,9 @@ class FakeProvider:
         return {"cost_usd": (batch.get("usage") or {}).get("cost"),
                 "host_backend": batch.get("provider")}
 
+    async def fetch_results(self, batch, provider_id):
+        return batch.get("results") or []
+
 
 class TestSubmitPoll:
     def _staged(self, mgr):
@@ -320,6 +326,20 @@ class TestSubmitPoll:
         with pytest.raises(BatchError, match="submit_failed"):
             asyncio.run(mgr.run(meta, provider))
         assert meta["status"] == STATUS_SUBMIT_FAILED
+
+    def test_submit_failure_can_be_retried(self, mgr):
+        meta = self._staged(mgr)
+        # First attempt fails (e.g. bad API key or credit issue)
+        bad_provider = FakeProvider(fail_submit=True)
+        with pytest.raises(BatchError, match="submit_failed"):
+            asyncio.run(mgr.run(meta, bad_provider))
+        assert meta["status"] == STATUS_SUBMIT_FAILED
+
+        # Second attempt succeeds with working provider
+        good_provider = FakeProvider(fail_submit=False)
+        meta = asyncio.run(mgr.run(meta, good_provider))
+        assert meta["status"] == STATUS_SUBMITTED
+        assert meta["provider_id"] == "batch-0001"
 
     def test_double_submit_refused_after_crash(self, mgr):
         meta = self._staged(mgr)
@@ -791,6 +811,19 @@ class TestResultsInspection:
         out = capsys.readouterr().out
         assert "listed_0003" in out
         assert len(ctx.app.buffer_manager.get_script_var("my_res")) == 3
+
+    def test_results_detail_shows_prompt_input_and_result(self, mgr, capsys):
+        self._completed_batch(mgr, "detailed", n=2)
+        ctx = make_ctx(mgr)
+        asyncio.run(run_cmd(ctx, "/batch results detailed detail"))
+        out = capsys.readouterr().out
+        assert "[Template Prompt]: Translate." in out
+        assert "[Input]:" in out
+        assert "poem 0" in out
+        assert "poem 1" in out
+        assert "[Result]:" in out
+        assert "detailed_0001" in out
+        assert "detailed_0002" in out
 
     def test_results_before_retrieval(self, mgr, capsys):
         ctx = make_ctx(mgr)
@@ -1472,7 +1505,7 @@ class TestResultsOrdering:
         mgr.end(meta)
         provider = FakeProvider()
         # Corrupt the provider order: return results in REVERSE completion order
-        async def shuffled_submit(requests, model_name):
+        async def shuffled_submit(requests, model_name, *, metadata=None):
             batch = await FakeProvider.submit(provider, list(reversed(requests)),
                                               model_name)
             provider.calls.append(("submit", model_name, len(requests)))
@@ -1686,5 +1719,240 @@ class TestRefactoredHelpers:
         assert "Error: no batch specified and no active draft found." in out
         assert "Start one with: /batch start <name>" in out
         assert "already been submitted" not in out
+
+
+# ---------------------------------------------------------------------------
+# Phase 2: Mistral Batch provider (inline batching)
+# ---------------------------------------------------------------------------
+
+class FakeMistralProvider:
+    """In-memory Mistral-shaped provider for testing inline batch + Files API
+    result retrieval. Results come from output_file/error_file (not inline)."""
+    name = "mistral"
+    supports_cancel = True
+
+    def __init__(self, fail_submit=False, final_status="SUCCESS",
+                 empty_custom_ids=None):
+        self.fail_submit = fail_submit
+        self.final_status = final_status
+        self.empty_custom_ids = set(empty_custom_ids or ())
+        self.batches = {}
+        self.files = {}  # file_id -> JSONL content
+        self.calls = []
+
+    async def submit(self, requests, model_name, *, metadata=None):
+        self.calls.append(("submit", model_name, len(requests), metadata))
+        if self.fail_submit:
+            raise RuntimeError("HTTP 401: unauthorized")
+        bid = f"job-{len(self.calls):04d}"
+        # Build output file content (JSONL) - one line per request
+        output_lines = []
+        for r in requests:
+            cid = r["custom_id"]
+            if cid in self.empty_custom_ids:
+                content = ""
+            else:
+                content = "ok"
+            output_lines.append(json.dumps({
+                "custom_id": cid,
+                "response": {
+                    "status_code": 200,
+                    "body": {"choices": [{"message": {"content": content}}]},
+                },
+            }))
+        output_file_id = f"file-out-{len(self.calls):04d}"
+        self.files[output_file_id] = "\n".join(output_lines)
+        self.batches[bid] = {
+            "id": bid,
+            "status": self.final_status,
+            "total_requests": len(requests),
+            "succeeded_requests": len(requests),
+            "failed_requests": 0,
+            "output_file": output_file_id,
+            "error_file": None,
+            "metadata": metadata,
+        }
+        return self.batches[bid]
+
+    async def get(self, provider_id, allow_missing=False):
+        self.calls.append(("get", provider_id))
+        return self.batches.get(provider_id)
+
+    async def cancel(self, provider_id):
+        self.batches[provider_id]["status"] = "CANCELLED"
+        return self.batches[provider_id]
+
+    async def fetch_results(self, batch, provider_id):
+        output_file_id = batch.get("output_file")
+        if not output_file_id:
+            return []
+        content = self.files.get(output_file_id, "")
+        results = []
+        for line in content.strip().split("\n"):
+            if line:
+                results.append(json.loads(line))
+        return results
+
+    @staticmethod
+    def normalize_status(batch):
+        from chatybot.batch_manager import MISTRAL_STATUS_MAP
+        return MISTRAL_STATUS_MAP.get(batch.get("status", ""),
+                                       batch.get("status", ""))
+
+    @staticmethod
+    def counts_of(batch):
+        return (batch.get("total_requests"),
+                batch.get("succeeded_requests"),
+                batch.get("failed_requests"))
+
+    @staticmethod
+    def normalize_result(entry):
+        return MistralBatchProvider.normalize_result(entry)
+
+    @staticmethod
+    def telemetry_of(batch):
+        return MistralBatchProvider.telemetry_of(batch)
+
+
+class TestMistralProvider:
+    """Tests for the Mistral inline batch backend (Phase 2)."""
+
+    def _staged(self, mgr):
+        meta = mgr.start("mrun", model_alias="mistral_batch",
+                         model_name="mistral-large-latest",
+                         provider="mistral", prompt="Translate.")
+        mgr.add_items(meta, ["a", "b"], id_prefix="mrun_")
+        mgr.end(meta)
+        return meta
+
+    def test_make_provider_mistral(self):
+        provider = make_provider(
+            {"vendor": "mistral", "base_url": "https://api.mistral.ai/v1"},
+            api_key="fake_key",
+        )
+        assert isinstance(provider, MistralBatchProvider)
+        assert provider.name == "mistral"
+        assert provider.supports_cancel is True
+
+    def test_make_provider_openrouter_default(self):
+        provider = make_provider(
+            {"vendor": "openrouter"},
+            api_key="fake_key",
+        )
+        assert isinstance(provider, OpenRouterBatchProvider)
+
+    def test_mistral_submit_sends_metadata(self, mgr):
+        meta = self._staged(mgr)
+        provider = FakeMistralProvider()
+        meta = asyncio.run(mgr.run(meta, provider, max_cost_usd=5.0,
+                                    max_open_per_provider=3))
+        assert meta["status"] == STATUS_SUBMITTED
+        assert meta["provider_id"] == "job-0001"
+        # Metadata with client_token should have been passed
+        _, _, _, md = provider.calls[0]
+        assert md is not None
+        assert md["client_token"] == meta["batch_id"]
+
+    def test_mistral_check_downloads_results_from_files_api(self, mgr, batches_dir):
+        meta = self._staged(mgr)
+        provider = FakeMistralProvider()
+        meta = asyncio.run(mgr.run(meta, provider))
+        meta = asyncio.run(mgr.check(meta, provider))
+        assert meta["status"] == STATUS_COMPLETED
+        # Mistral has no exact cost - telemetry returns None
+        assert meta["cost_usd"] is None
+        results = mgr.read_results(meta["batch_id"])
+        assert len(results) == 2
+        assert results[0]["custom_id"] == "mrun_0001"
+        assert results[0]["content"] == "ok"
+
+    def test_mistral_cancel_supported(self, mgr):
+        meta = self._staged(mgr)
+        provider = FakeMistralProvider(final_status="RUNNING")
+        meta = asyncio.run(mgr.run(meta, provider))
+        meta = asyncio.run(mgr.cancel(meta, provider))
+        assert meta["status"] == "cancelled"
+
+    def test_mistral_inline_limit_refused(self):
+        provider = MistralBatchProvider(api_key="fake")
+        too_many = [{"custom_id": str(i), "body": {}} for i in range(10_001)]
+        with pytest.raises(BatchError, match="Inline batch limit exceeded"):
+            asyncio.run(provider.submit(too_many, "mistral-large-latest"))
+
+    def test_mistral_normalize_status_map(self):
+        assert MistralBatchProvider.normalize_status({"status": "QUEUED"}) == "submitted"
+        assert MistralBatchProvider.normalize_status({"status": "RUNNING"}) == "in_progress"
+        assert MistralBatchProvider.normalize_status({"status": "SUCCESS"}) == "completed"
+        assert MistralBatchProvider.normalize_status({"status": "FAILED"}) == "failed"
+        assert MistralBatchProvider.normalize_status({"status": "TIMEOUT_EXCEEDED"}) == "expired"
+        assert MistralBatchProvider.normalize_status({"status": "CANCELLATION_REQUESTED"}) == "cancelled"
+        assert MistralBatchProvider.normalize_status({"status": "CANCELLED"}) == "cancelled"
+
+    def test_mistral_normalize_result_response_body(self):
+        entry = {"custom_id": "x", "response": {
+            "status_code": 200,
+            "body": {"choices": [{"message": {"content": "hello"}}]},
+        }}
+        r = MistralBatchProvider.normalize_result(entry)
+        assert r["custom_id"] == "x"
+        assert r["status_code"] == 200
+        assert r["content"] == "hello"
+
+    def test_mistral_normalize_result_output_choices(self):
+        entry = {"custom_id": "y", "output": {
+            "choices": [{"message": {"content": "world"}}],
+        }}
+        r = MistralBatchProvider.normalize_result(entry)
+        assert r["custom_id"] == "y"
+        assert r["status_code"] == 200
+        assert r["content"] == "world"
+
+    def test_mistral_normalize_result_error(self):
+        entry = {"custom_id": "z", "error": {"message": "bad request"}}
+        r = MistralBatchProvider.normalize_result(entry)
+        assert r["custom_id"] == "z"
+        assert r["content"] is None
+        assert "error" in r
+
+    def test_mistral_telemetry_no_cost(self):
+        t = MistralBatchProvider.telemetry_of({"status": "SUCCESS"})
+        assert t["cost_usd"] is None
+        assert t["host_backend"] is None
+
+    def test_build_provider_allows_mistral(self, mgr):
+        """The command-layer _build_provider should accept vendor=mistral."""
+        from chatybot.commands.batch import _build_provider
+        meta = self._staged(mgr)
+        meta["status"] = STATUS_STAGED
+        mgr._write_meta(meta)
+        app = SimpleNamespace()
+        model_config = {
+            "name": "mistral-large-latest",
+            "vendor": "mistral",
+            "batch": True,
+            "api_key": "MISTRAL_API_KEY",
+            "base_url": "https://api.mistral.ai/v1",
+        }
+        app.config_manager = MagicMock()
+        app.config_manager.get_model_config.return_value = model_config
+        app.trace_raw_payload = False
+        app.logging_manager = None
+        os.environ["MISTRAL_API_KEY"] = "fake_test_key"
+        try:
+            provider = _build_provider(app, meta)
+            assert isinstance(provider, MistralBatchProvider)
+        finally:
+            del os.environ["MISTRAL_API_KEY"]
+
+    def test_build_provider_rejects_unknown_vendor(self, mgr):
+        from chatybot.commands.batch import _build_provider, BatchError as CmdBatchError
+        meta = mgr.start("bad", model_alias="x", model_name="y",
+                         provider="unsupported_vendor")
+        mgr.add_items(meta, ["a"], id_prefix="bad_")
+        mgr.end(meta)
+        app = SimpleNamespace()
+        with pytest.raises(CmdBatchError, match="not implemented"):
+            _build_provider(app, meta)
+
 
 

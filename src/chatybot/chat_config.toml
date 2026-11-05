@@ -336,3 +336,13 @@ base_url = "https://openrouter.ai/api/v1"
 api_key = "OPENROUTER_API_KEY"
 batch = true
 vendor = "openrouter"
+
+# Mistral batch model (Phase 2 - inline batching only, <10k items per batch).
+# Uses the same MISTRAL_API_KEY as the interactive mistral_1 model above.
+[models.mistral_batch]
+name = "mistral-large-latest"
+temperature = 0.3
+base_url = "https://api.mistral.ai/v1"
+api_key = "MISTRAL_API_KEY"
+batch = true
+vendor = "mistral"

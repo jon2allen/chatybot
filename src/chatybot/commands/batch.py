@@ -45,7 +45,7 @@ BATCH_KV_KEYS = {"id", "var", "filebank", "split", "file", "limit", "range",
                  "force", "adopt", "wait", "clear", "prompt", "model",
                  "temp", "temperature", "max_tokens", "top_p",
                  "freq_penalty", "frequency_penalty",
-                 "pres_penalty", "presence_penalty"}
+                 "pres_penalty", "presence_penalty", "detail"}
 
 # Built-in prompt templates (proposal §4.2 "Named Template")
 BUILTIN_PROMPTS = {
@@ -138,14 +138,16 @@ def _batch_model_config(app: Any, meta: dict) -> dict:
 
 
 def _build_provider(app: Any, meta: dict):
-    """Build the provider client for a batch's own model entry (Phase 1:
-    OpenRouter). The model is taken from the batch meta, not the active
-    model, so polling/submitting works after the user switched models."""
+    """Build the provider client for a batch's own model entry. The model
+    is taken from the batch meta, not the active model, so polling/submitting
+    works after the user switched models.
+
+    Supports OpenRouter (Phase 1) and Mistral inline batching (Phase 2)."""
     vendor = (meta.get("provider") or "").lower()
-    if vendor != "openrouter":
-        raise BatchError(f"Batch backend '{vendor or 'unknown'}' is not implemented yet "
-                         "(Phase 2 adds the Mistral backend). Configure a model with "
-                         "vendor = \"openrouter\" and batch = true.")
+    if vendor not in ("openrouter", "mistral"):
+        raise BatchError(f"Batch backend '{vendor or 'unknown'}' is not implemented yet. "
+                         "Configure a model with vendor = \"openrouter\" or vendor = \"mistral\" "
+                         "and batch = true.")
     model_config = _batch_model_config(app, meta)
     api_key = None
     api_key_env = model_config.get("api_key", "")
@@ -181,7 +183,7 @@ EDIT_OPTS = {"var", "file"}
 DUMP_OPTS = {"var"}
 RUN_OPTS = {"force", "adopt"}
 CHECK_OPTS = {"wait"}
-RESULTS_OPTS = {"limit", "range", "var"}
+RESULTS_OPTS = {"limit", "range", "var", "detail"}
 CANCEL_OPTS = {"force"}
 
 
@@ -887,7 +889,8 @@ async def _sc_check(ctx: CommandContext, mgr: BatchManager, rest: str) -> Comman
 
 async def _sc_results(ctx: CommandContext, mgr: BatchManager, rest: str) -> CommandResult:
     opts, tokens = _parse_args(rest, keys=RESULTS_OPTS)
-    meta = mgr.resolve(_name_token(rest))
+    show_detail = _opt_bool(opts, "detail") or any(t.lower() == "detail" for t in tokens)
+    meta = mgr.resolve(_name_token(rest, skip="detail" if "detail" in tokens else None))
     records = mgr.read_results(meta["batch_id"])
     if not records:
         print(f"No results retrieved yet for '{meta['name']}' "
@@ -898,6 +901,10 @@ async def _sc_results(ctx: CommandContext, mgr: BatchManager, rest: str) -> Comm
     end = len(records) if limit is None else min(offset + limit, len(records))
     page = records[offset:end]
 
+    items_by_id: dict[str, str] = {}
+    if show_detail:
+        items_by_id = {it["custom_id"]: it.get("text", "") for it in mgr.list_items(meta)}
+
     bound = clean_var_name(opts.get("var"), default="BATCH_RESULTS")
     ctx.app.buffer_manager.set_script_var(bound, records, allow_protected=True)
 
@@ -905,14 +912,21 @@ async def _sc_results(ctx: CommandContext, mgr: BatchManager, rest: str) -> Comm
     empty_note = f", {empty_now} empty" if empty_now else ""
     print(f"\n[Results: {meta['name']} - showing {len(page)} of "
           f"{len(records)} records{empty_note}, status: {meta['status']}]")
+    if show_detail and meta.get("prompt"):
+        print(f"[Template Prompt]: {meta['prompt']}")
     for i, record in enumerate(page, offset + 1):
         print("-" * 60)
         status = record.get("status_code", "?")
-        print(f"#{i}  {record.get('custom_id')}   [{status}]")
+        cid = record.get("custom_id")
+        print(f"#{i}  {cid}   [{status}]")
+        if show_detail:
+            input_text = items_by_id.get(cid, "")
+            print(f"[Input]:\n{input_text}")
         if record.get("error"):
             print(f"[Error]: {record['error']}")
         else:
-            print(record.get("content") or "(empty completion)")
+            prefix = "[Result]:\n" if show_detail else ""
+            print(f"{prefix}{record.get('content') or '(empty completion)'}")
     print("-" * 60)
     print(f"(all {len(records)} records exported to ${{{bound}}})\n")
     return CommandResult.ok()
