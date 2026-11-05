@@ -1070,6 +1070,9 @@ class BatchManager:
         if meta["status"] in TERMINAL_STATES:
             raise BatchError(f"Batch '{meta['name']}' already reached terminal state "
                              f"({meta['status']}); nothing to abort.")
+        if meta["status"] == STATUS_SUBMIT_FAILED:
+            raise BatchError(f"Batch '{meta['name']}' failed to submit (status: submit_failed). "
+                             "Retry with '/batch run', or delete it with '/batch purge'.")
         if meta["status"] == STATUS_SUBMITTING:
             print(f"Warning: Batch '{meta['name']}' was in 'submitting' state. "
                   "A remote batch may still exist and bill - check /batchlist or "

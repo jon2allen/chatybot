@@ -181,6 +181,14 @@ class TestBatchManager:
         mgr.abort(draft)
         assert mgr.find_by_name("dufu_run") is None
 
+    def test_abort_refuses_submit_failed(self, mgr, draft):
+        mgr.add_items(draft, ["x"], id_prefix="dufu_run_")
+        draft["status"] = STATUS_SUBMIT_FAILED
+        mgr._write_meta(draft)
+        with pytest.raises(BatchError, match="failed to submit"):
+            mgr.abort(draft)
+        assert mgr.find_by_name("dufu_run") is not None
+
     def test_purge_deletes_terminal_batch(self, mgr, draft):
         mgr.add_items(draft, ["x"], id_prefix="dufu_run_")
         draft["status"] = "completed"
@@ -540,6 +548,21 @@ class TestBatchCommands:
         asyncio.run(run_cmd(ctx, "/batch frobnicate"))
         out = capsys.readouterr().out
         assert "Unknown batch subcommand" in out
+
+    def test_check_on_submit_failed_gives_retry_hint(self, mgr, capsys):
+        meta = mgr.start("sf_run", model_alias="gptoss_batch",
+                         model_name="openai/gpt-oss-120b:batch",
+                         provider="openrouter", prompt="p")
+        mgr.add_items(meta, ["x"], id_prefix="sf_")
+        mgr.end(meta)
+        meta["status"] = STATUS_SUBMIT_FAILED
+        mgr._write_meta(meta)
+        ctx = make_ctx(mgr)
+        capsys.readouterr()
+        asyncio.run(run_cmd(ctx, "/batch check sf_run"))
+        out = capsys.readouterr().out
+        assert "failed to submit" in out
+        assert "/batch run sf_run" in out
 
     def test_retry_phase3_notice(self, mgr, capsys):
         ctx = make_ctx(mgr)

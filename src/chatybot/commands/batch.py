@@ -886,6 +886,10 @@ async def _sc_check(ctx: CommandContext, mgr: BatchManager, rest: str) -> Comman
               "polled anymore. The remote job may still have run to "
               "completion and billed at batch rates.")
         return CommandResult.ok()
+    if meta["status"] == "submit_failed":
+        print(f"Batch '{meta['name']}' failed to submit (status: submit_failed). "
+              f"Retry with: /batch run {meta['name']}")
+        return CommandResult.ok()
     provider_obj = _build_provider(ctx.app, meta)
     wait = _opt_bool(opts, "wait")
     meta = await mgr.check(meta, provider_obj, wait=wait)
