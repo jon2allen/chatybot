@@ -456,10 +456,33 @@ class MistralBatchProvider:
     async def _download_file(self, file_id: str) -> str:
         """Download a file's text content via the Mistral Files API."""
         url = f"{self.base_url}/files/{file_id}/content"
+        if trace_enabled(self.trace_raw_payload):
+            masked_key = _mask_key(self.api_key)
+            trace_text = (
+                f"Batch API Request (GET):\n"
+                f"-----------------------------\n"
+                f"GET {url}\n"
+                f"Headers: {{'Authorization': 'Bearer {masked_key}', "
+                f"'Content-Type': 'application/json'}}\n"
+                f"---- end of payload ---"
+            )
+            print(trace_text)
+            if self.logging_manager and hasattr(self.logging_manager, "log_message"):
+                try:
+                    self.logging_manager.log_message(trace_text)
+                except Exception:
+                    pass
         async with aiohttp.ClientSession() as session:
             async with session.get(url, headers=self._headers(),
                                    timeout=aiohttp.ClientTimeout(total=HTTP_TIMEOUT_SECONDS)) as resp:
                 text = await resp.text()
+                if trace_enabled(self.trace_raw_payload):
+                    print_response_payload(
+                        resp.status,
+                        text,
+                        logging_manager=self.logging_manager,
+                        label=f"Batch API Response Payload (GET {url}):",
+                    )
                 if resp.status >= 400:
                     raise self._http_error(resp.status, text, url)
                 return text
@@ -476,14 +499,16 @@ class MistralBatchProvider:
             return []
         content = await self._download_file(output_file_id)
         results = []
-        for line in content.strip().split("\n"):
+        for raw_line in content.splitlines():
+            line = raw_line.strip()
             if line:
                 results.append(json.loads(line))
         # Include error records if a separate error file exists
         error_file_id = batch.get("error_file")
         if error_file_id:
             error_content = await self._download_file(error_file_id)
-            for line in error_content.strip().split("\n"):
+            for raw_line in error_content.splitlines():
+                line = raw_line.strip()
                 if line:
                     results.append(json.loads(line))
         return results
@@ -1052,6 +1077,29 @@ class BatchManager:
         import shutil
         shutil.rmtree(self._instance_dir(meta["batch_id"]), ignore_errors=True)
         # Catalog prune: rewrite the index without this batch_id
+        records = [r for r in self.list_index() if r["batch_id"] != meta["batch_id"]]
+        self._rewrite_index(records)
+
+    def purge(self, meta: dict, force: bool = False) -> None:
+        """Permanently delete a batch from disk and catalog.
+
+        Local-only states (draft, staged) and terminal states (completed,
+        failed, expired, cancelled, submit_failed) can be purged. Active
+        batches (submitting, submitted, in_progress) are refused
+        unconditionally - force=true does not override this, because
+        purging an active batch orphans a remote job that is still running
+        and billing, with no way to poll or cancel it. Cancel the batch
+        first, then purge the terminal result.
+        """
+        purgable = EDITABLE_STATES | {STATUS_STAGED} | TERMINAL_STATES | {STATUS_SUBMIT_FAILED}
+        if meta.get("status") not in purgable:
+            raise BatchError(
+                f"Batch '{meta['name']}' is still active (status: {meta['status']}). "
+                "Only local or terminal batches can be purged. Cancel it first with "
+                f"'/batch cancel {meta['name']}', then purge the result."
+            )
+        import shutil
+        shutil.rmtree(self._instance_dir(meta["batch_id"]), ignore_errors=True)
         records = [r for r in self.list_index() if r["batch_id"] != meta["batch_id"]]
         self._rewrite_index(records)
 

@@ -185,6 +185,7 @@ RUN_OPTS = {"force", "adopt"}
 CHECK_OPTS = {"wait"}
 RESULTS_OPTS = {"limit", "range", "var", "detail"}
 CANCEL_OPTS = {"force"}
+PURGE_OPTS = {"force"}
 
 
 def _extract_sampling_params(opts: dict[str, str],
@@ -819,6 +820,18 @@ async def _sc_abort(ctx: CommandContext, mgr: BatchManager, rest: str) -> Comman
     return CommandResult.ok()
 
 
+async def _sc_purge(ctx: CommandContext, mgr: BatchManager, rest: str) -> CommandResult:
+    opts, tokens = _parse_args(rest, keys=PURGE_OPTS)
+    target = _name_token(rest)
+    if not target:
+        print("Usage: /batch purge <batch-name | batch-id>")
+        return CommandResult.ok()
+    meta = mgr.resolve(target)
+    mgr.purge(meta)
+    print(f"Purged batch '{meta['name']}' ({meta['batch_id']}) from disk and catalog.")
+    return CommandResult.ok()
+
+
 async def _sc_run(ctx: CommandContext, mgr: BatchManager, rest: str) -> CommandResult:
     opts, tokens = _parse_args(rest, keys=RUN_OPTS)
     meta = mgr.resolve(_name_token(rest))
@@ -889,8 +902,9 @@ async def _sc_check(ctx: CommandContext, mgr: BatchManager, rest: str) -> Comman
 
 async def _sc_results(ctx: CommandContext, mgr: BatchManager, rest: str) -> CommandResult:
     opts, tokens = _parse_args(rest, keys=RESULTS_OPTS)
-    show_detail = _opt_bool(opts, "detail") or any(t.lower() == "detail" for t in tokens)
-    meta = mgr.resolve(_name_token(rest, skip="detail" if "detail" in tokens else None))
+    detail_token = next((t for t in tokens if t.lower() == "detail"), None)
+    show_detail = _opt_bool(opts, "detail") or detail_token is not None
+    meta = mgr.resolve(_name_token(rest, skip=detail_token))
     records = mgr.read_results(meta["batch_id"])
     if not records:
         print(f"No results retrieved yet for '{meta['name']}' "
@@ -903,7 +917,13 @@ async def _sc_results(ctx: CommandContext, mgr: BatchManager, rest: str) -> Comm
 
     items_by_id: dict[str, str] = {}
     if show_detail:
-        items_by_id = {it["custom_id"]: it.get("text", "") for it in mgr.list_items(meta)}
+        needed_ids = {r.get("custom_id") for r in page if r.get("custom_id")}
+        for it in mgr.list_items(meta):
+            cid = it.get("custom_id")
+            if cid in needed_ids:
+                items_by_id[cid] = it.get("text", "")
+                if len(items_by_id) == len(needed_ids):
+                    break
 
     bound = clean_var_name(opts.get("var"), default="BATCH_RESULTS")
     ctx.app.buffer_manager.set_script_var(bound, records, allow_protected=True)
@@ -977,13 +997,14 @@ _SUBCOMMAND_DISPATCH = {
     "check": _sc_check,
     "results": _sc_results,
     "cancel": _sc_cancel,
+    "purge": _sc_purge,
     "retry": _sc_retry,
     "list": _sc_list,
 }
 
 
 @command("/batch", help="Batch API jobs: stage, seal, submit, poll, retrieve",
-         args="<status|start|clone|prompt|add|items|ids|show|edit|remove|clear|dump|end|abort|run|check|results|retry|list|cancel> [name] [key=value ...]",
+         args="<status|start|clone|prompt|add|items|ids|show|edit|remove|clear|dump|end|abort|run|check|results|retry|list|cancel|purge> [name] [key=value ...]",
          category="batch")
 async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandResult:
     app = ctx.app
@@ -996,7 +1017,7 @@ async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandRe
     if not handler:
         print(f"Unknown batch subcommand: {subcmd}. Use start, clone, prompt, add, items, "
               "ids, show, edit, remove, clear, dump, end, abort, run, check, "
-              "results, retry, list, cancel, or status.")
+              "results, retry, list, cancel, purge, or status.")
         return CommandResult.ok()
 
     try:

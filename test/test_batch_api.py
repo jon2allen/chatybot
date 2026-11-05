@@ -181,6 +181,22 @@ class TestBatchManager:
         mgr.abort(draft)
         assert mgr.find_by_name("dufu_run") is None
 
+    def test_purge_deletes_terminal_batch(self, mgr, draft):
+        mgr.add_items(draft, ["x"], id_prefix="dufu_run_")
+        draft["status"] = "completed"
+        mgr._write_meta(draft)
+        mgr.purge(draft)
+        assert mgr.find_by_name("dufu_run") is None
+
+    def test_purge_active_batch_refused_even_with_force(self, mgr, draft):
+        draft["status"] = "in_progress"
+        mgr._write_meta(draft)
+        with pytest.raises(BatchError, match="still active"):
+            mgr.purge(draft, force=False)
+        with pytest.raises(BatchError, match="still active"):
+            mgr.purge(draft, force=True)
+        assert mgr.find_by_name("dufu_run") is not None
+
     def test_estimate_cost(self, mgr, draft):
         mgr.add_items(draft, ["x" * 400], id_prefix="dufu_run_")  # ~100 tokens
         est = mgr.estimate_cost_usd(draft, mgr.list_items(draft),
@@ -496,6 +512,28 @@ class TestBatchCommands:
         asyncio.run(run_cmd(ctx, "/batch list all"))
         out = capsys.readouterr().out
         assert "listed" in out
+
+    def test_purge_command(self, mgr, capsys):
+        ctx = make_ctx(mgr)
+        asyncio.run(run_cmd(ctx, "/batch start to_purge"))
+        asyncio.run(run_cmd(ctx, "/batch add something"))
+        capsys.readouterr()
+        # Test purging by name
+        asyncio.run(run_cmd(ctx, "/batch purge to_purge"))
+        out = capsys.readouterr().out
+        assert "Purged batch 'to_purge'" in out
+        assert mgr.find_by_name("to_purge") is None
+
+    def test_purge_command_by_id(self, mgr, capsys):
+        meta = mgr.start("by_id_batch", model_alias="m", model_name="n", provider="openrouter")
+        bid = meta["batch_id"]
+        ctx = make_ctx(mgr)
+        capsys.readouterr()
+        # Test purging directly by batch_id
+        asyncio.run(run_cmd(ctx, f"/batch purge {bid}"))
+        out = capsys.readouterr().out
+        assert f"Purged batch 'by_id_batch' ({bid})" in out
+        assert mgr.find_by_name("by_id_batch") is None
 
     def test_unknown_subcommand(self, mgr, capsys):
         ctx = make_ctx(mgr)
