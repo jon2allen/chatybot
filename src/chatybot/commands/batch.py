@@ -45,7 +45,8 @@ BATCH_KV_KEYS = {"id", "var", "filebank", "split", "file", "limit", "range",
                  "force", "adopt", "wait", "clear", "prompt", "model",
                  "temp", "temperature", "max_tokens", "top_p",
                  "freq_penalty", "frequency_penalty",
-                 "pres_penalty", "presence_penalty", "detail", "imagebank"}
+                 "pres_penalty", "presence_penalty", "detail", "imagebank",
+                 "image"}
 
 # Built-in prompt templates (proposal §4.2 "Named Template")
 BUILTIN_PROMPTS = {
@@ -172,7 +173,7 @@ def _build_provider(app: Any, meta: dict):
 SAMPLING_KEYS = {"temp", "temperature", "max_tokens", "top_p",
                  "freq_penalty", "frequency_penalty",
                  "pres_penalty", "presence_penalty"}
-ADD_OPTS = {"id", "var", "filebank", "split", "file", "imagebank"}
+ADD_OPTS = {"id", "var", "filebank", "split", "file", "imagebank", "image"}
 CLONE_OPTS = {"prompt", "model", "force"} | SAMPLING_KEYS
 START_OPTS = {"model", "clear"} | SAMPLING_KEYS
 PROMPT_OPTS = {"file"}
@@ -508,10 +509,23 @@ def _resolve_add_source(app: Any, opts: dict[str, str], tokens: list[str],
             clean_text = re.sub(r"\$?\{?imagebank[1-5]\}?", "", text).strip()
             texts = [clean_text]
             image = content
+        elif "image" in opts:
+            # image= accepts a URL (https://...) or a data URI (data:image/...;base64,...).
+            # Free text tokens become the item's text field, sent alongside the
+            # image as a multimodal content array.
+            image = opts["image"]
+            text = _text_from_tokens(tokens)
+            if not text:
+                print("Usage: /batch add <text> image=<url-or-data-uri>  "
+                      "(free text is sent with the image)")
+                return None
+            origin = "image_url"
+            id_prefix = _id_prefix_for_source("image", "img", "none")
+            texts = [text]
         else:
             if not text:
-                print("Usage: /batch add <text | filebank=N | var=NAME | file=PATH | imagebank=N> "
-                      "[id=<id>] [split=lines|paragraphs]")
+                print("Usage: /batch add <text | filebank=N | var=NAME | file=PATH | "
+                      "imagebank=N | image=<url>> [id=<id>] [split=lines|paragraphs]")
                 return None
             texts = [text]
             origin = "manual"

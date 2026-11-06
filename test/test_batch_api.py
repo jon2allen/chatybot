@@ -2053,6 +2053,55 @@ class TestMultimodalBatch:
         meta = mgr.find_by_name("mm_empty")
         assert len(mgr.list_items(meta)) == 0
 
+    def test_batch_add_image_url_with_text(self, mgr):
+        ctx = make_ctx(mgr)
+        asyncio.run(run_cmd(ctx, "/batch start url_test model=gptoss_batch"))
+        asyncio.run(run_cmd(ctx, '/batch add Filename: photo.jpg image=https://example.com/photo.jpg'))
+        meta = mgr.find_by_name("url_test")
+        items = mgr.list_items(meta)
+        assert len(items) == 1
+        assert items[0]["image"] == "https://example.com/photo.jpg"
+        assert items[0]["text"] == "Filename: photo.jpg"
+        assert items[0]["origin"] == "image_url"
+
+    def test_batch_add_image_url_no_text_error(self, mgr, capsys):
+        ctx = make_ctx(mgr)
+        asyncio.run(run_cmd(ctx, "/batch start url_err model=gptoss_batch"))
+        asyncio.run(run_cmd(ctx, "/batch add image=https://example.com/photo.jpg"))
+        out = capsys.readouterr().out
+        assert "Usage:" in out
+        meta = mgr.find_by_name("url_err")
+        assert len(mgr.list_items(meta)) == 0
+
+    def test_batch_add_image_data_uri_with_text(self, mgr):
+        ctx = make_ctx(mgr)
+        asyncio.run(run_cmd(ctx, "/batch start datauri_test model=gptoss_batch"))
+        asyncio.run(run_cmd(ctx,
+            '/batch add Describe this image=data:image/jpeg;base64,/9j/4AAQ'))
+        meta = mgr.find_by_name("datauri_test")
+        items = mgr.list_items(meta)
+        assert len(items) == 1
+        assert items[0]["image"] == "data:image/jpeg;base64,/9j/4AAQ"
+        assert items[0]["text"] == "Describe this"
+
+    def test_build_payload_image_url(self, mgr):
+        meta = mgr.start("url_payload", model_alias="mistral_batch",
+                         model_name="mistral-large-latest",
+                         provider="mistral", prompt="Analyze.")
+        mgr.add_items(meta, ["Filename: test.jpg"], id_prefix="img_",
+                      image="https://example.com/test.jpg")
+        items = mgr.list_items(meta)
+        payload = mgr.build_payload(meta, items)
+        req = payload["requests"][0]
+        body = req["body"]
+        msg = body["messages"][1]  # [system, user]
+        assert msg["role"] == "user"
+        content = msg["content"]
+        assert isinstance(content, list)
+        assert content[0] == {"type": "text", "text": "Filename: test.jpg"}
+        assert content[1] == {"type": "image_url",
+                              "image_url": {"url": "https://example.com/test.jpg"}}
+
     def test_build_payload_multimodal(self, mgr):
         meta = mgr.start("mm_payload", model_alias="mistral_batch",
                          model_name="mistral-large-latest",

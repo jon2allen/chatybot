@@ -6,6 +6,7 @@ November 6th, 2026
 ------------------
 - **Multimodal & Provider Batch Enhancements (`/batch`)**:
   - Support multimodal image bank ingestion for `/batch add` via `{imagebankN}` and `imagebank=N` syntax with auto-generated `ib<N>_` item IDs.
+  - Added `image=<url>` direct remote URL ingestion and preserved accompanying free text as multimodal text parts alongside images.
   - Mistral inline batch API support (`mistral_batch` using `mistral-large-latest`): submission, status normalization, cancellation, and file retrieval.
   - Automatic image format detection from magic header bytes when file extensions differ from raw payloads.
   - True wire payload size calculation using compact serialization, stored in batch metadata (`payload_bytes`) and catalog index.

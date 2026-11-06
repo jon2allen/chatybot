@@ -1077,7 +1077,7 @@ class HelpSystem:
                 "start <name>": "Open a new draft, or reopen a staged draft [model=<alias>] [temp=<float>] [max_tokens=<int>] [top_p=<float>] [clear=true]",
                 "clone <src> <new>": 'Clone an existing batch into a new draft [prompt="..."] [model=<alias>] [temp=<float>] [force=true to replace an existing draft/staged batch of that name]',
                 "prompt": 'Set the batch instruction: "inline text" | translate|summarize|classify | file=<path>',
-                "add": "Append items: <text> | filebank=N [split=lines|paragraphs] | imagebank=N | {imagebankN} | var=NAME | file=PATH [id=<id>]",
+                "add": "Append items: <text> | filebank=N [split=lines|paragraphs] | imagebank=N | {imagebankN} | image=<url> | var=NAME | file=PATH [id=<id>]",
                 "items [name]": "List staged items with previews [limit=N] [range=start:end]",
                 "ids [name]": "List item IDs; exports ${BATCH_ITEM_IDS} [var=<target>]",
                 "show <id|name>": "Inspect one item by ID (input + retrieved completion); with only a batch name, shows the batch overview and its item IDs. The batch is found by the item ID itself when no name is given",

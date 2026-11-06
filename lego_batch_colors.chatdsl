@@ -9,10 +9,10 @@
 /batch start lego_colors model=mistral_batch temp=0.3
 
 # 3. Set the batch system prompt template
-/batch prompt "List 3 colors that are in the image."
+/batch prompt "List 3 colors that are in the image. at the top restate the filename"
 
 # 4. Ingest and pass the imagebank item
-/batch add {imagebank1}
+/batch add "deathstar pict file:13345.jpg {imagebank1}"
 
 # 5. Inspect draft items before sealing
 /batch items
