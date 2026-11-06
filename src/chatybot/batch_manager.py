@@ -145,31 +145,11 @@ def is_empty_result(record: dict) -> bool:
 async def _provider_call(fn: Any, *args: Any, session: aiohttp.ClientSession | None = None, **kwargs: Any) -> Any:
     """Invoke provider method passing session if accepted, otherwise omitting it."""
     import inspect
-    try:
-        sig = inspect.signature(fn)
-        call_kwargs = dict(kwargs)
-        if session is not None and ("session" in sig.parameters or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())):
-            call_kwargs["session"] = session
-        else:
-            call_kwargs.pop("session", None)
-        pos_params = [p for p in sig.parameters.values() if p.kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)]
-        has_varargs = any(p.kind == inspect.Parameter.VAR_POSITIONAL for p in sig.parameters.values())
-        if not has_varargs and len(args) > len(pos_params):
-            call_args = args[:len(pos_params)]
-        else:
-            call_args = args
-        valid_kw = set(sig.parameters.keys())
-        has_varkw = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
-        if not has_varkw:
-            call_kwargs = {k: v for k, v in call_kwargs.items() if k in valid_kw}
-        return await fn(*call_args, **call_kwargs)
-    except (ValueError, TypeError):
-        if session is not None:
-            try:
-                return await fn(*args, session=session, **kwargs)
-            except TypeError:
-                pass
-        return await fn(*args, **kwargs)
+    sig = inspect.signature(fn)
+    call_kwargs = dict(kwargs)
+    if session is not None and ("session" in sig.parameters or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())):
+        call_kwargs["session"] = session
+    return await fn(*args, **call_kwargs)
 
 
 class BaseBatchProvider:
@@ -372,7 +352,8 @@ class OpenRouterBatchProvider(BaseBatchProvider):
             data = await self._request(s, "GET", f"{self.base_url}/batches")
             return data.get("data") or []
 
-    async def cancel(self) -> dict:
+    async def cancel(self, provider_id: str | None = None,
+                     session: aiohttp.ClientSession | None = None) -> dict:
         raise BatchError(
             "OpenRouter does not support cancelling a submitted batch - it "
             "runs to completion (or expires within 24 hours) and bills at "
@@ -514,7 +495,7 @@ class MistralBatchProvider(BaseBatchProvider):
         url = f"{self.base_url}/files/{file_id}/content"
         return await self._download_text(url, session=session)
 
-    async def fetch_results(self, batch: dict,
+    async def fetch_results(self, batch: dict, provider_id: str | None = None,
                             session: aiohttp.ClientSession | None = None) -> list[dict]:
         """Download results from the Mistral Files API.
 
@@ -1176,8 +1157,9 @@ class BatchManager:
         if meta["status"] == STATUS_SUBMITTING:
             raise BatchError(
                 f"Batch '{meta['name']}' is in 'submitting' state and cannot be aborted. "
-                "A remote batch may already be running and billing. "
-                f"Adopt it first with '/batch run {meta['name']} adopt=<id>' to verify/cancel it."
+                "A remote batch may already be running and billing.\n"
+                f"Use '/batch remote' to inspect remote jobs and adopt with '/batch run {meta['name']} adopt=<id>', "
+                f"or abandon this local batch with '/batch cancel {meta['name']} force=true'."
             )
         import shutil
         shutil.rmtree(self._instance_dir(meta["batch_id"]), ignore_errors=True)
@@ -1300,6 +1282,11 @@ class BatchManager:
         if "inline batch limit exceeded" in lower_msg:
             return True
 
+        # Non-JSON responses (e.g. HTML proxy responses, truncated bodies) are ambiguous:
+        # the request may have reached the backend and started running.
+        if isinstance(e, json.JSONDecodeError):
+            return False
+
         # Client-side exceptions that happen before or during request building
         if isinstance(e, (ValueError, TypeError, FileNotFoundError)):
             return True
@@ -1334,11 +1321,11 @@ class BatchManager:
         if meta["status"] == STATUS_SUBMITTING:
             raise BatchError(
                 f"Batch '{meta['name']}' is marked as 'submitting' - a previous "
-                "submission may have crashed mid-flight. OpenRouter does not "
+                "submission may have crashed mid-flight. Providers do not "
                 "deduplicate, so a new POST could create a duplicate batch.\n"
-                "Reconcile first: run '/batch check {0}' or inspect provider "
-                "batches with '/batchlist' and adopt the orphan with "
-                "'/batch run {0} adopt=<provider_id>'.".format(meta["name"])
+                "Reconcile first: inspect remote jobs with '/batch remote' and adopt with "
+                f"'/batch run {meta['name']} adopt=<id>', "
+                f"or abandon this local batch with '/batch cancel {meta['name']} force=true'."
             )
 
         self._require_staged(meta)
@@ -1389,8 +1376,9 @@ class BatchManager:
                 raise BatchError(
                     f"Submission timed out or network error encountered; status left as "
                     f"'submitting' to prevent duplicate runs and double-billing. "
-                    f"Run '/batch check {meta['name']}' or adopt the remote batch with "
-                    f"'/batch run {meta['name']} adopt=<id>': {e}"
+                    f"Check remote jobs with '/batch remote' and adopt with "
+                    f"'/batch run {meta['name']} adopt=<id>', "
+                    f"or abandon with '/batch cancel {meta['name']} force=true': {e}"
                 ) from e
 
         meta["provider_id"] = batch.get("id")
@@ -1431,6 +1419,14 @@ class BatchManager:
                                         session=s)
 
         if not meta.get("provider_id"):
+            if meta.get("status") == STATUS_SUBMITTING:
+                raise BatchError(
+                    f"Batch '{meta['name']}' is stuck in 'submitting' with no provider ID "
+                    "(the submission timed out or crashed before receiving an ID).\n"
+                    "Use '/batch remote' to inspect remote jobs, then adopt with "
+                    f"'/batch run {meta['name']} adopt=<id>'.\n"
+                    f"Or abandon this local batch with '/batch cancel {meta['name']} force=true'."
+                )
             raise BatchError(f"Batch '{meta['name']}' has no provider id - it has not "
                              "been submitted. Run '/batch run {0}' first.".format(meta["name"]))
         delay = poll_start_seconds
@@ -1496,13 +1492,22 @@ class BatchManager:
             if hasattr(provider_obj, "fetch_results"):
                 try:
                     results = await _provider_call(provider_obj.fetch_results, batch, meta["provider_id"], session=session)
-                except Exception:
-                    results = []
+                except Exception as e:
+                    print(f"Error fetching batch results for '{meta['name']}': {e}")
+                    print(f"Batch results could not be downloaded. Retry with '/batch check {meta['name']}'.")
+                    self._write_meta(meta)
+                    return meta
             else:
                 results = batch.get("results") or []
                 if not results and status == STATUS_COMPLETED:
-                    refetched = await _provider_call(provider_obj.get, meta["provider_id"], session=session)
-                    results = (refetched or {}).get("results") or []
+                    try:
+                        refetched = await _provider_call(provider_obj.get, meta["provider_id"], session=session)
+                        results = (refetched or {}).get("results") or []
+                    except Exception as e:
+                        print(f"Error refetching batch results for '{meta['name']}': {e}")
+                        print(f"Batch results could not be downloaded. Retry with '/batch check {meta['name']}'.")
+                        self._write_meta(meta)
+                        return meta
             if results:
                 normalized = [provider_obj.normalize_result(r) for r in results]
                 # Providers return results in COMPLETION order, which is arbitrary
@@ -1549,7 +1554,15 @@ class BatchManager:
 
         if meta["status"] not in OPEN_STATES:
             raise BatchError(f"Batch '{meta['name']}' is not in flight (status: {meta['status']}).")
-        if provider_obj is not None and getattr(provider_obj, "supports_cancel", False):
+        if not meta.get("provider_id"):
+            if not force:
+                raise BatchError(
+                    f"Batch '{meta['name']}' has no provider ID (submission timed out or crashed).\n"
+                    "If the job was accepted remotely, it may still be running. Inspect with '/batch remote'.\n"
+                    f"To disown it locally, re-run with force=true: '/batch cancel {meta['name']} force=true'."
+                )
+            print(f"Note: cancelling '{meta['name']}' locally only (no provider ID recorded).")
+        elif provider_obj is not None and getattr(provider_obj, "supports_cancel", False):
             await _provider_call(provider_obj.cancel, meta["provider_id"], session=session)
         else:
             if not force:

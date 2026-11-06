@@ -243,7 +243,7 @@ class FakeProvider:
         self.batches = {}
         self.calls = []
 
-    async def submit(self, requests, model_name, *, metadata=None):
+    async def submit(self, requests, model_name, *, metadata=None, session=None):
         self.calls.append(("submit", model_name, len(requests)))
         if self.fail_submit:
             raise RuntimeError("HTTP 402: insufficient credits")
@@ -266,13 +266,16 @@ class FakeProvider:
         }
         return self.batches[bid]
 
-    async def get(self, provider_id, allow_missing=False):
+    async def get(self, provider_id, allow_missing=False, session=None):
         self.calls.append(("get", provider_id))
         return self.batches.get(provider_id)
 
-    async def cancel(self, provider_id):
+    async def cancel(self, provider_id, session=None):
         self.batches[provider_id]["status"] = "cancelled"
         return self.batches[provider_id]
+
+    async def list(self, session=None):
+        return list(self.batches.values())
 
     def normalize_status(self, batch):
         return batch["status"]
@@ -296,7 +299,7 @@ class FakeProvider:
         return {"cost_usd": (batch.get("usage") or {}).get("cost"),
                 "host_backend": batch.get("provider")}
 
-    async def fetch_results(self, batch, provider_id):
+    async def fetch_results(self, batch, provider_id=None, session=None):
         return batch.get("results") or []
 
 
@@ -1808,7 +1811,7 @@ class FakeMistralProvider:
         self.files = {}  # file_id -> JSONL content
         self.calls = []
 
-    async def submit(self, requests, model_name, *, metadata=None):
+    async def submit(self, requests, model_name, *, metadata=None, session=None):
         self.calls.append(("submit", model_name, len(requests), metadata))
         if self.fail_submit:
             raise RuntimeError("HTTP 401: unauthorized")
@@ -1842,15 +1845,18 @@ class FakeMistralProvider:
         }
         return self.batches[bid]
 
-    async def get(self, provider_id, allow_missing=False):
+    async def get(self, provider_id, allow_missing=False, session=None):
         self.calls.append(("get", provider_id))
         return self.batches.get(provider_id)
 
-    async def cancel(self, provider_id):
+    async def cancel(self, provider_id, session=None):
         self.batches[provider_id]["status"] = "CANCELLED"
         return self.batches[provider_id]
 
-    async def fetch_results(self, batch, provider_id):
+    async def list(self, session=None):
+        return list(self.batches.values())
+
+    async def fetch_results(self, batch, provider_id=None, session=None):
         output_file_id = batch.get("output_file")
         if not output_file_id:
             return []
@@ -2516,3 +2522,214 @@ class TestBatchPerformanceOptimizations:
         assert all(isinstance(s, aiohttp.ClientSession) for s in check_sessions)
         # All calls within check(wait=True) shared the exact same ClientSession instance
         assert len(set(id(s) for s in check_sessions)) == 1
+
+
+class TestBatchReviewFixes:
+    """Tests for code review findings R1-R4 (Mistral fetch, JSONDecodeError, stuck submitting, cancel signature)."""
+
+    def test_r1_real_mistral_provider_check(self, mgr, monkeypatch):
+        meta = mgr.start("mistral_real", model_alias="devstral", model_name="mistral-large-latest",
+                         provider="mistral", prompt="Translate to French")
+        mgr.add_items(meta, ["hello world"], id_prefix="req_")
+        mgr.end(meta)
+
+        # Transition to submitted with provider ID
+        meta["status"] = STATUS_SUBMITTED
+        meta["provider_id"] = "job_mistral_xyz_789"
+        mgr._write_meta(meta)
+
+        real_provider = MistralBatchProvider(api_key="mock-mistral-key")
+
+        async def fake_request(session, method, url, json_body=None, allow_missing_404=False):
+            if "/batch/jobs/job_mistral_xyz_789" in url:
+                return {
+                    "id": "job_mistral_xyz_789",
+                    "status": "SUCCESS",
+                    "output_file": "file_output_123",
+                    "total_requests": 1,
+                    "succeeded_requests": 1,
+                    "failed_requests": 0,
+                }
+            return None
+
+        async def fake_download_text(url, session=None):
+            assert "file_output_123" in url
+            return json.dumps({
+                "custom_id": "req_0001",
+                "response": {
+                    "status_code": 200,
+                    "body": {"choices": [{"message": {"content": "bonjour le monde"}}]},
+                },
+            }) + "\n"
+
+        monkeypatch.setattr(real_provider, "_request", fake_request)
+        monkeypatch.setattr(real_provider, "_download_text", fake_download_text)
+
+        checked = asyncio.run(mgr.check(meta, real_provider))
+        assert checked["status"] == STATUS_COMPLETED
+        assert checked["results_count"] == 1
+
+        results = mgr.read_results(meta["batch_id"])
+        assert len(results) == 1
+        assert results[0]["custom_id"] == "req_0001"
+        assert results[0]["content"] == "bonjour le monde"
+
+    def test_r1_fetch_results_failure_reporting(self, mgr, capsys):
+        meta = mgr.start("fetch_fail", model_alias="m", model_name="m", provider="openrouter", prompt="p")
+        mgr.add_items(meta, ["item1"], id_prefix="fetch_fail_")
+        mgr.end(meta)
+
+        meta["status"] = STATUS_SUBMITTED
+        meta["provider_id"] = "batch_fail_123"
+        mgr._write_meta(meta)
+
+        class FailingFetchProvider(FakeProvider):
+            def __init__(self):
+                super().__init__()
+                self.fail_fetch = True
+
+            async def fetch_results(self, batch, provider_id=None, session=None):
+                if self.fail_fetch:
+                    raise RuntimeError("Download socket disconnected during file transfer")
+                return await super().fetch_results(batch, provider_id=provider_id, session=session)
+
+        prov = FailingFetchProvider()
+        prov.batches["batch_fail_123"] = {
+            "id": "batch_fail_123",
+            "status": "completed",
+            "request_counts": {"total": 1, "completed": 1, "failed": 0},
+            "results": [{"custom_id": "fetch_fail_0001", "response": {"status_code": 200, "body": {"choices": [{"message": {"content": "ok"}}]}}}],
+        }
+
+        checked = asyncio.run(mgr.check(meta, prov))
+        out = capsys.readouterr().out
+        assert "Error fetching batch results for 'fetch_fail'" in out
+        assert "Download socket disconnected during file transfer" in out
+        assert "Retry with '/batch check fetch_fail'" in out
+        # results.jsonl must NOT be written and finalized_at must NOT be set
+        results_path = os.path.join(mgr.batches_dir, meta["batch_id"], "results.jsonl")
+        assert not os.path.exists(results_path)
+        assert checked.get("finalized_at") is None
+
+        # Now simulate retry succeeding
+        prov.fail_fetch = False
+        retry_checked = asyncio.run(mgr.check(checked, prov))
+        assert os.path.exists(results_path)
+        assert retry_checked["results_count"] == 1
+        assert retry_checked.get("finalized_at") is not None
+
+    def test_r2_json_decode_error_ambiguous(self, mgr):
+        decode_err = None
+        try:
+            json.loads("<!DOCTYPE html><html><head><title>504 Gateway Time-out</title></head></html>")
+        except json.JSONDecodeError as e:
+            decode_err = e
+
+        assert decode_err is not None
+        assert isinstance(decode_err, ValueError)
+        # JSONDecodeError must be treated as ambiguous (False), not definitive rejection (True)
+        assert not BatchManager._is_definitive_submit_rejection(decode_err)
+        # Normal ValueError remains definitive
+        assert BatchManager._is_definitive_submit_rejection(ValueError("bad format"))
+
+        # Verify mgr.run leaves batch in STATUS_SUBMITTING
+        meta = mgr.start("json_err_test", model_alias="m", model_name="m", provider="openrouter", prompt="p")
+        mgr.add_items(meta, ["item1"], id_prefix="json_err_")
+        mgr.end(meta)
+
+        class DecodeErrorProvider(FakeProvider):
+            async def submit(self, requests, model_name, *, metadata=None, session=None):
+                raise decode_err
+
+        with pytest.raises(BatchError) as exc_info:
+            asyncio.run(mgr.run(meta, DecodeErrorProvider()))
+
+        assert "submitting" in str(exc_info.value).lower()
+        # Batch must stay in STATUS_SUBMITTING to prevent duplicate submissions
+        fresh_meta = mgr.resolve("json_err_test")
+        assert fresh_meta["status"] == STATUS_SUBMITTING
+
+    def test_r3_submitting_batch_recovery_hints(self, mgr):
+        meta = mgr.start("stuck_batch", model_alias="m", model_name="m", provider="openrouter", prompt="p")
+        mgr.add_items(meta, ["item1"], id_prefix="stuck_")
+        mgr.end(meta)
+
+        meta["status"] = STATUS_SUBMITTING
+        meta["provider_id"] = None
+        mgr._write_meta(meta)
+
+        prov = FakeProvider()
+
+        # check() raises with guidance mentioning /batch remote and /batch cancel force=true
+        with pytest.raises(BatchError) as exc_check:
+            asyncio.run(mgr.check(meta, prov))
+        assert "/batch remote" in str(exc_check.value)
+        assert "adopt=" in str(exc_check.value)
+        assert "force=true" in str(exc_check.value)
+
+        # run() raises with guidance mentioning /batch remote and /batch cancel force=true
+        with pytest.raises(BatchError) as exc_run:
+            asyncio.run(mgr.run(meta, prov))
+        assert "/batch remote" in str(exc_run.value)
+        assert "adopt=" in str(exc_run.value)
+        assert "force=true" in str(exc_run.value)
+
+        # abort() raises with guidance mentioning /batch remote and /batch cancel force=true
+        with pytest.raises(BatchError) as exc_abort:
+            mgr.abort(meta)
+        assert "/batch remote" in str(exc_abort.value)
+        assert "adopt=" in str(exc_abort.value)
+        assert "force=true" in str(exc_abort.value)
+
+        # cancel() without force refuses with guidance
+        with pytest.raises(BatchError) as exc_cancel:
+            asyncio.run(mgr.cancel(meta, prov, force=False))
+        assert "force=true" in str(exc_cancel.value)
+
+        # cancel() with force=True successfully cancels locally without TypeError
+        cancelled = asyncio.run(mgr.cancel(meta, prov, force=True))
+        assert cancelled["status"] == "cancelled"
+
+    def test_r3_batch_remote_command(self, mgr, monkeypatch, capsys):
+        from chatybot.commands.batch import _sc_remote
+        from chatybot.commands.context import CommandContext
+
+        class DummyApp:
+            trace_raw_payload = False
+            logging_manager = None
+            class DummyConfigMgr:
+                def list_batch_capable_models(self):
+                    return ["batch_model"]
+                def get_model_config(self, alias):
+                    return {"vendor": "openrouter", "api_key": "MOCK_KEY", "batch": True}
+            config_manager = DummyConfigMgr()
+
+        monkeypatch.setenv("MOCK_KEY", "key-123")
+
+        class RemoteListProvider(FakeProvider):
+            async def list(self, session=None):
+                return [
+                    {"id": "batch_remote_001", "status": "completed", "model": "openai/gpt-4o", "created_at": 1700000000},
+                    {"id": "batch_remote_002", "status": "in_progress", "model": "openai/gpt-4o-mini", "created_at": 1700000500},
+                ]
+
+        monkeypatch.setattr("chatybot.commands.batch.make_provider", lambda cfg, key, **kw: RemoteListProvider())
+
+        ctx = CommandContext(buffer_manager=None, config_manager=DummyApp.config_manager,
+                             i18n=None, session_store=None, app=DummyApp())
+
+        from chatybot.commands.registry import CommandAction
+        res = asyncio.run(_sc_remote(ctx, mgr, ""))
+        assert res.action == CommandAction.HANDLED
+        out = capsys.readouterr().out
+        assert "[Remote Batches (openrouter)]" in out
+        assert "batch_remote_001" in out
+        assert "batch_remote_002" in out
+        assert "Tip: To adopt a remote batch into a local session: /batch run <local_name> adopt=<remote_id>" in out
+
+    def test_r4_openrouter_cancel_with_id_raises_batch_error(self):
+        prov = OpenRouterBatchProvider(api_key="mock-key")
+        with pytest.raises(BatchError) as exc_info:
+            asyncio.run(prov.cancel("any_provider_id"))
+        assert "OpenRouter does not support cancelling" in str(exc_info.value)
+

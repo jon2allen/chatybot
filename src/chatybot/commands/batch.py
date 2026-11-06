@@ -27,6 +27,8 @@ from chatybot.batch_manager import (
     BatchError,
     BatchManager,
     EDITABLE_STATES,
+    MistralBatchProvider,
+    OpenRouterBatchProvider,
     TERMINAL_STATES,
     is_empty_result,
     make_provider,
@@ -1070,6 +1072,104 @@ async def _sc_cancel(ctx: CommandContext, mgr: BatchManager, rest: str) -> Comma
     return CommandResult.ok()
 
 
+async def _sc_remote(ctx: CommandContext, mgr: BatchManager, rest: str) -> CommandResult:
+    target = (rest or "").strip()
+    provider_obj = None
+    provider_name = ""
+
+    # 1. If target matches a local batch name or ID, use that batch's provider config
+    if target:
+        try:
+            meta = mgr.resolve(target)
+            provider_obj = _build_provider(ctx.app, meta)
+            provider_name = meta.get("provider") or getattr(provider_obj, "name", "unknown")
+        except Exception:
+            pass
+
+    # 2. If target is a known provider name or we still need a provider
+    if provider_obj is None:
+        target_lower = target.lower()
+        if target and target_lower not in ("openrouter", "mistral"):
+            raise BatchError(f"Batch or provider '{target}' not found. Use 'openrouter', 'mistral', or an existing batch name.")
+
+        desired_provider = target_lower if target_lower in ("openrouter", "mistral") else None
+
+        # Try active draft first if no specific provider requested
+        if desired_provider is None:
+            active_name = mgr.get_active_draft()
+            if active_name:
+                try:
+                    meta = mgr.get(active_name)
+                    provider_obj = _build_provider(ctx.app, meta)
+                    provider_name = meta.get("provider") or getattr(provider_obj, "name", "unknown")
+                except Exception:
+                    pass
+
+        # Try batch-capable models from config
+        if provider_obj is None:
+            config_mgr = ctx.app.config_manager
+            batch_models = config_mgr.list_batch_capable_models()
+            for alias in batch_models:
+                try:
+                    cfg = config_mgr.get_model_config(alias)
+                    from ..config_model import detect_provider
+                    detected = (cfg.get("vendor") or detect_provider(cfg) or "").lower()
+                    if desired_provider is None or detected == desired_provider:
+                        api_key_env = cfg.get("api_key", "")
+                        api_key = os.environ.get(api_key_env) if api_key_env else None
+                        if api_key:
+                            provider_obj = make_provider(
+                                cfg,
+                                api_key,
+                                trace_raw_payload=getattr(ctx.app, "trace_raw_payload", False),
+                                logging_manager=getattr(ctx.app, "logging_manager", None),
+                            )
+                            provider_name = detected
+                            break
+                except Exception:
+                    continue
+
+        # Fallback to direct environment variables
+        if provider_obj is None:
+            prov = desired_provider or "openrouter"
+            if prov == "mistral":
+                api_key = os.environ.get("MISTRAL_API_KEY")
+                if not api_key:
+                    raise BatchError("API key not found: set MISTRAL_API_KEY to list Mistral batches.")
+                provider_obj = MistralBatchProvider(api_key)
+                provider_name = "mistral"
+            else:
+                api_key = os.environ.get("OPENROUTER_API_KEY")
+                if not api_key:
+                    raise BatchError("API key not found: set OPENROUTER_API_KEY to list OpenRouter batches.")
+                provider_obj = OpenRouterBatchProvider(api_key)
+                provider_name = "openrouter"
+
+    print(f"Querying remote batches from {provider_name}...")
+    try:
+        remote_batches = await provider_obj.list()
+    except Exception as e:
+        raise BatchError(f"Failed to list remote batches from {provider_name}: {e}")
+
+    if not remote_batches:
+        print(f"No remote batches found for {provider_name}.")
+        return CommandResult.ok()
+
+    print(f"\n[Remote Batches ({provider_name})] ({len(remote_batches)} found)")
+    for b in remote_batches:
+        bid = b.get("id") or "unknown"
+        status = b.get("status") or "unknown"
+        model = b.get("model") or ""
+        created_at = b.get("created_at") or ""
+        extra = f"  model={model}" if model else ""
+        if created_at:
+            extra += f"  created={created_at}"
+        print(f"  {bid:<30} status={status:<15}{extra}")
+
+    print("\nTip: To adopt a remote batch into a local session: /batch run <local_name> adopt=<remote_id>")
+    return CommandResult.ok()
+
+
 async def _sc_retry(ctx: CommandContext, mgr: BatchManager, rest: str) -> CommandResult:
     print("'/batch retry' is scheduled for Phase 3 (new batch from failed/"
           "invalid items). For now, extract failed items from results.jsonl "
@@ -1108,11 +1208,12 @@ _SUBCOMMAND_DISPATCH = {
     "purge": _sc_purge,
     "retry": _sc_retry,
     "list": _sc_list,
+    "remote": _sc_remote,
 }
 
 
 @command("/batch", help="Batch API jobs: stage, seal, submit, poll, retrieve",
-         args="<status|start|clone|prompt|add|items|ids|show|edit|remove|clear|dump|end|abort|run|check|results|retry|list|cancel|purge> [name] [key=value ...]",
+         args="<status|start|clone|prompt|add|items|ids|show|edit|remove|clear|dump|end|abort|run|check|results|retry|list|cancel|purge|remote> [name] [key=value ...]",
          category="batch")
 async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandResult:
     app = ctx.app
@@ -1125,7 +1226,7 @@ async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandRe
     if not handler:
         print(f"Unknown batch subcommand: {subcmd}. Use start, clone, prompt, add, items, "
               "ids, show, edit, remove, clear, dump, end, abort, run, check, "
-              "results, retry, list, cancel, purge, or status.")
+              "results, retry, list, cancel, purge, remote, or status.")
         return CommandResult.ok()
 
     try:
