@@ -2213,7 +2213,3 @@ class TestBatchPayloadSizeLimits:
         status_out = capsys.readouterr().out
         assert "Payload:" in status_out
 
-
-
-
-

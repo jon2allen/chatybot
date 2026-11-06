@@ -854,8 +854,13 @@ async def _sc_dump(ctx: CommandContext, mgr: BatchManager, rest: str) -> Command
     opts, tokens = _parse_args(rest, keys=DUMP_OPTS)
     meta = mgr.resolve(_name_token(rest))
     payload = mgr.dump_payload(meta)
-    payload_len = len(payload.encode("utf-8"))
-    size_str = f" ({_format_bytes(payload_len)})" if payload_len else ""
+    wire_bytes = meta.get("payload_bytes")
+    if not wire_bytes and payload:
+        try:
+            wire_bytes = len(json.dumps(json.loads(payload), separators=(",", ":")).encode("utf-8"))
+        except Exception:
+            wire_bytes = len(payload.encode("utf-8"))
+    size_str = f" ({_format_bytes(wire_bytes)})" if wire_bytes else ""
     print(f"\nBatch payload for '{meta['name']}'{size_str}:")
     print(payload)
     bound = clean_var_name(opts.get("var"), default="BATCH_PAYLOAD")

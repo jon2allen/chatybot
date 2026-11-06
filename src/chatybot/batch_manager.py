@@ -1097,8 +1097,10 @@ class BatchManager:
             )
         payload = self.build_payload(meta, items)
         payload_json = json.dumps(payload, ensure_ascii=False, indent=2)
-        payload_bytes = len(payload_json.encode("utf-8"))
         self._fsync_write(self._requests_path(meta["batch_id"]), payload_json)
+        # Calculate true wire payload size (compact serialization matching HTTP clients)
+        compact_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+        payload_bytes = len(compact_json.encode("utf-8"))
         warnings = self.check_payload_limits(meta, items, payload_bytes)
         meta["status"] = STATUS_STAGED
         meta["item_count"] = len(items)
