@@ -311,7 +311,17 @@ class BufferManager:
         return self.script_vars.get(var_name)
 
     def detect_image_format(self, file_path: str) -> str:
-        """Detect image MIME type from file extension."""
+        """Detect image MIME type from magic bytes or file extension."""
+        try:
+            with open(file_path, "rb") as f:
+                header = f.read(8)
+            if header.startswith(b"\x89PNG\r\n\x1a\n"):
+                return "image/png"
+            if header.startswith(b"\xff\xd8\xff"):
+                return "image/jpeg"
+        except Exception:
+            pass
+
         ext = Path(file_path).suffix.lower()
         if ext in ['.jpg', '.jpeg']:
             return 'image/jpeg'
@@ -679,10 +689,20 @@ class BufferManager:
             text_prompt = re.sub(r'\$?\{[a-zA-Z_]\w*\[-?\d+\]\}', "", text_prompt)
             # 2. Unbraced subscript: $var[idx]
             text_prompt = re.sub(r'\$[a-zA-Z_]\w*\[-?\d+\]', "", text_prompt)
-            # 3. Braced base: ${var} or {var}
-            text_prompt = re.sub(r'\$?\{[a-zA-Z_]\w*\}', "", text_prompt)
+            # 3. Braced base: ${var} or {var} - preserve valid loaded imagebanks
+            def _clean_braced(m):
+                var = m.group(1)
+                if var in self.image_banks and self.image_banks[var]:
+                    return m.group(0)
+                return ""
+            text_prompt = re.sub(r'\$?\{([a-zA-Z_]\w*)\}', _clean_braced, text_prompt)
             # 4. Unbraced base: $var
-            text_prompt = re.sub(r'\$[a-zA-Z_]\w*\b', "", text_prompt)
+            def _clean_unbraced(m):
+                var = m.group(1)
+                if var in self.image_banks and self.image_banks[var]:
+                    return m.group(0)
+                return ""
+            text_prompt = re.sub(r'\$([a-zA-Z_]\w*)\b', _clean_unbraced, text_prompt)
             # Collapse whitespace gaps left by removed placeholders
             while "  " in text_prompt:
                 text_prompt = text_prompt.replace("  ", " ")

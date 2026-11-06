@@ -370,6 +370,8 @@ chatybot --no-tools
 | `/loadimage <1-5> <file>` | Load an image file into specified image bank | `/loadimage 1 photo.png` |
 | `/showimage [path\|1-5]` | View image or inspect imagebank entry | `/showimage 1` |
 | `/listimages [dir]` | List generated/saved images in active image directory | `/listimages` |
+| `/batch <cmd> [args]` | Asynchronous bulk provider batch inference (start, add, end, run, check, results) | `/batch start run1 model=mistral_batch` |
+| `/batchlist [filters]` | List and filter batch catalog records | `/batchlist status=completed` |
 | `/docs [filename\|search]` | Browse bundled guides/recipes or search across documentation | `/docs search chatdsl` |
 | `/session [subcommand]` | Manage multi-turn session persistence, note annotations, exports, merging, compression, and pruning | `/session start my_project` (or `/session new`) |
 | `/session query [terms] [options]` | Search turns, notes, and scratchpads with boolean logic, date filters, and whole session byte sizes | `/session query "error" since=7d ids` |
@@ -439,11 +441,11 @@ chat --> Generate documentation for this project
 
 #### **Multilingual ChatDSL Guides**
 To assist users in multiple languages, localized versions of the ChatDSL technical guide are available in the [doc](doc/) folder:
-- 📖 [Arabic ChatDSL Guide (العربية)](doc/chatdsl_guide_v1_arabic.md)
-- 📖 [Chinese ChatDSL Guide (简体中文)](doc/chatdsl_guide_v1_chinese.md)
-- 📖 [French ChatDSL Guide (Français)](doc/chatdsl_guide_v1_french.md)
-- 📖 [Italian ChatDSL Guide (Italiano)](doc/chatdsl_guide_v1_italian.md)
-- 📖 [Spanish ChatDSL Guide (Español)](doc/chatdsl_guide_v1_spanish.md)
+- [Arabic ChatDSL Guide (العربية)](doc/chatdsl_guide_v1_arabic.md)
+- [Chinese ChatDSL Guide (简体中文)](doc/chatdsl_guide_v1_chinese.md)
+- [French ChatDSL Guide (Français)](doc/chatdsl_guide_v1_french.md)
+- [Italian ChatDSL Guide (Italiano)](doc/chatdsl_guide_v1_italian.md)
+- [Spanish ChatDSL Guide (Español)](doc/chatdsl_guide_v1_spanish.md)
 
 
 ### **ChatDSL Validation**
@@ -652,6 +654,26 @@ Describe this image: {imagebank1}
 | `/imagebank{1-5} <file>` | Load image into bank | `/imagebank1 cat.jpg` |
 | `/imagebank{1-5} clear` | Clear an image bank | `/imagebank1 clear` |
 | `/imagebank{1-5} show` | Show image bank info | `/imagebank1 show` |
+
+#### **Batch Vision Inference (`/batch add {imagebankN}`)**
+Images loaded into image banks can also be staged and submitted to asynchronous provider Batch APIs (such as `mistral_batch`):
+```bash
+/imagebank1 pics/sample.jpg
+/model mistral_batch
+/batch start photo_analysis model=mistral_batch
+/batch prompt "Describe the primary elements in this image."
+/batch add {imagebank1}
+/batch end
+/batch run photo_analysis
+/batch check photo_analysis wait=true
+/batch results photo_analysis detail=true
+```
+
+> [!NOTE]
+> **Payload Size & Format Guidelines for Batch Vision**:
+> - **Inline Payload Limits**: Mistral and other providers process inline batch jobs via standard HTTP POST endpoints. Embedding large or uncompressed base64 images (e.g. >2-4 MB) can cause edge reverse proxies / load balancers to reject the request with a generic `HTTP 400 Bad Request` HTML page before reaching the API backend.
+> - **Compression**: Ensure images are compressed (standard JPEG/PNG under ~1.5 MB) before loading them into image banks for batch jobs.
+> - **Format Autodetection**: Chatybot automatically inspects image magic header bytes to resolve the true MIME format if the file extension does not match (e.g., JPEG URLs serving PNG bytes).
 
 ### **Conditional Logic**
 ```dsl

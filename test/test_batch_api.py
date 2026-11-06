@@ -2016,4 +2016,100 @@ class TestMistralProvider:
             _build_provider(app, meta)
 
 
+class TestMultimodalBatch:
+    """Tests for multimodal / imagebank support in the Batch API subsystem."""
+
+    def test_batch_add_imagebank_option(self, mgr):
+        ctx = make_ctx(mgr)
+        ctx.buffer_manager.image_banks["imagebank1"] = "data:image/jpeg;base64,fakeimage123"
+        asyncio.run(run_cmd(ctx, "/batch start mm_test model=gptoss_batch"))
+        asyncio.run(run_cmd(ctx, "/batch add imagebank=1"))
+        meta = mgr.find_by_name("mm_test")
+        items = mgr.list_items(meta)
+        assert len(items) == 1
+        assert items[0]["custom_id"] == "ib1_0001"
+        assert items[0]["image"] == "data:image/jpeg;base64,fakeimage123"
+        assert items[0]["origin"] == "imagebank1"
+
+    def test_batch_add_imagebank_placeholder(self, mgr):
+        ctx = make_ctx(mgr)
+        ctx.buffer_manager.image_banks["imagebank2"] = "data:image/png;base64,fakepng456"
+        asyncio.run(run_cmd(ctx, "/batch start mm_test2 model=gptoss_batch"))
+        asyncio.run(run_cmd(ctx, "/batch add What colors are here: {imagebank2}"))
+        meta = mgr.find_by_name("mm_test2")
+        items = mgr.list_items(meta)
+        assert len(items) == 1
+        assert items[0]["custom_id"] == "ib2_0001"
+        assert items[0]["image"] == "data:image/png;base64,fakepng456"
+        assert items[0]["text"] == "What colors are here:"
+
+    def test_batch_add_empty_imagebank_error(self, mgr, capsys):
+        ctx = make_ctx(mgr)
+        ctx.buffer_manager.image_banks["imagebank3"] = ""
+        asyncio.run(run_cmd(ctx, "/batch start mm_empty model=gptoss_batch"))
+        asyncio.run(run_cmd(ctx, "/batch add imagebank=3"))
+        out = capsys.readouterr().out
+        assert "imagebank3 is empty" in out
+        meta = mgr.find_by_name("mm_empty")
+        assert len(mgr.list_items(meta)) == 0
+
+    def test_build_payload_multimodal(self, mgr):
+        meta = mgr.start("mm_payload", model_alias="mistral_batch",
+                         model_name="mistral-large-latest",
+                         provider="mistral", prompt="Analyze images.")
+        mgr.add_items(meta, ["Identify subject"], id_prefix="ib1_",
+                      image="data:image/jpeg;base64,payloadimage")
+        items = mgr.list_items(meta)
+        payload = mgr.build_payload(meta, items)
+        req = payload["requests"][0]
+        body = req["body"]
+        assert len(body["messages"]) == 2
+        assert body["messages"][0]["role"] == "system"
+        assert body["messages"][0]["content"] == "Analyze images."
+        user_msg = body["messages"][1]
+        assert user_msg["role"] == "user"
+        assert isinstance(user_msg["content"], list)
+        assert user_msg["content"][0] == {"type": "text", "text": "Identify subject"}
+        assert user_msg["content"][1] == {
+            "type": "image_url",
+            "image_url": {"url": "data:image/jpeg;base64,payloadimage"}
+        }
+
+    def test_build_payload_image_only(self, mgr):
+        meta = mgr.start("mm_img_only", model_alias="mistral_batch",
+                         model_name="mistral-large-latest",
+                         provider="mistral", prompt="List 3 colors.")
+        mgr.add_items(meta, [""], id_prefix="ib1_",
+                      image="data:image/jpeg;base64,payloadimage")
+        items = mgr.list_items(meta)
+        payload = mgr.build_payload(meta, items)
+        user_msg = payload["requests"][0]["body"]["messages"][1]
+        assert len(user_msg["content"]) == 1
+        assert user_msg["content"][0]["type"] == "image_url"
+
+    def test_multimodal_show_item_and_items(self, mgr, capsys):
+        ctx = make_ctx(mgr)
+        ctx.buffer_manager.image_banks["imagebank1"] = "data:image/jpeg;base64," + "A" * 1000
+        asyncio.run(run_cmd(ctx, "/batch start mm_show model=gptoss_batch"))
+        asyncio.run(run_cmd(ctx, "/batch add imagebank=1"))
+        asyncio.run(run_cmd(ctx, "/batch items mm_show"))
+        out = capsys.readouterr().out
+        assert "[image imagebank1]" in out
+        asyncio.run(run_cmd(ctx, "/batch show ib1_0001 mm_show"))
+        out2 = capsys.readouterr().out
+        assert "[Attached Image: imagebank1 (1023 bytes)]" in out2
+        assert "A" * 50 not in out2
+
+    def test_mistral_html_400_hint(self):
+        from chatybot.batch_manager import MistralBatchProvider
+        err = MistralBatchProvider._http_error(
+            400,
+            "<!doctype html><html><title>Bad Request (400)</title><body><h1>Bad Request (400)</h1></body></html>",
+            "https://api.mistral.ai/v1/batch/jobs"
+        )
+        assert "Mistral's edge gateway rejected the request with HTML 400 Bad Request" in str(err)
+        assert "Ensure images are compressed" in str(err)
+
+
+
 

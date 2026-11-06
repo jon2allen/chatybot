@@ -153,7 +153,15 @@ class OpenRouterBatchProvider:
 
     @staticmethod
     def _http_error(status: int, body: str, url: str) -> BatchError:
-        return BatchError(f"HTTP {status} from {url}: {body[:500]}")
+        extra_hint = ""
+        if status == 400 and ("<html" in body.lower() or "<!doctype" in body.lower()):
+            extra_hint = (
+                "\nHint: Mistral's edge gateway rejected the request with HTML 400 Bad Request. "
+                "This usually indicates the inline batch payload exceeded the HTTP POST size limit "
+                "(typically caused by embedding large or uncompressed base64 images). "
+                "Ensure images are compressed (e.g., JPEG under ~1.5 MB) or reduce batch size."
+            )
+        return BatchError(f"HTTP {status} from {url}: {body[:500]}{extra_hint}")
 
     async def _request(self, session: aiohttp.ClientSession, method: str, url: str,
                        json_body: dict | None = None,
@@ -349,7 +357,15 @@ class MistralBatchProvider:
 
     @staticmethod
     def _http_error(status: int, body: str, url: str) -> BatchError:
-        return BatchError(f"HTTP {status} from {url}: {body[:500]}")
+        extra_hint = ""
+        if status == 400 and ("<html" in body.lower() or "<!doctype" in body.lower()):
+            extra_hint = (
+                "\nHint: Mistral's edge gateway rejected the request with HTML 400 Bad Request. "
+                "This usually indicates the inline batch payload exceeded the HTTP POST size limit "
+                "(typically caused by embedding large or uncompressed base64 images). "
+                "Ensure images are compressed (e.g., JPEG under ~1.5 MB) or reduce batch size."
+            )
+        return BatchError(f"HTTP {status} from {url}: {body[:500]}{extra_hint}")
 
     async def _request(self, session: aiohttp.ClientSession, method: str, url: str,
                        json_body: dict | None = None,
@@ -882,12 +898,14 @@ class BatchManager:
         return len(items)
 
     def add_items(self, meta: dict, texts: list[str], *, id_prefix: str,
-                  explicit_id: str | None = None, origin: str = "manual") -> list[dict]:
+                  explicit_id: str | None = None, origin: str = "manual",
+                  image: str | None = None) -> list[dict]:
         """Append one or many items with auto-generated sequenced IDs.
 
         Direct adds use ``<batch_name>_0001``; filebank ingestion uses
-        ``fb<N>_line_0001``; script vars use ``<var_name>_0001``
-        (proposal §4.3). Explicit colliding IDs are refused."""
+        ``fb<N>_line_0001``; imagebank ingestion uses ``ib<N>_0001``;
+        script vars use ``<var_name>_0001`` (proposal §4.3). Explicit colliding
+        IDs are refused."""
         if meta["status"] not in EDITABLE_STATES:
             if meta["status"] == STATUS_STAGED:
                 raise BatchError(
@@ -929,12 +947,15 @@ class BatchManager:
                 seq_max += 1
                 custom_id = f"{id_prefix}{seq_max:04d}"
             existing_ids.add(custom_id)
-            new_items.append({
+            item_data = {
                 "custom_id": custom_id,
                 "text": text,
                 "origin": origin,
                 "added_at": int(time.time()),
-            })
+            }
+            if image:
+                item_data["image"] = image
+            new_items.append(item_data)
         self._append_items(meta, new_items, total_count=len(items) + len(new_items))
         return new_items
 
@@ -1001,10 +1022,12 @@ class BatchManager:
         scanner = self._get_scanner()
         hits = []
         for item in items:
-            result = scanner.scan(item["text"] or "")
-            if result is not None:
-                verdict, reason = result
-                hits.append((item["custom_id"], str(verdict), reason))
+            scan_text = item.get("text") or ""
+            if scan_text:
+                result = scanner.scan(scan_text)
+                if result is not None:
+                    verdict, reason = result
+                    hits.append((item["custom_id"], str(verdict), reason))
         if hits:
             raise BatchError(
                 "Security scan failed - staging remains open (status: draft).\n"
@@ -1031,7 +1054,17 @@ class BatchManager:
             messages = []
             if meta.get("prompt"):
                 messages.append({"role": "system", "content": meta["prompt"]})
-            messages.append({"role": "user", "content": item["text"]})
+            if item.get("image"):
+                content_parts = []
+                if item.get("text"):
+                    content_parts.append({"type": "text", "text": item["text"]})
+                content_parts.append({
+                    "type": "image_url",
+                    "image_url": {"url": item["image"]}
+                })
+                messages.append({"role": "user", "content": content_parts})
+            else:
+                messages.append({"role": "user", "content": item.get("text") or ""})
             body: dict[str, Any] = {"messages": messages}
             if meta.get("temperature") is not None:
                 body["temperature"] = meta["temperature"]
@@ -1120,7 +1153,7 @@ class BatchManager:
         if not input_cost_per_mtok:
             return None
         prompt_chars = len(meta.get("prompt") or "") * len(items)
-        chars = sum(len(it["text"]) for it in items) + prompt_chars
+        chars = sum(len(it.get("text") or "") for it in items) + prompt_chars
         est_input_tokens = chars // 4
         est_total = est_input_tokens + (max_tokens or 0) * len(items)
         batch_rate = input_cost_per_mtok / 1_000_000 * 0.5  # 50% batch discount

@@ -45,7 +45,7 @@ BATCH_KV_KEYS = {"id", "var", "filebank", "split", "file", "limit", "range",
                  "force", "adopt", "wait", "clear", "prompt", "model",
                  "temp", "temperature", "max_tokens", "top_p",
                  "freq_penalty", "frequency_penalty",
-                 "pres_penalty", "presence_penalty", "detail"}
+                 "pres_penalty", "presence_penalty", "detail", "imagebank"}
 
 # Built-in prompt templates (proposal §4.2 "Named Template")
 BUILTIN_PROMPTS = {
@@ -172,7 +172,7 @@ def _build_provider(app: Any, meta: dict):
 SAMPLING_KEYS = {"temp", "temperature", "max_tokens", "top_p",
                  "freq_penalty", "frequency_penalty",
                  "pres_penalty", "presence_penalty"}
-ADD_OPTS = {"id", "var", "filebank", "split", "file"}
+ADD_OPTS = {"id", "var", "filebank", "split", "file", "imagebank"}
 CLONE_OPTS = {"prompt", "model", "force"} | SAMPLING_KEYS
 START_OPTS = {"model", "clear"} | SAMPLING_KEYS
 PROMPT_OPTS = {"file"}
@@ -311,10 +311,12 @@ def _text_from_tokens(tokens: list[str]) -> str:
 
 
 def _id_prefix_for_source(source_kind: str, source_name: str, split_mode: str) -> str:
-    """Auto-ID prefixes per proposal §4.3: fb1_line_ / <var>_ / <name>_."""
+    """Auto-ID prefixes per proposal §4.3: fb1_line_ / ib1_ / <var>_ / <name>_."""
     mode_slug = {"lines": "line", "paragraphs": "paragraph"}.get(split_mode, "item")
     if source_kind == "filebank":
         return f"{source_name}_{mode_slug}_"
+    if source_kind == "imagebank":
+        return f"{source_name}_"
     return f"{sanitize_batch_name(source_name)}_"
 
 
@@ -418,11 +420,12 @@ def _try_active_draft(mgr: BatchManager) -> dict | None:
 # ---------------------------------------------------------------------------
 
 def _resolve_add_source(app: Any, opts: dict[str, str], tokens: list[str],
-                        meta: dict, split_mode: str) -> tuple[list[str], str, str] | None:
-    """Resolve texts, origin, and id_prefix from add options or free tokens.
+                        meta: dict, split_mode: str) -> tuple[list[str], str, str, str | None] | None:
+    """Resolve texts, origin, id_prefix, and optional image from add options or free tokens.
 
-    Returns (texts, origin, id_prefix) or None on validation failure.
+    Returns (texts, origin, id_prefix, image) or None on validation failure.
     """
+    image = None
     if "filebank" in opts:
         bank_name = f"filebank{opts['filebank']}"
         content = app.buffer_manager.file_banks.get(bank_name, "")
@@ -433,6 +436,20 @@ def _resolve_add_source(app: Any, opts: dict[str, str], tokens: list[str],
         origin = bank_name
         id_prefix = _id_prefix_for_source("filebank", f"fb{opts['filebank']}", split_mode)
         texts = _split_for_add(content, split_mode)
+    elif "imagebank" in opts:
+        bank_raw = opts["imagebank"].lower().replace("imagebank", "").strip()
+        bank_name = f"imagebank{bank_raw}"
+        bm = getattr(app, "buffer_manager", None)
+        content = bm.image_banks.get(bank_name, "") if bm else ""
+        if not content:
+            print(f"Error: {bank_name} is empty. "
+                  f"Load it first: /imagebank{bank_raw} <path>")
+            return None
+        origin = bank_name
+        id_prefix = _id_prefix_for_source("imagebank", f"ib{bank_raw}", "none")
+        text = _text_from_tokens(tokens)
+        texts = [text]
+        image = content
     elif "var" in opts:
         var_name = clean_var_name(opts["var"])
         value = _get_var_value(app, var_name)
@@ -458,17 +475,35 @@ def _resolve_add_source(app: Any, opts: dict[str, str], tokens: list[str],
         texts = _split_for_add(content, split_mode)
     else:
         text = _text_from_tokens(tokens)
-        if not text:
-            print("Usage: /batch add <text | filebank=N | var=NAME | file=PATH> "
-                  "[id=<id>] [split=lines|paragraphs]")
-            return None
-        texts = [text]
-        origin = "manual"
-        id_prefix = f"{sanitize_batch_name(meta['name'])}_"
-    if not texts:
+        # Check if free tokens reference an imagebank placeholder: {imagebankN} or $imagebankN
+        import re
+        img_match = re.search(r"\$?\{?(imagebank([1-5]))\}?", text)
+        if img_match:
+            bank_name = img_match.group(1)
+            bank_num = img_match.group(2)
+            bm = getattr(app, "buffer_manager", None)
+            content = bm.image_banks.get(bank_name, "") if bm else ""
+            if not content:
+                print(f"Error: {bank_name} is empty. "
+                      f"Load it first: /imagebank{bank_num} <path>")
+                return None
+            origin = bank_name
+            id_prefix = _id_prefix_for_source("imagebank", f"ib{bank_num}", "none")
+            clean_text = re.sub(r"\$?\{?imagebank[1-5]\}?", "", text).strip()
+            texts = [clean_text]
+            image = content
+        else:
+            if not text:
+                print("Usage: /batch add <text | filebank=N | var=NAME | file=PATH | imagebank=N> "
+                      "[id=<id>] [split=lines|paragraphs]")
+                return None
+            texts = [text]
+            origin = "manual"
+            id_prefix = f"{sanitize_batch_name(meta['name'])}_"
+    if not texts and not image:
         print("Error: no items to add (source was empty after splitting).")
         return None
-    return texts, origin, id_prefix
+    return texts, origin, id_prefix, image
 
 
 def _print_added_summary(meta: dict, added: list[dict]) -> None:
@@ -476,7 +511,8 @@ def _print_added_summary(meta: dict, added: list[dict]) -> None:
     print(f"Added {len(added)} item(s) to '{meta['name']}' "
           f"({meta['item_count']} total):")
     for item in added[:5]:
-        preview = (item["text"][:40] + "...") if len(item["text"]) > 40 else item["text"]
+        display_text = item.get("text") or (f"[image {item.get('origin', '')}]" if item.get("image") else "")
+        preview = (display_text[:40] + "...") if len(display_text) > 40 else display_text
         print(f"  {item['custom_id']}: \"{preview}\"")
     if len(added) > 5:
         print(f"  ... and {len(added) - 5} more (list with /batch items)")
@@ -639,10 +675,11 @@ async def _sc_add(ctx: CommandContext, mgr: BatchManager, rest: str) -> CommandR
     resolved = _resolve_add_source(ctx.app, opts, tokens, meta, split_mode)
     if resolved is None:
         return CommandResult.ok()
-    texts, origin, id_prefix = resolved
+    texts, origin, id_prefix, image = resolved
 
     added = mgr.add_items(meta, texts, id_prefix=id_prefix,
-                          explicit_id=opts.get("id"), origin=origin)
+                          explicit_id=opts.get("id"), origin=origin,
+                          image=image)
     _print_added_summary(meta, added)
     return CommandResult.ok()
 
@@ -655,7 +692,8 @@ async def _sc_items(ctx: CommandContext, mgr: BatchManager, rest: str) -> Comman
     print(f"\n[Staged Items: {meta['name']} ({meta['item_count']} items, "
           f"status: {meta['status']})]")
     for i, item in enumerate(items, offset + 1):
-        preview = (item["text"][:40] + "...") if len(item["text"]) > 40 else item["text"]
+        display_text = item.get("text") or (f"[image {item.get('origin', '')}]" if item.get("image") else "")
+        preview = (display_text[:40] + "...") if len(display_text) > 40 else display_text
         print(f"  #{i}  {item['custom_id']}   \"{preview}\"")
     if not items:
         print("  (no items)")
@@ -708,12 +746,16 @@ async def _sc_show(ctx: CommandContext, mgr: BatchManager, rest: str) -> Command
     result = mgr.get_result(meta["batch_id"], custom_id)
     status_note = (f"   Status: {result['status_code']}"
                    if result is not None else "")
+    image_info = f"   Image: {item['origin']}" if item.get("image") else ""
     print(f"\nItem: {item['custom_id']}  (batch: {meta['name']})")
     print(f"Origin: {item.get('origin', 'manual')}   "
-          f"Chars: {len(item['text'])}{status_note}")
+          f"Chars: {len(item.get('text') or '')}{image_info}{status_note}")
     print("-" * 60)
     print("[Input]:")
-    print(item["text"])
+    if item.get("text"):
+        print(item["text"])
+    if item.get("image"):
+        print(f"[Attached Image: {item.get('origin', 'imagebank')} ({len(item['image'])} bytes)]")
     if result is not None:
         print("-" * 60)
         if result.get("error"):
@@ -925,7 +967,11 @@ async def _sc_results(ctx: CommandContext, mgr: BatchManager, rest: str) -> Comm
         for it in mgr.list_items(meta):
             cid = it.get("custom_id")
             if cid in needed_ids:
-                items_by_id[cid] = it.get("text", "")
+                txt = it.get("text", "")
+                if it.get("image"):
+                    img_tag = f"[image {it.get('origin', 'imagebank')}]"
+                    txt = f"{txt} {img_tag}".strip() if txt else img_tag
+                items_by_id[cid] = txt
                 if len(items_by_id) == len(needed_ids):
                     break
 

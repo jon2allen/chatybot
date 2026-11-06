@@ -101,6 +101,11 @@ class TestResolveApiKey:
         monkeypatch.setenv("MISTRAL_API_KEY", "real-secret-12345")
         assert resolve_api_key("MISTRAL_API_KEY") == "real-secret-12345"
 
+    def test_resolves_chatybot_suffix_fallback(self, monkeypatch):
+        monkeypatch.delenv("MISTRAL_API_KEY", raising=False)
+        monkeypatch.setenv("MISTRAL_API_KEY_CHATYBOT", "chatybot-secret-67890")
+        assert resolve_api_key("MISTRAL_API_KEY") == "chatybot-secret-67890"
+
     def test_resolves_known_raw_key_prefixes(self, monkeypatch):
         monkeypatch.delenv("sk-openrouter-key", raising=False)
         assert resolve_api_key("sk-openrouter-key") == "sk-openrouter-key"

@@ -150,8 +150,10 @@ def resolve_api_key(key_spec: str | None) -> str | None:
     if not key_spec:
         return None
 
-    # 1. Check environment variable
+    # 1. Check environment variable (with _CHATYBOT suffix fallback)
     env_val = os.environ.get(key_spec)
+    if not env_val and not key_spec.endswith("_CHATYBOT"):
+        env_val = os.environ.get(f"{key_spec}_CHATYBOT")
     if env_val:
         return env_val
 

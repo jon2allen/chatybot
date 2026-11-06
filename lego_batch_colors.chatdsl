@@ -1,0 +1,37 @@
+# lego_batch_colors.chatdsl
+# Batch vision analysis of Lego set image using mistral_batch
+
+# 1. Load the downloaded Lego image into imagebank1
+/imagebank1 pics/75419-1.jpg
+
+# 2. Open the staging draft configured for mistral_batch
+/model mistral_batch
+/batch start lego_colors model=mistral_batch temp=0.3
+
+# 3. Set the batch system prompt template
+/batch prompt "List 3 colors that are in the image."
+
+# 4. Ingest and pass the imagebank item
+/batch add {imagebank1}
+
+# 5. Inspect draft items before sealing
+/batch items
+
+# 6. Close staging: runs secret scanner and locks manifest
+/batch end lego_colors
+
+# 7. Dump compiled request payload for verification
+/batch dump lego_colors
+
+# 8. Submit to the Mistral Batch API
+/batch run lego_colors
+
+# 9. Poll until complete and retrieve results
+/batch check lego_colors wait=true
+
+# 10. Display retrieved results with prompt and input detail
+/batch results lego_colors detail=true
+
+# 11. Restore interactive chat model
+/model mistral_1
+

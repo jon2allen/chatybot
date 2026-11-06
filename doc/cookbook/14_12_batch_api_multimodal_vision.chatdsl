@@ -1,0 +1,41 @@
+# Recipe 14.12 - Multimodal Batch Vision Pipeline (batch_api)
+# Run: /script doc/cookbook/14_12_batch_api_multimodal_vision.chatdsl
+#
+# Demonstrates batch vision analysis using /batch with image banks ({imagebankN}
+# or imagebank=N) on a vision-capable batch model (e.g. mistral_batch).
+#
+# NOTE ON IMAGE SIZE & FORMAT:
+# Inline batch payloads embed images as base64 data URIs. To avoid edge gateway
+# rejection (HTML 400 Bad Request caused by payload limits), ensure images are
+# reasonably compressed (JPEG/PNG under ~1.5 MB).
+
+# 1. Load the image into image bank 1
+/imagebank1 pics/75419-1.jpg
+
+# 2. Select the batch model and initialize the batch draft
+/model mistral_batch
+/batch start vision_demo model=mistral_batch temp=0.3
+
+# 3. Set the common prompt template for all items
+/batch prompt "List 3 colors that are in the image."
+
+# 4. Add the image from image bank 1 as a batch item
+/batch add {imagebank1}
+
+# 5. Inspect draft items before sealing
+/batch items
+
+# 6. Seal the batch manifest (runs security scan and builds payload)
+/batch end vision_demo
+
+# 7. Submit to provider Batch API
+/batch run vision_demo
+
+# 8. Poll until finished and retrieve results
+/batch check vision_demo wait=true
+
+# 9. View results with template prompt and response detail
+/batch results vision_demo detail=true
+
+# 10. Switch back to interactive chat model
+/model mistral_1
