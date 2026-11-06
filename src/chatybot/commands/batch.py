@@ -326,12 +326,28 @@ def _batch_config(app: Any) -> dict:
     return app.config_manager.config.get("batch", {}) or {}
 
 
+def _format_bytes(num_bytes: int) -> str:
+    """Format a byte count into a human-readable string (B, KB, MB, GB)."""
+    if num_bytes <= 0:
+        return ""
+    if num_bytes < 1024:
+        return f"{num_bytes} B"
+    elif num_bytes < 1024 * 1024:
+        return f"{num_bytes / 1024:.1f} KB"
+    elif num_bytes < 1024 * 1024 * 1024:
+        return f"{num_bytes / (1024 * 1024):.2f} MB"
+    else:
+        return f"{num_bytes / (1024 * 1024 * 1024):.2f} GB"
+
+
 def _print_batch_status(meta: dict) -> None:
     print(f"\nBatch: {meta['name']}  (ID: {meta['batch_id']})")
     print(f"  Status:     {meta['status']}")
     print(f"  Provider:   {meta['provider']}  Model: {meta['model']} "
           f"(alias: {meta.get('model_alias')})")
     print(f"  Items:      {meta.get('item_count', 0)}")
+    if meta.get("payload_bytes"):
+        print(f"  Payload:    {_format_bytes(meta['payload_bytes'])}")
     if meta.get("provider_id"):
         print(f"  Provider ID: {meta['provider_id']}")
     if meta.get("host_backend"):
@@ -838,7 +854,9 @@ async def _sc_dump(ctx: CommandContext, mgr: BatchManager, rest: str) -> Command
     opts, tokens = _parse_args(rest, keys=DUMP_OPTS)
     meta = mgr.resolve(_name_token(rest))
     payload = mgr.dump_payload(meta)
-    print(f"\nBatch payload for '{meta['name']}':")
+    payload_len = len(payload.encode("utf-8"))
+    size_str = f" ({_format_bytes(payload_len)})" if payload_len else ""
+    print(f"\nBatch payload for '{meta['name']}'{size_str}:")
     print(payload)
     bound = clean_var_name(opts.get("var"), default="BATCH_PAYLOAD")
     ctx.app.buffer_manager.set_script_var(bound, payload, allow_protected=True)
@@ -849,8 +867,13 @@ async def _sc_dump(ctx: CommandContext, mgr: BatchManager, rest: str) -> Command
 async def _sc_end(ctx: CommandContext, mgr: BatchManager, rest: str) -> CommandResult:
     meta = mgr.resolve(_name_token(rest))
     result = mgr.end(meta)
+    bytes_str = _format_bytes(result.get("payload_bytes", 0))
+    size_info = f" ({bytes_str})" if bytes_str else ""
     print(f"Sealed batch '{meta['name']}': {result['item_count']} items scanned "
-          "(no security hits), payload compiled to requests.json.")
+          f"(no security hits), payload compiled to requests.json{size_info}.")
+    warnings = result.get("warnings") or []
+    for w in warnings:
+        print(f"  Warning: {w}")
     print(f"Status: staged. Submit with /batch run {meta['name']}")
     return CommandResult.ok()
 
@@ -899,6 +922,11 @@ async def _sc_run(ctx: CommandContext, mgr: BatchManager, rest: str) -> CommandR
              "input_cost_per_mtok); budget guard skipped.")
     else:
         print(f"  Pre-submit cost estimate: ${estimate:.4f}")
+
+    if meta.get("payload_bytes"):
+        warnings = mgr.check_payload_limits(meta, items, meta["payload_bytes"])
+        for w in warnings:
+            print(f"  Warning: {w}")
 
     meta = await mgr.run(
         meta, provider_obj,

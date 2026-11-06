@@ -2111,5 +2111,109 @@ class TestMultimodalBatch:
         assert "Ensure images are compressed" in str(err)
 
 
+class TestBatchPayloadSizeLimits:
+    def test_format_bytes(self):
+        from chatybot.commands.batch import _format_bytes
+        assert _format_bytes(0) == ""
+        assert _format_bytes(500) == "500 B"
+        assert _format_bytes(1024) == "1.0 KB"
+        assert _format_bytes(2048) == "2.0 KB"
+        assert _format_bytes(1024 * 1024) == "1.00 MB"
+        assert _format_bytes(2500000) == "2.38 MB"
+        assert _format_bytes(2 * 1024 * 1024 * 1024) == "2.00 GB"
+
+    def test_check_payload_limits_mistral(self, mgr):
+        meta = {"provider": "mistral", "name": "test_m"}
+        items_small = [{"custom_id": "1", "text": "hello"}]
+        items_image = [{"custom_id": "1", "text": "hello", "image": "data:image/jpeg;base64,123"}]
+
+        # Under 2 MB: no warnings
+        assert mgr.check_payload_limits(meta, items_small, 500 * 1024) == []
+
+        # 2 MB - 4 MB: approaching limit
+        w_warn = mgr.check_payload_limits(meta, items_small, int(2.5 * 1024 * 1024))
+        assert len(w_warn) == 1
+        assert "approaches Mistral's inline body limit" in w_warn[0]
+
+        # 2 MB - 4 MB with image: image compression hint
+        w_img = mgr.check_payload_limits(meta, items_image, int(2.5 * 1024 * 1024))
+        assert len(w_img) == 1
+        assert "compress attached images" in w_img[0]
+
+        # >= 4 MB: exceeds limit
+        w_exceed = mgr.check_payload_limits(meta, items_image, int(4.5 * 1024 * 1024))
+        assert len(w_exceed) == 1
+        assert "exceeds Mistral's inline body limit" in w_exceed[0]
+        assert "HTTP 400 Bad Request" in w_exceed[0]
+
+        # Exceeding item count (>10,000)
+        items_10001 = [{"custom_id": str(i), "text": "x"} for i in range(10001)]
+        w_count = mgr.check_payload_limits(meta, items_10001, 1000)
+        assert any("exceeds Mistral's inline limit" in w for w in w_count)
+
+    def test_check_payload_limits_openrouter(self, mgr):
+        meta = {"provider": "openrouter", "name": "test_or"}
+        items = [{"custom_id": "1", "text": "hello"}]
+
+        # Under 100 MB: no warnings
+        assert mgr.check_payload_limits(meta, items, 50 * 1024 * 1024) == []
+
+        # 100 MB - 200 MB: approaching limit
+        w_warn = mgr.check_payload_limits(meta, items, 150 * 1024 * 1024)
+        assert len(w_warn) == 1
+        assert "approaching OpenRouter's 200 MB limit" in w_warn[0]
+
+        # >= 200 MB: exceeds limit
+        w_exceed = mgr.check_payload_limits(meta, items, 210 * 1024 * 1024)
+        assert len(w_exceed) == 1
+        assert "exceeds OpenRouter's 200 MB batch limit" in w_exceed[0]
+        assert "HTTP 413" in w_exceed[0]
+
+    def test_end_returns_size_and_warnings(self, mgr):
+        meta = mgr.start("m_size_test", model_alias="mistral_batch",
+                         model_name="mistral-large-latest",
+                         provider="mistral", prompt="Analyze.")
+        # Add a large item that puts payload > 2 MB
+        large_base64 = "data:image/jpeg;base64," + "A" * (2500000)
+        mgr.add_items(meta, ["desc"], id_prefix="m_sz_", image=large_base64)
+
+        result = mgr.end(meta)
+        assert result["item_count"] == 1
+        assert result["payload_bytes"] > 2500000
+        assert len(result["warnings"]) == 1
+        assert "approaches Mistral's inline body limit" in result["warnings"][0]
+
+        # Verify meta persisted payload_bytes
+        persisted = mgr.read_meta(meta["batch_id"])
+        assert persisted["payload_bytes"] == result["payload_bytes"]
+
+    def test_cli_end_displays_size_and_warning(self, mgr, capsys):
+        ctx = make_ctx(mgr)
+        mistral_cfg = {
+            "name": "mistral-large-latest",
+            "vendor": "mistral",
+            "batch": True,
+            "api_key": "MISTRAL_API_KEY",
+        }
+        ctx.config_manager.config["models"]["mistral_batch"] = mistral_cfg
+        ctx.config_manager.get_model_config.side_effect = lambda a: ctx.config_manager.config["models"].get(a, mistral_cfg)
+        ctx.config_manager.list_batch_capable_models.return_value = ["gptoss_batch", "mistral_batch"]
+        ctx.buffer_manager.image_banks["imagebank1"] = "data:image/jpeg;base64," + "B" * (4500000)
+        asyncio.run(run_cmd(ctx, "/batch start cli_warn model=mistral_batch"))
+        asyncio.run(run_cmd(ctx, "/batch add imagebank=1"))
+        asyncio.run(run_cmd(ctx, "/batch end"))
+        out = capsys.readouterr().out
+
+        assert "payload compiled to requests.json (" in out
+        assert "Warning: Payload size" in out
+        assert "exceeds Mistral's inline body limit" in out
+
+        # Status also shows payload
+        asyncio.run(run_cmd(ctx, "/batch status cli_warn"))
+        status_out = capsys.readouterr().out
+        assert "Payload:" in status_out
+
+
+
 
 

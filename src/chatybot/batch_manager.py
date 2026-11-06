@@ -97,6 +97,17 @@ MISTRAL_API_BASE = "https://api.mistral.ai/v1"
 MISTRAL_CHAT_ENDPOINT = "/v1/chat/completions"
 MISTRAL_INLINE_LIMIT = 10_000
 
+# Provider payload limits and warning thresholds (bytes)
+# OpenRouter enforces a hard 200 MB limit (HTTP 413) on inline batch payloads.
+OPENROUTER_PAYLOAD_LIMIT_BYTES = 200 * 1024 * 1024
+OPENROUTER_PAYLOAD_WARN_BYTES = 100 * 1024 * 1024
+
+# Mistral inline batch endpoint (POST /v1/batch/jobs) is subject to edge reverse proxy
+# body size limits (~2-4 MB). Uncompressed base64 payloads over ~2 MB are at risk of
+# edge HTTP 400 Bad Request rejection.
+MISTRAL_INLINE_WARN_BYTES = 2 * 1024 * 1024
+MISTRAL_INLINE_MAX_RECOMMENDED_BYTES = 4 * 1024 * 1024
+
 # Poll backoff (mirrors the validated POC runner)
 POLL_START_SECONDS = 10
 POLL_MAX_SECONDS = 60
@@ -652,6 +663,7 @@ class BatchManager:
         record = {k: meta.get(k) for k in (
             "batch_id", "provider_id", "name", "provider", "host_backend",
             "model_alias", "model", "prompt", "status", "item_count",
+            "payload_bytes",
             "temperature", "max_tokens", "top_p", "frequency_penalty", "presence_penalty",
             "results_count", "empty_results",
             "created_at", "finalized_at", "cost_usd", "workspace",
@@ -1010,10 +1022,55 @@ class BatchManager:
             self._scanner = SecretScanner()
         return self._scanner
 
+    def check_payload_limits(self, meta: dict, items: list[dict], payload_bytes: int) -> list[str]:
+        """Check payload size and item count against provider limits and return warnings."""
+        warnings: list[str] = []
+        provider = (meta.get("provider") or "").lower()
+        size_mb = payload_bytes / (1024 * 1024)
+        has_images = any(bool(item.get("image")) for item in items)
+
+        if provider == "mistral":
+            if len(items) > MISTRAL_INLINE_LIMIT:
+                warnings.append(
+                    f"Item count ({len(items):,}) exceeds Mistral's inline limit "
+                    f"({MISTRAL_INLINE_LIMIT:,} items). Mistral will reject this submission."
+                )
+            if payload_bytes >= MISTRAL_INLINE_MAX_RECOMMENDED_BYTES:
+                img_hint = " Compress attached images (e.g., JPEG under 1.5 MB) or reduce items." if has_images else " Split the batch into smaller runs."
+                warnings.append(
+                    f"Payload size ({size_mb:.2f} MB) exceeds Mistral's inline body limit (~2-4 MB). "
+                    f"Mistral's edge gateway is very likely to reject the submission with an HTTP 400 Bad Request.{img_hint}"
+                )
+            elif payload_bytes >= MISTRAL_INLINE_WARN_BYTES:
+                img_hint = " If submission fails with HTTP 400, compress attached images." if has_images else " If submission fails with HTTP 400, split the batch into smaller runs."
+                warnings.append(
+                    f"Payload size ({size_mb:.2f} MB) approaches Mistral's inline body limit (~2-4 MB).{img_hint}"
+                )
+
+        elif provider == "openrouter":
+            if payload_bytes >= OPENROUTER_PAYLOAD_LIMIT_BYTES:
+                warnings.append(
+                    f"Payload size ({size_mb:.2f} MB) exceeds OpenRouter's 200 MB batch limit. "
+                    "OpenRouter will reject this submission with HTTP 413. Split the batch into smaller runs."
+                )
+            elif payload_bytes >= OPENROUTER_PAYLOAD_WARN_BYTES:
+                warnings.append(
+                    f"Payload size ({size_mb:.2f} MB) is large and approaching OpenRouter's 200 MB limit. "
+                    "Consider splitting the batch if timeouts or submission issues occur."
+                )
+        else:
+            if payload_bytes >= OPENROUTER_PAYLOAD_LIMIT_BYTES:
+                warnings.append(
+                    f"Payload size ({size_mb:.2f} MB) is unusually large (>200 MB). "
+                    "Verify provider batch request size limits before submitting."
+                )
+
+        return warnings
+
     def end(self, meta: dict) -> dict:
         """Run the Secret Scanner over every staged item, compile
         staging.jsonl into the provider payload requests.json, and lock the
-        manifest (status: staged). Returns {'hits': [(custom_id, reason)]}."""
+        manifest (status: staged). Returns {'hits': [(custom_id, reason)], 'item_count': N, 'payload_bytes': N, 'warnings': [...]}."""
         if meta["status"] not in EDITABLE_STATES:
             raise BatchError(f"Batch '{meta['name']}' is already closed (status: {meta['status']}).")
         items = self._read_items(meta["batch_id"])
@@ -1039,12 +1096,20 @@ class BatchManager:
                 "Unresolved security hits cannot be submitted."
             )
         payload = self.build_payload(meta, items)
-        self._fsync_write(self._requests_path(meta["batch_id"]),
-                          json.dumps(payload, ensure_ascii=False, indent=2))
+        payload_json = json.dumps(payload, ensure_ascii=False, indent=2)
+        payload_bytes = len(payload_json.encode("utf-8"))
+        self._fsync_write(self._requests_path(meta["batch_id"]), payload_json)
+        warnings = self.check_payload_limits(meta, items, payload_bytes)
         meta["status"] = STATUS_STAGED
         meta["item_count"] = len(items)
+        meta["payload_bytes"] = payload_bytes
         self._write_meta(meta)
-        return {"hits": [], "item_count": len(items)}
+        return {
+            "hits": [],
+            "item_count": len(items),
+            "payload_bytes": payload_bytes,
+            "warnings": warnings,
+        }
 
     def build_payload(self, meta: dict, items: list[dict]) -> dict:
         """Compile staged items into the OpenRouter request payload.

@@ -1085,7 +1085,7 @@ class HelpSystem:
                 "remove <id>": "Remove an item from the open draft (alias: del)",
                 "clear [name]": "Reset staged items to 0 (alias: reset)",
                 "dump [name]": "Print the JSON request payload; binds ${BATCH_PAYLOAD} [var=<target>]",
-                "end [name]": "Security-scan items, compile requests.json, lock the manifest (staged)",
+                "end [name]": "Security-scan items, compile requests.json, check payload size against provider limits, lock manifest (staged)",
                 "abort [name]": "Discard an open (never-submitted) staging session",
                 "run [name]": "Estimate cost, verify budget, submit [force=true] [adopt=<provider_id>]",
                 "check [name]": "Poll status / retrieve results [wait=true polls until terminal]; the summary, /batch status, and /batchlist surface empty completions (status 200, no content - providers count them as successes and never retry them)",
