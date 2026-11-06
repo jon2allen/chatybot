@@ -190,30 +190,56 @@ def detect_provider(model_config: dict[str, Any] | BaseModelConfig | None) -> st
 
     if model_type == "apple_fm" or "on-device" in base_url_lower:
         return "apple_fm"
-    if "openrouter" in base_url_lower or "openrouter" in api_key_lower:
+
+    # Hosting service / base_url takes precedence over model name or API key env var
+    if "openrouter" in base_url_lower:
         return "openrouter"
-    if "googleapis.com" in base_url_lower or "gemini" in api_key_lower or "google" in name_lower or "google" in base_url_lower:
+    if "googleapis.com" in base_url_lower or "google" in base_url_lower:
         return "google"
-    if "mistral" in base_url_lower or "mistral" in api_key_lower:
+    if "mistral" in base_url_lower:
         return "mistral"
-    if "api.openai.com" in base_url_lower or "openai.com" in base_url_lower or "openai" in api_key_lower:
+    if "api.openai.com" in base_url_lower or "openai.com" in base_url_lower:
         return "openai"
-    if "nvidia" in base_url_lower or "nvidia" in api_key_lower or "nvidia" in name_lower:
+    if "nvidia" in base_url_lower:
         return "nvidia"
-    if "bytez" in base_url_lower or "bytez" in api_key_lower:
+    if "bytez" in base_url_lower:
         return "bytez"
-    if "jina" in base_url_lower or "jina" in api_key_lower:
+    if "jina" in base_url_lower:
         return "jina"
-    if "localhost:11434" in base_url_lower or "11434" in base_url_lower or "ollama" in base_url_lower or "ollama" in api_key_lower:
+    if "localhost:11434" in base_url_lower or "11434" in base_url_lower or "ollama" in base_url_lower:
         return "ollama"
     if "localhost:8080" in base_url_lower or "8080" in base_url_lower or "llama.cpp" in base_url_lower or "llama-cpp" in base_url_lower:
         return "llama_cpp"
-    if "publicai" in base_url_lower or "swiss" in api_key_lower:
+    if "publicai" in base_url_lower:
         return "publicai"
-    if "huggingface" in base_url_lower or "hf_api_key" in api_key_lower or "hf_token" in api_key_lower or "hf.co" in base_url_lower:
+    if "huggingface" in base_url_lower or "hf.co" in base_url_lower:
         return "huggingface"
     if "localhost" in base_url_lower or "127.0.0.1" in base_url_lower:
         return "local"
+
+    # Secondary heuristics only when base_url is uninformative / omitted
+    if not base_url_lower:
+        if "openrouter" in api_key_lower:
+            return "openrouter"
+        if "gemini" in api_key_lower:
+            return "google"
+        if "mistral" in api_key_lower:
+            return "mistral"
+        if "openai" in api_key_lower:
+            return "openai"
+        if "nvidia" in api_key_lower or "nvidia" in name_lower:
+            return "nvidia"
+        if "bytez" in api_key_lower:
+            return "bytez"
+        if "jina" in api_key_lower:
+            return "jina"
+        if "swiss" in api_key_lower:
+            return "publicai"
+        if "hf_api_key" in api_key_lower or "hf_token" in api_key_lower:
+            return "huggingface"
+        if "ollama" in api_key_lower:
+            return "ollama"
+
     return "other"
 
 

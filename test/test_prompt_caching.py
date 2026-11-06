@@ -389,6 +389,36 @@ class TestCachekeyCommand:
         assert "Session Hit Rate:" in out
         assert "800 written" in out
 
+    def test_status_disabled_in_config_reports_disabled(self, app, capsys):
+        app.active_session_id = "ses_0505"
+        # Disable caching at model config level
+        cfg = dict(app.config_manager.get_model_config(app.config_manager.active_model_alias))
+        cfg["prompt_caching"] = False
+        app.config_manager.get_model_config = lambda a: cfg
+
+        result = asyncio.run(app.handle_escape_command("/cachekey status"))
+        assert result is True
+        out = capsys.readouterr().out
+        assert "Status:           Disabled" in out
+        assert "Active Key:       (off)" in out
+
+    def test_status_number_formatting_with_commas(self, app, capsys):
+        app.active_session_id = "ses_0505"
+        app.last_cached_tokens = 12345
+        app.last_cache_write_tokens = 6789
+        app.last_prompt_tokens = 20000
+        app.session_cached_tokens = 12345
+        app.session_cache_write_tokens = 6789
+        app.session_prompt_tokens = 20000
+
+        result = asyncio.run(app.handle_escape_command("/cachekey status"))
+        assert result is True
+        out = capsys.readouterr().out
+        assert "12,345 read" in out
+        assert "6,789 written to cache" in out
+        assert "12,345/20,000 tokens" in out
+        assert "6,789 written" in out
+
 
 class TestParserAndLocalization:
     def test_escape_command_whitelisted(self):
@@ -579,3 +609,58 @@ class TestProviderDetectionAndHitPct:
         assert detect_provider({"base_url": "on-device"}) == "apple_fm"
         assert detect_provider({"base_url": "https://custom.unknown.com/v1"}) == "other"
         assert detect_provider(None) == "other"
+
+    def test_detect_provider_hosting_service_takes_precedence_over_model_name(self):
+        from src.chatybot.config_model import detect_provider
+        # Models with google/ prefix in name hosted on third-party services
+        assert detect_provider({"name": "google/gemma-2-27b-it", "base_url": "https://integrate.api.nvidia.com/v1"}) == "nvidia"
+        assert detect_provider({"name": "google/gemma-2-27b-it", "base_url": "https://api.bytez.com/v1"}) == "bytez"
+        assert detect_provider({"name": "google/gemma-2-27b-it", "base_url": "https://router.huggingface.co/v1"}) == "huggingface"
+
+    def test_detect_provider_proxy_with_openai_api_key_not_classified_as_openai(self):
+        from src.chatybot.config_model import detect_provider
+        # A proxy with OPENAI_API_KEY env var should not be classified as official OpenAI
+        cfg = {"name": "custom", "base_url": "http://my-proxy:8000/v1", "api_key": "OPENAI_API_KEY"}
+        assert detect_provider(cfg) == "other"
+
+    def test_detect_provider_bundled_models_unchanged(self):
+        import os
+        import tomllib
+        from src.chatybot.config_model import detect_provider
+        config_path = os.path.join(os.path.dirname(__file__), "..", "src", "chatybot", "chat_config.toml")
+        with open(config_path, "rb") as f:
+            cfg = tomllib.load(f)
+        expected = {
+            "mistral_1": "mistral",
+            "devstral_1": "mistral",
+            "mistral_pixtral": "openrouter",
+            "gemini_flash": "google",
+            "gemini_pro": "google",
+            "gemma_3": "google",
+            "openai_gpt4": "openai",
+            "openrouter_image": "openrouter",
+            "flux_1": "openrouter",
+            "nova_2": "openrouter",
+            "elephant": "openrouter",
+            "nvidia_1": "openrouter",
+            "gpt_oss_20b": "openrouter",
+            "llama_3_3_openrt": "openrouter",
+            "cohere_reranker": "openrouter",
+            "openrouter_jev": "openrouter",
+            "nvidia_mistral_nemotron": "nvidia",
+            "llama1": "nvidia",
+            "kimi_k2_instruct": "nvidia",
+            "nemotron_super_49b": "nvidia",
+            "eurollm": "publicai",
+            "swiss": "publicai",
+            "swiss2": "publicai",
+            "qwen2_5_instruct": "bytez",
+            "Jan_v1_4b": "bytez",
+            "ollama_llama3": "ollama",
+            "hf_qwen": "huggingface",
+            "apple_fm": "apple_fm",
+            "gptoss_batch": "openrouter",
+            "mistral_batch": "mistral",
+        }
+        for name, exp in expected.items():
+            assert detect_provider(cfg["models"][name]) == exp, f"Model {name} failed: expected {exp}"

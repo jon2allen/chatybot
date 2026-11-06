@@ -39,8 +39,12 @@ def _detect_provider_label(app) -> str:
 
 
 def _print_cache_status(app, i18n) -> None:
-    model_config = app.config_manager.get_model_config(app.config_manager.active_model_alias)
-    if app.prompt_caching_disabled:
+    model_config = app.config_manager.get_model_config(app.config_manager.active_model_alias) or {}
+    config_disabled = (
+        model_config.get("prompt_caching") is False
+        or getattr(app.config_manager, "prompt_caching_default", True) is False
+    )
+    if getattr(app, "prompt_caching_disabled", False) or config_disabled:
         status_label = i18n.get_ui_string("ui.cache_status_disabled", "Disabled")
     elif getattr(app, "custom_cache_key", None):
         status_label = i18n.get_ui_string("ui.cache_status_custom", "Custom Key")
@@ -58,21 +62,21 @@ def _print_cache_status(app, i18n) -> None:
         hit_pct = compute_hit_pct(cached, getattr(app, "last_prompt_tokens", 0))
         print(
             f"  {i18n.get_ui_string('ui.cache_cached_tokens', 'Cached Tokens:')}    "
-            f"{cached:} read ({hit_pct:.0f}% last-turn hit rate)"
+            f"{cached:,} read ({hit_pct:.0f}% last-turn hit rate)"
         )
         print(
             f"  {i18n.get_ui_string('ui.cache_write_tokens', 'Write Tokens:')}     "
-            f"{written:} written to cache (warm-up surcharge factored in net savings)"
+            f"{written:,} written to cache (warm-up surcharge factored in net savings)"
         )
         sess_cached = getattr(app, "session_cached_tokens", 0)
         sess_written = getattr(app, "session_cache_write_tokens", 0)
         sess_prompt = getattr(app, "session_prompt_tokens", 0)
         if sess_prompt:
             sess_hit = compute_hit_pct(sess_cached, sess_prompt)
-            write_str = f", {sess_written:} written" if sess_written else ""
+            write_str = f", {sess_written:,} written" if sess_written else ""
             print(
                 f"  {i18n.get_ui_string('ui.cache_session_hit', 'Session Hit Rate:')}  "
-                f"{sess_cached:}/{sess_prompt:} tokens ({sess_hit:.0f}% overall{write_str})"
+                f"{sess_cached:,}/{sess_prompt:,} tokens ({sess_hit:.0f}% overall{write_str})"
             )
         savings = app._compute_cache_net_savings(model_config, cached, written)
         if savings is not None:
