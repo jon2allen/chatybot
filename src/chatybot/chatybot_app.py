@@ -1604,22 +1604,14 @@ class ChatybotApp:
         cfg_read = _parse_float(model_config.get("cache_read_multiplier"))
         cfg_write = _parse_float(model_config.get("cache_write_multiplier"))
 
-        vendor = (model_config.get("vendor") or "").lower()
-        base_url = (model_config.get("base_url") or "").lower()
-        model_name = (model_config.get("name") or "").lower()
+        from .config_model import detect_provider
 
-        target_vendor = vendor
-        if "mistral" in base_url or vendor == "mistral":
-            target_vendor = "mistral"
-        elif "anthropic" in base_url or vendor == "anthropic":
-            target_vendor = "anthropic"
-        elif "deepseek" in base_url or vendor == "deepseek":
-            target_vendor = "deepseek"
-        elif "openai" in base_url or vendor == "openai":
-            target_vendor = "openai"
-        elif "googleapis" in base_url or "google" in base_url or vendor in ("gemini", "google"):
+        model_name = (model_config.get("name") or "").lower()
+        detected = detect_provider(model_config)
+        target_vendor = detected
+        if detected == "google":
             target_vendor = "gemini"
-        elif "openrouter" in base_url or vendor == "openrouter":
+        elif detected == "openrouter":
             # For OpenRouter, detect the upstream provider from the model name prefix
             prefix = model_name.split("/", 1)[0] if "/" in model_name else model_name
             if "mistral" in prefix:
@@ -1632,6 +1624,8 @@ class ChatybotApp:
                 target_vendor = "openai"
             elif "google" in prefix:
                 target_vendor = "gemini"
+            else:
+                target_vendor = "openrouter"
 
         default_read, default_write = self._CACHE_RATE_DEFAULTS.get(
             target_vendor, self._CACHE_RATE_FALLBACK

@@ -625,7 +625,10 @@ class TestProviderDetectionAndHitPct:
 
     def test_detect_provider_bundled_models_unchanged(self):
         import os
-        import tomllib
+        try:
+            import tomllib
+        except ImportError:
+            import tomli as tomllib
         from src.chatybot.config_model import detect_provider
         config_path = os.path.join(os.path.dirname(__file__), "..", "src", "chatybot", "chat_config.toml")
         with open(config_path, "rb") as f:

@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 # Python 3.11+ has tomllib in stdlib; for 3.10 use tomli
 if sys.version_info >= (3, 11):
@@ -200,6 +200,10 @@ def detect_provider(model_config: dict[str, Any] | BaseModelConfig | None) -> st
         return "mistral"
     if "api.openai.com" in base_url_lower or "openai.com" in base_url_lower:
         return "openai"
+    if "anthropic" in base_url_lower:
+        return "anthropic"
+    if "deepseek" in base_url_lower:
+        return "deepseek"
     if "nvidia" in base_url_lower:
         return "nvidia"
     if "bytez" in base_url_lower:
@@ -227,6 +231,10 @@ def detect_provider(model_config: dict[str, Any] | BaseModelConfig | None) -> st
             return "mistral"
         if "openai" in api_key_lower:
             return "openai"
+        if "anthropic" in api_key_lower:
+            return "anthropic"
+        if "deepseek" in api_key_lower:
+            return "deepseek"
         if "nvidia" in api_key_lower or "nvidia" in name_lower:
             return "nvidia"
         if "bytez" in api_key_lower:

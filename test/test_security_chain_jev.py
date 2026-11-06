@@ -788,7 +788,10 @@ async def test_dispatch_records_ask_outcomes_in_chain_log(monkeypatch, tmp_path)
 def test_engine_rubric_matches_harness_rubric():
     """The engine's bundled rubric must equal tools/jev-eval/rubric.toml, or the harness
     stops testing what chatybot runs. Comments may differ; content may not."""
-    import tomllib
+    try:
+        import tomllib
+    except ImportError:
+        import tomli as tomllib
     from pathlib import Path
 
     harness = Path(__file__).resolve().parent.parent / "tools" / "jev-eval" / "rubric.toml"
@@ -1230,7 +1233,10 @@ def test_setup_jev_wizard(tmp_path, monkeypatch):
 def test_setup_jev_upsert_preserves_comments_matching_sections():
     """Verify that comments containing section names (e.g. # see [jev] for info)
     are not accidentally overwritten or treated as real section headers."""
-    import tomllib
+    try:
+        import tomllib
+    except ImportError:
+        import tomli as tomllib
     from chatybot.setup_jev import _upsert_section
 
     content = """# Chatybot Security Configuration

@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import os
 import shlex
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any
 
 from chatybot.batch_manager import (
@@ -198,7 +198,6 @@ RUN_OPTS = {"force", "adopt"}
 CHECK_OPTS = {"wait"}
 RESULTS_OPTS = {"limit", "range", "var", "detail"}
 CANCEL_OPTS = {"force"}
-PURGE_OPTS = {"force"}
 
 
 def _extract_sampling_params(opts: dict[str, str],
@@ -726,7 +725,7 @@ async def _sc_add(ctx: CommandContext, mgr: BatchManager, rest: str) -> CommandR
 
 
 async def _sc_items(ctx: CommandContext, mgr: BatchManager, rest: str) -> CommandResult:
-    opts, tokens = _parse_args(rest, keys=ITEMS_OPTS)
+    opts, _ = _parse_args(rest, keys=ITEMS_OPTS)
     meta = mgr.resolve(_name_token(rest))
     offset, limit = parse_paging(opts)
     items = mgr.list_items(meta, offset=offset, limit=limit)
@@ -743,7 +742,7 @@ async def _sc_items(ctx: CommandContext, mgr: BatchManager, rest: str) -> Comman
 
 
 async def _sc_ids(ctx: CommandContext, mgr: BatchManager, rest: str) -> CommandResult:
-    opts, tokens = _parse_args(rest, keys=IDS_OPTS)
+    opts, _ = _parse_args(rest, keys=IDS_OPTS)
     meta = mgr.resolve(_name_token(rest))
     items = mgr.list_items(meta)
     ids = [it["custom_id"] for it in items]
@@ -757,7 +756,7 @@ async def _sc_ids(ctx: CommandContext, mgr: BatchManager, rest: str) -> CommandR
 
 
 async def _sc_show(ctx: CommandContext, mgr: BatchManager, rest: str) -> CommandResult:
-    opts, tokens = _parse_args(rest, keys=SHOW_OPTS)
+    _, tokens = _parse_args(rest, keys=SHOW_OPTS)
     if not tokens:
         print("Usage: /batch show <item-id> [batch-name]  "
               "(or /batch show <batch-name> for a batch overview)")
@@ -772,7 +771,7 @@ async def _sc_show(ctx: CommandContext, mgr: BatchManager, rest: str) -> Command
         print("Inspect one with: /batch show <item-id>")
         return CommandResult.ok()
     custom_id = first
-    meta, _consumed = _resolve_item_batch(mgr, custom_id, tokens[1:])
+    meta, _ = _resolve_item_batch(mgr, custom_id, tokens[1:])
     if meta is None:
         active = _try_active_draft(mgr)
         if active is not None and any(
@@ -845,12 +844,12 @@ async def _sc_edit(ctx: CommandContext, mgr: BatchManager, rest: str) -> Command
 
 
 async def _sc_remove(ctx: CommandContext, mgr: BatchManager, rest: str) -> CommandResult:
-    opts, tokens = _parse_args(rest, keys=SHOW_OPTS)
+    _, tokens = _parse_args(rest, keys=SHOW_OPTS)
     if not tokens:
         print("Usage: /batch remove <id> [name]")
         return CommandResult.ok()
     custom_id = tokens[0]
-    meta, _consumed = _resolve_item_batch(mgr, custom_id, tokens[1:])
+    meta, _ = _resolve_item_batch(mgr, custom_id, tokens[1:])
     if meta is None:
         print(f"Error: item '{custom_id}' not found in any batch. "
               "List a batch's items with: /batch items <name>")
@@ -876,7 +875,7 @@ async def _sc_clear(ctx: CommandContext, mgr: BatchManager, rest: str) -> Comman
 
 
 async def _sc_dump(ctx: CommandContext, mgr: BatchManager, rest: str) -> CommandResult:
-    opts, tokens = _parse_args(rest, keys=DUMP_OPTS)
+    opts, _ = _parse_args(rest, keys=DUMP_OPTS)
     meta = mgr.resolve(_name_token(rest))
     payload = mgr.dump_payload(meta)
     wire_bytes = meta.get("payload_bytes")
@@ -916,7 +915,6 @@ async def _sc_abort(ctx: CommandContext, mgr: BatchManager, rest: str) -> Comman
 
 
 async def _sc_purge(ctx: CommandContext, mgr: BatchManager, rest: str) -> CommandResult:
-    opts, tokens = _parse_args(rest, keys=PURGE_OPTS)
     target = _name_token(rest)
     if not target:
         print("Usage: /batch purge <batch-name | batch-id>")
@@ -928,7 +926,7 @@ async def _sc_purge(ctx: CommandContext, mgr: BatchManager, rest: str) -> Comman
 
 
 async def _sc_run(ctx: CommandContext, mgr: BatchManager, rest: str) -> CommandResult:
-    opts, tokens = _parse_args(rest, keys=RUN_OPTS)
+    opts, _ = _parse_args(rest, keys=RUN_OPTS)
     meta = mgr.resolve(_name_token(rest))
     if "adopt" in opts:
         mgr.adopt_orphan(meta, opts["adopt"])
@@ -976,7 +974,7 @@ async def _sc_run(ctx: CommandContext, mgr: BatchManager, rest: str) -> CommandR
 
 
 async def _sc_check(ctx: CommandContext, mgr: BatchManager, rest: str) -> CommandResult:
-    opts, tokens = _parse_args(rest, keys=CHECK_OPTS)
+    opts, _ = _parse_args(rest, keys=CHECK_OPTS)
     meta = mgr.resolve(_name_token(rest))
     results_path = os.path.join(mgr.batches_dir, meta["batch_id"], "results.jsonl")
     if meta["status"] in TERMINAL_STATES and os.path.exists(results_path):
@@ -1063,7 +1061,7 @@ async def _sc_results(ctx: CommandContext, mgr: BatchManager, rest: str) -> Comm
 
 
 async def _sc_cancel(ctx: CommandContext, mgr: BatchManager, rest: str) -> CommandResult:
-    opts, tokens = _parse_args(rest, keys=CANCEL_OPTS)
+    opts, _ = _parse_args(rest, keys=CANCEL_OPTS)
     meta = mgr.resolve(_name_token(rest))
     provider_obj = _build_provider(ctx.app, meta) if meta.get("provider_id") else None
     force = _opt_bool(opts, "force")

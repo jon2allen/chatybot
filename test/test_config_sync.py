@@ -46,7 +46,10 @@ class TestConfigSync:
         }
         serialized = serialize_toml(data)
         
-        import tomllib
+        try:
+            import tomllib
+        except ImportError:
+            import tomli as tomllib
         parsed = tomllib.loads(serialized)
         assert parsed == data
 

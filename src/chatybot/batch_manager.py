@@ -30,7 +30,6 @@ import json
 import os
 import re
 import time
-from pathlib import Path
 from typing import Any
 
 import aiohttp
@@ -145,30 +144,47 @@ def is_empty_result(record: dict) -> bool:
 
 async def _provider_call(fn: Any, *args: Any, session: aiohttp.ClientSession | None = None, **kwargs: Any) -> Any:
     """Invoke provider method passing session if accepted, otherwise omitting it."""
-    if session is not None:
-        try:
-            return await fn(*args, session=session, **kwargs)
-        except TypeError as te:
-            if "session" in str(te):
-                return await fn(*args, **kwargs)
-            raise
-    return await fn(*args, **kwargs)
+    import inspect
+    try:
+        sig = inspect.signature(fn)
+        call_kwargs = dict(kwargs)
+        if session is not None and ("session" in sig.parameters or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())):
+            call_kwargs["session"] = session
+        else:
+            call_kwargs.pop("session", None)
+        pos_params = [p for p in sig.parameters.values() if p.kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)]
+        has_varargs = any(p.kind == inspect.Parameter.VAR_POSITIONAL for p in sig.parameters.values())
+        if not has_varargs and len(args) > len(pos_params):
+            call_args = args[:len(pos_params)]
+        else:
+            call_args = args
+        valid_kw = set(sig.parameters.keys())
+        has_varkw = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
+        if not has_varkw:
+            call_kwargs = {k: v for k, v in call_kwargs.items() if k in valid_kw}
+        return await fn(*call_args, **call_kwargs)
+    except (ValueError, TypeError):
+        if session is not None:
+            try:
+                return await fn(*args, session=session, **kwargs)
+            except TypeError:
+                pass
+        return await fn(*args, **kwargs)
 
 
-class OpenRouterBatchProvider:
-    """Async client for the OpenRouter Batch API (spike-validated behaviors).
+class BaseBatchProvider:
+    """Base client for batch providers with shared networking, headers,
+    request tracing, error formatting, and result normalization."""
 
-    See class docstring of batch_manager for the spike findings that drive
-    the design here (no idempotency, no server metadata, inline results).
-    """
-
-    name = "openrouter"
+    name: str = ""
+    supports_cancel: bool = False
+    DEFAULT_BASE_URL: str = ""
 
     def __init__(self, api_key: str, base_url: str | None = None, *,
                  trace_raw_payload: bool = False,
                  logging_manager: Any = None):
         self.api_key = api_key
-        self.base_url = (base_url or OPENROUTER_API_BASE).rstrip("/")
+        self.base_url = (base_url or self.DEFAULT_BASE_URL).rstrip("/")
         self.trace_raw_payload = trace_raw_payload
         self.logging_manager = logging_manager
 
@@ -178,10 +194,10 @@ class OpenRouterBatchProvider:
             "Content-Type": "application/json",
         }
 
-    @staticmethod
-    def _http_error(status: int, body: str, url: str) -> BatchError:
+    @classmethod
+    def _http_error(cls, status: int, body: str, url: str) -> BatchError:
         extra_hint = ""
-        if status == 400 and ("<html" in body.lower() or "<!doctype" in body.lower()):
+        if cls.name == "mistral" and status == 400 and ("<html" in body.lower() or "<!doctype" in body.lower()):
             extra_hint = (
                 "\nHint: Mistral's edge gateway rejected the request with HTML 400 Bad Request. "
                 "This usually indicates the inline batch payload exceeded the HTTP POST size limit "
@@ -243,14 +259,89 @@ class OpenRouterBatchProvider:
                 raise self._http_error(resp.status, text, url)
             return json.loads(text) if text else {}
 
+    async def _download_text(self, url: str, session: aiohttp.ClientSession | None = None) -> str:
+        """Download raw text content (e.g. from Files API) with tracing and error handling."""
+        if trace_enabled(self.trace_raw_payload):
+            masked_key = _mask_key(self.api_key)
+            trace_text = (
+                f"Batch API Request (GET):\n"
+                f"-----------------------------\n"
+                f"GET {url}\n"
+                f"Headers: {{'Authorization': 'Bearer {masked_key}', 'Content-Type': 'application/json'}}\n"
+                f"---- end of payload ---"
+            )
+            print(trace_text)
+            if self.logging_manager and hasattr(self.logging_manager, "log_message"):
+                try:
+                    self.logging_manager.log_message(trace_text)
+                except Exception:
+                    pass
+
+        async def _do_download(s: aiohttp.ClientSession) -> str:
+            async with s.get(url, headers=self._headers(),
+                             timeout=aiohttp.ClientTimeout(total=HTTP_TIMEOUT_SECONDS)) as resp:
+                text = await resp.text()
+                if trace_enabled(self.trace_raw_payload):
+                    print_response_payload(
+                        resp.status,
+                        text,
+                        logging_manager=self.logging_manager,
+                        label=f"Batch API Response Payload (GET {url}):",
+                    )
+                if resp.status >= 400:
+                    raise self._http_error(resp.status, text, url)
+                return text
+
+        if session is not None:
+            return await _do_download(session)
+        async with aiohttp.ClientSession() as s:
+            return await _do_download(s)
+
+    @staticmethod
+    def normalize_result(entry: dict) -> dict:
+        """Map a provider result line onto the canonical local result shape:
+        {custom_id, status_code, content, error}."""
+        out: dict[str, Any] = {"custom_id": entry.get("custom_id")}
+        resp = entry.get("response")
+        if isinstance(resp, dict) and "body" in resp:
+            body = resp["body"]
+            out["status_code"] = resp.get("status_code", 200)
+            choices = body.get("choices") or []
+            out["content"] = choices[0].get("message", {}).get("content") if choices else None
+        elif isinstance(resp, dict) and "choices" in resp:
+            out["status_code"] = 200
+            choices = resp.get("choices") or []
+            out["content"] = choices[0].get("message", {}).get("content") if choices else None
+        else:
+            output = entry.get("output")
+            if isinstance(output, dict):
+                choices = output.get("choices") or []
+                out["status_code"] = 200
+                out["content"] = choices[0].get("message", {}).get("content") if choices else None
+            else:
+                out["status_code"] = entry.get("status_code", 500)
+                out["content"] = None
+                out["error"] = entry.get("error") or json.dumps(entry, ensure_ascii=False)[:500]
+        if entry.get("error") and "error" not in out:
+            out["error"] = entry["error"]
+        return out
+
+
+class OpenRouterBatchProvider(BaseBatchProvider):
+    """Async client for the OpenRouter Batch API (spike-validated behaviors).
+
+    See class docstring of batch_manager for the spike findings that drive
+    the design here (no idempotency, no server metadata, inline results).
+    """
+
+    name = "openrouter"
+    DEFAULT_BASE_URL = OPENROUTER_API_BASE
+    supports_cancel = False
+
     async def submit(self, requests: list[dict], model_name: str, *,
-                     metadata: dict | None = None,
                      session: aiohttp.ClientSession | None = None) -> dict:
         """Submit a new batch. Key order matters: endpoint and model must be
-        serialized BEFORE the requests array or OpenRouter returns HTTP 400.
-
-        ``metadata`` is accepted for interface parity with Mistral but is not
-        sent - OpenRouter silently drops top-level metadata (spike finding §2.2)."""
+        serialized BEFORE the requests array or OpenRouter returns HTTP 400."""
         payload = {
             "endpoint": OPENROUTER_ENDPOINT,
             "model": model_name,
@@ -281,11 +372,7 @@ class OpenRouterBatchProvider:
             data = await self._request(s, "GET", f"{self.base_url}/batches")
             return data.get("data") or []
 
-    # OpenRouter's Batch API has no cancel endpoint (web-verified): a
-    # submitted batch always runs to completion or expires within 24h.
-    supports_cancel = False
-
-    async def cancel(self, provider_id: str) -> dict:
+    async def cancel(self) -> dict:
         raise BatchError(
             "OpenRouter does not support cancelling a submitted batch - it "
             "runs to completion (or expires within 24 hours) and bills at "
@@ -305,30 +392,6 @@ class OpenRouterBatchProvider:
         return rc.get("total"), rc.get("completed"), rc.get("failed")
 
     @staticmethod
-    def normalize_result(entry: dict) -> dict:
-        """Map an OpenRouter result line onto the canonical local result shape:
-        {custom_id, status_code, content, error}. OpenRouter guarantees exactly
-        one of response or error per line, but the nesting has varied."""
-        out = {"custom_id": entry.get("custom_id")}
-        resp = entry.get("response")
-        if isinstance(resp, dict) and "body" in resp:
-            body = resp["body"]
-            out["status_code"] = resp.get("status_code", 200)
-            choices = body.get("choices") or []
-            out["content"] = choices[0].get("message", {}).get("content") if choices else None
-        elif isinstance(resp, dict) and "choices" in resp:
-            out["status_code"] = 200
-            choices = resp.get("choices") or []
-            out["content"] = choices[0].get("message", {}).get("content") if choices else None
-        else:
-            out["status_code"] = entry.get("status_code", 500)
-            out["content"] = None
-            out["error"] = entry.get("error") or json.dumps(entry, ensure_ascii=False)[:500]
-        if entry.get("error") and "error" not in out:
-            out["error"] = entry["error"]
-        return out
-
-    @staticmethod
     def telemetry_of(batch: dict) -> dict:
         """Exact billed cost and host backend, populated only at completion."""
         usage = batch.get("usage") or {}
@@ -337,7 +400,7 @@ class OpenRouterBatchProvider:
             "host_backend": batch.get("provider"),
         }
 
-    async def fetch_results(self, batch: dict, provider_id: str,
+    async def fetch_results(self, batch: dict, provider_id: str | None = None,
                             session: aiohttp.ClientSession | None = None) -> list[dict]:
         """Return inline results from the batch object, re-fetching if empty.
 
@@ -346,8 +409,10 @@ class OpenRouterBatchProvider:
         the results array was populated (spike finding §2.3)."""
         results = batch.get("results") or []
         if not results:
-            refetched = await self.get(provider_id, session=session)
-            results = (refetched or {}).get("results") or []
+            bid = batch.get("id") or provider_id
+            if bid:
+                refetched = await self.get(bid, session=session)
+                results = (refetched or {}).get("results") or []
         return results
 
 
@@ -355,7 +420,7 @@ class OpenRouterBatchProvider:
 # Mistral Batch provider (Phase 2 - inline batching only)
 # ---------------------------------------------------------------------------
 
-class MistralBatchProvider:
+class MistralBatchProvider(BaseBatchProvider):
     """Async client for the Mistral Batch API (inline batching, Phase 2).
 
     Mistral differs from OpenRouter in several ways (proposal §3, verified
@@ -376,86 +441,8 @@ class MistralBatchProvider:
     """
 
     name = "mistral"
+    DEFAULT_BASE_URL = MISTRAL_API_BASE
     supports_cancel = True
-
-    def __init__(self, api_key: str, base_url: str | None = None, *,
-                 trace_raw_payload: bool = False,
-                 logging_manager: Any = None):
-        self.api_key = api_key
-        self.base_url = (base_url or MISTRAL_API_BASE).rstrip("/")
-        self.trace_raw_payload = trace_raw_payload
-        self.logging_manager = logging_manager
-
-    def _headers(self) -> dict[str, str]:
-        return {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-        }
-
-    @staticmethod
-    def _http_error(status: int, body: str, url: str) -> BatchError:
-        extra_hint = ""
-        if status == 400 and ("<html" in body.lower() or "<!doctype" in body.lower()):
-            extra_hint = (
-                "\nHint: Mistral's edge gateway rejected the request with HTML 400 Bad Request. "
-                "This usually indicates the inline batch payload exceeded the HTTP POST size limit "
-                "(typically caused by embedding large or uncompressed base64 images). "
-                "Ensure images are compressed (e.g., JPEG under ~1.5 MB) or reduce batch size."
-            )
-        return BatchError(f"HTTP {status} from {url}: {body[:500]}{extra_hint}")
-
-    async def _request(self, session: aiohttp.ClientSession, method: str, url: str,
-                       json_body: dict | None = None,
-                       allow_missing_404: bool = False) -> dict | None:
-        if trace_enabled(self.trace_raw_payload):
-            if json_body is not None:
-                print_request_payload(
-                    url,
-                    json_body,
-                    self.api_key,
-                    logging_manager=self.logging_manager,
-                    label=f"Batch API Request Payload ({method}):",
-                )
-            else:
-                masked_key = _mask_key(self.api_key)
-                header_line = f"Headers: {{'Authorization': 'Bearer {masked_key}', 'Content-Type': 'application/json'}}"
-                trace_text = (
-                    f"Batch API Request ({method}):\n"
-                    f"-----------------------------\n"
-                    f"{method} {url}\n"
-                    f"{header_line}\n"
-                    f"---- end of payload ---"
-                )
-                print(trace_text)
-                if self.logging_manager and hasattr(self.logging_manager, "log_message"):
-                    try:
-                        self.logging_manager.log_message(trace_text)
-                    except Exception:
-                        pass
-
-        async with session.request(method, url, headers=self._headers(),
-                                   json=json_body, timeout=aiohttp.ClientTimeout(total=HTTP_TIMEOUT_SECONDS)) as resp:
-            if resp.status == 404 and allow_missing_404:
-                if trace_enabled(self.trace_raw_payload):
-                    print_response_payload(
-                        resp.status,
-                        "(404 Not Found - batch not queryable yet)",
-                        logging_manager=self.logging_manager,
-                        label=f"Batch API Response Payload ({method} {url}):",
-                    )
-                return None
-
-            text = await resp.text()
-            if trace_enabled(self.trace_raw_payload):
-                print_response_payload(
-                    resp.status,
-                    text,
-                    logging_manager=self.logging_manager,
-                    label=f"Batch API Response Payload ({method} {url}):",
-                )
-            if resp.status >= 400:
-                raise self._http_error(resp.status, text, url)
-            return json.loads(text) if text else {}
 
     async def submit(self, requests: list[dict], model_name: str, *,
                      metadata: dict | None = None,
@@ -525,44 +512,9 @@ class MistralBatchProvider:
                              session: aiohttp.ClientSession | None = None) -> str:
         """Download a file's text content via the Mistral Files API."""
         url = f"{self.base_url}/files/{file_id}/content"
-        if trace_enabled(self.trace_raw_payload):
-            masked_key = _mask_key(self.api_key)
-            trace_text = (
-                f"Batch API Request (GET):\n"
-                f"-----------------------------\n"
-                f"GET {url}\n"
-                f"Headers: {{'Authorization': 'Bearer {masked_key}', "
-                f"'Content-Type': 'application/json'}}\n"
-                f"---- end of payload ---"
-            )
-            print(trace_text)
-            if self.logging_manager and hasattr(self.logging_manager, "log_message"):
-                try:
-                    self.logging_manager.log_message(trace_text)
-                except Exception:
-                    pass
+        return await self._download_text(url, session=session)
 
-        async def _do_download(s: aiohttp.ClientSession) -> str:
-            async with s.get(url, headers=self._headers(),
-                             timeout=aiohttp.ClientTimeout(total=HTTP_TIMEOUT_SECONDS)) as resp:
-                text = await resp.text()
-                if trace_enabled(self.trace_raw_payload):
-                    print_response_payload(
-                        resp.status,
-                        text,
-                        logging_manager=self.logging_manager,
-                        label=f"Batch API Response Payload (GET {url}):",
-                    )
-                if resp.status >= 400:
-                    raise self._http_error(resp.status, text, url)
-                return text
-
-        if session is not None:
-            return await _do_download(session)
-        async with aiohttp.ClientSession() as s:
-            return await _do_download(s)
-
-    async def fetch_results(self, batch: dict, provider_id: str,
+    async def fetch_results(self, batch: dict,
                             session: aiohttp.ClientSession | None = None) -> list[dict]:
         """Download results from the Mistral Files API.
 
@@ -601,40 +553,6 @@ class MistralBatchProvider:
         return (batch.get("total_requests"),
                 batch.get("succeeded_requests"),
                 batch.get("failed_requests"))
-
-    @staticmethod
-    def normalize_result(entry: dict) -> dict:
-        """Map a Mistral result line onto the canonical local result shape:
-        {custom_id, status_code, content, error}.
-
-        Mistral's output file format follows the OpenAI batch convention
-        (``response.body.choices``) but may also use ``output.choices``;
-        both are handled.
-        """
-        out: dict[str, Any] = {"custom_id": entry.get("custom_id")}
-        resp = entry.get("response")
-        if isinstance(resp, dict) and "body" in resp:
-            body = resp["body"]
-            out["status_code"] = resp.get("status_code", 200)
-            choices = body.get("choices") or []
-            out["content"] = choices[0].get("message", {}).get("content") if choices else None
-        elif isinstance(resp, dict) and "choices" in resp:
-            out["status_code"] = 200
-            choices = resp.get("choices") or []
-            out["content"] = choices[0].get("message", {}).get("content") if choices else None
-        else:
-            output = entry.get("output")
-            if isinstance(output, dict):
-                choices = output.get("choices") or []
-                out["status_code"] = 200
-                out["content"] = choices[0].get("message", {}).get("content") if choices else None
-            else:
-                out["status_code"] = entry.get("status_code", 500)
-                out["content"] = None
-                out["error"] = entry.get("error") or json.dumps(entry, ensure_ascii=False)[:500]
-        if entry.get("error") and "error" not in out:
-            out["error"] = entry["error"]
-        return out
 
     @staticmethod
     def telemetry_of(batch: dict) -> dict:
@@ -1267,7 +1185,7 @@ class BatchManager:
         records = [r for r in self.list_index() if r["batch_id"] != meta["batch_id"]]
         self._rewrite_index(records)
 
-    def purge(self, meta: dict, force: bool = False) -> None:
+    def purge(self, meta: dict) -> None:
         """Permanently delete a batch from disk and catalog.
 
         Local-only states (draft, staged) and terminal states (completed,

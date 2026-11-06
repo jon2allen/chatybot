@@ -197,13 +197,11 @@ class TestBatchManager:
         mgr.purge(draft)
         assert mgr.find_by_name("dufu_run") is None
 
-    def test_purge_active_batch_refused_even_with_force(self, mgr, draft):
+    def test_purge_active_batch_refused(self, mgr, draft):
         draft["status"] = "in_progress"
         mgr._write_meta(draft)
         with pytest.raises(BatchError, match="still active"):
-            mgr.purge(draft, force=False)
-        with pytest.raises(BatchError, match="still active"):
-            mgr.purge(draft, force=True)
+            mgr.purge(draft)
         assert mgr.find_by_name("dufu_run") is not None
 
     def test_estimate_cost(self, mgr, draft):
