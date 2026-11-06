@@ -143,6 +143,18 @@ def is_empty_result(record: dict) -> bool:
 # Providers (Phase 1: OpenRouter; Mistral lands in Phase 2 behind this shape)
 # ---------------------------------------------------------------------------
 
+async def _provider_call(fn: Any, *args: Any, session: aiohttp.ClientSession | None = None, **kwargs: Any) -> Any:
+    """Invoke provider method passing session if accepted, otherwise omitting it."""
+    if session is not None:
+        try:
+            return await fn(*args, session=session, **kwargs)
+        except TypeError as te:
+            if "session" in str(te):
+                return await fn(*args, **kwargs)
+            raise
+    return await fn(*args, **kwargs)
+
+
 class OpenRouterBatchProvider:
     """Async client for the OpenRouter Batch API (spike-validated behaviors).
 
@@ -232,7 +244,8 @@ class OpenRouterBatchProvider:
             return json.loads(text) if text else {}
 
     async def submit(self, requests: list[dict], model_name: str, *,
-                     metadata: dict | None = None) -> dict:
+                     metadata: dict | None = None,
+                     session: aiohttp.ClientSession | None = None) -> dict:
         """Submit a new batch. Key order matters: endpoint and model must be
         serialized BEFORE the requests array or OpenRouter returns HTTP 400.
 
@@ -243,21 +256,29 @@ class OpenRouterBatchProvider:
             "model": model_name,
             "requests": requests,
         }
-        async with aiohttp.ClientSession() as session:
+        if session is not None:
             return await self._request(session, "POST", f"{self.base_url}/batches", payload)
+        async with aiohttp.ClientSession() as s:
+            return await self._request(s, "POST", f"{self.base_url}/batches", payload)
 
-    async def get(self, provider_id: str, allow_missing: bool = False) -> dict | None:
+    async def get(self, provider_id: str, allow_missing: bool = False,
+                  session: aiohttp.ClientSession | None = None) -> dict | None:
         """Fetch one batch record. Right after submission the batch may not be
         queryable yet (202 + id precedes eventual consistency) - treat 404 as
         'not yet' when allow_missing."""
         url = f"{self.base_url}/batches/{provider_id}"
-        async with aiohttp.ClientSession() as session:
+        if session is not None:
             return await self._request(session, "GET", url, allow_missing_404=allow_missing)
+        async with aiohttp.ClientSession() as s:
+            return await self._request(s, "GET", url, allow_missing_404=allow_missing)
 
-    async def list(self) -> list[dict]:
+    async def list(self, session: aiohttp.ClientSession | None = None) -> list[dict]:
         """List batches (list items omit results: 'results': null)."""
-        async with aiohttp.ClientSession() as session:
+        if session is not None:
             data = await self._request(session, "GET", f"{self.base_url}/batches")
+            return data.get("data") or []
+        async with aiohttp.ClientSession() as s:
+            data = await self._request(s, "GET", f"{self.base_url}/batches")
             return data.get("data") or []
 
     # OpenRouter's Batch API has no cancel endpoint (web-verified): a
@@ -316,7 +337,8 @@ class OpenRouterBatchProvider:
             "host_backend": batch.get("provider"),
         }
 
-    async def fetch_results(self, batch: dict, provider_id: str) -> list[dict]:
+    async def fetch_results(self, batch: dict, provider_id: str,
+                            session: aiohttp.ClientSession | None = None) -> list[dict]:
         """Return inline results from the batch object, re-fetching if empty.
 
         OpenRouter embeds results directly in the completed batch object;
@@ -324,7 +346,7 @@ class OpenRouterBatchProvider:
         the results array was populated (spike finding §2.3)."""
         results = batch.get("results") or []
         if not results:
-            refetched = await self.get(provider_id)
+            refetched = await self.get(provider_id, session=session)
             results = (refetched or {}).get("results") or []
         return results
 
@@ -436,7 +458,8 @@ class MistralBatchProvider:
             return json.loads(text) if text else {}
 
     async def submit(self, requests: list[dict], model_name: str, *,
-                     metadata: dict | None = None) -> dict:
+                     metadata: dict | None = None,
+                     session: aiohttp.ClientSession | None = None) -> dict:
         """Submit a new inline batch job.
 
         Mistral supports inline batching for fewer than 10,000 requests;
@@ -457,34 +480,49 @@ class MistralBatchProvider:
         }
         if metadata:
             payload["metadata"] = metadata
-        async with aiohttp.ClientSession() as session:
+        if session is not None:
             return await self._request(session, "POST",
                                         f"{self.base_url}/batch/jobs", payload)
+        async with aiohttp.ClientSession() as s:
+            return await self._request(s, "POST",
+                                        f"{self.base_url}/batch/jobs", payload)
 
-    async def get(self, provider_id: str, allow_missing: bool = False) -> dict | None:
+    async def get(self, provider_id: str, allow_missing: bool = False,
+                  session: aiohttp.ClientSession | None = None) -> dict | None:
         """Fetch one batch job record by its UUID."""
         url = f"{self.base_url}/batch/jobs/{provider_id}"
-        async with aiohttp.ClientSession() as session:
+        if session is not None:
             return await self._request(session, "GET", url,
                                         allow_missing_404=allow_missing)
+        async with aiohttp.ClientSession() as s:
+            return await self._request(s, "GET", url,
+                                        allow_missing_404=allow_missing)
 
-    async def list(self) -> list[dict]:
+    async def list(self, session: aiohttp.ClientSession | None = None) -> list[dict]:
         """List batch jobs (supports metadata-based filtering server-side)."""
-        async with aiohttp.ClientSession() as session:
+        if session is not None:
             data = await self._request(session, "GET",
                                         f"{self.base_url}/batch/jobs")
             return data.get("data") or []
+        async with aiohttp.ClientSession() as s:
+            data = await self._request(s, "GET",
+                                        f"{self.base_url}/batch/jobs")
+            return data.get("data") or []
 
-    async def cancel(self, provider_id: str) -> dict:
+    async def cancel(self, provider_id: str,
+                     session: aiohttp.ClientSession | None = None) -> dict:
         """Request cancellation of a running batch job.
 
         The job transitions to CANCELLATION_REQUESTED then CANCELLED.
         """
         url = f"{self.base_url}/batch/jobs/{provider_id}/cancel"
-        async with aiohttp.ClientSession() as session:
+        if session is not None:
             return await self._request(session, "POST", url)
+        async with aiohttp.ClientSession() as s:
+            return await self._request(s, "POST", url)
 
-    async def _download_file(self, file_id: str) -> str:
+    async def _download_file(self, file_id: str,
+                             session: aiohttp.ClientSession | None = None) -> str:
         """Download a file's text content via the Mistral Files API."""
         url = f"{self.base_url}/files/{file_id}/content"
         if trace_enabled(self.trace_raw_payload):
@@ -503,9 +541,10 @@ class MistralBatchProvider:
                     self.logging_manager.log_message(trace_text)
                 except Exception:
                     pass
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, headers=self._headers(),
-                                   timeout=aiohttp.ClientTimeout(total=HTTP_TIMEOUT_SECONDS)) as resp:
+
+        async def _do_download(s: aiohttp.ClientSession) -> str:
+            async with s.get(url, headers=self._headers(),
+                             timeout=aiohttp.ClientTimeout(total=HTTP_TIMEOUT_SECONDS)) as resp:
                 text = await resp.text()
                 if trace_enabled(self.trace_raw_payload):
                     print_response_payload(
@@ -518,7 +557,13 @@ class MistralBatchProvider:
                     raise self._http_error(resp.status, text, url)
                 return text
 
-    async def fetch_results(self, batch: dict, provider_id: str) -> list[dict]:
+        if session is not None:
+            return await _do_download(session)
+        async with aiohttp.ClientSession() as s:
+            return await _do_download(s)
+
+    async def fetch_results(self, batch: dict, provider_id: str,
+                            session: aiohttp.ClientSession | None = None) -> list[dict]:
         """Download results from the Mistral Files API.
 
         Mistral returns results via ``output_file`` and ``error_file`` (file
@@ -528,7 +573,7 @@ class MistralBatchProvider:
         output_file_id = batch.get("output_file")
         if not output_file_id:
             return []
-        content = await self._download_file(output_file_id)
+        content = await self._download_file(output_file_id, session=session)
         results = []
         for raw_line in content.splitlines():
             line = raw_line.strip()
@@ -537,7 +582,7 @@ class MistralBatchProvider:
         # Include error records if a separate error file exists
         error_file_id = batch.get("error_file")
         if error_file_id:
-            error_content = await self._download_file(error_file_id)
+            error_content = await self._download_file(error_file_id, session=session)
             for raw_line in error_content.splitlines():
                 line = raw_line.strip()
                 if line:
@@ -655,11 +700,16 @@ class BatchManager:
             f.flush()
             os.fsync(f.fileno())
 
-    def _write_meta(self, meta: dict) -> None:
+    def _write_meta(self, meta: dict, *, update_index: bool = True) -> None:
         meta["updated_at"] = int(time.time())
         self._fsync_write(self._meta_path(meta["batch_id"]),
                           json.dumps(meta, ensure_ascii=False, indent=2))
-        self._append_index(meta)
+        if update_index:
+            self._append_index(meta)
+
+    def compact_index(self) -> None:
+        """Compact index.jsonl to keep only the latest record per batch."""
+        self._rewrite_index(self.list_index())
 
     def _append_index(self, meta: dict) -> None:
         """Append the catalog record for this state; /batchlist dedups by id
@@ -705,12 +755,31 @@ class BatchManager:
                 if bid not in latest:
                     order.append(bid)
                 latest[bid] = rec
-        return [latest[bid] for bid in order]
+        records = [latest[bid] for bid in order]
+        for r in records:
+            if r.get("status") in EDITABLE_STATES:
+                try:
+                    meta = self.read_meta(r["batch_id"])
+                    if "item_count" in meta:
+                        r["item_count"] = meta["item_count"]
+                except Exception:
+                    pass
+        return records
 
     def find_by_name(self, name: str) -> dict | None:
         """Most recent batch record with the given name (case-insensitive)."""
         matches = [r for r in self.list_index() if r.get("name", "").lower() == name.lower()]
         return matches[-1] if matches else None
+
+    def get_active_draft(self) -> dict | None:
+        """Return the most recently touched editable draft meta, or None."""
+        candidates = [r for r in self.list_index() if r.get("status") in EDITABLE_STATES]
+        if not candidates:
+            return None
+        try:
+            return self.read_meta(candidates[-1]["batch_id"])
+        except BatchError:
+            return None
 
     def resolve(self, target: str | None) -> dict:
         """Resolve a batch by instance id (btch-...) or by name."""
@@ -909,8 +978,8 @@ class BatchManager:
         if total_count is not None:
             meta["item_count"] = total_count
         else:
-            meta["item_count"] = len(self._read_items(meta["batch_id"]))
-        self._write_meta(meta)
+            meta["item_count"] = meta.get("item_count", 0) + len(items)
+        self._write_meta(meta, update_index=False)
         return len(items)
 
     def add_items(self, meta: dict, texts: list[str], *, id_prefix: str,
@@ -1008,7 +1077,7 @@ class BatchManager:
             raise BatchError(f"Item '{custom_id}' not found in batch '{meta['name']}'.")
         self._rewrite_items(meta["batch_id"], remaining)
         meta["item_count"] = len(remaining)
-        self._write_meta(meta)
+        self._write_meta(meta, update_index=False)
         return meta
 
     def clear_items(self, batch_id: str) -> None:
@@ -1118,6 +1187,7 @@ class BatchManager:
         meta["item_count"] = len(items)
         meta["payload_bytes"] = payload_bytes
         self._write_meta(meta)
+        self.compact_index()
         return {
             "hits": [],
             "item_count": len(items),
@@ -1323,7 +1393,8 @@ class BatchManager:
                   max_tokens: int | None = None,
                   input_cost_per_mtok: float | None = None,
                   output_cost_per_mtok: float | None = None,
-                  precomputed_estimate: float | None = None) -> dict:
+                  precomputed_estimate: float | None = None,
+                  session: aiohttp.ClientSession | None = None) -> dict:
         """Estimate cost, verify the budget and concurrency caps, then submit.
 
         The pre-POST sidecar write (status='submitting', fsynced) happens
@@ -1331,6 +1402,17 @@ class BatchManager:
         deduplicate batch POSTs (spike finding §2.1), so a crash between the
         write and the POST leaves a reconcilable orphan rather than a silent
         duplicate."""
+        if session is None:
+            async with aiohttp.ClientSession() as s:
+                return await self.run(meta, provider_obj, force=force,
+                                      max_cost_usd=max_cost_usd,
+                                      max_open_per_provider=max_open_per_provider,
+                                      max_tokens=max_tokens,
+                                      input_cost_per_mtok=input_cost_per_mtok,
+                                      output_cost_per_mtok=output_cost_per_mtok,
+                                      precomputed_estimate=precomputed_estimate,
+                                      session=s)
+
         if meta["status"] == STATUS_SUBMITTING:
             raise BatchError(
                 f"Batch '{meta['name']}' is marked as 'submitting' - a previous "
@@ -1372,9 +1454,11 @@ class BatchManager:
         try:
             with open(self._requests_path(meta["batch_id"]), "r", encoding="utf-8") as f:
                 payload = json.load(f)
-            batch = await provider_obj.submit(
+            batch = await _provider_call(
+                provider_obj.submit,
                 payload["requests"], meta["model"],
                 metadata={"client_token": meta["batch_id"]},
+                session=session,
             )
         except Exception as e:
             if self._is_definitive_submit_rejection(e):
@@ -1394,6 +1478,7 @@ class BatchManager:
         meta["provider_id"] = batch.get("id")
         meta["status"] = STATUS_SUBMITTED
         self._write_meta(meta)
+        self.compact_index()
         return meta
 
     def adopt_orphan(self, meta: dict, provider_id: str) -> dict:
@@ -1413,11 +1498,20 @@ class BatchManager:
     async def check(self, meta: dict, provider_obj: Any, *, wait: bool = False,
                     max_wait_seconds: float = MAX_WAIT_SECONDS,
                     max_consecutive_404: int = MAX_CONSECUTIVE_404,
-                    poll_start_seconds: float = POLL_START_SECONDS) -> dict:
+                    poll_start_seconds: float = POLL_START_SECONDS,
+                    session: aiohttp.ClientSession | None = None) -> dict:
         """Poll status once (or with backoff until terminal when wait=true) and
         retrieve completed results inline. On completion, writes
         results.jsonl (one record per custom_id) and records the exact
         usage.cost / provider telemetry into meta and the catalog."""
+        if session is None:
+            async with aiohttp.ClientSession() as s:
+                return await self.check(meta, provider_obj, wait=wait,
+                                        max_wait_seconds=max_wait_seconds,
+                                        max_consecutive_404=max_consecutive_404,
+                                        poll_start_seconds=poll_start_seconds,
+                                        session=s)
+
         if not meta.get("provider_id"):
             raise BatchError(f"Batch '{meta['name']}' has no provider id - it has not "
                              "been submitted. Run '/batch run {0}' first.".format(meta["name"]))
@@ -1425,12 +1519,12 @@ class BatchManager:
         start_time = time.time()
         consecutive_404 = 0
 
-        batch = await provider_obj.get(meta["provider_id"], allow_missing=True)
+        batch = await _provider_call(provider_obj.get, meta["provider_id"], allow_missing=True, session=session)
         if batch is None:
             consecutive_404 += 1
             if not wait:
                 print(f"  Batch not queryable yet (404, eventual consistency). "
-                      "Retry '/batch check {0}' shortly.".format(meta["name"]))
+                       "Retry '/batch check {0}' shortly.".format(meta["name"]))
                 return meta
             while batch is None:
                 if consecutive_404 >= max_consecutive_404:
@@ -1446,7 +1540,7 @@ class BatchManager:
                     )
                 await asyncio.sleep(delay)
                 delay = min(delay * 2, POLL_MAX_SECONDS)
-                batch = await provider_obj.get(meta["provider_id"], allow_missing=True)
+                batch = await _provider_call(provider_obj.get, meta["provider_id"], allow_missing=True, session=session)
                 if batch is None:
                     consecutive_404 += 1
                 else:
@@ -1462,7 +1556,7 @@ class BatchManager:
                 )
             await asyncio.sleep(delay)
             delay = min(delay * 2, POLL_MAX_SECONDS)
-            batch = await provider_obj.get(meta["provider_id"], allow_missing=True)
+            batch = await _provider_call(provider_obj.get, meta["provider_id"], allow_missing=True, session=session)
             if batch is None:
                 consecutive_404 += 1
                 if consecutive_404 >= max_consecutive_404:
@@ -1483,13 +1577,13 @@ class BatchManager:
         if status in (STATUS_COMPLETED, STATUS_CANCELLED, STATUS_EXPIRED):
             if hasattr(provider_obj, "fetch_results"):
                 try:
-                    results = await provider_obj.fetch_results(batch, meta["provider_id"])
+                    results = await _provider_call(provider_obj.fetch_results, batch, meta["provider_id"], session=session)
                 except Exception:
                     results = []
             else:
                 results = batch.get("results") or []
                 if not results and status == STATUS_COMPLETED:
-                    refetched = await provider_obj.get(meta["provider_id"])
+                    refetched = await _provider_call(provider_obj.get, meta["provider_id"], session=session)
                     results = (refetched or {}).get("results") or []
             if results:
                 normalized = [provider_obj.normalize_result(r) for r in results]
@@ -1524,16 +1618,21 @@ class BatchManager:
         return meta
 
     async def cancel(self, meta: dict, provider_obj: Any,
-                     force: bool = False) -> dict:
+                     force: bool = False,
+                     session: aiohttp.ClientSession | None = None) -> dict:
         """Cancel an in-flight batch at the provider and locally.
 
         Providers without a cancel endpoint (OpenRouter) cannot stop a
         submitted job: refuse unless force=True, which marks the batch
         cancelled locally while the remote job still runs to completion."""
+        if session is None:
+            async with aiohttp.ClientSession() as s:
+                return await self.cancel(meta, provider_obj, force=force, session=s)
+
         if meta["status"] not in OPEN_STATES:
             raise BatchError(f"Batch '{meta['name']}' is not in flight (status: {meta['status']}).")
         if provider_obj is not None and getattr(provider_obj, "supports_cancel", False):
-            await provider_obj.cancel(meta["provider_id"])
+            await _provider_call(provider_obj.cancel, meta["provider_id"], session=session)
         else:
             if not force:
                 raise BatchError(
@@ -1577,13 +1676,35 @@ class BatchManager:
         Used by /batch show|edit|remove when the batch name is not given:
         the item ID itself identifies the batch. With editable_only, only
         draft batches are considered (edit/remove operate on drafts)."""
+        active = self.get_active_draft()
+        if active is not None:
+            if not editable_only or active.get("status") in EDITABLE_STATES:
+                if any(it["custom_id"] == custom_id for it in self._read_items(active["batch_id"])):
+                    return [active]
+
+        if "_" in custom_id:
+            cand_name = custom_id.rsplit("_", 1)[0]
+            rec = self.find_by_name(cand_name)
+            if rec is not None:
+                if not editable_only or rec.get("status") in EDITABLE_STATES:
+                    try:
+                        cand_meta = self.read_meta(rec["batch_id"])
+                        if any(it["custom_id"] == custom_id for it in self._read_items(cand_meta["batch_id"])):
+                            return [cand_meta]
+                    except BatchError:
+                        pass
+
         matches = []
         for rec in reversed(self.list_index()):
+            if editable_only and rec.get("status") not in EDITABLE_STATES:
+                continue
+            if active and rec["batch_id"] == active["batch_id"]:
+                continue
             try:
                 meta = self.read_meta(rec["batch_id"])
             except BatchError:
                 continue
-            if editable_only and meta["status"] not in EDITABLE_STATES:
+            if editable_only and meta.get("status") not in EDITABLE_STATES:
                 continue
             if any(it["custom_id"] == custom_id
                    for it in self._read_items(meta["batch_id"])):

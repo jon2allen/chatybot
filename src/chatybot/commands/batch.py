@@ -433,13 +433,7 @@ def _resolve_item_batch(mgr: BatchManager, custom_id: str,
 
 
 def _try_active_draft(mgr: BatchManager) -> dict | None:
-    candidates = [r for r in mgr.list_index() if r.get("status") in EDITABLE_STATES]
-    if not candidates:
-        return None
-    try:
-        return mgr.read_meta(candidates[-1]["batch_id"])
-    except BatchError:
-        return None
+    return mgr.get_active_draft()
 
 
 # ---------------------------------------------------------------------------

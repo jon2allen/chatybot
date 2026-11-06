@@ -16,6 +16,7 @@ import sys
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+import aiohttp
 import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -311,16 +312,25 @@ class TestSubmitPoll:
 
     def test_run_sidecar_then_submitted(self, mgr):
         meta = self._staged(mgr)
-        provider = FakeProvider()
+        observed_during_submit = []
+
+        class InterceptProvider(FakeProvider):
+            async def submit(self, requests, model_name, *, metadata=None, session=None):
+                with open(mgr.index_path(), encoding="utf-8") as f:
+                    observed_during_submit.extend([json.loads(line)["status"] for line in f if line.strip()])
+                return await super().submit(requests, model_name, metadata=metadata)
+
+        provider = InterceptProvider()
         meta = asyncio.run(mgr.run(meta, provider, max_cost_usd=5.0,
                                    max_open_per_provider=3))
         assert meta["status"] == STATUS_SUBMITTED
         assert meta["provider_id"] == "batch-0001"
-        # Crash safety: the raw index log shows the fsynced 'submitting'
-        # sidecar record was appended BEFORE the POST completed.
+        # Pre-POST fsynced sidecar is present during submit before the POST finishes
+        assert observed_during_submit == ["staged", "submitting"]
+        # Compacted on run completion
         with open(mgr.index_path(), encoding="utf-8") as f:
-            raw_statuses = [json.loads(line)["status"] for line in f if line.strip()]
-        assert raw_statuses == ["draft", "draft", "staged", "submitting", "submitted"]
+            final_statuses = [json.loads(line)["status"] for line in f if line.strip()]
+        assert final_statuses == ["submitted"]
 
     def test_run_budget_refusal(self, mgr):
         meta = self._staged(mgr)
@@ -2416,3 +2426,95 @@ class TestBatchApiBugFixes:
         est_zero = mgr.estimate_cost_usd(meta, items, max_tokens=0, input_cost_per_mtok=2.0)
         assert est_zero == pytest.approx(0.0001)
 
+
+class TestBatchPerformanceOptimizations:
+    def test_skip_index_write_on_add_remove_and_compaction(self, mgr):
+        meta = mgr.start("opt_test", model_alias="m", model_name="m", provider="openrouter", prompt="p")
+        with open(mgr.index_path(), encoding="utf-8") as f:
+            lines = [line.strip() for line in f if line.strip()]
+        assert len(lines) == 1
+        assert json.loads(lines[0])["item_count"] == 0
+
+        # Adding items should NOT append to index.jsonl
+        mgr.add_items(meta, ["item 1", "item 2"], id_prefix="opt_test_")
+        with open(mgr.index_path(), encoding="utf-8") as f:
+            lines = [line.strip() for line in f if line.strip()]
+        assert len(lines) == 1  # Still 1 line!
+
+        # list_index() overlays live item_count from meta.json
+        recs = mgr.list_index()
+        assert recs[0]["item_count"] == 2
+
+        # Removing an item should NOT append to index.jsonl
+        mgr.remove_item(meta, "opt_test_0001")
+        with open(mgr.index_path(), encoding="utf-8") as f:
+            lines = [line.strip() for line in f if line.strip()]
+        assert len(lines) == 1  # Still 1 line!
+        recs = mgr.list_index()
+        assert recs[0]["item_count"] == 1
+
+        # end() compacts the index
+        mgr.end(meta)
+        with open(mgr.index_path(), encoding="utf-8") as f:
+            lines = [line.strip() for line in f if line.strip()]
+        assert len(lines) == 1
+        staged_rec = json.loads(lines[0])
+        assert staged_rec["status"] == STATUS_STAGED
+        assert staged_rec["item_count"] == 1
+
+    def test_find_batches_containing_fast_paths(self, mgr):
+        meta1 = mgr.start("batch_one", model_alias="m", model_name="m", provider="openrouter", prompt="p")
+        mgr.add_items(meta1, ["text1"], id_prefix="batch_one_")
+
+        meta2 = mgr.start("batch_two", model_alias="m", model_name="m", provider="openrouter", prompt="p")
+        mgr.add_items(meta2, ["text2"], id_prefix="batch_two_")
+
+        # 1. Active draft is batch_two: finding batch_two_0001 returns [meta2] via active draft check
+        matches_active = mgr.find_batches_containing("batch_two_0001")
+        assert len(matches_active) == 1
+        assert matches_active[0]["batch_id"] == meta2["batch_id"]
+
+        # 2. Prefix match for batch_one_0001 resolves batch_one via find_by_name prefix candidate
+        matches_prefix = mgr.find_batches_containing("batch_one_0001")
+        assert len(matches_prefix) == 1
+        assert matches_prefix[0]["batch_id"] == meta1["batch_id"]
+
+        # 3. editable_only filters out non-draft batches without reading their items
+        mgr.end(meta1)
+        assert meta1["status"] == STATUS_STAGED
+        assert mgr.find_batches_containing("batch_one_0001", editable_only=True) == []
+
+    def test_shared_session_in_check_and_run(self, mgr):
+        meta = mgr.start("session_test", model_alias="m", model_name="m", provider="openrouter", prompt="p")
+        mgr.add_items(meta, ["item1"], id_prefix="session_test_")
+        mgr.end(meta)
+
+        sessions_seen = []
+
+        class SessionSpyProvider(FakeProvider):
+            async def submit(self, requests, model_name, *, metadata=None, session=None):
+                sessions_seen.append(("submit", session))
+                return await super().submit(requests, model_name, metadata=metadata)
+
+            async def get(self, provider_id, allow_missing=False, session=None):
+                sessions_seen.append(("get", session))
+                return await super().get(provider_id, allow_missing=allow_missing)
+
+            async def fetch_results(self, batch, provider_id, session=None):
+                sessions_seen.append(("fetch_results", session))
+                return await super().fetch_results(batch, provider_id)
+
+        spy = SessionSpyProvider()
+        asyncio.run(mgr.run(meta, spy))
+        assert len(sessions_seen) == 1
+        sub_type, sub_session = sessions_seen[0]
+        assert sub_type == "submit"
+        assert isinstance(sub_session, aiohttp.ClientSession)
+
+        sessions_seen.clear()
+        asyncio.run(mgr.check(meta, spy, wait=True))
+        assert len(sessions_seen) >= 2  # get + fetch_results
+        check_sessions = [sess for _, sess in sessions_seen]
+        assert all(isinstance(s, aiohttp.ClientSession) for s in check_sessions)
+        # All calls within check(wait=True) shared the exact same ClientSession instance
+        assert len(set(id(s) for s in check_sessions)) == 1
