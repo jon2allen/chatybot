@@ -2,6 +2,21 @@
 
 All notable changes, release milestones, and version history for **Chatybot** are documented in this file.
 
+November 6th, 2026
+------------------
+- **Multimodal & Provider Batch Enhancements (`/batch`)**:
+  - Support multimodal image bank ingestion for `/batch add` via `{imagebankN}` and `imagebank=N` syntax with auto-generated `ib<N>_` item IDs.
+  - Mistral inline batch API support (`mistral_batch` using `mistral-large-latest`): submission, status normalization, cancellation, and file retrieval.
+  - Automatic image format detection from magic header bytes when file extensions differ from raw payloads.
+  - True wire payload size calculation using compact serialization, stored in batch metadata (`payload_bytes`) and catalog index.
+  - Provider payload size validation on `/batch end` and `/batch run`:
+    - Mistral: early warning at >=2 MB and edge gateway rejection alert at >=4 MB (with image compression guidance); item count warning at >10,000 items.
+    - OpenRouter: warning at >=100 MB and HTTP 413 hard cap alert at >=200 MB.
+  - New `/batch purge <name>` command to safely delete completed, failed, or cancelled batches from disk and the catalog index.
+  - Added `detail=true` flag to `/batch results` displaying prompt, input, and response together.
+  - Added retry hints on `/batch check` and `/batch abort` for batches in `submit_failed` status.
+  - Added Cookbook Recipe 14.12 (`14_12_batch_api_multimodal_vision.chatdsl`) for batch vision workflows.
+
 November 3rd, 2026 (v0.9.2)
 ---------------------------
 - **Asynchronous Batch API Subsystem (`/batch`)**:
