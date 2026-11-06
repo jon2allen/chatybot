@@ -331,8 +331,11 @@ Just as `/session list` exports `${SESSION_LIST}` and `${SESSION_IDS}`, every in
 1. **Pre-POST Fsync:** `meta.json` is written with `status = "submitting"` and fsynced **before** the network socket opens.
 2. **Provider terminal states** (`failed`, `expired`, `cancelled`) are terminal locally as well; `completed` is the only success exit. All three feed `/batch retry`, which builds a new linked batch from the failed/invalid items.
 3. **Reconciliation Rules (§4.4 Rule 3):**
+   - **`/batch remote [provider|batch_name]`:** Queries the provider's active remote batch list via `provider.list()` to display in-flight/completed remote job IDs, models, and timestamps.
+   - **Orphan Adoption (`/batch run <name> adopt=<remote_id>`):** Re-attaches a remote batch ID to a local batch stuck in `'submitting'` state after a timeout or crash, transitioning it safely to `submitted` for subsequent `/batch check`.
+   - **Local Disown (`/batch cancel <name> force=true`):** Cancels locally when a batch in `'submitting'` state has no remote provider ID or was rejected by the provider.
    - **Mistral:** Match `client_token` in provider metadata.
-   - **OpenRouter:** Heuristic match (creation window + model + count) presented to user for confirmation.
+   - **OpenRouter:** Heuristic match (creation window + model + count) presented to user for confirmation via `/batch remote`.
 
 ---
 

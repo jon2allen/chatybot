@@ -148,7 +148,8 @@
       "abort": "abort",
       "here": "here",
       "results": "results",
-      "clone": "clone"
+      "clone": "clone",
+      "remote": "remote"
     },
     "ui": {
       "language_changed": "Language set to: {lang}",
@@ -527,7 +528,8 @@
       "vaciar": "clear",
       "resultados": "results",
       "clonar": "clone",
-      "duplicar": "clone"
+      "duplicar": "clone",
+      "remoto": "remote"
     },
     "ui": {
       "language_changed": "Idioma establecido en: {lang}",
@@ -946,7 +948,8 @@
             "results [name]": "Muestra los completados recuperados con paginación; exporta ${BATCH_RESULTS} [limit=N] [range=inicio:fin] [var=<destino>]. Los registros están en orden de preparación (envío); los proveedores devuelven los resultados en un orden de completado arbitrario; empareja siempre por custom_id",
             "cancel <name>": "Cancela un lote en vuelo [force=true para proveedores sin endpoint de cancelación (OpenRouter): lo marca como cancelado localmente mientras el trabajo remoto sigue ejecutándose hasta completarse]",
             "retry <name>": "Lote nuevo a partir de los elementos fallidos (Fase 3)",
-            "list": "Alias de /batchlist"
+            "list": "Alias de /batchlist",
+            "remote [provider|batch_name]": "Muestra los lotes remotos activos del proveedor y sus IDs para adopción (/batch run <nombre> adopt=<id_remoto>)"
           },
           "short_desc": "Trabajos asincrónicos de la Batch API del proveedor (stage, seal, submit, poll)"
         },
@@ -1292,7 +1295,8 @@
       "resultats": "results",
       "résultats": "results",
       "cloner": "clone",
-      "dupliquer": "clone"
+      "dupliquer": "clone",
+      "distant": "remote"
     },
     "ui": {
       "language_changed": "Langue définie sur : {lang}",
@@ -1540,7 +1544,7 @@
         },
         "/save": {
           "short_desc": "Sauvegarde la réponse ou l'historique dans un fichier (omet la réflexion par défaut)",
-          "long_desc": "Enregistre la dernière réponse de complétion du chat ou l'historique complet de la conversation dans un fichier. Par défaut, les blocs de raisonnement internes (🤭, <thought>, <thinking>) sont supprimés pour produire une sortie propre. Si la collecte de l'historique de chat est désactivée via '/session history off', /save retombe automatiquement sur l'enregistrement de la seule dernière réponse.",
+          "long_desc": "Enregistre la dernière réponse de complétion du chat ou l'historique complet de la conversation dans un fichier. Par défaut, les blocs de raisonnement internes (, <thought>, <thinking>) sont supprimés pour produire une sortie propre. Si la collecte de l'historique de chat est désactivée via '/session history off', /save retombe automatiquement sur l'enregistrement de la seule dernière réponse.",
           "parameters": {
             "<file>": "Chemin du fichier de destination (les répertoires parents sont créés automatiquement)",
             "all": "Drapeau optionnel pour enregistrer tous les tours de l'historique de conversation au lieu de la seule dernière réponse",
@@ -1711,7 +1715,8 @@
             "results [name]": "Affiche les complétions récupérées avec pagination ; exporte ${BATCH_RESULTS} [limit=N] [range=début:fin] [var=<cible>]. Les enregistrements sont dans l'ordre de préparation (soumission) ; les fournisseurs renvoient les résultats dans un ordre de complétion arbitraire ; appariez toujours par custom_id",
             "cancel <name>": "Annule un lot en vol [force=true pour les fournisseurs sans endpoint d'annulation (OpenRouter) : le marque annulé localement pendant que la tâche distante continue jusqu'à son terme]",
             "retry <name>": "Nouveau lot à partir des éléments échoués (Phase 3)",
-            "list": "Alias de /batchlist"
+            "list": "Alias de /batchlist",
+            "remote [provider|batch_name]": "Liste les lots distants actifs du fournisseur et affiche les IDs pour adoption (/batch run <nom> adopt=<id_distant>)"
           },
           "short_desc": "Tâches asynchrones de la Batch API du fournisseur (stage, seal, submit, poll)"
         },
@@ -2056,7 +2061,8 @@
       "重新开始": "clear",
       "结果": "results",
       "克隆": "clone",
-      "复制": "clone"
+      "复制": "clone",
+      "远程": "remote"
     },
     "ui": {
       "language_changed": "语言设置为: {lang}",
@@ -2304,7 +2310,7 @@
         },
         "/save": {
           "short_desc": "将回复或历史保存到文件（默认忽略思考过程）",
-          "long_desc": "将最后一次聊天补全响应或完整对话历史保存到文件。默认情况下,内部推理块(🤭、<thought>、<thinking>)会被剥离以产生干净的输出。如果通过 '/session history off' 禁用了聊天历史收集,/save 会自动回退为仅保存最近一次响应。",
+          "long_desc": "将最后一次聊天补全响应或完整对话历史保存到文件。默认情况下,内部推理块(、<thought>、<thinking>)会被剥离以产生干净的输出。如果通过 '/session history off' 禁用了聊天历史收集,/save 会自动回退为仅保存最近一次响应。",
           "parameters": {
             "<file>": "要保存到的目标文件路径(父目录自动创建)",
             "all": "可选标志,保存全部对话历史轮次而不是仅最近一次响应",
@@ -2475,7 +2481,8 @@
             "results [name]": "分页打印取回的补全;导出 ${BATCH_RESULTS} [limit=N] [range=开始:结束] [var=<目标>]。记录按暂存(提交)顺序排列--提供商以任意的补全顺序返回结果;请始终按 custom_id 匹配",
             "cancel <name>": "取消进行中的批量 [force=true 用于没有取消端点的提供商(OpenRouter):在远端任务继续运行至完成的同时,本地将其标记为已取消]",
             "retry <name>": "从失败条目创建新批量(阶段 3)",
-            "list": "/batchlist 的别名"
+            "list": "/batchlist 的别名",
+            "remote [provider|batch_name]": "列出提供商的活跃远端批量任务并显示孤儿采纳 ID (/batch run <名称> adopt=<远端ID>)"
           },
           "short_desc": "提供商 Batch API 异步任务(stage、seal、submit、poll)"
         },
@@ -2813,7 +2820,8 @@
       "svuota": "clear",
       "risultati": "results",
       "clona": "clone",
-      "duplica": "clone"
+      "duplica": "clone",
+      "remoto": "remote"
     },
     "ui": {
       "language_changed": "Lingua impostata su: {lang}",
@@ -3061,7 +3069,7 @@
         },
         "/save": {
           "short_desc": "Salva la risposta o la cronologia su file (omette i pensieri per impostazione predefinita)",
-          "long_desc": "Salva l'ultima risposta di completamento della chat o la cronologia completa della conversazione su file. Per impostazione predefinita, i blocchi di ragionamento interni (🤭, <thought>, <thinking>) vengono rimossi per produrre un output pulito. Se la raccolta della cronologia chat è disabilitata tramite '/session history off', /save ricade automaticamente nel salvataggio della sola ultima risposta.",
+          "long_desc": "Salva l'ultima risposta di completamento della chat o la cronologia completa della conversazione su file. Per impostazione predefinita, i blocchi di ragionamento interni (, <thought>, <thinking>) vengono rimossi per produrre un output pulito. Se la raccolta della cronologia chat è disabilitata tramite '/session history off', /save ricade automaticamente nel salvataggio della sola ultima risposta.",
           "parameters": {
             "<file>": "Percorso del file di destinazione (le directory padre vengono create automaticamente)",
             "all": "Flag opzionale per salvare tutti i turni della cronologia della conversazione invece della sola ultima risposta",
@@ -3232,7 +3240,8 @@
             "results [name]": "Stampa i completamenti recuperati con paginazione; esporta ${BATCH_RESULTS} [limit=N] [range=inizio:fine] [var=<destinazione>]. I record sono in ordine di preparazione (invio); i fornitori restituiscono i risultati in un ordine di completamento arbitrario; abbina sempre per custom_id",
             "cancel <name>": "Annulla un batch in corso [force=true per i fornitori senza endpoint di annullamento (OpenRouter): lo marca annullato localmente mentre il job remoto continua fino al completamento]",
             "retry <name>": "Nuovo batch dagli elementi falliti (Fase 3)",
-            "list": "Alias di /batchlist"
+            "list": "Alias di /batchlist",
+            "remote [provider|batch_name]": "Elenca i job batch remoti attivi del fornitore e mostra gli ID per l'adozione (/batch run <nome> adopt=<id_remoto>)"
           },
           "short_desc": "Job asincroni della Batch API del fornitore (stage, seal, submit, poll)"
         },
@@ -3580,7 +3589,8 @@
       "إخلاء": "clear",
       "نتائج": "results",
       "استنساخ": "clone",
-      "نسخ": "clone"
+      "نسخ": "clone",
+      "عن_بعد": "remote"
     },
     "ui": {
       "language_changed": "تغيرت اللغة لـ: {lang}",
@@ -3828,7 +3838,7 @@
         },
         "/save": {
           "short_desc": "حفظ الرد أو سجل المحادثة في ملف (يحذف كتل التفكير افتراضياً)",
-          "long_desc": "يحفظ آخر استجابة إكمال محادثة أو سجل المحادثة الكامل إلى ملف. افتراضيًا، تُزال كتل الاستدلال الداخلية (🤭 و<thought> و<thinking>) لإنتاج مخرجات نظيفة. إذا كان جمع سجل المحادثة معطلًا عبر '/session history off'، يرتد /save تلقائيًا إلى حفظ آخر استجابة فقط.",
+          "long_desc": "يحفظ آخر استجابة إكمال محادثة أو سجل المحادثة الكامل إلى ملف. افتراضيًا، تُزال كتل الاستدلال الداخلية ( و<thought> و<thinking>) لإنتاج مخرجات نظيفة. إذا كان جمع سجل المحادثة معطلًا عبر '/session history off'، يرتد /save تلقائيًا إلى حفظ آخر استجابة فقط.",
           "parameters": {
             "<file>": "مسار الملف الوجهة للحفظ (تُنشأ الدلائل الأصل تلقائيًا)",
             "all": "علامة اختيارية لحفظ كل أدوار سجل المحادثة بدلًا من آخر استجابة فقط",
@@ -3999,7 +4009,8 @@
             "results [name]": "طباعة عمليات الإكمال المسترجعة مع ترقيم الصفحات؛ يصدّر ${BATCH_RESULTS} [limit=N] [range=بداية:نهاية] [var=<هدف>]. السجلات بترتيب التجهيز (الإرسال) - يعيد المزودون النتائج بترتيب إكمال عشوائي؛ طابق دائمًا بـ custom_id",
             "cancel <name>": "إلغاء دفعة جارية [force=true للمزودين بلا نقطة إلغاء (OpenRouter): يعلّمها ملغاة محليًا بينما تستمر المهمة البعيدة حتى اكتمالها]",
             "retry <name>": "دفعة جديدة من العناصر الفاشلة (المرحلة 3)",
-            "list": "اسم بديل لـ /batchlist"
+            "list": "اسم بديل لـ /batchlist",
+            "remote [provider|batch_name]": "عرض مهام الدفعات البعيدة النشطة للمزوّد ومعرّفاتها للتبني (/batch run <الاسم> adopt=<المعرّف_البعيد>)"
           },
           "short_desc": "مهام Batch API غير المتزامنة للمزوّد (stage, seal, submit, poll)"
         },

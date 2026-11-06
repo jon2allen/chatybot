@@ -1040,7 +1040,7 @@ class HelpSystem:
             name="/batch",
             category="batch",
             short_desc="Asynchronous provider Batch API jobs (stage, seal, submit, poll)",
-            usage="/batch <status|start|clone|prompt|add|items|ids|show|edit|remove|clear|dump|end|abort|run|check|results|retry|list|cancel|purge> [name] [key=value ...]",
+            usage="/batch <status|start|clone|prompt|add|items|ids|show|edit|remove|clear|dump|end|abort|run|check|results|retry|list|cancel|purge|remote> [name] [key=value ...]",
             long_desc=(
                 "Batch API jobs: asynchronous bulk inference submitted to a provider "
                 "Batch API (OpenRouter or Mistral) at a 50% discount "
@@ -1094,6 +1094,7 @@ class HelpSystem:
                 "purge <name>": "Permanently delete a terminal batch and its files from disk and catalog (active batches must be cancelled first)",
                 "retry <name>": "New batch from failed items (Phase 3)",
                 "list": "Alias for /batchlist",
+                "remote [provider|batch_name]": "List active remote batch jobs from the provider and display IDs for orphan adoption (/batch run <name> adopt=<remote_id>)",
             },
             see_also=["/batchlist", "/model", "/filebank1"]
         ))

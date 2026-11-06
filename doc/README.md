@@ -370,7 +370,7 @@ chatybot --no-tools
 | `/loadimage <1-5> <file>` | Load an image file into specified image bank | `/loadimage 1 photo.png` |
 | `/showimage [path\|1-5]` | View image or inspect imagebank entry | `/showimage 1` |
 | `/listimages [dir]` | List generated/saved images in active image directory | `/listimages` |
-| `/batch <cmd> [args]` | Asynchronous bulk provider batch inference (start, add, end, run, check, results) | `/batch start run1 model=mistral_batch` |
+| `/batch <cmd> [args]` | Asynchronous bulk provider batch inference (start, add, end, run, check, results, remote) | `/batch start run1 model=mistral_batch` |
 | `/batchlist [filters]` | List and filter batch catalog records | `/batchlist status=completed` |
 | `/docs [filename\|search]` | Browse bundled guides/recipes or search across documentation | `/docs search chatdsl` |
 | `/session [subcommand]` | Manage multi-turn session persistence, note annotations, exports, merging, compression, and pruning | `/session start my_project` (or `/session new`) |
@@ -716,6 +716,28 @@ This produces the same multimodal content array, but with a URL instead of a bas
 > - **Inline Payload Limits**: Mistral and other providers process inline batch jobs via standard HTTP POST endpoints. Embedding large or uncompressed base64 images (e.g. >2-4 MB) can cause edge reverse proxies / load balancers to reject the request with a generic `HTTP 400 Bad Request` HTML page before reaching the API backend.
 > - **Compression**: Ensure images are compressed (standard JPEG/PNG under ~1.5 MB) before loading them into image banks for batch jobs.
 > - **Format Autodetection**: Chatybot automatically inspects image magic header bytes to resolve the true MIME format if the file extension does not match (e.g., JPEG URLs serving PNG bytes).
+
+#### **Remote Batch Inspection & Orphan Adoption (`/batch remote`)**
+When submitting large batches to asynchronous provider APIs, network timeouts or in-flight connection drops can leave local batches in a `'submitting'` state to prevent accidental duplicate submissions and double-billing.
+
+The `/batch remote` subcommand uses the provider's remote batch list API to inspect active and completed jobs on the remote queue:
+```bash
+/batch remote                       # Inspect remote queue using active draft/model
+/batch remote openrouter            # Inspect OpenRouter remote batch queue directly
+/batch remote mistral               # Inspect Mistral remote batch queue directly
+/batch remote my_batch              # Inspect remote queue using provider configured on my_batch
+```
+
+**Adopting an Orphaned Batch:**
+If a batch was successfully accepted remotely during a timed-out submission, adopt its remote ID into your local staging session:
+```bash
+/batch run my_batch adopt=batch_abc123
+/batch check my_batch wait=true
+```
+If the batch was never accepted by the provider and you want to discard the local record:
+```bash
+/batch cancel my_batch force=true
+```
 
 ### **Conditional Logic**
 ```dsl
