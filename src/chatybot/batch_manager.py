@@ -25,6 +25,7 @@ in its own directory tree, decoupled from session stores (proposal §4.4).
 from __future__ import annotations
 
 import asyncio
+import errno
 import json
 import os
 import re
@@ -81,15 +82,15 @@ OPENROUTER_STATUS_MAP = {
 OPENROUTER_API_BASE = "https://openrouter.ai/api/v1"
 OPENROUTER_ENDPOINT = "/v1/chat/completions"
 
-# Mistral status → canonical local status (proposal §3; CANCELLATION_REQUESTED
-# is an intermediate state after POST .../cancel that the proposal missed).
+# Mistral status -> canonical local status (proposal §3; CANCELLATION_REQUESTED
+# is an intermediate state after POST .../cancel while workers shut down).
 MISTRAL_STATUS_MAP = {
     "QUEUED": STATUS_SUBMITTED,
     "RUNNING": STATUS_IN_PROGRESS,
     "SUCCESS": STATUS_COMPLETED,
     "FAILED": STATUS_FAILED,
     "TIMEOUT_EXCEEDED": STATUS_EXPIRED,
-    "CANCELLATION_REQUESTED": STATUS_CANCELLED,
+    "CANCELLATION_REQUESTED": STATUS_IN_PROGRESS,
     "CANCELLED": STATUS_CANCELLED,
 }
 
@@ -108,10 +109,13 @@ OPENROUTER_PAYLOAD_WARN_BYTES = 100 * 1024 * 1024
 MISTRAL_INLINE_WARN_BYTES = 2 * 1024 * 1024
 MISTRAL_INLINE_MAX_RECOMMENDED_BYTES = 4 * 1024 * 1024
 
-# Poll backoff (mirrors the validated POC runner)
+# Poll backoff and timeout caps
 POLL_START_SECONDS = 10
 POLL_MAX_SECONDS = 60
 HTTP_TIMEOUT_SECONDS = 120
+MAX_CONSECUTIVE_404 = 5
+MAX_WAIT_SECONDS = 86_400  # 24 hours
+DEFAULT_BATCH_OUTPUT_TOKENS = 1000
 
 _NAME_RE = re.compile(r"[^a-zA-Z0-9_-]")
 
@@ -1078,6 +1082,14 @@ class BatchManager:
             raise BatchError(f"Batch '{meta['name']}' has no staged items. Add items first: /batch add ...")
         scanner = self._get_scanner()
         hits = []
+        # Security scan batch prompt template if configured
+        prompt_text = meta.get("prompt") or ""
+        if prompt_text:
+            p_res = scanner.scan(prompt_text)
+            if p_res is not None:
+                verdict, reason = p_res
+                hits.append(("prompt", str(verdict), reason))
+
         for item in items:
             scan_text = item.get("text") or ""
             if scan_text:
@@ -1174,9 +1186,11 @@ class BatchManager:
             raise BatchError(f"Batch '{meta['name']}' failed to submit (status: submit_failed). "
                              "Retry with '/batch run', or delete it with '/batch purge'.")
         if meta["status"] == STATUS_SUBMITTING:
-            print(f"Warning: Batch '{meta['name']}' was in 'submitting' state. "
-                  "A remote batch may still exist and bill - check /batchlist or "
-                  f"adopt with '/batch run {meta['name']} adopt=<id>' before aborting.")
+            raise BatchError(
+                f"Batch '{meta['name']}' is in 'submitting' state and cannot be aborted. "
+                "A remote batch may already be running and billing. "
+                f"Adopt it first with '/batch run {meta['name']} adopt=<id>' to verify/cancel it."
+            )
         import shutil
         shutil.rmtree(self._instance_dir(meta["batch_id"]), ignore_errors=True)
         # Catalog prune: rewrite the index without this batch_id
@@ -1214,17 +1228,29 @@ class BatchManager:
 
     @staticmethod
     def estimate_cost_usd(meta: dict, items: list[dict], max_tokens: int | None,
-                           input_cost_per_mtok: float | None) -> float | None:
-        """(input_tokens + max_tokens) x batch_rate. Returns None when the
-        model lacks pricing info (budget guard is then skipped with a notice)."""
+                           input_cost_per_mtok: float | None,
+                           output_cost_per_mtok: float | None = None,
+                           default_output_tokens: int = DEFAULT_BATCH_OUTPUT_TOKENS) -> float | None:
+        """Estimate batch cost in USD.
+
+        Uses input_cost_per_mtok for input tokens (50% batch discount) and
+        output_cost_per_mtok (or input_cost_per_mtok if omitted) for estimated
+        output tokens (50% batch discount). When max_tokens is None, falls back
+        to default_output_tokens. When max_tokens is explicitly 0, output tokens
+        are counted as 0.
+        Returns None when the model lacks input pricing info (budget guard is
+        then skipped with a notice)."""
         if not input_cost_per_mtok:
             return None
         prompt_chars = len(meta.get("prompt") or "") * len(items)
         chars = sum(len(it.get("text") or "") for it in items) + prompt_chars
         est_input_tokens = chars // 4
-        est_total = est_input_tokens + (max_tokens or 0) * len(items)
-        batch_rate = input_cost_per_mtok / 1_000_000 * 0.5  # 50% batch discount
-        return est_total * batch_rate
+        effective_max = max_tokens if max_tokens is not None else default_output_tokens
+        est_output_tokens = effective_max * len(items)
+        effective_out_rate = output_cost_per_mtok if output_cost_per_mtok is not None else input_cost_per_mtok
+        input_cost = (est_input_tokens * input_cost_per_mtok / 1_000_000) * 0.5
+        output_cost = (est_output_tokens * effective_out_rate / 1_000_000) * 0.5
+        return input_cost + output_cost
 
     def count_open_per_provider(self, provider: str) -> int:
         return sum(1 for r in self.list_index()
@@ -1240,10 +1266,63 @@ class BatchManager:
             raise BatchError(f"Batch '{meta['name']}' is not in staged state "
                              f"(status: {meta['status']}).")
 
+    @staticmethod
+    def _is_definitive_submit_rejection(e: Exception) -> bool:
+        """Determine whether a submit failure is definitively client-side / rejected
+        by provider with 4xx, meaning the job was never accepted remotely.
+
+        If False, the request may have reached the provider or timed out in-flight,
+        so the batch remains in 'submitting' to prevent duplicate runs and double-billing.
+        """
+        # Explicit connection refused (socket never accepted, never reached server)
+        if isinstance(e, ConnectionRefusedError):
+            return True
+        if isinstance(e, aiohttp.ClientConnectorError):
+            os_err = getattr(e, "os_error", None)
+            if isinstance(os_err, ConnectionRefusedError) or getattr(os_err, "errno", None) in (errno.ECONNREFUSED,):
+                return True
+
+        # Timeouts and network disconnects are NOT definitive rejections
+        if isinstance(e, (asyncio.TimeoutError, TimeoutError, aiohttp.ServerTimeoutError, aiohttp.ServerDisconnectedError)):
+            return False
+
+        err_str = str(e)
+        lower_msg = err_str.lower()
+
+        # Check for keywords indicating in-flight drops or server-side issues
+        if any(k in lower_msg for k in ("timeout", "timed out", "gateway time-out", "gateway timeout",
+                                        "bad gateway", "server disconnected", "reset by peer", "connection reset")):
+            return False
+
+        status = getattr(e, "status", None) or getattr(e, "status_code", None)
+        if isinstance(status, int):
+            if 400 <= status < 500:
+                return True
+            if status >= 500:
+                return False
+
+        # Check for HTTP 4xx vs 5xx in error message
+        if re.search(r"\bHTTP\s+4\d\d\b", err_str, re.IGNORECASE) or re.search(r"\b4\d\d\b", err_str):
+            if not re.search(r"\bHTTP\s+5\d\d\b", err_str, re.IGNORECASE):
+                return True
+
+        if re.search(r"\bHTTP\s+5\d\d\b", err_str, re.IGNORECASE) or re.search(r"\b5\d\d\b", err_str):
+            return False
+
+        if "inline batch limit exceeded" in lower_msg:
+            return True
+
+        # Client-side exceptions that happen before or during request building
+        if isinstance(e, (ValueError, TypeError, FileNotFoundError)):
+            return True
+
+        return False
+
     async def run(self, meta: dict, provider_obj: Any, *, force: bool = False,
                   max_cost_usd: float = 5.0, max_open_per_provider: int = 3,
                   max_tokens: int | None = None,
                   input_cost_per_mtok: float | None = None,
+                  output_cost_per_mtok: float | None = None,
                   precomputed_estimate: float | None = None) -> dict:
         """Estimate cost, verify the budget and concurrency caps, then submit.
 
@@ -1267,7 +1346,11 @@ class BatchManager:
             estimate = precomputed_estimate
         else:
             items = self._read_items(meta["batch_id"])
-            estimate = self.estimate_cost_usd(meta, items, max_tokens, input_cost_per_mtok)
+            estimate = self.estimate_cost_usd(
+                meta, items, max_tokens,
+                input_cost_per_mtok=input_cost_per_mtok,
+                output_cost_per_mtok=output_cost_per_mtok,
+            )
         if estimate is not None and estimate > max_cost_usd and not force:
             raise BatchError(
                 f"Estimated batch cost ${estimate:.4f} exceeds max_cost_usd "
@@ -1294,9 +1377,19 @@ class BatchManager:
                 metadata={"client_token": meta["batch_id"]},
             )
         except Exception as e:
-            meta["status"] = STATUS_SUBMIT_FAILED
-            self._write_meta(meta)
-            raise BatchError(f"Submission failed (status: submit_failed): {e}") from e
+            if self._is_definitive_submit_rejection(e):
+                meta["status"] = STATUS_SUBMIT_FAILED
+                self._write_meta(meta)
+                raise BatchError(f"Submission failed (status: submit_failed): {e}") from e
+            else:
+                meta["status"] = STATUS_SUBMITTING
+                self._write_meta(meta)
+                raise BatchError(
+                    f"Submission timed out or network error encountered; status left as "
+                    f"'submitting' to prevent duplicate runs and double-billing. "
+                    f"Run '/batch check {meta['name']}' or adopt the remote batch with "
+                    f"'/batch run {meta['name']} adopt=<id>': {e}"
+                ) from e
 
         meta["provider_id"] = batch.get("id")
         meta["status"] = STATUS_SUBMITTED
@@ -1317,7 +1410,10 @@ class BatchManager:
 
     # -- polling / retrieval -------------------------------------------------
 
-    async def check(self, meta: dict, provider_obj: Any, *, wait: bool = False) -> dict:
+    async def check(self, meta: dict, provider_obj: Any, *, wait: bool = False,
+                    max_wait_seconds: float = MAX_WAIT_SECONDS,
+                    max_consecutive_404: int = MAX_CONSECUTIVE_404,
+                    poll_start_seconds: float = POLL_START_SECONDS) -> dict:
         """Poll status once (or with backoff until terminal when wait=true) and
         retrieve completed results inline. On completion, writes
         results.jsonl (one record per custom_id) and records the exact
@@ -1325,62 +1421,101 @@ class BatchManager:
         if not meta.get("provider_id"):
             raise BatchError(f"Batch '{meta['name']}' has no provider id - it has not "
                              "been submitted. Run '/batch run {0}' first.".format(meta["name"]))
-        delay = POLL_START_SECONDS
+        delay = poll_start_seconds
+        start_time = time.time()
+        consecutive_404 = 0
+
         batch = await provider_obj.get(meta["provider_id"], allow_missing=True)
         if batch is None:
+            consecutive_404 += 1
             if not wait:
                 print(f"  Batch not queryable yet (404, eventual consistency). "
                       "Retry '/batch check {0}' shortly.".format(meta["name"]))
                 return meta
             while batch is None:
+                if consecutive_404 >= max_consecutive_404:
+                    raise BatchError(
+                        f"Batch '{meta['name']}' (provider id: {meta['provider_id']}) returned "
+                        f"404 Not Found {consecutive_404} consecutive times; polling aborted."
+                    )
+                if time.time() - start_time > max_wait_seconds:
+                    raise BatchError(
+                        f"Polling timeout reached for batch '{meta['name']}' after "
+                        f"{max_wait_seconds:.0f}s. The batch may still be running remotely; "
+                        f"check again later with '/batch check {meta['name']}'."
+                    )
                 await asyncio.sleep(delay)
                 delay = min(delay * 2, POLL_MAX_SECONDS)
                 batch = await provider_obj.get(meta["provider_id"], allow_missing=True)
+                if batch is None:
+                    consecutive_404 += 1
+                else:
+                    consecutive_404 = 0
 
         status = provider_obj.normalize_status(batch)
         while wait and status not in TERMINAL_STATES:
+            if time.time() - start_time > max_wait_seconds:
+                raise BatchError(
+                    f"Polling timeout reached for batch '{meta['name']}' after "
+                    f"{max_wait_seconds:.0f}s. The batch may still be running remotely; "
+                    f"check again later with '/batch check {meta['name']}'."
+                )
             await asyncio.sleep(delay)
             delay = min(delay * 2, POLL_MAX_SECONDS)
             batch = await provider_obj.get(meta["provider_id"], allow_missing=True)
-            if batch is not None:
+            if batch is None:
+                consecutive_404 += 1
+                if consecutive_404 >= max_consecutive_404:
+                    raise BatchError(
+                        f"Batch '{meta['name']}' (provider id: {meta['provider_id']}) returned "
+                        f"404 Not Found {consecutive_404} consecutive times; polling aborted."
+                    )
+            else:
+                consecutive_404 = 0
                 status = provider_obj.normalize_status(batch)
 
         meta["status"] = status
         total, done, failed = provider_obj.counts_of(batch)
-        if done is None:
+        if done is None and batch is not None:
             done = len(batch.get("results") or [])
 
         results = []
-        if status == STATUS_COMPLETED:
+        if status in (STATUS_COMPLETED, STATUS_CANCELLED, STATUS_EXPIRED):
             if hasattr(provider_obj, "fetch_results"):
-                results = await provider_obj.fetch_results(batch, meta["provider_id"])
+                try:
+                    results = await provider_obj.fetch_results(batch, meta["provider_id"])
+                except Exception:
+                    results = []
             else:
                 results = batch.get("results") or []
-                if not results:
+                if not results and status == STATUS_COMPLETED:
                     refetched = await provider_obj.get(meta["provider_id"])
                     results = (refetched or {}).get("results") or []
-            normalized = [provider_obj.normalize_result(r) for r in results]
-            # Providers return results in COMPLETION order, which is arbitrary
-            # and varies run to run. Sort into the staging (submission) order
-            # so results.jsonl and /batch results are predictable; the
-            # custom_id is the join key either way.
-            staged_order = {it["custom_id"]: i for i, it
-                            in enumerate(self._read_items(meta["batch_id"]))}
-            normalized.sort(key=lambda r: staged_order.get(
-                r.get("custom_id"), len(staged_order)))
-            data = "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in normalized)
-            self._fsync_write(self._results_path(meta["batch_id"]), data)
-            # Batch providers count empty completions (status 200, no
-            # content) as successes and never retry them; surface them so
-            # users can spot flaky runs and re-queue just those items.
-            meta["empty_results"] = sum(1 for r in normalized if is_empty_result(r))
+            if results:
+                normalized = [provider_obj.normalize_result(r) for r in results]
+                # Providers return results in COMPLETION order, which is arbitrary
+                # and varies run to run. Sort into the staging (submission) order
+                # so results.jsonl and /batch results are predictable; the
+                # custom_id is the join key either way.
+                staged_order = {it["custom_id"]: i for i, it
+                                in enumerate(self._read_items(meta["batch_id"]))}
+                normalized.sort(key=lambda r: staged_order.get(
+                    r.get("custom_id"), len(staged_order)))
+                data = "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in normalized)
+                self._fsync_write(self._results_path(meta["batch_id"]), data)
+                # Batch providers count empty completions (status 200, no
+                # content) as successes and never retry them; surface them so
+                # users can spot flaky runs and re-queue just those items.
+                meta["empty_results"] = sum(1 for r in normalized if is_empty_result(r))
+                meta["results_count"] = len(normalized)
             meta["finalized_at"] = int(time.time())
-            telemetry = provider_obj.telemetry_of(batch)
+            telemetry = provider_obj.telemetry_of(batch) if batch else {}
             if telemetry.get("cost_usd") is not None:
                 meta["cost_usd"] = telemetry["cost_usd"]
             if telemetry.get("host_backend"):
                 meta["host_backend"] = telemetry["host_backend"]
-            meta["results_count"] = len(normalized)
+            if failed is not None:
+                meta["failed_count"] = failed
         elif status in TERMINAL_STATES:
             meta["finalized_at"] = int(time.time())
             meta["failed_count"] = failed or 0
@@ -1474,10 +1609,12 @@ def make_provider(model_config: dict, api_key: str, *,
                   logging_manager: Any = None) -> Any:
     """Build the batch provider from a chat_config model entry.
 
-    Dispatches on the ``vendor`` field: ``openrouter`` (Phase 1) or
-    ``mistral`` (Phase 2, inline batching only).
+    Dispatches on the ``vendor`` field or detected provider via ``detect_provider``:
+    ``openrouter`` (Phase 1) or ``mistral`` (Phase 2, inline batching only).
     """
-    vendor = (model_config.get("vendor") or "openrouter").lower()
+    from .config_model import detect_provider
+    detected = detect_provider(model_config)
+    vendor = (model_config.get("vendor") or (detected if detected not in ("other", "local") else None) or "openrouter").lower()
     base_url = model_config.get("base_url")
     if vendor == "mistral":
         return MistralBatchProvider(

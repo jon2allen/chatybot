@@ -115,6 +115,10 @@ class BaseModelConfig(BaseModel):
     """Base input price in USD per million tokens. Optional; enables net
     prompt-cache savings figures in /cachekey status and /trace cache output."""
 
+    output_cost_per_mtok: float | None = None
+    """Base output price in USD per million tokens. Optional; enables accurate
+    batch cost estimation when output pricing differs from input pricing."""
+
     cache_read_multiplier: float | None = None
     """Multiplier against input_cost_per_mtok for cached prompt tokens (e.g. 0.10 for Mistral).
     When omitted, per-vendor defaults are used."""

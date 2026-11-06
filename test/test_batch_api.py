@@ -1702,8 +1702,8 @@ class TestRefactoredHelpers:
         assert "Invalid range format" in capsys.readouterr().out
 
     def test_abort_submitting_orphan_without_provider_id(self, mgr):
-        """A batch that crashed in STATUS_SUBMITTING before acquiring a provider_id
-        can be aborted and cleaned up rather than trapped."""
+        """A batch in STATUS_SUBMITTING is refused on abort to prevent leaving
+        a remote job running without local tracking."""
         meta = mgr.start("crashed_orphan", model_alias="gptoss_batch",
                          model_name="openai/gpt-oss-120b:batch",
                          provider="openrouter", prompt="p")
@@ -1712,9 +1712,9 @@ class TestRefactoredHelpers:
         meta["status"] = "submitting"
         mgr._write_meta(meta)
 
-        # Abort should cleanly delete the orphan instance directory and catalog entry
-        mgr.abort(meta)
-        assert mgr.find_by_name("crashed_orphan") is None
+        with pytest.raises(BatchError, match="submitting"):
+            mgr.abort(meta)
+        assert mgr.find_by_name("crashed_orphan") is not None
 
     def test_run_with_precomputed_estimate(self, mgr):
         meta = mgr.start("fast_est", model_alias="gptoss_batch",
@@ -1733,7 +1733,7 @@ class TestRefactoredHelpers:
         assert clean_var_name(None, default="DEFAULT") == "DEFAULT"
         assert clean_var_name("", default="DEF") == ""
 
-    def test_abort_submitting_warns(self, mgr, capsys):
+    def test_abort_submitting_warns(self, mgr):
         meta = mgr.start("warn_orphan", model_alias="gptoss_batch",
                          model_name="openai/gpt-oss-120b:batch",
                          provider="openrouter", prompt="p")
@@ -1742,10 +1742,9 @@ class TestRefactoredHelpers:
         meta["status"] = "submitting"
         mgr._write_meta(meta)
 
-        mgr.abort(meta)
-        out = capsys.readouterr().out
-        assert "Warning: Batch 'warn_orphan' was in 'submitting' state." in out
-        assert "A remote batch may still exist and bill" in out
+        with pytest.raises(BatchError, match="submitting"):
+            mgr.abort(meta)
+        assert mgr.find_by_name("warn_orphan") is not None
 
     def test_batch_config_delegation(self):
         from chatybot.commands.batch import _batch_config
@@ -1946,7 +1945,7 @@ class TestMistralProvider:
         assert MistralBatchProvider.normalize_status({"status": "SUCCESS"}) == "completed"
         assert MistralBatchProvider.normalize_status({"status": "FAILED"}) == "failed"
         assert MistralBatchProvider.normalize_status({"status": "TIMEOUT_EXCEEDED"}) == "expired"
-        assert MistralBatchProvider.normalize_status({"status": "CANCELLATION_REQUESTED"}) == "cancelled"
+        assert MistralBatchProvider.normalize_status({"status": "CANCELLATION_REQUESTED"}) == "in_progress"
         assert MistralBatchProvider.normalize_status({"status": "CANCELLED"}) == "cancelled"
 
     def test_mistral_normalize_result_response_body(self):
@@ -2261,4 +2260,159 @@ class TestBatchPayloadSizeLimits:
         asyncio.run(run_cmd(ctx, "/batch status cli_warn"))
         status_out = capsys.readouterr().out
         assert "Payload:" in status_out
+
+
+# ---------------------------------------------------------------------------
+# Regression & Bug Fix Verification (The 7 Hardening Fixes)
+# ---------------------------------------------------------------------------
+
+class TestBatchApiBugFixes:
+    def test_submit_timeout_retains_submitting_state(self, mgr):
+        meta = mgr.start("timeout_run", model_alias="gptoss_batch",
+                         model_name="openai/gpt-oss-120b:batch",
+                         provider="openrouter", prompt="p")
+        mgr.add_items(meta, ["item1"], id_prefix="tr_")
+        mgr.end(meta)
+
+        class TimeoutProvider:
+            name = "openrouter"
+            supports_cancel = True
+            async def submit(self, requests, model_name, *, metadata=None):
+                raise asyncio.TimeoutError("Gateway POST timeout")
+
+        with pytest.raises(BatchError, match="status left as 'submitting'"):
+            asyncio.run(mgr.run(meta, TimeoutProvider()))
+
+        # Status must remain submitting to prevent accidental double-billing
+        persisted = mgr.read_meta(meta["batch_id"])
+        assert persisted["status"] == STATUS_SUBMITTING
+
+        # Re-running without adopt= is refused
+        with pytest.raises(BatchError, match="marked as 'submitting'"):
+            asyncio.run(mgr.run(meta, TimeoutProvider()))
+
+    def test_check_wait_limits_consecutive_404(self, mgr):
+        meta = mgr.start("lost_run", model_alias="gptoss_batch",
+                         model_name="openai/gpt-oss-120b:batch",
+                         provider="openrouter", prompt="p")
+        mgr.add_items(meta, ["item1"], id_prefix="lr_")
+        mgr.end(meta)
+        meta["status"] = STATUS_SUBMITTED
+        meta["provider_id"] = "prov_404_id"
+        mgr._write_meta(meta)
+
+        class NotFoundProvider:
+            async def get(self, provider_id, allow_missing=False):
+                return None
+            def normalize_status(self, batch):
+                return "in_progress"
+
+        with pytest.raises(BatchError, match="404 Not Found 3 consecutive times"):
+            asyncio.run(mgr.check(meta, NotFoundProvider(), wait=True, max_consecutive_404=3, poll_start_seconds=0.001))
+
+    def test_check_wait_limits_max_duration(self, mgr):
+        meta = mgr.start("long_run", model_alias="gptoss_batch",
+                         model_name="openai/gpt-oss-120b:batch",
+                         provider="openrouter", prompt="p")
+        mgr.add_items(meta, ["item1"], id_prefix="long_")
+        mgr.end(meta)
+        meta["status"] = STATUS_SUBMITTED
+        meta["provider_id"] = "prov_long_id"
+        mgr._write_meta(meta)
+
+        class EndlessProvider:
+            async def get(self, provider_id, allow_missing=False):
+                return {"status": "in_progress"}
+            def normalize_status(self, batch):
+                return "in_progress"
+
+        with pytest.raises(BatchError, match="Polling timeout reached"):
+            asyncio.run(mgr.check(meta, EndlessProvider(), wait=True, max_wait_seconds=0.01, poll_start_seconds=0.001))
+
+    def test_end_scans_prompt_template_for_secrets(self, mgr):
+        meta = mgr.start("leak_prompt", model_alias="gptoss_batch",
+                         model_name="openai/gpt-oss-120b:batch",
+                         provider="openrouter",
+                         prompt="GitHub token: ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890")
+        mgr.add_items(meta, ["harmless item"], id_prefix="lp_")
+
+        with pytest.raises(BatchError, match="Security scan failed"):
+            mgr.end(meta)
+
+        # Batch stays draft and cannot seal
+        persisted = mgr.read_meta(meta["batch_id"])
+        assert persisted["status"] == STATUS_DRAFT
+
+    def test_detect_provider_in_make_provider(self):
+        # Base URL contains mistral.ai but vendor is omitted
+        cfg = {
+            "name": "mistral-large-latest",
+            "base_url": "https://api.mistral.ai/v1",
+        }
+        provider = make_provider(cfg, api_key="secret_key")
+        assert isinstance(provider, MistralBatchProvider)
+
+    def test_detect_provider_in_start_command(self, mgr):
+        ctx = make_ctx(mgr)
+        mistral_unspecified_vendor = {
+            "name": "mistral-large-latest",
+            "base_url": "https://api.mistral.ai/v1",
+            "batch": True,
+            "api_key": "MISTRAL_API_KEY",
+        }
+        ctx.config_manager.config["models"]["mistral_autodetect"] = mistral_unspecified_vendor
+        ctx.config_manager.get_model_config.side_effect = lambda a: ctx.config_manager.config["models"].get(a, mistral_unspecified_vendor)
+        ctx.config_manager.list_batch_capable_models.return_value = ["mistral_autodetect"]
+
+        asyncio.run(run_cmd(ctx, "/batch start auto_prov model=mistral_autodetect"))
+        meta = mgr.find_by_name("auto_prov")
+        assert meta["provider"] == "mistral"
+
+    def test_cancelled_batch_retrieves_partial_results(self, mgr):
+        meta = mgr.start("partial_cancel", model_alias="mistral_batch",
+                         model_name="mistral-large-latest",
+                         provider="mistral", prompt="p")
+        mgr.add_items(meta, ["item1", "item2"], id_prefix="pc_")
+        mgr.end(meta)
+
+        provider = FakeMistralProvider(final_status="CANCELLED")
+        # Submit to populate provider files and get real provider_id
+        submitted = asyncio.run(provider.submit([{"custom_id": "pc_0001", "body": {}}], "mistral-large-latest"))
+        meta["status"] = STATUS_SUBMITTED
+        meta["provider_id"] = submitted["id"]
+        mgr._write_meta(meta)
+
+        meta = asyncio.run(mgr.check(meta, provider))
+        assert meta["status"] == "cancelled"
+        assert meta["results_count"] == 1
+        results = mgr.read_results(meta["batch_id"])
+        assert len(results) == 1
+        assert results[0]["custom_id"] == "pc_0001"
+
+    def test_estimate_cost_usd_output_pricing_and_default(self, mgr):
+        meta = mgr.start("cost_calc", model_alias="m", model_name="m", provider="openrouter", prompt="p")
+        items = [{"text": "x" * 400}]  # 400 chars -> 100 tokens
+
+        # 1. max_tokens=None falls back to default 1000 output tokens
+        est_default = mgr.estimate_cost_usd(meta, items, max_tokens=None, input_cost_per_mtok=2.0)
+        # prompt="p" (1 char) -> total chars 401 // 4 = 100 input tokens
+        # input: 100 * 2.0 / 1e6 * 0.5 = 0.0001
+        # output: 1000 * 2.0 / 1e6 * 0.5 = 0.001
+        # total: 0.0011
+        assert est_default == pytest.approx(0.0011)
+
+        # 2. explicit output_cost_per_mtok (e.g. $4.0 vs input $2.0)
+        est_separate = mgr.estimate_cost_usd(
+            meta, items, max_tokens=500,
+            input_cost_per_mtok=2.0,
+            output_cost_per_mtok=4.0,
+        )
+        # input: 100 * 2.0 / 1e6 * 0.5 = 0.0001
+        # output: 500 * 4.0 / 1e6 * 0.5 = 0.0010
+        # total: 0.0011
+        assert est_separate == pytest.approx(0.0011)
+
+        # 3. max_tokens=0 explicitly counts 0 output tokens
+        est_zero = mgr.estimate_cost_usd(meta, items, max_tokens=0, input_cost_per_mtok=2.0)
+        assert est_zero == pytest.approx(0.0001)
 

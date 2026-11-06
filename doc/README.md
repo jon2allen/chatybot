@@ -690,6 +690,27 @@ This produces the same multimodal content array, but with a URL instead of a bas
 {"type": "image_url", "image_url": {"url": "https://example.com/images/75419-1.jpg"}}
 ```
 
+**Text + image on the same item:** When free text accompanies the `{imagebankN}` placeholder, both the text and the image are sent together as a multimodal content array (text part + image part). The text around the placeholder is preserved as the item's text field; the placeholder itself is replaced by the image data. This is useful for passing filenames, IDs, or instructions alongside the image:
+```bash
+/batch add "Filename: 75419-1.jpg {imagebank1}"
+```
+The resulting batch item contains `text: "Filename: 75419-1.jpg"` and the image from image bank 1, sent to the provider as:
+```json
+{"role": "user", "content": [
+  {"type": "text", "text": "Filename: 75419-1.jpg"},
+  {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,..."}}
+]}
+```
+
+**Image URL (`image=<url>`):** Use `image=` to pass a remote image URL directly instead of loading it into an image bank. The provider fetches the image from the URL - no local download or base64 encoding needed. Free text is sent alongside the URL as the text part of a multimodal content array:
+```bash
+/batch add "Filename: 75419-1.jpg" image=https://example.com/images/75419-1.jpg
+```
+This produces the same multimodal content array, but with a URL instead of a base64 data URI:
+```json
+{"type": "image_url", "image_url": {"url": "https://example.com/images/75419-1.jpg"}}
+```
+
 > [!NOTE]
 > **Payload Size & Format Guidelines for Batch Vision**:
 > - **Inline Payload Limits**: Mistral and other providers process inline batch jobs via standard HTTP POST endpoints. Embedding large or uncompressed base64 images (e.g. >2-4 MB) can cause edge reverse proxies / load balancers to reject the request with a generic `HTTP 400 Bad Request` HTML page before reaching the API backend.

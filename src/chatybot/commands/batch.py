@@ -145,11 +145,23 @@ def _build_provider(app: Any, meta: dict):
 
     Supports OpenRouter (Phase 1) and Mistral inline batching (Phase 2)."""
     vendor = (meta.get("provider") or "").lower()
+    model_config = None
+    if not vendor or vendor not in ("openrouter", "mistral"):
+        try:
+            model_config = _batch_model_config(app, meta)
+            from ..config_model import detect_provider
+            detected = detect_provider(model_config)
+            if detected in ("openrouter", "mistral"):
+                vendor = detected
+                meta["provider"] = vendor
+        except Exception:
+            pass
     if vendor not in ("openrouter", "mistral"):
         raise BatchError(f"Batch backend '{vendor or 'unknown'}' is not implemented yet. "
                          "Configure a model with vendor = \"openrouter\" or vendor = \"mistral\" "
                          "and batch = true.")
-    model_config = _batch_model_config(app, meta)
+    if model_config is None:
+        model_config = _batch_model_config(app, meta)
     api_key = None
     api_key_env = model_config.get("api_key", "")
     if api_key_env:
@@ -583,9 +595,12 @@ async def _sc_start(ctx: CommandContext, mgr: BatchManager, rest: str) -> Comman
     sampling = _extract_sampling_params(
         opts, None if will_reopen else model_config)
     prompt = _pending_batch_prompt.get("prompt")
+    from ..config_model import detect_provider
+    detected_prov = detect_provider(model_config)
+    provider_name = (model_config.get("vendor") or (detected_prov if detected_prov not in ("other", "local") else None) or "openrouter").lower()
     meta = mgr.start(name, model_alias=model_alias,
                      model_name=model_config.get("name", model_alias),
-                     provider=(model_config.get("vendor") or "openrouter").lower(),
+                     provider=provider_name,
                      prompt=prompt,
                      clear=_opt_bool(opts, "clear"),
                      **sampling)
@@ -621,7 +636,9 @@ async def _sc_clone(ctx: CommandContext, mgr: BatchManager, rest: str) -> Comman
             return CommandResult.ok()
         model_alias = req_alias
         model_name = m_cfg.get("name", req_alias)
-        provider = (m_cfg.get("vendor") or "openrouter").lower()
+        from ..config_model import detect_provider
+        detected_prov = detect_provider(m_cfg)
+        provider = (m_cfg.get("vendor") or (detected_prov if detected_prov not in ("other", "local") else None) or "openrouter").lower()
 
     prompt = None
     if "prompt" in opts:
@@ -935,7 +952,8 @@ async def _sc_run(ctx: CommandContext, mgr: BatchManager, rest: str) -> CommandR
                             else batch_model_config.get("max_tokens"))
     estimate = mgr.estimate_cost_usd(meta, items,
                                      effective_max_tokens,
-                                     batch_model_config.get("input_cost_per_mtok"))
+                                     batch_model_config.get("input_cost_per_mtok"),
+                                     output_cost_per_mtok=batch_model_config.get("output_cost_per_mtok"))
     if estimate is None:
         print("  Note: cost estimate unavailable (model lacks "
              "input_cost_per_mtok); budget guard skipped.")
@@ -954,6 +972,7 @@ async def _sc_run(ctx: CommandContext, mgr: BatchManager, rest: str) -> CommandR
         max_open_per_provider=int(batch_cfg.get("max_open_per_provider", 3)),
         max_tokens=effective_max_tokens,
         input_cost_per_mtok=batch_model_config.get("input_cost_per_mtok"),
+        output_cost_per_mtok=batch_model_config.get("output_cost_per_mtok"),
         precomputed_estimate=estimate,
     )
     print(f"Submitted batch '{meta['name']}' to {meta['provider']} "
@@ -970,16 +989,16 @@ async def _sc_check(ctx: CommandContext, mgr: BatchManager, rest: str) -> Comman
         _print_batch_status(meta)
         print("Results already retrieved (results.jsonl).")
         return CommandResult.ok()
-    if meta["status"] == "cancelled":
-        print(f"Batch '{meta['name']}' was cancelled locally and is not "
-              "polled anymore. The remote job may still have run to "
-              "completion and billed at batch rates.")
-        return CommandResult.ok()
     if meta["status"] == "submit_failed":
         print(f"Batch '{meta['name']}' failed to submit (status: submit_failed). "
               f"Retry with: /batch run {meta['name']}")
         return CommandResult.ok()
     provider_obj = _build_provider(ctx.app, meta)
+    if meta["status"] == "cancelled" and (not getattr(provider_obj, "supports_cancel", False) or not meta.get("provider_id")):
+        print(f"Batch '{meta['name']}' was cancelled locally and is not "
+              "polled anymore. The remote job may still have run to "
+              "completion and billed at batch rates.")
+        return CommandResult.ok()
     wait = _opt_bool(opts, "wait")
     meta = await mgr.check(meta, provider_obj, wait=wait)
     extra = ""
