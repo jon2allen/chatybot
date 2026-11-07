@@ -15,10 +15,10 @@ November 6th, 2026
     - OpenRouter: warning at >=100 MB and HTTP 413 hard cap alert at >=200 MB.
   - New `/batch purge <name>` command to safely delete completed, failed, or cancelled batches from disk and the catalog index.
   - Added `detail=true` flag to `/batch results` displaying prompt, input, and response together.
-  - Added `/batch remote [provider|batch_name]` to inspect remote provider queues and discover remote IDs for orphan adoption.
-  - Hardened submit crash-safety: treat non-JSON 2xx responses (e.g. HTML 504 from reverse proxies) as ambiguous to prevent double-billing.
-  - Enhanced error and recovery hints across `/batch check`, `/batch run`, and `/batch abort` for batches in `submitting` state.
-  - Allow `/batch cancel <name> force=true` to cleanly disown `submitting` batches that have no remote provider ID.
+  - Added `submit_unknown` status for unconfirmed batch submissions (timeouts, network drops, 5xx) requiring explicit `resubmit=true` to retry.
+  - Added read-only org-wide `/batch remote` view of provider accounts, tagging matching local jobs.
+  - Enabled `/batch abort` and `/batch purge` on `submit_unknown` batches for simple local record cleanup.
+  - Simplified submit error classification and removed `adopt_orphan` / `adopt=` guesswork.
   - Fixed Mistral Files API result retrieval and surfaced download errors instead of silently swallowing them.
   - Added retry hints on `/batch check` and `/batch abort` for batches in `submit_failed` status.
   - Added Cookbook Recipe 14.12 (`14_12_batch_api_multimodal_vision.chatdsl`) for batch vision workflows.

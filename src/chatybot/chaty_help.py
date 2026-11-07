@@ -1087,14 +1087,14 @@ class HelpSystem:
                 "dump [name]": "Print the JSON request payload; binds ${BATCH_PAYLOAD} [var=<target>]",
                 "end [name]": "Security-scan items, compile requests.json, check payload size against provider limits, lock manifest (staged)",
                 "abort [name]": "Discard an open (never-submitted) staging session",
-                "run [name]": "Estimate cost, verify budget, submit [force=true] [adopt=<provider_id>]",
+                "run [name]": "Estimate cost, verify budget, submit [force=true] [resubmit=true]",
                 "check [name]": "Poll status / retrieve results [wait=true polls until terminal]; the summary, /batch status, and /batchlist surface empty completions (status 200, no content - providers count them as successes and never retry them)",
                 "results [name]": "Print retrieved completions with pagination [detail]; exports ${BATCH_RESULTS} [limit=N] [range=start:end] [var=<target>]. Records are in staging (submission) order - providers return results in arbitrary completion order; always match by custom_id. With 'detail', shows template prompt, input text, and result together",
                 "cancel <name>": "Cancel an in-flight batch [force=true for providers without a cancel endpoint (OpenRouter): marks it cancelled locally while the remote job still runs to completion]",
                 "purge <name>": "Permanently delete a terminal batch and its files from disk and catalog (active batches must be cancelled first)",
                 "retry <name>": "New batch from failed items (Phase 3)",
                 "list": "Alias for /batchlist",
-                "remote [provider|batch_name]": "List active remote batch jobs from the provider and display IDs for orphan adoption (/batch run <name> adopt=<remote_id>)",
+                "remote [provider|batch_name]": "List batch jobs on the provider account (org-wide; may include jobs not tracked locally)",
             },
             see_also=["/batchlist", "/model", "/filebank1"]
         ))

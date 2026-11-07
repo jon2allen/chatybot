@@ -330,12 +330,11 @@ Just as `/session list` exports `${SESSION_LIST}` and `${SESSION_IDS}`, every in
 
 1. **Pre-POST Fsync:** `meta.json` is written with `status = "submitting"` and fsynced **before** the network socket opens.
 2. **Provider terminal states** (`failed`, `expired`, `cancelled`) are terminal locally as well; `completed` is the only success exit. All three feed `/batch retry`, which builds a new linked batch from the failed/invalid items.
-3. **Reconciliation Rules (§4.4 Rule 3):**
-   - **`/batch remote [provider|batch_name]`:** Queries the provider's active remote batch list via `provider.list()` to display in-flight/completed remote job IDs, models, and timestamps.
-   - **Orphan Adoption (`/batch run <name> adopt=<remote_id>`):** Re-attaches a remote batch ID to a local batch stuck in `'submitting'` state after a timeout or crash, transitioning it safely to `submitted` for subsequent `/batch check`.
-   - **Local Disown (`/batch cancel <name> force=true`):** Cancels locally when a batch in `'submitting'` state has no remote provider ID or was rejected by the provider.
-   - **Mistral:** Match `client_token` in provider metadata.
-   - **OpenRouter:** Heuristic match (creation window + model + count) presented to user for confirmation via `/batch remote`.
+3. **Unconfirmed Submissions & Provider Inspection (§4.4 Rule 3):**
+   - **`submit_unknown` State:** When a submission encounters an unconfirmed failure (network timeout, connection drop, 5xx), status transitions to `submit_unknown` and does not count toward `max_open_per_provider`.
+   - **Explicit Resubmit (`/batch run <name> resubmit=true`):** Requires an explicit flag to resubmit, preventing accidental double-billing.
+   - **`/batch remote [provider|batch_name]`:** Read-only view of the org-wide provider account displaying remote batch IDs, models, and timestamps, tagging matches to local jobs.
+   - **Local Discard (`/batch purge <name>` or `/batch abort <name>`):** Safely deletes the local record if unneeded.
 
 ---
 

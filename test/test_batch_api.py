@@ -32,6 +32,7 @@ from chatybot.batch_manager import (  # noqa: E402
     STATUS_SUBMITTING,
     STATUS_SUBMITTED,
     STATUS_SUBMIT_FAILED,
+    STATUS_SUBMIT_UNKNOWN,
     make_provider,
 )
 from chatybot.commands import batch as batch_cmds  # noqa: E402
@@ -380,16 +381,20 @@ class TestSubmitPoll:
         meta = self._staged(mgr)
         meta["status"] = STATUS_SUBMITTING
         mgr._write_meta(meta)
-        with pytest.raises(BatchError, match="adopt"):
+        with pytest.raises(BatchError, match="resubmit=true"):
             asyncio.run(mgr.run(meta, FakeProvider()))
 
-    def test_adopt_orphan(self, mgr):
+    def test_resubmit_unconfirmed_batch(self, mgr):
         meta = self._staged(mgr)
-        meta["status"] = STATUS_SUBMITTING
+        meta["status"] = STATUS_SUBMIT_UNKNOWN
         mgr._write_meta(meta)
-        mgr.adopt_orphan(meta, "batch-9999")
+        # Without resubmit=true, raises error
+        with pytest.raises(BatchError, match="resubmit=true"):
+            asyncio.run(mgr.run(meta, FakeProvider()))
+        # With resubmit=True, proceeds to submit
+        meta = asyncio.run(mgr.run(meta, FakeProvider(), resubmit=True))
         assert meta["status"] == STATUS_SUBMITTED
-        assert meta["provider_id"] == "batch-9999"
+        assert meta["provider_id"] == "batch-0001"
 
     def test_check_completed_writes_results_and_telemetry(self, mgr, batches_dir):
         meta = self._staged(mgr)
@@ -416,6 +421,22 @@ class TestSubmitPoll:
         mgr.end(meta)
         with pytest.raises(BatchError, match="Concurrency cap"):
             asyncio.run(mgr.run(meta, FakeProvider(), max_open_per_provider=3))
+
+    def test_concurrency_cap_excludes_submitting_and_submit_unknown(self, mgr):
+        for i in range(3):
+            meta = mgr.start(f"stuck_{i}", model_alias="m", model_name="n",
+                             provider="openrouter")
+            mgr.add_items(meta, ["x"], id_prefix=f"s{i}_")
+            mgr.end(meta)
+            meta["status"] = STATUS_SUBMIT_UNKNOWN if i % 2 == 0 else STATUS_SUBMITTING
+            mgr._write_meta(meta)
+
+        # 3 stuck batches do not consume open slots
+        meta = mgr.start("new_ok", model_alias="m", model_name="n", provider="openrouter")
+        mgr.add_items(meta, ["x"], id_prefix="ok_")
+        mgr.end(meta)
+        run_res = asyncio.run(mgr.run(meta, FakeProvider(), max_open_per_provider=3))
+        assert run_res["status"] == STATUS_SUBMITTED
 
     def test_cancel(self, mgr):
         meta = self._staged(mgr)
@@ -1713,8 +1734,8 @@ class TestRefactoredHelpers:
         assert "Invalid range format" in capsys.readouterr().out
 
     def test_abort_submitting_orphan_without_provider_id(self, mgr):
-        """A batch in STATUS_SUBMITTING is refused on abort to prevent leaving
-        a remote job running without local tracking."""
+        """A batch in STATUS_SUBMITTING or STATUS_SUBMIT_UNKNOWN without a provider ID
+        can be aborted cleanly because it's only a local record."""
         meta = mgr.start("crashed_orphan", model_alias="gptoss_batch",
                          model_name="openai/gpt-oss-120b:batch",
                          provider="openrouter", prompt="p")
@@ -1723,9 +1744,19 @@ class TestRefactoredHelpers:
         meta["status"] = "submitting"
         mgr._write_meta(meta)
 
-        with pytest.raises(BatchError, match="submitting"):
-            mgr.abort(meta)
-        assert mgr.find_by_name("crashed_orphan") is not None
+        mgr.abort(meta)
+        assert mgr.find_by_name("crashed_orphan") is None
+
+        # Also works for STATUS_SUBMIT_UNKNOWN
+        meta_unk = mgr.start("unk_orphan", model_alias="gptoss_batch",
+                             model_name="openai/gpt-oss-120b:batch",
+                             provider="openrouter", prompt="p")
+        mgr.add_items(meta_unk, ["item1"], id_prefix="uo_")
+        mgr.end(meta_unk)
+        meta_unk["status"] = STATUS_SUBMIT_UNKNOWN
+        mgr._write_meta(meta_unk)
+        mgr.abort(meta_unk)
+        assert mgr.find_by_name("unk_orphan") is None
 
     def test_run_with_precomputed_estimate(self, mgr):
         meta = mgr.start("fast_est", model_alias="gptoss_batch",
@@ -1751,6 +1782,7 @@ class TestRefactoredHelpers:
         mgr.add_items(meta, ["item1"], id_prefix="wo_")
         mgr.end(meta)
         meta["status"] = "submitting"
+        meta["provider_id"] = "remote_id_123"
         mgr._write_meta(meta)
 
         with pytest.raises(BatchError, match="submitting"):
@@ -2281,7 +2313,7 @@ class TestBatchPayloadSizeLimits:
 # ---------------------------------------------------------------------------
 
 class TestBatchApiBugFixes:
-    def test_submit_timeout_retains_submitting_state(self, mgr):
+    def test_submit_timeout_sets_submit_unknown_state(self, mgr):
         meta = mgr.start("timeout_run", model_alias="gptoss_batch",
                          model_name="openai/gpt-oss-120b:batch",
                          provider="openrouter", prompt="p")
@@ -2291,19 +2323,23 @@ class TestBatchApiBugFixes:
         class TimeoutProvider:
             name = "openrouter"
             supports_cancel = True
-            async def submit(self, requests, model_name, *, metadata=None):
+            async def submit(self, requests, model_name, *, metadata=None, session=None):
                 raise asyncio.TimeoutError("Gateway POST timeout")
 
-        with pytest.raises(BatchError, match="status left as 'submitting'"):
+        with pytest.raises(BatchError, match="Submission unconfirmed"):
             asyncio.run(mgr.run(meta, TimeoutProvider()))
 
-        # Status must remain submitting to prevent accidental double-billing
+        # Status must be submit_unknown to indicate unconfirmed submission
         persisted = mgr.read_meta(meta["batch_id"])
-        assert persisted["status"] == STATUS_SUBMITTING
+        assert persisted["status"] == STATUS_SUBMIT_UNKNOWN
 
-        # Re-running without adopt= is refused
-        with pytest.raises(BatchError, match="marked as 'submitting'"):
+        # Re-running without resubmit=true is refused
+        with pytest.raises(BatchError, match="resubmit=true"):
             asyncio.run(mgr.run(meta, TimeoutProvider()))
+
+        # Purging the submit_unknown record is allowed
+        mgr.purge(persisted)
+        assert mgr.find_by_name("timeout_run") is None
 
     def test_check_wait_limits_consecutive_404(self, mgr):
         meta = mgr.start("lost_run", model_alias="gptoss_batch",
@@ -2632,7 +2668,7 @@ class TestBatchReviewFixes:
         # Normal ValueError remains definitive
         assert BatchManager._is_definitive_submit_rejection(ValueError("bad format"))
 
-        # Verify mgr.run leaves batch in STATUS_SUBMITTING
+        # Verify mgr.run leaves batch in STATUS_SUBMIT_UNKNOWN
         meta = mgr.start("json_err_test", model_alias="m", model_name="m", provider="openrouter", prompt="p")
         mgr.add_items(meta, ["item1"], id_prefix="json_err_")
         mgr.end(meta)
@@ -2644,51 +2680,39 @@ class TestBatchReviewFixes:
         with pytest.raises(BatchError) as exc_info:
             asyncio.run(mgr.run(meta, DecodeErrorProvider()))
 
-        assert "submitting" in str(exc_info.value).lower()
-        # Batch must stay in STATUS_SUBMITTING to prevent duplicate submissions
+        assert "resubmit=true" in str(exc_info.value).lower()
+        # Batch must stay in STATUS_SUBMIT_UNKNOWN to prevent duplicate submissions
         fresh_meta = mgr.resolve("json_err_test")
-        assert fresh_meta["status"] == STATUS_SUBMITTING
+        assert fresh_meta["status"] == STATUS_SUBMIT_UNKNOWN
 
     def test_r3_submitting_batch_recovery_hints(self, mgr):
         meta = mgr.start("stuck_batch", model_alias="m", model_name="m", provider="openrouter", prompt="p")
         mgr.add_items(meta, ["item1"], id_prefix="stuck_")
         mgr.end(meta)
 
-        meta["status"] = STATUS_SUBMITTING
+        meta["status"] = STATUS_SUBMIT_UNKNOWN
         meta["provider_id"] = None
         mgr._write_meta(meta)
 
         prov = FakeProvider()
 
-        # check() raises with guidance mentioning /batch remote and /batch cancel force=true
+        # check() raises with guidance mentioning dashboard, resubmit=true, and /batch purge
         with pytest.raises(BatchError) as exc_check:
             asyncio.run(mgr.check(meta, prov))
-        assert "/batch remote" in str(exc_check.value)
-        assert "adopt=" in str(exc_check.value)
-        assert "force=true" in str(exc_check.value)
+        assert "dashboard" in str(exc_check.value).lower()
+        assert "resubmit=true" in str(exc_check.value)
+        assert "/batch purge" in str(exc_check.value)
 
-        # run() raises with guidance mentioning /batch remote and /batch cancel force=true
+        # run() without resubmit=true raises with guidance
         with pytest.raises(BatchError) as exc_run:
             asyncio.run(mgr.run(meta, prov))
-        assert "/batch remote" in str(exc_run.value)
-        assert "adopt=" in str(exc_run.value)
-        assert "force=true" in str(exc_run.value)
+        assert "dashboard" in str(exc_run.value).lower()
+        assert "resubmit=true" in str(exc_run.value)
 
-        # abort() raises with guidance mentioning /batch remote and /batch cancel force=true
-        with pytest.raises(BatchError) as exc_abort:
-            mgr.abort(meta)
-        assert "/batch remote" in str(exc_abort.value)
-        assert "adopt=" in str(exc_abort.value)
-        assert "force=true" in str(exc_abort.value)
-
-        # cancel() without force refuses with guidance
-        with pytest.raises(BatchError) as exc_cancel:
-            asyncio.run(mgr.cancel(meta, prov, force=False))
-        assert "force=true" in str(exc_cancel.value)
-
-        # cancel() with force=True successfully cancels locally without TypeError
-        cancelled = asyncio.run(mgr.cancel(meta, prov, force=True))
-        assert cancelled["status"] == "cancelled"
+        # run() with resubmit=true succeeds
+        resubmitted = asyncio.run(mgr.run(meta, prov, resubmit=True))
+        assert resubmitted["status"] == STATUS_SUBMITTED
+        assert resubmitted["provider_id"] == "batch-0001"
 
     def test_r3_batch_remote_command(self, mgr, monkeypatch, capsys):
         from chatybot.commands.batch import _sc_remote
@@ -2715,6 +2739,13 @@ class TestBatchReviewFixes:
 
         monkeypatch.setattr("chatybot.commands.batch.make_provider", lambda cfg, key, **kw: RemoteListProvider())
 
+        # Create a local batch tracking batch_remote_001
+        loc = mgr.start("my_local_run", model_alias="m", model_name="n", provider="openrouter")
+        mgr.add_items(loc, ["item1"], id_prefix="ml_")
+        mgr.end(loc)
+        loc["provider_id"] = "batch_remote_001"
+        mgr._write_meta(loc)
+
         ctx = CommandContext(buffer_manager=None, config_manager=DummyApp.config_manager,
                              i18n=None, session_store=None, app=DummyApp())
 
@@ -2722,10 +2753,11 @@ class TestBatchReviewFixes:
         res = asyncio.run(_sc_remote(ctx, mgr, ""))
         assert res.action == CommandAction.HANDLED
         out = capsys.readouterr().out
-        assert "[Remote Batches (openrouter)]" in out
+        assert "[Remote Batches (openrouter) - org-wide account]" in out
         assert "batch_remote_001" in out
+        assert "(local: my_local_run)" in out
         assert "batch_remote_002" in out
-        assert "Tip: To adopt a remote batch into a local session: /batch run <local_name> adopt=<remote_id>" in out
+        assert "adopt=" not in out
 
     def test_r4_openrouter_cancel_with_id_raises_batch_error(self):
         prov = OpenRouterBatchProvider(api_key="mock-key")

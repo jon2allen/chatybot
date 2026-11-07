@@ -59,11 +59,12 @@ STATUS_FAILED = "failed"
 STATUS_EXPIRED = "expired"
 STATUS_CANCELLED = "cancelled"
 STATUS_SUBMIT_FAILED = "submit_failed"
+STATUS_SUBMIT_UNKNOWN = "submit_unknown"
 
 # States in which the local instance may still be modified (draft workflow)
 EDITABLE_STATES = {STATUS_DRAFT}
 # States that count against the per-provider open-batch concurrency cap
-OPEN_STATES = {STATUS_SUBMITTING, STATUS_SUBMITTED, STATUS_IN_PROGRESS}
+OPEN_STATES = {STATUS_SUBMITTED, STATUS_IN_PROGRESS}
 # Provider terminal states
 TERMINAL_STATES = {STATUS_COMPLETED, STATUS_FAILED, STATUS_EXPIRED, STATUS_CANCELLED}
 
@@ -1154,13 +1155,9 @@ class BatchManager:
         if meta["status"] == STATUS_SUBMIT_FAILED:
             raise BatchError(f"Batch '{meta['name']}' failed to submit (status: submit_failed). "
                              "Retry with '/batch run', or delete it with '/batch purge'.")
-        if meta["status"] == STATUS_SUBMITTING:
-            raise BatchError(
-                f"Batch '{meta['name']}' is in 'submitting' state and cannot be aborted. "
-                "A remote batch may already be running and billing.\n"
-                f"Use '/batch remote' to inspect remote jobs and adopt with '/batch run {meta['name']} adopt=<id>', "
-                f"or abandon this local batch with '/batch cancel {meta['name']} force=true'."
-            )
+        if meta["status"] == STATUS_SUBMITTING and meta.get("provider_id"):
+            raise BatchError(f"Batch '{meta['name']}' was submitted (status: submitting) "
+                             "and cannot be aborted. Use '/batch cancel' instead.")
         import shutil
         shutil.rmtree(self._instance_dir(meta["batch_id"]), ignore_errors=True)
         # Catalog prune: rewrite the index without this batch_id
@@ -1170,19 +1167,17 @@ class BatchManager:
     def purge(self, meta: dict) -> None:
         """Permanently delete a batch from disk and catalog.
 
-        Local-only states (draft, staged) and terminal states (completed,
-        failed, expired, cancelled, submit_failed) can be purged. Active
-        batches (submitting, submitted, in_progress) are refused
-        unconditionally - force=true does not override this, because
-        purging an active batch orphans a remote job that is still running
-        and billing, with no way to poll or cancel it. Cancel the batch
-        first, then purge the terminal result.
+        Local-only states (draft, staged, submit_unknown), terminal states
+        (completed, failed, expired, cancelled, submit_failed), and unconfirmed
+        submitting batches without provider IDs can be purged. Active batches
+        with provider IDs (submitted, in_progress) are refused unconditionally.
         """
-        purgable = EDITABLE_STATES | {STATUS_STAGED} | TERMINAL_STATES | {STATUS_SUBMIT_FAILED}
-        if meta.get("status") not in purgable:
+        purgable = EDITABLE_STATES | {STATUS_STAGED} | TERMINAL_STATES | {STATUS_SUBMIT_FAILED, STATUS_SUBMIT_UNKNOWN}
+        is_stale_submitting = (meta.get("status") == STATUS_SUBMITTING and not meta.get("provider_id"))
+        if meta.get("status") not in purgable and not is_stale_submitting:
             raise BatchError(
                 f"Batch '{meta['name']}' is still active (status: {meta['status']}). "
-                "Only local or terminal batches can be purged. Cancel it first with "
+                "Only local, unconfirmed, or terminal batches can be purged. Cancel it first with "
                 f"'/batch cancel {meta['name']}', then purge the result."
             )
         import shutil
@@ -1228,72 +1223,45 @@ class BatchManager:
 
     # -- submission (crash-safe) -------------------------------------------
 
-    def _require_staged(self, meta: dict) -> None:
+    def _require_staged(self, meta: dict, resubmit: bool = False) -> None:
         if meta["status"] == STATUS_DRAFT:
             raise BatchError(f"Batch '{meta['name']}' is still a draft. Run '/batch end' "
                              "to seal and security-scan it first.")
-        if meta["status"] not in (STATUS_STAGED, STATUS_SUBMIT_FAILED):
+        valid_states = (STATUS_STAGED, STATUS_SUBMIT_FAILED, STATUS_SUBMIT_UNKNOWN)
+        is_stale_submitting = (meta["status"] == STATUS_SUBMITTING and not meta.get("provider_id"))
+        if meta["status"] not in valid_states and not is_stale_submitting:
             raise BatchError(f"Batch '{meta['name']}' is not in staged state "
                              f"(status: {meta['status']}).")
+        if (meta["status"] == STATUS_SUBMIT_UNKNOWN or is_stale_submitting) and not resubmit:
+            raise BatchError(
+                f"Batch '{meta['name']}' has unconfirmed submission status ({meta['status']}). "
+                "The request may have reached the provider. Check your provider dashboard before resubmitting.\n"
+                f"To resubmit anyway, add resubmit=true: '/batch run {meta['name']} resubmit=true'."
+            )
 
     @staticmethod
     def _is_definitive_submit_rejection(e: Exception) -> bool:
         """Determine whether a submit failure is definitively client-side / rejected
-        by provider with 4xx, meaning the job was never accepted remotely.
-
-        If False, the request may have reached the provider or timed out in-flight,
-        so the batch remains in 'submitting' to prevent duplicate runs and double-billing.
-        """
-        # Explicit connection refused (socket never accepted, never reached server)
+        by provider with HTTP 4xx, meaning the job was certainly never accepted remotely.
+        Everything else (timeouts, disconnects, 5xx, unreadable bodies) is treated
+        as unconfirmed (submit_unknown)."""
+        if isinstance(e, (ValueError, TypeError, FileNotFoundError)):
+            return not isinstance(e, json.JSONDecodeError)
         if isinstance(e, ConnectionRefusedError):
             return True
         if isinstance(e, aiohttp.ClientConnectorError):
             os_err = getattr(e, "os_error", None)
             if isinstance(os_err, ConnectionRefusedError) or getattr(os_err, "errno", None) in (errno.ECONNREFUSED,):
                 return True
-
-        # Timeouts and network disconnects are NOT definitive rejections
-        if isinstance(e, (asyncio.TimeoutError, TimeoutError, aiohttp.ServerTimeoutError, aiohttp.ServerDisconnectedError)):
-            return False
-
-        err_str = str(e)
-        lower_msg = err_str.lower()
-
-        # Check for keywords indicating in-flight drops or server-side issues
-        if any(k in lower_msg for k in ("timeout", "timed out", "gateway time-out", "gateway timeout",
-                                        "bad gateway", "server disconnected", "reset by peer", "connection reset")):
-            return False
-
         status = getattr(e, "status", None) or getattr(e, "status_code", None)
-        if isinstance(status, int):
-            if 400 <= status < 500:
-                return True
-            if status >= 500:
-                return False
-
-        # Check for HTTP 4xx vs 5xx in error message
-        if re.search(r"\bHTTP\s+4\d\d\b", err_str, re.IGNORECASE) or re.search(r"\b4\d\d\b", err_str):
-            if not re.search(r"\bHTTP\s+5\d\d\b", err_str, re.IGNORECASE):
-                return True
-
-        if re.search(r"\bHTTP\s+5\d\d\b", err_str, re.IGNORECASE) or re.search(r"\b5\d\d\b", err_str):
-            return False
-
-        if "inline batch limit exceeded" in lower_msg:
+        if isinstance(status, int) and 400 <= status < 500:
             return True
-
-        # Non-JSON responses (e.g. HTML proxy responses, truncated bodies) are ambiguous:
-        # the request may have reached the backend and started running.
-        if isinstance(e, json.JSONDecodeError):
-            return False
-
-        # Client-side exceptions that happen before or during request building
-        if isinstance(e, (ValueError, TypeError, FileNotFoundError)):
+        if re.search(r"\bHTTP\s+4\d\d\b", str(e), re.IGNORECASE):
             return True
-
         return False
 
     async def run(self, meta: dict, provider_obj: Any, *, force: bool = False,
+                  resubmit: bool = False,
                   max_cost_usd: float = 5.0, max_open_per_provider: int = 3,
                   max_tokens: int | None = None,
                   input_cost_per_mtok: float | None = None,
@@ -1304,12 +1272,12 @@ class BatchManager:
 
         The pre-POST sidecar write (status='submitting', fsynced) happens
         strictly BEFORE the network socket opens - OpenRouter does not
-        deduplicate batch POSTs (spike finding §2.1), so a crash between the
-        write and the POST leaves a reconcilable orphan rather than a silent
-        duplicate."""
+        deduplicate batch POSTs, so a crash between the write and the POST
+        leaves an unconfirmed batch rather than a silent duplicate."""
         if session is None:
             async with aiohttp.ClientSession() as s:
                 return await self.run(meta, provider_obj, force=force,
+                                      resubmit=resubmit,
                                       max_cost_usd=max_cost_usd,
                                       max_open_per_provider=max_open_per_provider,
                                       max_tokens=max_tokens,
@@ -1318,17 +1286,7 @@ class BatchManager:
                                       precomputed_estimate=precomputed_estimate,
                                       session=s)
 
-        if meta["status"] == STATUS_SUBMITTING:
-            raise BatchError(
-                f"Batch '{meta['name']}' is marked as 'submitting' - a previous "
-                "submission may have crashed mid-flight. Providers do not "
-                "deduplicate, so a new POST could create a duplicate batch.\n"
-                "Reconcile first: inspect remote jobs with '/batch remote' and adopt with "
-                f"'/batch run {meta['name']} adopt=<id>', "
-                f"or abandon this local batch with '/batch cancel {meta['name']} force=true'."
-            )
-
-        self._require_staged(meta)
+        self._require_staged(meta, resubmit=resubmit)
         if precomputed_estimate is not None:
             estimate = precomputed_estimate
         else:
@@ -1371,32 +1329,17 @@ class BatchManager:
                 self._write_meta(meta)
                 raise BatchError(f"Submission failed (status: submit_failed): {e}") from e
             else:
-                meta["status"] = STATUS_SUBMITTING
+                meta["status"] = STATUS_SUBMIT_UNKNOWN
                 self._write_meta(meta)
                 raise BatchError(
-                    f"Submission timed out or network error encountered; status left as "
-                    f"'submitting' to prevent duplicate runs and double-billing. "
-                    f"Check remote jobs with '/batch remote' and adopt with "
-                    f"'/batch run {meta['name']} adopt=<id>', "
-                    f"or abandon with '/batch cancel {meta['name']} force=true': {e}"
+                    f"Submission unconfirmed (status: submit_unknown). The request may have reached the provider.\n"
+                    f"Check your provider dashboard before resubmitting with '/batch run {meta['name']} resubmit=true': {e}"
                 ) from e
 
         meta["provider_id"] = batch.get("id")
         meta["status"] = STATUS_SUBMITTED
         self._write_meta(meta)
         self.compact_index()
-        return meta
-
-    def adopt_orphan(self, meta: dict, provider_id: str) -> dict:
-        """Adopt a provider-side batch into a 'submitting' orphan after a crash
-        between the sidecar write and the POST (OpenRouter reconciliation,
-        proposal §4.4 rule 3: heuristic match presented for confirmation)."""
-        if meta["status"] != STATUS_SUBMITTING:
-            raise BatchError(f"Batch '{meta['name']}' is not in 'submitting' state "
-                             f"(status: {meta['status']}); nothing to adopt.")
-        meta["provider_id"] = provider_id
-        meta["status"] = STATUS_SUBMITTED
-        self._write_meta(meta)
         return meta
 
     # -- polling / retrieval -------------------------------------------------
@@ -1419,13 +1362,16 @@ class BatchManager:
                                         session=s)
 
         if not meta.get("provider_id"):
-            if meta.get("status") == STATUS_SUBMITTING:
+            if meta.get("status") in (STATUS_SUBMIT_UNKNOWN, STATUS_SUBMITTING):
                 raise BatchError(
-                    f"Batch '{meta['name']}' is stuck in 'submitting' with no provider ID "
-                    "(the submission timed out or crashed before receiving an ID).\n"
-                    "Use '/batch remote' to inspect remote jobs, then adopt with "
-                    f"'/batch run {meta['name']} adopt=<id>'.\n"
-                    f"Or abandon this local batch with '/batch cancel {meta['name']} force=true'."
+                    f"Batch '{meta['name']}' has unconfirmed submission status ({meta['status']}) with no provider ID.\n"
+                    f"Check your provider dashboard before resubmitting with '/batch run {meta['name']} resubmit=true', "
+                    f"or discard this record with '/batch purge {meta['name']}'."
+                )
+            if meta.get("status") == STATUS_SUBMIT_FAILED:
+                raise BatchError(
+                    f"Batch '{meta['name']}' failed to submit (status: submit_failed). "
+                    f"Retry with '/batch run {meta['name']}'."
                 )
             raise BatchError(f"Batch '{meta['name']}' has no provider id - it has not "
                              "been submitted. Run '/batch run {0}' first.".format(meta["name"]))
@@ -1554,15 +1500,7 @@ class BatchManager:
 
         if meta["status"] not in OPEN_STATES:
             raise BatchError(f"Batch '{meta['name']}' is not in flight (status: {meta['status']}).")
-        if not meta.get("provider_id"):
-            if not force:
-                raise BatchError(
-                    f"Batch '{meta['name']}' has no provider ID (submission timed out or crashed).\n"
-                    "If the job was accepted remotely, it may still be running. Inspect with '/batch remote'.\n"
-                    f"To disown it locally, re-run with force=true: '/batch cancel {meta['name']} force=true'."
-                )
-            print(f"Note: cancelling '{meta['name']}' locally only (no provider ID recorded).")
-        elif provider_obj is not None and getattr(provider_obj, "supports_cancel", False):
+        if provider_obj is not None and getattr(provider_obj, "supports_cancel", False):
             await _provider_call(provider_obj.cancel, meta["provider_id"], session=session)
         else:
             if not force:

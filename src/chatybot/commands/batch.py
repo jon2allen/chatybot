@@ -44,7 +44,7 @@ from chatybot.commands.registry import CommandResult, command
 # ---------------------------------------------------------------------------
 
 BATCH_KV_KEYS = {"id", "var", "filebank", "split", "file", "limit", "range",
-                 "force", "adopt", "wait", "clear", "prompt", "model",
+                 "force", "resubmit", "wait", "clear", "prompt", "model",
                  "temp", "temperature", "max_tokens", "top_p",
                  "freq_penalty", "frequency_penalty",
                  "pres_penalty", "presence_penalty", "detail", "imagebank",
@@ -196,7 +196,7 @@ IDS_OPTS = {"var"}
 SHOW_OPTS: set[str] = set()
 EDIT_OPTS = {"var", "file"}
 DUMP_OPTS = {"var"}
-RUN_OPTS = {"force", "adopt"}
+RUN_OPTS = {"force", "resubmit"}
 CHECK_OPTS = {"wait"}
 RESULTS_OPTS = {"limit", "range", "var", "detail"}
 CANCEL_OPTS = {"force"}
@@ -930,11 +930,7 @@ async def _sc_purge(ctx: CommandContext, mgr: BatchManager, rest: str) -> Comman
 async def _sc_run(ctx: CommandContext, mgr: BatchManager, rest: str) -> CommandResult:
     opts, _ = _parse_args(rest, keys=RUN_OPTS)
     meta = mgr.resolve(_name_token(rest))
-    if "adopt" in opts:
-        mgr.adopt_orphan(meta, opts["adopt"])
-        print(f"Adopted provider batch {opts['adopt']} into '{meta['name']}' "
-              "(status: submitted). Poll with /batch check.")
-        return CommandResult.ok()
+    resubmit = _opt_bool(opts, "resubmit")
     batch_model_config = _batch_model_config(ctx.app, meta)
     provider_obj = _build_provider(ctx.app, meta)
     batch_cfg = _batch_config(ctx.app)
@@ -962,6 +958,7 @@ async def _sc_run(ctx: CommandContext, mgr: BatchManager, rest: str) -> CommandR
     meta = await mgr.run(
         meta, provider_obj,
         force=force,
+        resubmit=resubmit,
         max_cost_usd=float(batch_cfg.get("max_cost_usd", 5.0)),
         max_open_per_provider=int(batch_cfg.get("max_open_per_provider", 3)),
         max_tokens=effective_max_tokens,
@@ -986,6 +983,10 @@ async def _sc_check(ctx: CommandContext, mgr: BatchManager, rest: str) -> Comman
     if meta["status"] == "submit_failed":
         print(f"Batch '{meta['name']}' failed to submit (status: submit_failed). "
               f"Retry with: /batch run {meta['name']}")
+        return CommandResult.ok()
+    if meta["status"] == "submit_unknown" or (meta["status"] == "submitting" and not meta.get("provider_id")):
+        print(f"Batch '{meta['name']}' has unconfirmed submission status ({meta['status']}). "
+              f"Check your provider dashboard before resubmitting: /batch run {meta['name']} resubmit=true")
         return CommandResult.ok()
     provider_obj = _build_provider(ctx.app, meta)
     if meta["status"] == "cancelled" and (not getattr(provider_obj, "supports_cancel", False) or not meta.get("provider_id")):
@@ -1099,7 +1100,7 @@ async def _sc_remote(ctx: CommandContext, mgr: BatchManager, rest: str) -> Comma
             active_name = mgr.get_active_draft()
             if active_name:
                 try:
-                    meta = mgr.get(active_name)
+                    meta = mgr.resolve(active_name)
                     provider_obj = _build_provider(ctx.app, meta)
                     provider_name = meta.get("provider") or getattr(provider_obj, "name", "unknown")
                 except Exception:
@@ -1155,7 +1156,13 @@ async def _sc_remote(ctx: CommandContext, mgr: BatchManager, rest: str) -> Comma
         print(f"No remote batches found for {provider_name}.")
         return CommandResult.ok()
 
-    print(f"\n[Remote Batches ({provider_name})] ({len(remote_batches)} found)")
+    print(f"\n[Remote Batches ({provider_name}) - org-wide account] ({len(remote_batches)} found)")
+    print("Note: This displays all jobs on the configured provider account; some may not be tracked locally.")
+    local_by_pid = {
+        r["provider_id"]: r["name"]
+        for r in mgr.list_index()
+        if r.get("provider_id")
+    }
     for b in remote_batches:
         bid = b.get("id") or "unknown"
         status = b.get("status") or "unknown"
@@ -1164,9 +1171,9 @@ async def _sc_remote(ctx: CommandContext, mgr: BatchManager, rest: str) -> Comma
         extra = f"  model={model}" if model else ""
         if created_at:
             extra += f"  created={created_at}"
-        print(f"  {bid:<30} status={status:<15}{extra}")
+        local_tag = f"  (local: {local_by_pid[bid]})" if bid in local_by_pid else ""
+        print(f"  {bid:<30} status={status:<15}{extra}{local_tag}")
 
-    print("\nTip: To adopt a remote batch into a local session: /batch run <local_name> adopt=<remote_id>")
     return CommandResult.ok()
 
 

@@ -46,9 +46,9 @@
 # 9. Submit to OpenRouter (pre-submit cost guard; crash-safe sidecar write)
 /batch run dufu_run
 
-# 9b. (Optional) In case of network timeout during submission, inspect remote jobs and adopt:
+# 9b. (Optional) In case of network timeout during submission (submit_unknown):
 # /batch remote
-# /batch run dufu_run adopt=<remote_id>
+# /batch run dufu_run resubmit=true
 
 # 10. Poll until terminal and retrieve results (results.jsonl; exact usage.cost)
 /batch check dufu_run wait=true

@@ -696,27 +696,21 @@ This produces the same multimodal content array, but with a URL instead of a bas
 > - **Compression**: Ensure images are compressed (standard JPEG/PNG under ~1.5 MB) before loading them into image banks for batch jobs.
 > - **Format Autodetection**: Chatybot automatically inspects image magic header bytes to resolve the true MIME format if the file extension does not match (e.g., JPEG URLs serving PNG bytes).
 
-#### **Remote Batch Inspection & Orphan Adoption (`/batch remote`)**
-When submitting large batches to asynchronous provider APIs, network timeouts or in-flight connection drops can leave local batches in a `'submitting'` state to prevent accidental duplicate submissions and double-billing.
+#### **Remote Batch Inspection & Unconfirmed Submissions (`/batch remote`)**
+When submitting large batches to asynchronous provider APIs, network timeouts or connection drops can leave local batches in a `'submit_unknown'` state because chatybot cannot confirm whether the provider accepted the request.
 
-The `/batch remote` subcommand uses the provider's remote batch list API to inspect active and completed jobs on the remote queue:
+The `/batch remote` subcommand provides a read-only, org-wide view of all batch jobs on the configured provider account:
 ```bash
-/batch remote                       # Inspect remote queue using active draft/model
+/batch remote                       # Inspect provider queue using active draft/model
 /batch remote openrouter            # Inspect OpenRouter remote batch queue directly
 /batch remote mistral               # Inspect Mistral remote batch queue directly
 /batch remote my_batch              # Inspect remote queue using provider configured on my_batch
 ```
 
-**Adopting an Orphaned Batch:**
-If a batch was successfully accepted remotely during a timed-out submission, adopt its remote ID into your local staging session:
-```bash
-/batch run my_batch adopt=batch_abc123
-/batch check my_batch wait=true
-```
-If the batch was never accepted by the provider and you want to discard the local record:
-```bash
-/batch cancel my_batch force=true
-```
+**Handling Unconfirmed Submissions (`submit_unknown`):**
+If `/batch run` encounters a timeout or network disconnect, the batch transitions to `submit_unknown` and prompts you to check your provider dashboard.
+- **To resubmit deliberately**: Run `/batch run <name> resubmit=true`.
+- **To discard the local record**: Run `/batch purge <name>` or `/batch abort <name>`.
 
 ### **Conditional Logic**
 ```dsl

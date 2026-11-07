@@ -943,13 +943,13 @@
             "dump [name]": "Muestra el payload JSON de la solicitud; vincula ${BATCH_PAYLOAD} [var=<destino>]",
             "end [name]": "Analiza los elementos en busca de seguridad, compila requests.json, bloquea el manifiesto (staged)",
             "abort [name]": "Descarta una sesión de preparación abierta (nunca enviada)",
-            "run [name]": "Estima el coste, verifica el presupuesto, envía [force=true] [adopt=<provider_id>]",
+            "run [name]": "Estima el coste, verifica el presupuesto, envía [force=true] [resubmit=true]",
             "check [name]": "Consulta el estado / recupera resultados [wait=true espera hasta el estado terminal]; el resumen, /batch status y /batchlist muestran los completados vacíos (estado 200, sin contenido - los proveedores los cuentan como éxitos y nunca los reintentan)",
             "results [name]": "Muestra los completados recuperados con paginación; exporta ${BATCH_RESULTS} [limit=N] [range=inicio:fin] [var=<destino>]. Los registros están en orden de preparación (envío); los proveedores devuelven los resultados en un orden de completado arbitrario; empareja siempre por custom_id",
             "cancel <name>": "Cancela un lote en vuelo [force=true para proveedores sin endpoint de cancelación (OpenRouter): lo marca como cancelado localmente mientras el trabajo remoto sigue ejecutándose hasta completarse]",
             "retry <name>": "Lote nuevo a partir de los elementos fallidos (Fase 3)",
             "list": "Alias de /batchlist",
-            "remote [provider|batch_name]": "Muestra los lotes remotos activos del proveedor y sus IDs para adopción (/batch run <nombre> adopt=<id_remoto>)"
+            "remote [provider|batch_name]": "Muestra los lotes del proveedor (a nivel de organización; puede incluir lotes no rastreados localmente)"
           },
           "short_desc": "Trabajos asincrónicos de la Batch API del proveedor (stage, seal, submit, poll)"
         },
@@ -1710,13 +1710,13 @@
             "dump [name]": "Affiche le payload JSON de la requête ; lie ${BATCH_PAYLOAD} [var=<cible>]",
             "end [name]": "Analyse la sécurité des éléments, compile requests.json, verrouille le manifeste (staged)",
             "abort [name]": "Abandonne une session de préparation ouverte (jamais soumise)",
-            "run [name]": "Estime le coût, vérifie le budget, soumet [force=true] [adopt=<provider_id>]",
+            "run [name]": "Estime le coût, vérifie le budget, soumet [force=true] [resubmit=true]",
             "check [name]": "Interroge le statut / récupère les résultats [wait=true attend l'état terminal] ; le résumé, /batch status et /batchlist font apparaître les complétions vides (statut 200, sans contenu - les fournisseurs les comptent comme des succès et ne les retentent jamais)",
             "results [name]": "Affiche les complétions récupérées avec pagination ; exporte ${BATCH_RESULTS} [limit=N] [range=début:fin] [var=<cible>]. Les enregistrements sont dans l'ordre de préparation (soumission) ; les fournisseurs renvoient les résultats dans un ordre de complétion arbitraire ; appariez toujours par custom_id",
             "cancel <name>": "Annule un lot en vol [force=true pour les fournisseurs sans endpoint d'annulation (OpenRouter) : le marque annulé localement pendant que la tâche distante continue jusqu'à son terme]",
             "retry <name>": "Nouveau lot à partir des éléments échoués (Phase 3)",
             "list": "Alias de /batchlist",
-            "remote [provider|batch_name]": "Liste les lots distants actifs du fournisseur et affiche les IDs pour adoption (/batch run <nom> adopt=<id_distant>)"
+            "remote [provider|batch_name]": "Liste les lots sur le compte du fournisseur (à l'échelle de l'organisation ; peut inclure des lots non suivis localement)"
           },
           "short_desc": "Tâches asynchrones de la Batch API du fournisseur (stage, seal, submit, poll)"
         },
@@ -2476,13 +2476,13 @@
             "dump [name]": "打印 JSON 请求载荷;绑定 ${BATCH_PAYLOAD} [var=<目标>]",
             "end [name]": "对条目做安全扫描,编译 requests.json,锁定清单(暂存)",
             "abort [name]": "丢弃打开的(从未提交的)暂存会话",
-            "run [name]": "估算成本,校验预算,提交 [force=true] [adopt=<provider_id>]",
+            "run [name]": "估算成本,校验预算,提交 [force=true] [resubmit=true]",
             "check [name]": "轮询状态 / 取回结果 [wait=true 轮询至终态];摘要、/batch status 和 /batchlist 会显示空补全(状态 200,无内容--提供商将其计为成功且从不重试)",
             "results [name]": "分页打印取回的补全;导出 ${BATCH_RESULTS} [limit=N] [range=开始:结束] [var=<目标>]。记录按暂存(提交)顺序排列--提供商以任意的补全顺序返回结果;请始终按 custom_id 匹配",
             "cancel <name>": "取消进行中的批量 [force=true 用于没有取消端点的提供商(OpenRouter):在远端任务继续运行至完成的同时,本地将其标记为已取消]",
             "retry <name>": "从失败条目创建新批量(阶段 3)",
             "list": "/batchlist 的别名",
-            "remote [provider|batch_name]": "列出提供商的活跃远端批量任务并显示孤儿采纳 ID (/batch run <名称> adopt=<远端ID>)"
+            "remote [provider|batch_name]": "列出提供商账户上的批量任务(整个组织范围;可能包含未在本地跟踪的任务)"
           },
           "short_desc": "提供商 Batch API 异步任务(stage、seal、submit、poll)"
         },
@@ -3235,13 +3235,13 @@
             "dump [name]": "Stampa il payload JSON della richiesta; vincola ${BATCH_PAYLOAD} [var=<destinazione>]",
             "end [name]": "Scansione di sicurezza degli elementi, compila requests.json, blocca il manifest (staged)",
             "abort [name]": "Scarta una sessione di preparazione aperta (mai inviata)",
-            "run [name]": "Stima i costi, verifica il budget, invia [force=true] [adopt=<provider_id>]",
+            "run [name]": "Stima i costi, verifica il budget, invia [force=true] [resubmit=true]",
             "check [name]": "Interroga lo stato / recupera i risultati [wait=true attende fino allo stato terminale]; il riepilogo, /batch status e /batchlist evidenziano i completamenti vuoti (stato 200, nessun contenuto - i fornitori li contano come successi e non li ritentano mai)",
             "results [name]": "Stampa i completamenti recuperati con paginazione; esporta ${BATCH_RESULTS} [limit=N] [range=inizio:fine] [var=<destinazione>]. I record sono in ordine di preparazione (invio); i fornitori restituiscono i risultati in un ordine di completamento arbitrario; abbina sempre per custom_id",
             "cancel <name>": "Annulla un batch in corso [force=true per i fornitori senza endpoint di annullamento (OpenRouter): lo marca annullato localmente mentre il job remoto continua fino al completamento]",
             "retry <name>": "Nuovo batch dagli elementi falliti (Fase 3)",
             "list": "Alias di /batchlist",
-            "remote [provider|batch_name]": "Elenca i job batch remoti attivi del fornitore e mostra gli ID per l'adozione (/batch run <nome> adopt=<id_remoto>)"
+            "remote [provider|batch_name]": "Elenca i job batch sull'account del fornitore (a livello di organizzazione; può includere job non tracciati localmente)"
           },
           "short_desc": "Job asincroni della Batch API del fornitore (stage, seal, submit, poll)"
         },
@@ -4004,13 +4004,13 @@
             "dump [name]": "طباعة حمولة طلب JSON؛ يربط ${BATCH_PAYLOAD} [var=<هدف>]",
             "end [name]": "فحص العناصر أمنيًا، وتجميع requests.json، وقفل البيان (staged)",
             "abort [name]": "التخلص من جلسة تجهيز مفتوحة (لم تُرسل أبدًا)",
-            "run [name]": "تقدير التكلفة، والتحقق من الميزانية، والإرسال [force=true] [adopt=<provider_id>]",
+            "run [name]": "تقدير التكلفة، والتحقق من الميزانية، والإرسال [force=true] [resubmit=true]",
             "check [name]": "استعلام الحالة / استرجاع النتائج [wait=true ينتظر حتى الحالة النهائية]؛ الملخص و/batch status و/batchlist تُظهر عمليات الإكمال الفارغة (حالة 200، بلا محتوى - يعدّها المزودون نجاحات ولا يعيدونها أبدًا)",
             "results [name]": "طباعة عمليات الإكمال المسترجعة مع ترقيم الصفحات؛ يصدّر ${BATCH_RESULTS} [limit=N] [range=بداية:نهاية] [var=<هدف>]. السجلات بترتيب التجهيز (الإرسال) - يعيد المزودون النتائج بترتيب إكمال عشوائي؛ طابق دائمًا بـ custom_id",
             "cancel <name>": "إلغاء دفعة جارية [force=true للمزودين بلا نقطة إلغاء (OpenRouter): يعلّمها ملغاة محليًا بينما تستمر المهمة البعيدة حتى اكتمالها]",
             "retry <name>": "دفعة جديدة من العناصر الفاشلة (المرحلة 3)",
             "list": "اسم بديل لـ /batchlist",
-            "remote [provider|batch_name]": "عرض مهام الدفعات البعيدة النشطة للمزوّد ومعرّفاتها للتبني (/batch run <الاسم> adopt=<المعرّف_البعيد>)"
+            "remote [provider|batch_name]": "عرض مهام الدفعات على حساب المزود (على مستوى المؤسسة؛ قد تشمل مهام غير متتبعة محليًا)"
           },
           "short_desc": "مهام Batch API غير المتزامنة للمزوّد (stage, seal, submit, poll)"
         },
