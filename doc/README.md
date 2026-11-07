@@ -19,7 +19,9 @@
 - [Advanced Features](#advanced-features)
   - [File Handling](#file-handling)
   - [Prompt Engineering](#prompt-engineering)
-  - [Scripting](#scripting)
+  - [Scripting & Dynamic Sourcing](#scripting--dynamic-sourcing)
+  - [Image Support (Beta)](#image-support-beta)
+  - [Asynchronous Batch API Subsystem (`/batch`)](#asynchronous-batch-api-subsystem-batch)
   - [Variable Substitution](#variable-substitution)
   - [Conditional Logic](#conditional-logic)
 - [Test Cases](#test-cases)
@@ -439,6 +441,31 @@ chat --> Generate documentation for this project
   - **Companion Macro Auto-Loading**: If a `macro.chatdsl` file exists in the same directory as the sourced script, its macros are compiled and loaded automatically.
   - **Multilingual Support**: Automatically preprocessed through the localization engine (also callable as `/origen`, `/加载脚本`, `/sorgente`, `/مصدر`).
 
+#### **Key Distinction: `/script` vs `/batch`**
+It is important to understand the fundamental difference between **ChatDSL scripts (`/script`)** and the **Provider Batch API (`/batch`)**:
+
+| Dimension | `/script` (ChatDSL Scripts) | `/batch` (Provider Batch API) |
+|---|---|---|
+| **Execution Environment** | **Local**: runs line-by-line via Chatybot's ChatDSL engine on your machine | **Remote**: submitted to cloud model providers (OpenRouter, Mistral) |
+| **Execution Mode** | **Synchronous**: executes commands, logic, loops, and prompts in sequence | **Asynchronous**: jobs are staged, submitted, queued, and processed out-of-band by the provider |
+| **Token Pricing** | Standard real-time provider token rates | **~50% discount** off standard token rates with higher rate limits |
+| **Primary Use Case** | Workflows, test automation, dynamic prompts, variables, macro evaluation, loops | Bulk processing of hundreds or thousands of text prompts or images |
+| **Interoperability** | **`/script` can call `/batch`**: A `.chatdsl` script can automate batch staging (`/batch add`), submission (`/batch run`), status checks (`/batch check wait=true`), and result exports | Driven interactively via CLI or invoked programmatically within `.chatdsl` scripts |
+
+For example, a ChatDSL script can ingest files, construct prompt templates, launch a remote batch job, wait for completion, and save the retrieved outputs:
+```dsl
+# Automated Batch Pipeline in ChatDSL
+/model gptoss_batch
+/batch start translation_run
+/batch prompt "Translate each line into English:"
+/filebank1 poems.txt
+/batch add filebank=1 split=lines
+/batch end
+/batch run translation_run
+/batch check translation_run wait=true
+/batch results translation_run detail=true
+```
+
 #### **Multilingual ChatDSL Guides**
 To assist users in multiple languages, localized versions of the ChatDSL technical guide are available in the [doc](doc/) folder:
 - [Arabic ChatDSL Guide (العربية)](doc/chatdsl_guide_v1_arabic.md)
@@ -655,69 +682,109 @@ Describe this image: {imagebank1}
 | `/imagebank{1-5} clear` | Clear an image bank | `/imagebank1 clear` |
 | `/imagebank{1-5} show` | Show image bank info | `/imagebank1 show` |
 
-#### **Batch Vision Inference (`/batch add {imagebankN}`)**
-Images loaded into image banks can also be staged and submitted to asynchronous provider Batch APIs (such as `mistral_batch`):
-```bash
-/imagebank1 pics/sample.jpg
-/model mistral_batch
-/batch start photo_analysis model=mistral_batch
-/batch prompt "Describe the primary elements in this image."
-/batch add {imagebank1}
-/batch end
-/batch run photo_analysis
-/batch check photo_analysis wait=true
-/batch results photo_analysis detail=true
-```
+> [!TIP]
+> **Batch Vision Inference**: To analyze images in bulk asynchronously at discounted token rates (~50% discount), see [Asynchronous Batch API Subsystem (`/batch`)](#asynchronous-batch-api-subsystem-batch) below.
 
-**Text + image on the same item:** When free text accompanies the `{imagebankN}` placeholder, both the text and the image are sent together as a multimodal content array (text part + image part). The text around the placeholder is preserved as the item's text field; the placeholder itself is replaced by the image data. This is useful for passing filenames, IDs, or instructions alongside the image:
-```bash
-/batch add "Filename: 75419-1.jpg {imagebank1}"
-```
-The resulting batch item contains `text: "Filename: 75419-1.jpg"` and the image from image bank 1, sent to the provider as:
-```json
-{"role": "user", "content": [
-  {"type": "text", "text": "Filename: 75419-1.jpg"},
-  {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,..."}}
-]}
-```
+### **Asynchronous Batch API Subsystem (`/batch`)**
+Chatybot includes a comprehensive subsystem for interacting with remote asynchronous provider Batch APIs (such as OpenRouter and Mistral). Jobs run out-of-band on provider infrastructure at a **50% discount** off standard token rates and outlive the interactive session that submitted them. Local manifests, staged files, and downloaded results are stored in `~/.local/share/chatybot/batches/` with a centralized append-only catalog (`index.jsonl`).
 
-**Image URL (`image=<url>`):** Use `image=` to pass a remote image URL directly instead of loading it into an image bank. The provider fetches the image from the URL - no local download or base64 encoding needed. Free text is sent alongside the URL as the text part of a multimodal content array:
-```bash
-/batch add "Filename: 75419-1.jpg" image=https://example.com/images/75419-1.jpg
-```
-This produces the same multimodal content array, but with a URL instead of a base64 data URI:
-```json
-{"type": "image_url", "image_url": {"url": "https://example.com/images/75419-1.jpg"}}
-```
+#### **1. Distinction: `/batch` (Remote Provider Processing) vs `/script` (Local ChatDSL)**
+It is essential to distinguish between batch processing and scripting in Chatybot:
+* **`/batch` (Remote Provider Processing)**: Submits bulk asynchronous queries to a cloud provider's Batch API (e.g., OpenRouter or Mistral). The provider queues and processes the requests remotely on their servers over minutes or hours.
+* **`/script` (ChatDSL Local Orchestration)**: Executes a `.chatdsl` script locally and synchronously line-by-line on your machine.
+* **Orchestration**: **ChatDSL scripts can call `/batch` commands!** You can write `.chatdsl` scripts to automate an entire bulk pipeline-staging items (`/batch add`), submitting (`/batch run`), waiting for results (`/batch check wait=true`), and analyzing completions (see [Cookbook Recipe 14.10](doc/cookbook/14_10_batch_api_translation.chatdsl) and [Recipe 14.12](doc/cookbook/14_12_batch_api_multimodal_vision.chatdsl)).
 
-**Text + image on the same item:** When free text accompanies the `{imagebankN}` placeholder, both the text and the image are sent together as a multimodal content array (text part + image part). The text around the placeholder is preserved as the item's text field; the placeholder itself is replaced by the image data. This is useful for passing filenames, IDs, or instructions alongside the image:
-```bash
-/batch add "Filename: 75419-1.jpg {imagebank1}"
-```
-The resulting batch item contains `text: "Filename: 75419-1.jpg"` and the image from image bank 1, sent to the provider as:
-```json
-{"role": "user", "content": [
-  {"type": "text", "text": "Filename: 75419-1.jpg"},
-  {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,..."}}
-]}
-```
+#### **2. Text and Multimodal Vision Support**
+The `/batch` command is designed for **both plain text completions and multimodal vision analysis (images)**:
 
-**Image URL (`image=<url>`):** Use `image=` to pass a remote image URL directly instead of loading it into an image bank. The provider fetches the image from the URL - no local download or base64 encoding needed. Free text is sent alongside the URL as the text part of a multimodal content array:
-```bash
-/batch add "Filename: 75419-1.jpg" image=https://example.com/images/75419-1.jpg
-```
-This produces the same multimodal content array, but with a URL instead of a base64 data URI:
-```json
-{"type": "image_url", "image_url": {"url": "https://example.com/images/75419-1.jpg"}}
-```
+##### **A. Text Batching**
+You can stage text items into an open batch draft from multiple sources:
+* **Direct free text**:
+  ```bash
+  /batch add "Translate to Spanish: Artificial intelligence is transforming workflows."
+  ```
+* **Corpus ingestion from File Banks**:
+  Load a document into a file bank and split it line-by-line or paragraph-by-paragraph (auto-assigns IDs like `fb1_line_0001`):
+  ```bash
+  /filebank1 data/corpus.txt
+  /batch add filebank=1 split=lines
+  ```
+* **Variables and Files**:
+  Stage items directly from a ChatDSL variable or individual file:
+  ```bash
+  /batch add id=item_001 var=my_text
+  /batch add id=item_002 file=path/to/prompt.txt
+  ```
+* **Global Prompt Templates**:
+  Set a common instruction template applied to all items in the batch:
+  ```bash
+  /batch prompt "Translate each input into Spanish with formal tone."
+  ```
+
+##### **B. Multimodal Vision Batching (Supporting Images)**
+For vision-capable batch models (such as `mistral_batch`), Chatybot supports three flexible ways to include images:
+
+1. **Local Images via Image Banks (`{imagebankN}` or `imagebank=N`)**:
+   Load a local image into an image bank and stage it into the batch:
+   ```bash
+   /imagebank1 pics/sample.jpg
+   /batch add {imagebank1}
+   ```
+2. **Text + Image on the same item**:
+   When free text accompanies the `{imagebankN}` placeholder, both the text and the image are sent together as a multimodal content array (`text` part + `image_url` part). The text around the placeholder is preserved as the item's text prompt, allowing you to pass filenames, IDs, or contextual questions alongside each image:
+   ```bash
+   /batch add "Filename: 75419-1.jpg {imagebank1}"
+   ```
+   The provider receives:
+   ```json
+   {"role": "user", "content": [
+     {"type": "text", "text": "Filename: 75419-1.jpg"},
+     {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,..."}}
+   ]}
+   ```
+3. **Remote Image URLs (`image=<url>`)**:
+   Pass a remote image URL directly using `image=`. The provider fetches the image directly from the URL-no local file download or base64 encoding needed:
+   ```bash
+   /batch add "Filename: 75419-1.jpg" image=https://example.com/images/75419-1.jpg
+   ```
+   This produces a remote URL reference in the multimodal content array:
+   ```json
+   {"type": "image_url", "image_url": {"url": "https://example.com/images/75419-1.jpg"}}
+   ```
 
 > [!NOTE]
 > **Payload Size & Format Guidelines for Batch Vision**:
-> - **Inline Payload Limits**: Mistral and other providers process inline batch jobs via standard HTTP POST endpoints. Embedding large or uncompressed base64 images (e.g. >2-4 MB) can cause edge reverse proxies / load balancers to reject the request with a generic `HTTP 400 Bad Request` HTML page before reaching the API backend.
-> - **Compression**: Ensure images are compressed (standard JPEG/PNG under ~1.5 MB) before loading them into image banks for batch jobs.
-> - **Format Autodetection**: Chatybot automatically inspects image magic header bytes to resolve the true MIME format if the file extension does not match (e.g., JPEG URLs serving PNG bytes).
+> * **Inline Payload Limits**: Mistral and other providers process inline batch jobs via standard HTTP POST endpoints. Embedding large or uncompressed base64 images (e.g. >2-4 MB) can cause edge reverse proxies / load balancers to reject the request with a generic `HTTP 400 Bad Request` HTML page before reaching the API backend.
+> * **Compression**: Ensure images are compressed (standard JPEG/PNG under ~1.5 MB) before loading them into image banks for batch jobs. Alternatively, use `image=<url>` to avoid base64 payload overhead entirely.
+> * **Format Autodetection**: Chatybot automatically inspects image magic header bytes to resolve the true MIME format if the file extension does not match (e.g., JPEG URLs serving PNG bytes).
 
-#### **Remote Batch Inspection & Unconfirmed Submissions (`/batch remote`)**
+#### **3. End-to-End Batch Lifecycle**
+```bash
+# 1. Switch to a batch-capable model (models need 'batch = true' in chat_config.toml)
+/model mistral_batch
+
+# 2. Open a new draft and set the batch instruction
+/batch start photo_analysis model=mistral_batch temp=0.3
+/batch prompt "Describe the primary elements in this image."
+
+# 3. Stage items (text or images)
+/imagebank1 pics/sample.jpg
+/batch add "Item 1: {imagebank1}"
+
+# 4. Seal the batch manifest (runs security scan, checks payload limits, and locks)
+/batch end
+
+# 5. Submit to provider (includes pre-submit cost guard and budget verification)
+/batch run photo_analysis
+
+# 6. Poll status until finished and retrieve completions
+/batch check photo_analysis wait=true
+
+# 7. Inspect retrieved completions with pagination
+/batch results photo_analysis detail=true
+```
+
+#### **4. Remote Batch Inspection & Unconfirmed Submissions (`/batch remote`)**
 When submitting large batches to asynchronous provider APIs, network timeouts or connection drops can leave local batches in a `'submit_unknown'` state because chatybot cannot confirm whether the provider accepted the request.
 
 The `/batch remote` subcommand provides a read-only, org-wide view of all batch jobs on the configured provider account:
@@ -730,8 +797,8 @@ The `/batch remote` subcommand provides a read-only, org-wide view of all batch 
 
 **Handling Unconfirmed Submissions (`submit_unknown`):**
 If `/batch run` encounters a timeout or network disconnect, the batch transitions to `submit_unknown` and prompts you to check your provider dashboard.
-- **To resubmit deliberately**: Run `/batch run <name> resubmit=true`.
-- **To discard the local record**: Run `/batch purge <name>` or `/batch abort <name>`.
+* **To resubmit deliberately**: Run `/batch run <name> resubmit=true`.
+* **To discard the local record**: Run `/batch purge <name>` or `/batch abort <name>`.
 
 ### **Conditional Logic**
 ```dsl

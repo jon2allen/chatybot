@@ -559,9 +559,17 @@ class HelpSystem:
             category="script",
             short_desc="Execute a script file with optional parameters",
             usage="/script <file> [x=value y=value ...] [interactive|--interactive|-i]",
-            long_desc="Execute a script file containing multiple commands. Optionally pass parameters that can be referenced in the script. By default script runs are non-interactive: confirmation prompts (skill tool config, security ASK verdicts) are skipped or denied. Pass the interactive flag to allow prompts to read from the terminal during the run.",
+            long_desc=(
+                "Execute a script file containing multiple commands. Optionally pass parameters that "
+                "can be referenced in the script. By default script runs are non-interactive: confirmation "
+                "prompts (skill tool config, security ASK verdicts) are skipped or denied. Pass the "
+                "interactive flag to allow prompts to read from the terminal during the run.\n\n"
+                "Distinction: /script executes local ChatDSL scripts line-by-line on your machine. "
+                "In contrast, /batch submits remote bulk asynchronous queries to model providers (OpenRouter, "
+                "Mistral) at a 50% discount. ChatDSL scripts can invoke /batch to orchestrate automated batch pipelines."
+            ),
             examples=["/script workflow.chatdsl", "/script generate.chatdsl x=5 y=10", "/script skill_lock_repro.chatdsl --interactive"],
-            see_also=["set", "if", "wait", "/chatdsl"]
+            see_also=["set", "if", "wait", "/chatdsl", "/batch"]
         ))
 
         # ChatDSL workflow generation
@@ -1044,11 +1052,17 @@ class HelpSystem:
             long_desc=(
                 "Batch API jobs: asynchronous bulk inference submitted to a provider "
                 "Batch API (OpenRouter or Mistral) at a 50% discount "
-                "off standard token rates. Jobs outlive the prompt cycle that creates "
+                "off standard token rates. Supports both text prompts and multimodal vision (images) "
+                "via image banks ({imagebankN}) or remote URLs (image=https://...).\n\n"
+                "Jobs outlive the prompt cycle that creates "
                 "them: stage items into a draft, seal with a security scan, submit, then "
                 "poll and retrieve results. Storage lives under ~/.local/share/chatybot/batches/ "
                 "(per-instance directories + global index.jsonl), fully decoupled from "
                 "session history.\n\n"
+                "Batch vs Script: /batch is for remote asynchronous queries executed on provider "
+                "infrastructure. In contrast, /script executes local ChatDSL scripts on your machine; "
+                "ChatDSL scripts can call /batch to automate staging, submission, and result retrieval "
+                "(see Cookbook Recipe 14.10, 14.12).\n\n"
                 "Model selection is idiomatic: /model <batch-alias> on its own line "
                 "(models need 'batch = true' in chat_config.toml). While a batch model "
                 "is selected, interactive chat is disabled - switch back with "
@@ -1096,7 +1110,7 @@ class HelpSystem:
                 "list": "Alias for /batchlist",
                 "remote [provider|batch_name]": "List batch jobs on the provider account (org-wide; may include jobs not tracked locally)",
             },
-            see_also=["/batchlist", "/model", "/filebank1"]
+            see_also=["/batchlist", "/model", "/filebank1", "/script"]
         ))
 
         self.register_command(CommandHelp(

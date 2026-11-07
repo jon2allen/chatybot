@@ -1360,26 +1360,77 @@ Deleted session 'test_model_20260908_083213_2'.
 /session query since=24h ids
 
 # 4. Non-destructive turn extraction: inspect turn 1 (prompt & response) of a target session
-# Extracts read-only without interrupting or switching the active session
-/session get ${ERROR_SESSIONS}[0] turn=1 both var=FIRST_TURN
+# Extracts read-only without interrupting or switching the active session.
+# Subscript syntax is ${var[0]} (index INSIDE the braces): ${var}[0] substitutes
+# the whole list and leaves "[0]" as literal text. var= saves a single formatted
+# string (no .prompt/.response dot access), so extract each part separately.
+/session get ${ERROR_SESSIONS[0]} turn=1 prompt var=FIRST_PROMPT
+/session get ${ERROR_SESSIONS[0]} turn=1 response var=FIRST_RESPONSE
 
-/echo "First turn prompt: ${FIRST_TURN}.prompt"
-/echo "First turn response: ${FIRST_TURN}.response"
+/echo "First turn prompt: ${FIRST_PROMPT}"
+/echo "First turn response: ${FIRST_RESPONSE}"
 
 # 5. Extract only the response text into a dedicated variable for downstream processing
-/session get ${ERROR_SESSIONS}[0] turn=1 response var=BOT_ANSWER
+/session get ${ERROR_SESSIONS[0]} turn=1 response var=BOT_ANSWER
 /echo "Extracted response: ${BOT_ANSWER}"
 ```
 
 **Walkthrough**
-1. **Content & Metadata Search (`/session query`):** Searches across all session turns (prompts, responses, tool calls), metadata notes, and scratchpad files using a pluggable query engine (`GrepQueryEngine`).
+1. **Content & Metadata Search (`/session query`):** Searches across all session turns (prompts, responses, tool calls), metadata notes, and scratchpad files using a pluggable query engine (`GrepQueryEngine`). This includes command action events (e.g. `/session show`, `/exit` records) - by design, so a session with zero LLM exchanges (script or command-verb testing) can still match and still has a directory size, while `/session show` reports only LLM exchanges.
 2. **Date Constraints & Relative Filtering:** Supports `since=` (`today`, `yesterday`, `7d`, `24h`), `until=`, or `range=` (`2026-03-01..2026-05-01`).
 3. **Filter-Only Discovery Without Search Terms:** Execute `/session query since=24h ids` or `/session query "*" since=7d` to discover all recent sessions matching the date window without needing dummy search terms.
 4. **Entire Session Storage Footprint:** Every matched session reports its full storage footprint on disk (e.g. `8.2 KB` or exact `size_bytes`) rather than confusing turn snippet sizes. Results are cached via a 3-tier lazy evaluation architecture to eliminate redundant disk I/O.
 5. **Fast Discovery Mode (`ids`):** Passing `ids` displays a compact list of session IDs and their whole-session byte sizes, populating `${SESSION_IDS}` and saving the ID list to `var=` if provided.
 6. **Full-Content Inspection (`full`):** Passing `full` outputs the entire un-truncated exchange instead of 80-character snippets.
-7. **Non-Destructive Extraction (`/session get`):** Inspect turns from any session on disk (or the active session via `active`) without calling `/session use` (which would switch the active session and pollute the context window). Specify `turn=N` (or `turn=all`), and select `prompt`, `response`, `thinking`, or `both`.
+7. **Non-Destructive Extraction (`/session get`):** Inspect turns from any session on disk (or the active session via `active`) without calling `/session use` (which would switch the active session and pollute the context window). Specify `turn=N` (or `turn=all`), and select `prompt`, `response`, `thinking`, or `both`. Note: the size shown in the `/session get` header is the byte length of the extracted text only, not the whole session - whole-session footprints appear in `/session query` output.
 8. **Automated Variable Assignment:** Populates protected variables `${SESSION_QUERY}` and `${SESSION_GET}`, or assign directly to custom script variables via `var=<name>`.
+
+### 10.7 Finding Sessions by Model and Reporting Sizes
+- **Goal:** Find every session saved under a given model alias (`model=` is a case-insensitive substring match on `model_alias`), extract the first exchange of the newest non-empty match, and report whole-session sizes for the first 10 - combining list, get, query, and bounded foreach loops.
+- **Commands:** `/session list model=<substr> all [ids] [var=...]`, `/session get <sid> turn=N prompt|response var=...`, `/session query "" session=<sid> ids`, `foreach`/`endfor`, `if ... then break`, `/calc`, `/setvar`.
+- **Script:** `cookbook/10_7_find_test_sessions.chatdsl`
+- **Run:** `/script doc/cookbook/10_7_find_test_sessions.chatdsl`
+
+```dsl
+# 1. Show all matching sessions (without `all`, only the 10 most recent appear)
+/session list model=test all
+
+# 2. Capture just the session IDs as a variable for downstream steps
+/session list model=test all ids var=test_ids
+
+# 3. Walk the matches newest-first and show the first exchange of the
+#    newest session that actually has content. Empty sessions (0 turns)
+#    fail /session get turn=1 and leave FIRST_PROMPT unset, so the loop
+#    skips them. Note: foreach iterates a bare variable name (test_ids),
+#    and the item var is unset after endfor, so save the match before break.
+foreach sid in test_ids
+/session get ${sid} turn=1 prompt var=FIRST_PROMPT
+if "${FIRST_PROMPT}" != "" then /setvar found_sid ${sid}
+if "${FIRST_PROMPT}" != "" then break
+endfor
+/echo "Newest non-empty test session: ${found_sid}"
+/echo "First turn prompt: ${FIRST_PROMPT}"
+/session get ${found_sid} turn=1 response var=FIRST_RESPONSE
+/echo "First turn response: ${FIRST_RESPONSE}"
+
+# 4. Report the whole-session size of the first 10 matches.
+#    /session query "" matches everything; session= takes an EXACT session
+#    id (not a substring), so query each sid directly. Sizes shown are the
+#    full session directory size (B/KB/MB). /calc counts iterations and
+#    the if breaks the loop at 10. Empty sessions simply report 0 found.
+/setvar size_count 0
+foreach sid in test_ids
+/session query "" session=${sid} ids
+/calc "${size_count} + 1" size_count
+if ${size_count} >= 10 then break
+endfor
+```
+
+**Walkthrough**
+1. **Filter by model (`/session list model=test all`):** `model=` substring-matches the session's `model_alias` (so `test` catches `test_model`); `all` is required because the default shows only the 10 most recent. Results are sorted by `updated_at`, newest first.
+2. **IDs into a variable:** with `ids`, `var=` stores the plain session-ID list (without `ids` it stores full summary dicts).
+3. **Skip-empty loop:** `/session get <sid> turn=1` fails on empty sessions, leaving the target variable unset; unresolved `${VAR}` placeholders are silently stripped by the script pre-substitution, so `if "${FIRST_PROMPT}" != ""` detects the failure. The match must be saved to a separate variable before `break` because foreach deletes its item variable after `endfor`.
+4. **Exact-match size lookup:** `/session query "" session=<sid> ids` lists the session with its full on-disk directory footprint; zero search terms match everything, and `session=` requires the exact sid (no substring). `/calc "${n} + 1" n` plus `if ${n} >= 10 then break` bounds the loop to 10 iterations since `limit=` does not cap ids-mode output.
 
 ---
 
@@ -1622,6 +1673,32 @@ What are the trade-offs of LSM trees compared to B-Trees?
 2. `/context session` isolates the token count from session history.
 3. `/session export csv <file> -t` produces a `QUOTE_ALL` CSV containing timestamps, TPS, timing, prompts, responses, and reasoning traces for spreadsheet or database ingestion.
 4. For agentic tool loops, `/tool export csv <file>` or `/tool history csv <file>` exports step-by-step tool execution traces and timings.
+
+### 13.5 Prompt-cache key tuning
+- **Goal:** inspect prompt-cache telemetry, pin a shared cache key for RAG/batch runs, and restore automatic session binding.
+- **Commands:** `/cachekey [status|session|reset|profile|set <name>|on|off]`, `/trace cache on|off`.
+- **Script:** `cookbook/13_5_cache_key_tuning.chatdsl`
+- **Run:** `/script doc/cookbook/13_5_cache_key_tuning.chatdsl`
+
+```dsl
+/cachekey status
+/cachekey set kb-rag-v1
+/model mistral_1
+Summarize the key ideas of KV-cache reuse in transformer inference.
+/cachekey status
+/cachekey session
+/model mistral_1
+Now contrast KV-cache reuse with prefix caching.
+```
+
+**Walkthrough**
+1. `/cachekey status` shows the active key, provider, cached/write token counts, hit rate, and (when `input_cost_per_mtok` is configured for the model) estimated net savings after cache-write warm-up surcharges.
+2. By default the cache key is bound to the active session (`chatybot-<session_id>`), so multi-turn chats and tool loops hit the provider KV cache automatically.
+3. `/cachekey set <name>` pins a custom key so separate sessions running the same corpus share one cached prefix - useful for repeated RAG queries or batch evaluations. `${PROMPT_CACHE_KEY}` is the script-variable equivalent.
+4. `/cachekey session` (synonym: `/cachekey reset`) clears the custom key and rebinds to the active session; `/cachekey profile` binds to the most recently applied profile; `/cachekey off` disables cache-key emission for the current session only.
+5. `/trace cache on` prints a per-turn `[TRACE:CACHE]` line (key, input/read/write tokens, hit rate) after each completion.
+
+**Variations:** add `prompt_caching = false` to a `[models.<alias>]` table (or `[default]`) to disable prompt caching persistently in `chat_config.toml`.
 
 ---
 
@@ -1934,6 +2011,89 @@ Summarize the consensus algorithms mentioned and who discussed them.
 **Walkthrough**
 1. `/run find` discovers notes; per-file rerank keeps only relevant slices and `/dblog` persists them.
 2. The final `/searchdb` + `/loadvar` turns the KB into an answer - an ingest → index → retrieve → answer pipeline in one script.
+
+### 14.11 Asynchronous Batch API translation pipeline
+- **Combines:** `/model <batch_alias>` + `/batch prompt` + `/batch start` + `/filebank1` + `/batch add` + `/batch end` + `/batch run` + `/batch check wait=true` + `/batch results`.
+- **Script:** `cookbook/14_10_batch_api_translation.chatdsl`
+- **Run:** `/script doc/cookbook/14_10_batch_api_translation.chatdsl`
+
+> [!NOTE]
+> **Key Distinction: `/batch` vs `/script`**:
+> It is critical to distinguish between **ChatDSL scripts (`/script`)** and the **Provider Batch API (`/batch`)**:
+> - **`/batch` (Remote Provider Processing)** submits bulk asynchronous queries to a cloud provider's Batch API (OpenRouter or Mistral) at a ~50% discount off standard token rates.
+> - **`/script` (Local ChatDSL Execution)** runs `.chatdsl` scripts line-by-line locally on your machine.
+> - **Interoperability**: ChatDSL scripts can invoke `/batch` commands to orchestrate end-to-end bulk processing workflows!
+
+```dsl
+# 1. Select the batch-capable model
+/model gptoss_batch
+
+# 2. Set the common batch instruction
+/batch prompt "Translate each Chinese poem into pinyin with tone marks and faithful English."
+
+# 3. Open the staging draft
+/batch start dufu_run
+
+# 4. Ingest corpus from Filebank 1 (splits by line)
+/filebank1 data/poems_short.txt
+/batch add filebank=1 split=lines
+
+# 5. Add one extra priority item from a script variable with an explicit ID
+/setvar special_poem "春望: 国破山河在，城春草木深。感时花溅泪，恨别鸟惊心。"
+/batch add id=chunwang var=special_poem
+
+# 6. Seal staging manifest (runs security scan and locks)
+/batch end
+
+# 7. Submit to provider with pre-submit cost guard
+/batch run dufu_run
+
+# 8. Poll until terminal and retrieve results
+/batch check dufu_run wait=true
+
+# 9. Inspect retrieved completions natively
+/batch results dufu_run limit=5
+```
+
+**Walkthrough**
+1. **Model Selection**: `/model gptoss_batch` activates a batch-capable model (`batch = true` in `chat_config.toml`). While active, interactive chat is disabled to prevent accidental per-token billing.
+2. **Text Batching & File Ingestion**: Ingests hundreds of lines in one command via `/batch add filebank=1 split=lines`.
+3. **Execution & Retrieval**: `/batch run` validates budget limits (`max_cost_usd`) before POSTing. `/batch check wait=true` polls out-of-band and saves results to `~/.local/share/chatybot/batches/dufu_run/results.jsonl`.
+
+### 14.12 Multimodal batch vision pipeline
+- **Combines:** `/imagebank1` + `/model mistral_batch` + `/batch start` + `/batch prompt` + `/batch add {imagebank1}` + `/batch run` + `/batch check wait=true` + `/batch results detail=true`.
+- **Script:** `cookbook/14_12_batch_api_multimodal_vision.chatdsl`
+- **Run:** `/script doc/cookbook/14_12_batch_api_multimodal_vision.chatdsl`
+
+```dsl
+# 1. Load the image into image bank 1
+/imagebank1 pics/75419-1.jpg
+
+# 2. Select the vision batch model and open draft
+/model mistral_batch
+/batch start vision_demo model=mistral_batch temp=0.3
+
+# 3. Set common instruction template
+/batch prompt "List 3 colors in the image. At the top, restate the filename."
+
+# 4. Add the image with accompanying text - sent together as a multimodal content array
+/batch add "Filename: 75419-1.jpg {imagebank1}"
+
+# 4b. Alternative: use image=<url> directly
+# /batch add "Filename: 75419-1.jpg" image=https://example.com/images/75419-1.jpg
+
+# 5. Seal manifest, submit, and poll
+/batch end vision_demo
+/batch run vision_demo
+/batch check vision_demo wait=true
+/batch results vision_demo detail=true
+/model mistral_1
+```
+
+**Walkthrough**
+1. **Batch Supports Text & Images**: Demonstrates that `/batch` handles multimodal vision inference alongside plain text.
+2. **Multimodal Content Array**: Accompanying text around `{imagebank1}` is preserved as the item prompt, and the image is attached as an `image_url` part.
+3. **Remote Image URLs**: Using `image=https://...` avoids base64 payload bloat entirely.
 
 ---
 
@@ -2338,6 +2498,7 @@ if "${TOOL_DISPATCH_EXIT_CODE}" == "0" then /echo Permitted workspace write conf
 | 13.1 | Tracing | `/trace` | new |
 | 13.2 | Inspecting state | `/dump` `/mem` `/showfile` `/debug` | new |
 | 13.3 | Performance & rate limits | `wait` `/context_limit` `/auto_truncate` | new |
+| 13.5 | Prompt-cache key tuning | `/cachekey` `/trace cache` `${PROMPT_CACHE_KEY}` | new |
 | 14.1 | Autonomous research agent | `/tool loop` + `/rerank` + `/dblog` | novel |
 | 14.2 | Iterative image refinement | `/imagine` + vision + `foreach` | novel |
 | 14.3 | LLM-as-judge ensemble vote | multi-model + `/rerank` vote | novel |
@@ -2348,6 +2509,8 @@ if "${TOOL_DISPATCH_EXIT_CODE}" == "0" then /echo Permitted workspace write conf
 | 14.8 | Multi-locale marketing | `/language` + `foreach` locales | novel |
 | 14.9 | Self-improving prompt macro | `%macro` + judge + `/reloadmacros` | novel |
 | 14.10 | Personal KB harvester | `/run` + `/rerank` + `/dblog` + `/searchdb` | novel |
+| 14.11 | Batch API translation pipeline | `/batch` async bulk text + `/filebank1` | novel |
+| 14.12 | Multimodal batch vision pipeline | `/batch` async vision + `{imagebank1}` | novel |
 | 8.5 | Skill-aware tool loops | `/tool enable search_skills,call_skill` `/tool loop` | new |
 | 15.1 | Discovering skills | `search_skills` `/tool enable` `/tool loop` | new |
 | 15.2 | Loading skill instructions | `call_skill` `/tool enable` `/tool loop` | new |
@@ -2377,7 +2540,7 @@ if "${TOOL_DISPATCH_EXIT_CODE}" == "0" then /echo Permitted workspace write conf
 | 10 Profiles | HowTo: Profile Management; Profile Commands |
 | 11 Macros | Macro Syntax; `chatdsl_macro_implementation.md` |
 | 12 Localization | Multi-Language Support; `multilingual_cross_reference.md` |
-| 13 Diagnostics | Diagnostics & Monitoring; Diagnostics Commands |
+| 13 Diagnostics | Diagnostics & Monitoring; Diagnostics Commands; Prompt-Cache Controls (`/cachekey`) |
 | 14 Novel Use Cases | (no existing counterpart) |
 | 15 Dynamic Skill Loading | (new - see Dynamic Skill Loading section in `chatdsl_guide_v1.md`) |
 | 16 Pluggable Security | (new - see `pluggable_security.md` and `tools/racf-guard/README.md`) |

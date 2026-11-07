@@ -2012,6 +2012,89 @@ Summarize the consensus algorithms mentioned and who discussed them.
 1. `/run find` discovers notes; per-file rerank keeps only relevant slices and `/dblog` persists them.
 2. The final `/searchdb` + `/loadvar` turns the KB into an answer - an ingest → index → retrieve → answer pipeline in one script.
 
+### 14.11 Asynchronous Batch API translation pipeline
+- **Combines:** `/model <batch_alias>` + `/batch prompt` + `/batch start` + `/filebank1` + `/batch add` + `/batch end` + `/batch run` + `/batch check wait=true` + `/batch results`.
+- **Script:** `cookbook/14_10_batch_api_translation.chatdsl`
+- **Run:** `/script doc/cookbook/14_10_batch_api_translation.chatdsl`
+
+> [!NOTE]
+> **Key Distinction: `/batch` vs `/script`**:
+> It is critical to distinguish between **ChatDSL scripts (`/script`)** and the **Provider Batch API (`/batch`)**:
+> - **`/batch` (Remote Provider Processing)** submits bulk asynchronous queries to a cloud provider's Batch API (OpenRouter or Mistral) at a ~50% discount off standard token rates.
+> - **`/script` (Local ChatDSL Execution)** runs `.chatdsl` scripts line-by-line locally on your machine.
+> - **Interoperability**: ChatDSL scripts can invoke `/batch` commands to orchestrate end-to-end bulk processing workflows!
+
+```dsl
+# 1. Select the batch-capable model
+/model gptoss_batch
+
+# 2. Set the common batch instruction
+/batch prompt "Translate each Chinese poem into pinyin with tone marks and faithful English."
+
+# 3. Open the staging draft
+/batch start dufu_run
+
+# 4. Ingest corpus from Filebank 1 (splits by line)
+/filebank1 data/poems_short.txt
+/batch add filebank=1 split=lines
+
+# 5. Add one extra priority item from a script variable with an explicit ID
+/setvar special_poem "春望: 国破山河在，城春草木深。感时花溅泪，恨别鸟惊心。"
+/batch add id=chunwang var=special_poem
+
+# 6. Seal staging manifest (runs security scan and locks)
+/batch end
+
+# 7. Submit to provider with pre-submit cost guard
+/batch run dufu_run
+
+# 8. Poll until terminal and retrieve results
+/batch check dufu_run wait=true
+
+# 9. Inspect retrieved completions natively
+/batch results dufu_run limit=5
+```
+
+**Walkthrough**
+1. **Model Selection**: `/model gptoss_batch` activates a batch-capable model (`batch = true` in `chat_config.toml`). While active, interactive chat is disabled to prevent accidental per-token billing.
+2. **Text Batching & File Ingestion**: Ingests hundreds of lines in one command via `/batch add filebank=1 split=lines`.
+3. **Execution & Retrieval**: `/batch run` validates budget limits (`max_cost_usd`) before POSTing. `/batch check wait=true` polls out-of-band and saves results to `~/.local/share/chatybot/batches/dufu_run/results.jsonl`.
+
+### 14.12 Multimodal batch vision pipeline
+- **Combines:** `/imagebank1` + `/model mistral_batch` + `/batch start` + `/batch prompt` + `/batch add {imagebank1}` + `/batch run` + `/batch check wait=true` + `/batch results detail=true`.
+- **Script:** `cookbook/14_12_batch_api_multimodal_vision.chatdsl`
+- **Run:** `/script doc/cookbook/14_12_batch_api_multimodal_vision.chatdsl`
+
+```dsl
+# 1. Load the image into image bank 1
+/imagebank1 pics/75419-1.jpg
+
+# 2. Select the vision batch model and open draft
+/model mistral_batch
+/batch start vision_demo model=mistral_batch temp=0.3
+
+# 3. Set common instruction template
+/batch prompt "List 3 colors in the image. At the top, restate the filename."
+
+# 4. Add the image with accompanying text - sent together as a multimodal content array
+/batch add "Filename: 75419-1.jpg {imagebank1}"
+
+# 4b. Alternative: use image=<url> directly
+# /batch add "Filename: 75419-1.jpg" image=https://example.com/images/75419-1.jpg
+
+# 5. Seal manifest, submit, and poll
+/batch end vision_demo
+/batch run vision_demo
+/batch check vision_demo wait=true
+/batch results vision_demo detail=true
+/model mistral_1
+```
+
+**Walkthrough**
+1. **Batch Supports Text & Images**: Demonstrates that `/batch` handles multimodal vision inference alongside plain text.
+2. **Multimodal Content Array**: Accompanying text around `{imagebank1}` is preserved as the item prompt, and the image is attached as an `image_url` part.
+3. **Remote Image URLs**: Using `image=https://...` avoids base64 payload bloat entirely.
+
 ---
 
 ## Chapter 15 - Dynamic Skill Loading & Delegation
@@ -2426,6 +2509,8 @@ if "${TOOL_DISPATCH_EXIT_CODE}" == "0" then /echo Permitted workspace write conf
 | 14.8 | Multi-locale marketing | `/language` + `foreach` locales | novel |
 | 14.9 | Self-improving prompt macro | `%macro` + judge + `/reloadmacros` | novel |
 | 14.10 | Personal KB harvester | `/run` + `/rerank` + `/dblog` + `/searchdb` | novel |
+| 14.11 | Batch API translation pipeline | `/batch` async bulk text + `/filebank1` | novel |
+| 14.12 | Multimodal batch vision pipeline | `/batch` async vision + `{imagebank1}` | novel |
 | 8.5 | Skill-aware tool loops | `/tool enable search_skills,call_skill` `/tool loop` | new |
 | 15.1 | Discovering skills | `search_skills` `/tool enable` `/tool loop` | new |
 | 15.2 | Loading skill instructions | `call_skill` `/tool enable` `/tool loop` | new |
