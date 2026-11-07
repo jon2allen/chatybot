@@ -641,7 +641,6 @@ class BatchManager:
         if not os.path.exists(path):
             return []
         latest: dict[str, dict] = {}
-        order: list[str] = []
         with open(path, "r", encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
@@ -653,10 +652,9 @@ class BatchManager:
                     continue
                 bid = rec.get("batch_id")
                 if bid in latest:
-                    order.remove(bid)
-                order.append(bid)
+                    del latest[bid]
                 latest[bid] = rec
-        records = [latest[bid] for bid in order]
+        records = list(latest.values())
         for r in records:
             if r.get("status") in EDITABLE_STATES:
                 try:
@@ -1254,12 +1252,11 @@ class BatchManager:
 
     @staticmethod
     def _is_definitive_submit_rejection(e: Exception) -> bool:
-        """Determine whether a submit failure is definitively client-side / rejected
-        by provider with HTTP 4xx, meaning the job was certainly never accepted remotely.
-        Everything else (timeouts, disconnects, 5xx, unreadable bodies) is treated
+        """Determine whether a submit failure from the network call is definitively
+        rejected with an HTTP 4xx or immediate connection refusal before transmission,
+        meaning the job was certainly never accepted remotely. Everything else
+        (timeouts, disconnects, 5xx, decoding/parsing errors) is treated
         as unconfirmed (submit_unknown)."""
-        if isinstance(e, (ValueError, TypeError, FileNotFoundError)):
-            return not isinstance(e, json.JSONDecodeError)
         if isinstance(e, ConnectionRefusedError):
             return True
         if isinstance(e, aiohttp.ClientConnectorError):
@@ -1323,16 +1320,32 @@ class BatchManager:
                 "Wait for completion or raise [batch] max_open_per_provider."
             )
 
-        # Pre-POST fsynced sidecar (mandatory)
+        # Read requests.json and validate payload before entering the submitting state
+        try:
+            with open(self._requests_path(meta["batch_id"]), "r", encoding="utf-8") as f:
+                payload = json.load(f)
+        except Exception as e:
+            meta["status"] = STATUS_SUBMIT_FAILED
+            self._write_meta(meta)
+            raise BatchError(f"Submission failed (status: submit_failed): Failed to load batch payload: {e}") from e
+
+        requests = payload.get("requests") or []
+        if meta.get("provider") == "mistral" and len(requests) > MISTRAL_INLINE_LIMIT:
+            meta["status"] = STATUS_SUBMIT_FAILED
+            self._write_meta(meta)
+            raise BatchError(
+                f"Submission failed (status: submit_failed): Inline batch limit exceeded: "
+                f"{len(requests)} items (max {MISTRAL_INLINE_LIMIT}). Split the batch into smaller runs."
+            )
+
+        # Pre-POST fsynced sidecar (mandatory) - only written immediately before the network socket opens
         meta["status"] = STATUS_SUBMITTING
         self._write_meta(meta)
 
         try:
-            with open(self._requests_path(meta["batch_id"]), "r", encoding="utf-8") as f:
-                payload = json.load(f)
             batch = await _provider_call(
                 provider_obj.submit,
-                payload["requests"], meta["model"],
+                requests, meta["model"],
                 metadata={"client_token": meta["batch_id"]},
                 session=session,
             )

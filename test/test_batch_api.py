@@ -2663,10 +2663,14 @@ class TestBatchReviewFixes:
 
         assert decode_err is not None
         assert isinstance(decode_err, ValueError)
-        # JSONDecodeError must be treated as ambiguous (False), not definitive rejection (True)
+        # JSONDecodeError and UnicodeDecodeError must be treated as ambiguous (False), not definitive rejection
         assert not BatchManager._is_definitive_submit_rejection(decode_err)
-        # Normal ValueError remains definitive
-        assert BatchManager._is_definitive_submit_rejection(ValueError("bad format"))
+        unicode_err = UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte")
+        assert not BatchManager._is_definitive_submit_rejection(unicode_err)
+        # HTTP 4xx remains definitive
+        class Http400Error(Exception):
+            status = 400
+        assert BatchManager._is_definitive_submit_rejection(Http400Error("bad request"))
 
         # Verify mgr.run leaves batch in STATUS_SUBMIT_UNKNOWN
         meta = mgr.start("json_err_test", model_alias="m", model_name="m", provider="openrouter", prompt="p")
@@ -2893,5 +2897,161 @@ class TestBatchReviewFixesItems8To13:
         out = capsys.readouterr().out
         assert "Batch payload for 'dump_calc' (" in out
         assert "B):" in out
+
+
+class TestBatchReviewFollowupFixes:
+    def test_pre_network_validation_fails_with_submit_failed(self, mgr):
+        # 1. Corrupt local requests.json fails before network POST, marked submit_failed
+        meta = mgr.start("corrupt_req", model_alias="m", model_name="m", provider="openrouter", prompt="p")
+        mgr.add_items(meta, ["item1"], id_prefix="cr_")
+        mgr.end(meta)
+
+        # Corrupt requests.json
+        req_path = mgr._requests_path(meta["batch_id"])
+        with open(req_path, "w", encoding="utf-8") as f:
+            f.write("{invalid json")
+
+        prov = FakeProvider()
+        with pytest.raises(BatchError) as exc_info:
+            asyncio.run(mgr.run(meta, prov))
+        assert "submit_failed" in str(exc_info.value)
+        assert "may have reached the provider" not in str(exc_info.value)
+        fresh_meta = mgr.resolve("corrupt_req")
+        assert fresh_meta["status"] == STATUS_SUBMIT_FAILED
+
+    def test_mistral_inline_limit_fails_before_network(self, mgr):
+        meta = mgr.start("mistral_over", model_alias="m", model_name="m", provider="mistral", prompt="p")
+        # Fake a staged batch with > 10,000 items in requests.json
+        meta["status"] = STATUS_STAGED
+        mgr._write_meta(meta)
+        req_path = mgr._requests_path(meta["batch_id"])
+        with open(req_path, "w", encoding="utf-8") as f:
+            json.dump({"requests": [{"custom_id": f"id_{i}", "body": {}} for i in range(10_001)]}, f)
+
+        prov = FakeProvider()
+        with pytest.raises(BatchError) as exc_info:
+            asyncio.run(mgr.run(meta, prov))
+        assert "Inline batch limit exceeded" in str(exc_info.value)
+        assert "submit_failed" in str(exc_info.value)
+        assert "may have reached the provider" not in str(exc_info.value)
+        assert mgr.resolve("mistral_over")["status"] == STATUS_SUBMIT_FAILED
+
+    def test_non_utf8_response_treated_as_submit_unknown(self, mgr):
+        meta = mgr.start("utf8_err", model_alias="m", model_name="m", provider="openrouter", prompt="p")
+        mgr.add_items(meta, ["item1"], id_prefix="u8_")
+        mgr.end(meta)
+
+        class UnicodeDecodeErrorProvider(FakeProvider):
+            async def submit(self, requests, model_name, *, metadata=None, session=None):
+                raise UnicodeDecodeError("utf-8", b"\x80abc", 0, 1, "invalid start byte")
+
+        with pytest.raises(BatchError) as exc_info:
+            asyncio.run(mgr.run(meta, UnicodeDecodeErrorProvider()))
+        assert "submit_unknown" in str(exc_info.value)
+        assert "may have reached the provider" in str(exc_info.value)
+        assert mgr.resolve("utf8_err")["status"] == STATUS_SUBMIT_UNKNOWN
+
+    def test_batch_remote_active_draft_branch(self, mgr, monkeypatch, capsys):
+        from chatybot.commands.batch import _sc_remote
+        from chatybot.commands.context import CommandContext
+
+        class DummyApp:
+            trace_raw_payload = False
+            logging_manager = None
+            class DummyConfigMgr:
+                def list_batch_capable_models(self):
+                    return []
+                def get_model_config(self, alias):
+                    return {"vendor": "openrouter", "api_key": "MOCK_KEY", "batch": True}
+            config_manager = DummyConfigMgr()
+
+        monkeypatch.setenv("MOCK_KEY", "key-123")
+
+        class RemoteProvider(FakeProvider):
+            async def list(self, session=None):
+                return [{"id": "r_100", "status": "completed", "model": "m", "created_at": 100}]
+
+        monkeypatch.setattr("chatybot.commands.batch.make_provider", lambda cfg, key, **kw: RemoteProvider())
+
+        # Start an active draft with openrouter provider
+        draft = mgr.start("act_remote_draft", model_alias="m", model_name="m", provider="openrouter")
+        mgr.add_items(draft, ["x"], id_prefix="ar_")
+
+        ctx = CommandContext(buffer_manager=None, config_manager=DummyApp.config_manager,
+                             i18n=None, session_store=None, app=DummyApp())
+
+        from chatybot.commands.registry import CommandAction
+        # With no target passed, _sc_remote must resolve via active draft
+        res = asyncio.run(_sc_remote(ctx, mgr, ""))
+        assert res.action == CommandAction.HANDLED
+        out = capsys.readouterr().out
+        assert "[Remote Batches (openrouter) - org-wide account]" in out
+        assert "r_100" in out
+
+    def test_quotes_preserved_when_not_exact_wrap(self, mgr):
+        ctx = make_ctx(mgr)
+        asyncio.run(run_cmd(ctx, "/batch start quote_test"))
+        # Multiple quotes inside text
+        text_with_quotes = '"Hello," she said, "goodbye."'
+        asyncio.run(run_cmd(ctx, f"/batch add {text_with_quotes}"))
+
+        # Single wrapping pair
+        asyncio.run(run_cmd(ctx, '/batch add "Wrapped text exactly"'))
+
+        items = mgr.list_items(mgr.resolve("quote_test"))
+        assert len(items) == 2
+        assert items[0]["text"] == text_with_quotes
+        assert items[1]["text"] == "Wrapped text exactly"
+
+    def test_options_inside_text_not_extracted(self, mgr):
+        ctx = make_ctx(mgr)
+        asyncio.run(run_cmd(ctx, "/batch start option_test"))
+        # Option-like phrase in the middle of text
+        sentence = "Set id=5 in the config file"
+        asyncio.run(run_cmd(ctx, f"/batch add {sentence}"))
+
+        # Leading and trailing options
+        asyncio.run(run_cmd(ctx, "/batch add id=custom_tail Another sentence split=none"))
+
+        items = mgr.list_items(mgr.resolve("option_test"))
+        assert len(items) == 2
+        assert items[0]["text"] == sentence
+        assert items[0]["custom_id"] != "5"
+        assert items[1]["custom_id"] == "custom_tail"
+        assert items[1]["text"] == "Another sentence"
+
+    def test_edit_preserves_trailing_batch_name_in_text(self, mgr):
+        ctx = make_ctx(mgr)
+        asyncio.run(run_cmd(ctx, "/batch start dufu"))
+        asyncio.run(run_cmd(ctx, "/batch add original text id=dufu_0001"))
+
+        # Trailing word matching batch name must NOT be stripped
+        asyncio.run(run_cmd(ctx, "/batch edit dufu_0001 Write a poem in the style of dufu"))
+        item = mgr.show_item(mgr.resolve("dufu"), "dufu_0001")
+        assert item["text"] == "Write a poem in the style of dufu"
+
+        # Explicit batch name before text
+        asyncio.run(run_cmd(ctx, "/batch edit dufu_0001 dufu Another poem for dufu"))
+        item = mgr.show_item(mgr.resolve("dufu"), "dufu_0001")
+        assert item["text"] == "Another poem for dufu"
+
+        # Explicit batch= option
+        asyncio.run(run_cmd(ctx, "/batch edit dufu_0001 batch=dufu Third poem ending in dufu"))
+        item = mgr.show_item(mgr.resolve("dufu"), "dufu_0001")
+        assert item["text"] == "Third poem ending in dufu"
+
+    def test_list_index_constant_time_order(self, mgr):
+        # Create b1, b2, update b1, update b2, update b1
+        meta1 = mgr.start("b1", model_alias="m", model_name="m", provider="openrouter")
+        meta2 = mgr.start("b2", model_alias="m", model_name="m", provider="openrouter")
+        mgr.set_prompt(meta1, "p1")
+        mgr.set_prompt(meta2, "p2")
+        mgr.set_prompt(meta1, "p1_updated")
+
+        idx = mgr.list_index()
+        # Most recently touched batch should be last
+        assert idx[-1]["batch_id"] == meta1["batch_id"]
+        assert idx[-2]["batch_id"] == meta2["batch_id"]
+
 
 

@@ -49,7 +49,7 @@ BATCH_KV_KEYS = {"id", "var", "filebank", "split", "file", "limit", "range",
                  "temp", "temperature", "max_tokens", "top_p",
                  "freq_penalty", "frequency_penalty",
                  "pres_penalty", "presence_penalty", "detail", "imagebank",
-                 "image"}
+                 "image", "batch"}
 
 # Built-in prompt templates (proposal §4.2 "Named Template")
 BUILTIN_PROMPTS = {
@@ -195,7 +195,7 @@ PROMPT_OPTS = {"file"}
 ITEMS_OPTS = {"limit", "range"}
 IDS_OPTS = {"var"}
 SHOW_OPTS: set[str] = set()
-EDIT_OPTS = {"var", "file"}
+EDIT_OPTS = {"var", "file", "batch"}
 DUMP_OPTS = {"var"}
 RUN_OPTS = {"force", "resubmit"}
 CHECK_OPTS = {"wait"}
@@ -300,34 +300,53 @@ def _parse_args(rest: str,
 def _parse_options_and_free_text(rest: str,
                                  keys: set[str] | None = None) -> tuple[dict[str, str], str]:
     """Extract key=value options matching allowed keys from rest, keeping free text
-    (including apostrophes, quotes, and spacing) completely intact."""
+    (including apostrophes, quotes, and spacing) completely intact.
+
+    Options are accepted only at the start or end of the command string, never
+    from within the free-text payload."""
     import re
     allowed = keys if keys is not None else BATCH_KV_KEYS
-    if not rest.strip():
+    rest = rest.strip()
+    if not rest:
         return {}, ""
-    opts: dict[str, str] = {}
-    pattern = re.compile(
-        r'(?:^|\s+)(' + '|'.join(re.escape(k) for k in allowed) + r')=(?:"([^"]*)"|\'([^\']*)\'|(\S+))',
+
+    opt_re = re.compile(
+        r'^(' + '|'.join(re.escape(k) for k in allowed) + r')=(?:"([^"]*)"|\'([^\']*)\'|(\S+))',
         flags=re.IGNORECASE,
     )
-    matches = list(pattern.finditer(rest))
-    if not matches:
-        text = rest.strip()
-        if (text.startswith('"') and text.endswith('"') and len(text) >= 2) or \
-           (text.startswith("'") and text.endswith("'") and len(text) >= 2 and text.count("'") == 2):
-            text = text[1:-1]
-        return opts, text
+    opts: dict[str, str] = {}
 
-    chars = list(rest)
-    for m in matches:
+    # 1. Parse leading options from left to right
+    while rest:
+        m = opt_re.match(rest)
+        if not m:
+            break
         key = m.group(1).lower()
         val = m.group(2) if m.group(2) is not None else (m.group(3) if m.group(3) is not None else m.group(4))
         opts[key] = val
-        for i in range(m.start(), m.end()):
-            chars[i] = " "
+        rest = rest[m.end():].lstrip()
 
-    free_text = "".join(chars).strip()
-    if (free_text.startswith('"') and free_text.endswith('"') and len(free_text) >= 2) or \
+    # 2. Parse trailing options from right to left
+    tail_re = re.compile(
+        r'(?:^|\s+)(' + '|'.join(re.escape(k) for k in allowed) + r')=(?:"([^"]*)"|\'([^\']*)\'|(\S+))$',
+        flags=re.IGNORECASE,
+    )
+    trailing_opts: list[tuple[str, str]] = []
+    while rest:
+        m = tail_re.search(rest)
+        if not m:
+            break
+        key = m.group(1).lower()
+        val = m.group(2) if m.group(2) is not None else (m.group(3) if m.group(3) is not None else m.group(4))
+        trailing_opts.append((key, val))
+        rest = rest[:m.start()].rstrip()
+
+    for key, val in reversed(trailing_opts):
+        opts[key] = val
+
+    free_text = rest.strip()
+    # Strip wrapping quotes only when exactly one matching pair wraps the whole text
+    if (free_text.startswith('"') and free_text.endswith('"') and len(free_text) >= 2 and free_text.count('"') == 2) or \
        (free_text.startswith("'") and free_text.endswith("'") and len(free_text) >= 2 and free_text.count("'") == 2):
         free_text = free_text[1:-1]
     return opts, free_text
@@ -869,20 +888,29 @@ async def _sc_show(ctx: CommandContext, mgr: BatchManager, rest: str) -> Command
 
 
 async def _sc_edit(ctx: CommandContext, mgr: BatchManager, rest: str) -> CommandResult:
-    opts, remaining = _parse_options_and_free_text(rest, keys=EDIT_OPTS)
-    if not remaining and "var" not in opts and "file" not in opts:
-        print("Usage: /batch edit <id> <text | var=NAME | file=PATH> [name]")
+    rest = rest.strip()
+    if not rest:
+        print("Usage: /batch edit <id> [batch_name] <text | var=NAME | file=PATH>")
         return CommandResult.ok()
-    custom_id, _, text_and_name = remaining.partition(" ")
+    custom_id, _, rest_after_id = rest.partition(" ")
     custom_id = custom_id.strip()
-    text_and_name = text_and_name.strip()
-    if not custom_id:
-        print("Usage: /batch edit <id> <text | var=NAME | file=PATH> [name]")
+    rest_after_id = rest_after_id.strip()
+
+    opts, text_and_name = _parse_options_and_free_text(rest_after_id, keys=EDIT_OPTS)
+    if not text_and_name and "var" not in opts and "file" not in opts:
+        print("Usage: /batch edit <id> [batch_name] <text | var=NAME | file=PATH>")
         return CommandResult.ok()
 
-    # Disambiguate optional batch name at the start or end of text_and_name
+    # Disambiguate optional batch name via batch= option or placed before the replacement text
     meta = None
-    if text_and_name:
+    if "batch" in opts:
+        rec = mgr.find_by_name(opts["batch"])
+        if rec is not None:
+            candidate_meta = mgr.read_meta(rec["batch_id"])
+            if any(it["custom_id"] == custom_id for it in mgr.list_items(candidate_meta)):
+                meta = candidate_meta
+
+    if meta is None and text_and_name:
         first_word, _, rest_after_first = text_and_name.partition(" ")
         if first_word:
             rec = mgr.find_by_name(first_word)
@@ -891,18 +919,8 @@ async def _sc_edit(ctx: CommandContext, mgr: BatchManager, rest: str) -> Command
                 if any(it["custom_id"] == custom_id for it in mgr.list_items(candidate_meta)):
                     meta = candidate_meta
                     text_and_name = rest_after_first.strip()
-        if meta is None:
-            parts = text_and_name.rsplit(None, 1)
-            if len(parts) == 2:
-                potential_text, potential_batch = parts[0], parts[1]
-                rec = mgr.find_by_name(potential_batch)
-                if rec is not None:
-                    candidate_meta = mgr.read_meta(rec["batch_id"])
-                    if any(it["custom_id"] == custom_id for it in mgr.list_items(candidate_meta)):
-                        meta = candidate_meta
-                        text_and_name = potential_text.strip()
     if meta is None:
-        meta, _ = _resolve_item_batch(mgr, custom_id, [text_and_name] if text_and_name else [])
+        meta, _ = _resolve_item_batch(mgr, custom_id, [])
     if meta is None:
         print(f"Error: item '{custom_id}' not found in any batch. "
               "List a batch's items with: /batch items <name>")
@@ -1176,12 +1194,11 @@ async def _sc_remote(ctx: CommandContext, mgr: BatchManager, rest: str) -> Comma
 
         # Try active draft first if no specific provider requested
         if desired_provider is None:
-            active_name = mgr.get_active_draft()
-            if active_name:
+            active_meta = mgr.get_active_draft()
+            if active_meta:
                 try:
-                    meta = mgr.resolve(active_name)
-                    provider_obj = _build_provider(ctx.app, meta)
-                    provider_name = meta.get("provider") or getattr(provider_obj, "name", "unknown")
+                    provider_obj = _build_provider(ctx.app, active_meta)
+                    provider_name = active_meta.get("provider") or getattr(provider_obj, "name", "unknown")
                 except Exception:
                     pass
 
