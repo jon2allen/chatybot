@@ -21,7 +21,7 @@ November 6th, 2026
   - Simplified submit error classification and removed `adopt_orphan` / `adopt=` guesswork.
   - Fixed Mistral Files API result retrieval and surfaced download errors instead of silently swallowing them.
   - Added retry hints on `/batch check` and `/batch abort` for batches in `submit_failed` status.
-  - Added Cookbook Recipe 14.12 (`14_12_batch_api_multimodal_vision.chatdsl`) for batch vision workflows.
+  - Added Cookbook Recipe 14.13 (`14_13_batch_api_multimodal_vision.chatdsl`) for batch vision workflows.
 
 November 3rd, 2026 (v0.9.2)
 ---------------------------

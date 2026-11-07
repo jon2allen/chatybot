@@ -1,0 +1,61 @@
+# Recipe 14.13 - Multimodal Batch Vision Pipeline (batch_api)
+# Run: /script doc/cookbook/14_13_batch_api_multimodal_vision.chatdsl
+#
+# Demonstrates batch vision analysis using /batch with image banks ({imagebankN}
+# or imagebank=N) on a vision-capable batch model (e.g. mistral_batch).
+#
+# Three ingestion modes are shown:
+#   - Image only:       /batch add {imagebank1}
+#   - Text + image:     /batch add "Filename: 75419-1.jpg {imagebank1}"
+#   - Text + image URL: /batch add "Filename: 75419-1.jpg" image=https://example.com/img.jpg
+#
+# When text accompanies the image, both are sent on the same item as a
+# multimodal content array (text part + image part). The text becomes the
+# item's text field; the image is attached alongside it.
+#
+# image= accepts a URL (https://...) or a data URI (data:image/...;base64,...).
+# With a URL, the provider fetches the image - no local download or base64
+# encoding needed, and the payload stays small.
+#
+# NOTE ON IMAGE SIZE & FORMAT:
+# Inline batch payloads embed images as base64 data URIs. To avoid edge gateway
+# rejection (HTML 400 Bad Request caused by payload limits), ensure images are
+# reasonably compressed (JPEG/PNG under ~1.5 MB). Using image=<url> avoids this
+# entirely since the image is not embedded in the request body.
+
+# 1. Load the image into image bank 1
+/imagebank1 pics/75419-1.jpg
+
+# 2. Select the batch model and initialize the batch draft
+/model mistral_batch
+/batch start vision_demo model=mistral_batch temp=0.3
+
+# 3. Set the common prompt template for all items
+/batch prompt "List 3 colors that are in the image. At the top, restate the filename."
+
+# 4. Add the image with accompanying text - both are sent together as a
+#    multimodal content array. The text around {imagebank1} is preserved
+#    as the item's text field; the placeholder is replaced by the image.
+/batch add "Filename: 75419-1.jpg {imagebank1}"
+
+# 4b. Alternative: use image= with a URL instead of an image bank.
+#     The provider fetches the image from the URL directly.
+#     /batch add "Filename: 75419-1.jpg" image=https://example.com/images/75419-1.jpg
+
+# 5. Inspect draft items before sealing
+/batch items
+
+# 6. Seal the batch manifest (runs security scan and builds payload)
+/batch end vision_demo
+
+# 7. Submit to provider Batch API
+/batch run vision_demo
+
+# 8. Poll until finished and retrieve results
+/batch check vision_demo wait=true
+
+# 9. View results with template prompt and input detail
+/batch results vision_demo detail=true
+
+# 10. Switch back to interactive chat model
+/model mistral_1

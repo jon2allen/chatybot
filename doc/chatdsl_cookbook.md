@@ -2014,8 +2014,8 @@ Summarize the consensus algorithms mentioned and who discussed them.
 
 ### 14.11 Asynchronous Batch API translation pipeline
 - **Combines:** `/model <batch_alias>` + `/batch prompt` + `/batch start` + `/filebank1` + `/batch add` + `/batch end` + `/batch run` + `/batch check wait=true` + `/batch results`.
-- **Script:** `cookbook/14_10_batch_api_translation.chatdsl`
-- **Run:** `/script doc/cookbook/14_10_batch_api_translation.chatdsl`
+- **Script:** `cookbook/14_11_batch_api_translation.chatdsl`
+- **Run:** `/script doc/cookbook/14_11_batch_api_translation.chatdsl`
 
 > [!NOTE]
 > **Key Distinction: `/batch` vs `/script`**:
@@ -2060,10 +2060,42 @@ Summarize the consensus algorithms mentioned and who discussed them.
 2. **Text Batching & File Ingestion**: Ingests hundreds of lines in one command via `/batch add filebank=1 split=lines`.
 3. **Execution & Retrieval**: `/batch run` validates budget limits (`max_cost_usd`) before POSTing. `/batch check wait=true` polls out-of-band and saves results to `~/.local/share/chatybot/batches/dufu_run/results.jsonl`.
 
-### 14.12 Multimodal batch vision pipeline
+### 14.12 Batch API in the real world: blank completions and item retry
+- **Combines:** `/session history off` + `/model` + `/batch prompt` + `/batch start` + `/batch add` + `/batch run` + `/batch check` + `/batch results` + blank detection + retry batch.
+- **Script:** `cookbook/14_12_batch_api_blank_retry.chatdsl`
+- **Run:** `/script doc/cookbook/14_12_batch_api_blank_retry.chatdsl`
+
+```dsl
+# 1. Generate inputs dynamically with a chat model
+/session history off
+/model mistral_1
+${recipe_1_prompt}
+/setvar recipe_1 {LAST_COMPLETION}
+
+# 2. Stage into a batch job with unique run tag
+/model gptoss_batch
+/batch prompt "Categorize each recipe in JSON format."
+/batch start recipe_cat_${run_tag}
+/batch add id=recipe_1 var=recipe_1 split=none
+/batch end
+
+# 3. Submit and poll
+/batch run recipe_cat_${run_tag}
+/batch check recipe_cat_${run_tag} wait=true
+
+# 4. Inspect results, detect any empty completions, and restage into a retry batch
+/batch results recipe_cat_${run_tag}
+```
+
+**Walkthrough**
+1. **Handling Empty Completions**: Cloud batch providers sometimes return HTTP 200 with empty completions (no text content) due to transient server issues, yet count them as successes and never retry them automatically.
+2. **Staging Order & Custom IDs**: Chatybot normalizes returned results back into submission order by `custom_id`.
+3. **Selective Retry**: The script inspects `${BATCH_RESULTS}`, detects blanks, and stages only the failed item IDs into a fresh retry batch.
+
+### 14.13 Multimodal batch vision pipeline
 - **Combines:** `/imagebank1` + `/model mistral_batch` + `/batch start` + `/batch prompt` + `/batch add {imagebank1}` + `/batch run` + `/batch check wait=true` + `/batch results detail=true`.
-- **Script:** `cookbook/14_12_batch_api_multimodal_vision.chatdsl`
-- **Run:** `/script doc/cookbook/14_12_batch_api_multimodal_vision.chatdsl`
+- **Script:** `cookbook/14_13_batch_api_multimodal_vision.chatdsl`
+- **Run:** `/script doc/cookbook/14_13_batch_api_multimodal_vision.chatdsl`
 
 ```dsl
 # 1. Load the image into image bank 1
@@ -2510,7 +2542,8 @@ if "${TOOL_DISPATCH_EXIT_CODE}" == "0" then /echo Permitted workspace write conf
 | 14.9 | Self-improving prompt macro | `%macro` + judge + `/reloadmacros` | novel |
 | 14.10 | Personal KB harvester | `/run` + `/rerank` + `/dblog` + `/searchdb` | novel |
 | 14.11 | Batch API translation pipeline | `/batch` async bulk text + `/filebank1` | novel |
-| 14.12 | Multimodal batch vision pipeline | `/batch` async vision + `{imagebank1}` | novel |
+| 14.12 | Batch API blank completion retry | `/batch` retry + blank detection | novel |
+| 14.13 | Multimodal batch vision pipeline | `/batch` async vision + `{imagebank1}` | novel |
 | 8.5 | Skill-aware tool loops | `/tool enable search_skills,call_skill` `/tool loop` | new |
 | 15.1 | Discovering skills | `search_skills` `/tool enable` `/tool loop` | new |
 | 15.2 | Loading skill instructions | `call_skill` `/tool enable` `/tool loop` | new |

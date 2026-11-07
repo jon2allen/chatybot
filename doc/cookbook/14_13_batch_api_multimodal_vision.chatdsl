@@ -1,5 +1,5 @@
-# Recipe 14.12 - Multimodal Batch Vision Pipeline (batch_api)
-# Run: /script doc/cookbook/14_12_batch_api_multimodal_vision.chatdsl
+# Recipe 14.13 - Multimodal Batch Vision Pipeline (batch_api)
+# Run: /script doc/cookbook/14_13_batch_api_multimodal_vision.chatdsl
 #
 # Demonstrates batch vision analysis using /batch with image banks ({imagebankN}
 # or imagebank=N) on a vision-capable batch model (e.g. mistral_batch).

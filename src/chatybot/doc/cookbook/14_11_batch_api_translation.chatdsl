@@ -1,5 +1,5 @@
-# Recipe 14.10 - Batch API translation pipeline (batch_api)
-# Run: /script doc/cookbook/14_10_batch_api_translation.chatdsl
+# Recipe 14.11 - Batch API translation pipeline (batch_api)
+# Run: /script doc/cookbook/14_11_batch_api_translation.chatdsl
 #
 # WHY "batch_api": this recipe drives the asynchronous *provider* Batch API
 # (/batch commands) - bulk inference submitted to OpenRouter (Mistral in a

@@ -1062,7 +1062,7 @@ class HelpSystem:
                 "Batch vs Script: /batch is for remote asynchronous queries executed on provider "
                 "infrastructure. In contrast, /script executes local ChatDSL scripts on your machine; "
                 "ChatDSL scripts can call /batch to automate staging, submission, and result retrieval "
-                "(see Cookbook Recipe 14.10, 14.12).\n\n"
+                "(see Cookbook Recipe 14.11, 14.13).\n\n"
                 "Model selection is idiomatic: /model <batch-alias> on its own line "
                 "(models need 'batch = true' in chat_config.toml). While a batch model "
                 "is selected, interactive chat is disabled - switch back with "

@@ -1,5 +1,5 @@
-# Recipe 14.11 - Batch API in the real world: blank completions and item retry
-# Run: /script doc/cookbook/14_11_batch_api_blank_retry.chatdsl
+# Recipe 14.12 - Batch API in the real world: blank completions and item retry
+# Run: /script doc/cookbook/14_12_batch_api_blank_retry.chatdsl
 #
 # WHY THIS RECIPE: batch providers count "empty completions" (HTTP 200, no
 # content) as SUCCESSES and never retry them - a live OpenRouter run with

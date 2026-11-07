@@ -692,7 +692,7 @@ Chatybot includes a comprehensive subsystem for interacting with remote asynchro
 It is essential to distinguish between batch processing and scripting in Chatybot:
 * **`/batch` (Remote Provider Processing)**: Submits bulk asynchronous queries to a cloud provider's Batch API (e.g., OpenRouter or Mistral). The provider queues and processes the requests remotely on their servers over minutes or hours.
 * **`/script` (ChatDSL Local Orchestration)**: Executes a `.chatdsl` script locally and synchronously line-by-line on your machine.
-* **Orchestration**: **ChatDSL scripts can call `/batch` commands!** You can write `.chatdsl` scripts to automate an entire bulk pipeline-staging items (`/batch add`), submitting (`/batch run`), waiting for results (`/batch check wait=true`), and analyzing completions (see [Cookbook Recipe 14.10](doc/cookbook/14_10_batch_api_translation.chatdsl) and [Recipe 14.12](doc/cookbook/14_12_batch_api_multimodal_vision.chatdsl)).
+* **Orchestration**: **ChatDSL scripts can call `/batch` commands!** You can write `.chatdsl` scripts to automate an entire bulk pipeline-staging items (`/batch add`), submitting (`/batch run`), waiting for results (`/batch check wait=true`), and analyzing completions (see [Cookbook Recipe 14.11](doc/cookbook/14_11_batch_api_translation.chatdsl) and [Recipe 14.13](doc/cookbook/14_13_batch_api_multimodal_vision.chatdsl)).
 
 #### **2. Text and Multimodal Vision Support**
 The `/batch` command is designed for **both plain text completions and multimodal vision analysis (images)**:
