@@ -620,7 +620,7 @@ class BatchManager:
             "payload_bytes",
             "temperature", "max_tokens", "top_p", "frequency_penalty", "presence_penalty",
             "results_count", "empty_results",
-            "created_at", "finalized_at", "cost_usd", "workspace",
+            "created_at", "updated_at", "finalized_at", "cost_usd", "workspace",
         )}
         self._ensure_root()
         with open(self.index_path(), "a", encoding="utf-8") as f:
@@ -652,8 +652,9 @@ class BatchManager:
                 except json.JSONDecodeError:
                     continue
                 bid = rec.get("batch_id")
-                if bid not in latest:
-                    order.append(bid)
+                if bid in latest:
+                    order.remove(bid)
+                order.append(bid)
                 latest[bid] = rec
         records = [latest[bid] for bid in order]
         for r in records:
@@ -676,6 +677,7 @@ class BatchManager:
         candidates = [r for r in self.list_index() if r.get("status") in EDITABLE_STATES]
         if not candidates:
             return None
+        candidates.sort(key=lambda r: (r.get("updated_at") or 0, r.get("created_at") or 0))
         try:
             return self.read_meta(candidates[-1]["batch_id"])
         except BatchError:
@@ -729,9 +731,20 @@ class BatchManager:
                       "Starting a fresh batch instance (the old one is preserved in "
                       "/batchlist).")
             else:
+                if model_alias is not None and meta.get("model_alias") and model_alias != meta.get("model_alias"):
+                    raise BatchError(
+                        f"Batch '{slug}' uses model '{meta.get('model_alias')}'; clone it to change models."
+                    )
                 if clear:
                     self.clear_items(meta["batch_id"])
+                requests_path = self._requests_path(meta["batch_id"])
+                if os.path.exists(requests_path):
+                    try:
+                        os.remove(requests_path)
+                    except OSError:
+                        pass
                 meta["status"] = STATUS_DRAFT
+                meta.pop("payload_bytes", None)
                 if prompt is not None:
                     meta["prompt"] = prompt
                 if temperature is not None:
@@ -1136,7 +1149,7 @@ class BatchManager:
         """The JSON request body that would be submitted (staged payload if
         available, otherwise a live build from staging)."""
         path = self._requests_path(meta["batch_id"])
-        if os.path.exists(path):
+        if meta.get("status") != STATUS_DRAFT and os.path.exists(path):
             with open(path, "r", encoding="utf-8") as f:
                 return f.read()
         items = self._read_items(meta["batch_id"])

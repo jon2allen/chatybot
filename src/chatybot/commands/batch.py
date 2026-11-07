@@ -18,6 +18,7 @@ client-side chunk pre-filter in /rerank (doc/BATCH_N_WALKTHROUGH.md), and the
 
 from __future__ import annotations
 
+import json
 import os
 import shlex
 from datetime import datetime
@@ -296,6 +297,42 @@ def _parse_args(rest: str,
     return opts, tokens
 
 
+def _parse_options_and_free_text(rest: str,
+                                 keys: set[str] | None = None) -> tuple[dict[str, str], str]:
+    """Extract key=value options matching allowed keys from rest, keeping free text
+    (including apostrophes, quotes, and spacing) completely intact."""
+    import re
+    allowed = keys if keys is not None else BATCH_KV_KEYS
+    if not rest.strip():
+        return {}, ""
+    opts: dict[str, str] = {}
+    pattern = re.compile(
+        r'(?:^|\s+)(' + '|'.join(re.escape(k) for k in allowed) + r')=(?:"([^"]*)"|\'([^\']*)\'|(\S+))',
+        flags=re.IGNORECASE,
+    )
+    matches = list(pattern.finditer(rest))
+    if not matches:
+        text = rest.strip()
+        if (text.startswith('"') and text.endswith('"') and len(text) >= 2) or \
+           (text.startswith("'") and text.endswith("'") and len(text) >= 2 and text.count("'") == 2):
+            text = text[1:-1]
+        return opts, text
+
+    chars = list(rest)
+    for m in matches:
+        key = m.group(1).lower()
+        val = m.group(2) if m.group(2) is not None else (m.group(3) if m.group(3) is not None else m.group(4))
+        opts[key] = val
+        for i in range(m.start(), m.end()):
+            chars[i] = " "
+
+    free_text = "".join(chars).strip()
+    if (free_text.startswith('"') and free_text.endswith('"') and len(free_text) >= 2) or \
+       (free_text.startswith("'") and free_text.endswith("'") and len(free_text) >= 2 and free_text.count("'") == 2):
+        free_text = free_text[1:-1]
+    return opts, free_text
+
+
 def _name_token(rest: str, skip: str | None = None) -> str | None:
     """First positional (non key=value) token, skipping an item id."""
     try:
@@ -443,13 +480,14 @@ def _try_active_draft(mgr: BatchManager) -> dict | None:
 # /batch subcommands (modular handlers)
 # ---------------------------------------------------------------------------
 
-def _resolve_add_source(app: Any, opts: dict[str, str], tokens: list[str],
+def _resolve_add_source(app: Any, opts: dict[str, str], source_input: str | list[str],
                         meta: dict, split_mode: str) -> tuple[list[str], str, str, str | None] | None:
-    """Resolve texts, origin, id_prefix, and optional image from add options or free tokens.
+    """Resolve texts, origin, id_prefix, and optional image from add options or free text.
 
     Returns (texts, origin, id_prefix, image) or None on validation failure.
     """
     image = None
+    text = _text_from_tokens(source_input) if isinstance(source_input, list) else source_input.strip()
     if "filebank" in opts:
         bank_name = f"filebank{opts['filebank']}"
         content = app.buffer_manager.file_banks.get(bank_name, "")
@@ -471,7 +509,6 @@ def _resolve_add_source(app: Any, opts: dict[str, str], tokens: list[str],
             return None
         origin = bank_name
         id_prefix = _id_prefix_for_source("imagebank", f"ib{bank_raw}", "none")
-        text = _text_from_tokens(tokens)
         texts = [text]
         image = content
     elif "var" in opts:
@@ -498,7 +535,6 @@ def _resolve_add_source(app: Any, opts: dict[str, str], tokens: list[str],
         id_prefix = _id_prefix_for_source("file", stem, split_mode)
         texts = _split_for_add(content, split_mode)
     else:
-        text = _text_from_tokens(tokens)
         # Check if free tokens reference an imagebank placeholder: {imagebankN} or $imagebankN
         import re
         img_match = re.search(r"\$?\{?(imagebank([1-5]))\}?", text)
@@ -518,10 +554,9 @@ def _resolve_add_source(app: Any, opts: dict[str, str], tokens: list[str],
             image = content
         elif "image" in opts:
             # image= accepts a URL (https://...) or a data URI (data:image/...;base64,...).
-            # Free text tokens become the item's text field, sent alongside the
+            # Free text becomes the item's text field, sent alongside the
             # image as a multimodal content array.
             image = opts["image"]
-            text = _text_from_tokens(tokens)
             if not text:
                 print("Usage: /batch add <text> image=<url-or-data-uri>  "
                       "(free text is sent with the image)")
@@ -574,8 +609,8 @@ async def _sc_start(ctx: CommandContext, mgr: BatchManager, rest: str) -> Comman
         return CommandResult.ok()
     name = tokens[0]
 
-    if "model" in opts:
-        req_alias = opts["model"].strip()
+    req_alias = opts["model"].strip() if "model" in opts else None
+    if req_alias:
         model_config = _resolve_batch_alias(ctx.app, req_alias)
         if model_config is None:
             return CommandResult.ok()
@@ -586,21 +621,38 @@ async def _sc_start(ctx: CommandContext, mgr: BatchManager, rest: str) -> Comman
     # Model-config sampling defaults apply only at CREATION; a
     # plain reopen keeps the batch's existing sampling, and only
     # explicit options on this command line update it.
-    will_reopen = mgr.find_by_name(name) is not None
+    will_reopen = False
+    existing_rec = mgr.find_by_name(name)
+    if existing_rec:
+        try:
+            ex_meta = mgr.read_meta(existing_rec["batch_id"])
+            if ex_meta.get("status") not in TERMINAL_STATES:
+                will_reopen = True
+                if req_alias and req_alias != ex_meta.get("model_alias"):
+                    print(f"Error: batch '{ex_meta['name']}' uses model '{ex_meta.get('model_alias')}'; clone it to change models.")
+                    return CommandResult.ok()
+        except Exception:
+            pass
+
     sampling = _extract_sampling_params(
         opts, None if will_reopen else model_config)
-    prompt = _pending_batch_prompt.get("prompt")
+
+    if not will_reopen:
+        prompt = _pending_batch_prompt.pop("prompt", None)
+    else:
+        prompt = None
+
     from ..config_model import detect_provider
     detected_prov = detect_provider(model_config)
     provider_name = (model_config.get("vendor") or (detected_prov if detected_prov not in ("other", "local") else None) or "openrouter").lower()
-    meta = mgr.start(name, model_alias=model_alias,
+    meta = mgr.start(name, model_alias=req_alias if will_reopen else model_alias,
                      model_name=model_config.get("name", model_alias),
                      provider=provider_name,
                      prompt=prompt,
                      clear=_opt_bool(opts, "clear"),
                      **sampling)
     print(f"Opened batch draft '{meta['name']}' (ID: {meta['batch_id']}, "
-          f"model: {model_alias})")
+          f"model: {meta.get('model_alias', model_alias)})")
     if meta.get("prompt"):
         print(f"  Batch prompt set: \"{_preview(meta['prompt'], 60)}\"")
     if meta.get("temperature") is not None:
@@ -671,7 +723,7 @@ async def _sc_prompt(ctx: CommandContext, mgr: BatchManager, rest: str) -> Comma
               else "No batch prompt set. Usage: /batch prompt \"<text>\" | "
                    "<template> | file=<path>")
         return CommandResult.ok()
-    opts, tokens = _parse_args(rest, keys=PROMPT_OPTS)
+    opts, free_text = _parse_options_and_free_text(rest, keys=PROMPT_OPTS)
     if "file" in opts:
         path = os.path.expanduser(opts["file"])
         if not os.path.isfile(path):
@@ -680,8 +732,7 @@ async def _sc_prompt(ctx: CommandContext, mgr: BatchManager, rest: str) -> Comma
         with open(path, "r", encoding="utf-8") as f:
             prompt = f.read().strip()
     else:
-        text = _text_from_tokens(tokens)
-        prompt = BUILTIN_PROMPTS.get(text.strip().lower(), text)
+        prompt = BUILTIN_PROMPTS.get(free_text.strip().lower(), free_text)
     if not prompt:
         print("Error: empty batch prompt.")
         return CommandResult.ok()
@@ -696,7 +747,7 @@ async def _sc_prompt(ctx: CommandContext, mgr: BatchManager, rest: str) -> Comma
 
 
 async def _sc_add(ctx: CommandContext, mgr: BatchManager, rest: str) -> CommandResult:
-    opts, tokens = _parse_args(rest, keys=ADD_OPTS)
+    opts, raw_text = _parse_options_and_free_text(rest, keys=ADD_OPTS)
     # /batch add operates on the active draft (or a sealed staged batch so add_items
     # can informatively instruct how to reopen it with /batch start <name>)
     meta = _try_active_draft(mgr)
@@ -714,7 +765,7 @@ async def _sc_add(ctx: CommandContext, mgr: BatchManager, rest: str) -> CommandR
         print(f"Invalid split= mode '{split_mode}'. Use lines, paragraphs, or none.")
         return CommandResult.ok()
 
-    resolved = _resolve_add_source(ctx.app, opts, tokens, meta, split_mode)
+    resolved = _resolve_add_source(ctx.app, opts, raw_text, meta, split_mode)
     if resolved is None:
         return CommandResult.ok()
     texts, origin, id_prefix, image = resolved
@@ -818,16 +869,45 @@ async def _sc_show(ctx: CommandContext, mgr: BatchManager, rest: str) -> Command
 
 
 async def _sc_edit(ctx: CommandContext, mgr: BatchManager, rest: str) -> CommandResult:
-    opts, tokens = _parse_args(rest, keys=EDIT_OPTS)
-    if not tokens:
+    opts, remaining = _parse_options_and_free_text(rest, keys=EDIT_OPTS)
+    if not remaining and "var" not in opts and "file" not in opts:
         print("Usage: /batch edit <id> <text | var=NAME | file=PATH> [name]")
         return CommandResult.ok()
-    custom_id = tokens[0]
-    meta, consumed = _resolve_item_batch(mgr, custom_id, tokens[1:])
+    custom_id, _, text_and_name = remaining.partition(" ")
+    custom_id = custom_id.strip()
+    text_and_name = text_and_name.strip()
+    if not custom_id:
+        print("Usage: /batch edit <id> <text | var=NAME | file=PATH> [name]")
+        return CommandResult.ok()
+
+    # Disambiguate optional batch name at the start or end of text_and_name
+    meta = None
+    if text_and_name:
+        first_word, _, rest_after_first = text_and_name.partition(" ")
+        if first_word:
+            rec = mgr.find_by_name(first_word)
+            if rec is not None:
+                candidate_meta = mgr.read_meta(rec["batch_id"])
+                if any(it["custom_id"] == custom_id for it in mgr.list_items(candidate_meta)):
+                    meta = candidate_meta
+                    text_and_name = rest_after_first.strip()
+        if meta is None:
+            parts = text_and_name.rsplit(None, 1)
+            if len(parts) == 2:
+                potential_text, potential_batch = parts[0], parts[1]
+                rec = mgr.find_by_name(potential_batch)
+                if rec is not None:
+                    candidate_meta = mgr.read_meta(rec["batch_id"])
+                    if any(it["custom_id"] == custom_id for it in mgr.list_items(candidate_meta)):
+                        meta = candidate_meta
+                        text_and_name = potential_text.strip()
+    if meta is None:
+        meta, _ = _resolve_item_batch(mgr, custom_id, [text_and_name] if text_and_name else [])
     if meta is None:
         print(f"Error: item '{custom_id}' not found in any batch. "
               "List a batch's items with: /batch items <name>")
         return CommandResult.ok()
+
     if "var" in opts:
         value = _get_var_value(ctx.app, clean_var_name(opts["var"]))
         new_text = "" if value is None else str(value)
@@ -835,8 +915,7 @@ async def _sc_edit(ctx: CommandContext, mgr: BatchManager, rest: str) -> Command
         with open(os.path.expanduser(opts["file"]), "r", encoding="utf-8") as f:
             new_text = f.read().strip()
     else:
-        text_tokens = [t for t in tokens[1:] if t != consumed]
-        new_text = _text_from_tokens(text_tokens)
+        new_text = text_and_name
     if not new_text:
         print("Error: empty replacement text.")
         return CommandResult.ok()
@@ -884,7 +963,7 @@ async def _sc_dump(ctx: CommandContext, mgr: BatchManager, rest: str) -> Command
     if not wire_bytes and payload:
         try:
             wire_bytes = len(json.dumps(json.loads(payload), separators=(",", ":")).encode("utf-8"))
-        except Exception:
+        except (ValueError, TypeError):
             wire_bytes = len(payload.encode("utf-8"))
     size_str = f" ({_format_bytes(wire_bytes)})" if wire_bytes else ""
     print(f"\nBatch payload for '{meta['name']}'{size_str}:")

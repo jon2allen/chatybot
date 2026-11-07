@@ -2765,3 +2765,133 @@ class TestBatchReviewFixes:
             asyncio.run(prov.cancel("any_provider_id"))
         assert "OpenRouter does not support cancelling" in str(exc_info.value)
 
+
+class TestBatchReviewFixesItems8To13:
+    def test_item8_reopen_with_different_model_refused(self, mgr, capsys):
+        ctx = make_ctx(mgr)
+        mistral_cfg = {"name": "mistral-large-latest", "vendor": "mistral", "batch": True, "api_key": "M_KEY"}
+        ctx.config_manager.config["models"]["mistral_batch"] = mistral_cfg
+        ctx.config_manager.get_model_config.side_effect = lambda a: ctx.config_manager.config["models"].get(a, mistral_cfg)
+        ctx.config_manager.list_batch_capable_models.return_value = ["gptoss_batch", "mistral_batch"]
+
+        # Create with gptoss_batch
+        asyncio.run(run_cmd(ctx, "/batch start immut_m model=gptoss_batch"))
+        meta = mgr.resolve("immut_m")
+        assert meta["model_alias"] == "gptoss_batch"
+        capsys.readouterr()
+
+        # Reopen with different model is refused
+        asyncio.run(run_cmd(ctx, "/batch start immut_m model=mistral_batch"))
+        out = capsys.readouterr().out
+        assert "Error: batch 'immut_m' uses model 'gptoss_batch'; clone it to change models." in out
+        # Direct API also raises BatchError
+        with pytest.raises(BatchError, match="clone it to change models"):
+            mgr.start("immut_m", "mistral_batch", "mistral-large-latest", "mistral")
+
+    def test_item9_pending_prompt_cleared_after_start_and_not_on_reopen(self, mgr, capsys):
+        ctx = make_ctx(mgr)
+        # Set pending prompt without open draft
+        asyncio.run(run_cmd(ctx, '/batch prompt "One-time prompt"'))
+        capsys.readouterr()
+
+        # Consumed by first batch
+        asyncio.run(run_cmd(ctx, "/batch start p_batch1"))
+        b1 = mgr.resolve("p_batch1")
+        assert b1["prompt"] == "One-time prompt"
+
+        # Next batch must NOT get the consumed prompt
+        asyncio.run(run_cmd(ctx, "/batch start p_batch2"))
+        b2 = mgr.resolve("p_batch2")
+        assert b2.get("prompt") is None
+
+        # Reopening an existing batch must not overwrite its prompt with a pending prompt
+        asyncio.run(run_cmd(ctx, "/batch start p_batch3"))
+        asyncio.run(run_cmd(ctx, "/batch add item3"))
+        asyncio.run(run_cmd(ctx, '/batch prompt "Original prompt"'))
+        asyncio.run(run_cmd(ctx, '/batch end'))
+        assert mgr.resolve("p_batch3")["prompt"] == "Original prompt"
+
+        # Now set another pending prompt when no draft is open
+        asyncio.run(run_cmd(ctx, '/batch prompt "Unrelated pending"'))
+        # Reopen p_batch3
+        asyncio.run(run_cmd(ctx, "/batch start p_batch3"))
+        assert mgr.resolve("p_batch3")["prompt"] == "Original prompt"
+
+    def test_item10_active_draft_targets_most_recently_touched(self, mgr):
+        ctx = make_ctx(mgr)
+        asyncio.run(run_cmd(ctx, "/batch start older_draft"))
+        asyncio.run(run_cmd(ctx, "/batch add item_older_1"))
+
+        asyncio.run(run_cmd(ctx, "/batch start newer_draft"))
+        asyncio.run(run_cmd(ctx, "/batch add item_newer_1"))
+
+        # Reopening older_draft must make it the active draft
+        asyncio.run(run_cmd(ctx, "/batch start older_draft"))
+        asyncio.run(run_cmd(ctx, "/batch add item_older_2"))
+
+        # Verify item_older_2 went into older_draft, not newer_draft
+        items_older = mgr.list_items(mgr.resolve("older_draft"))
+        items_newer = mgr.list_items(mgr.resolve("newer_draft"))
+        assert len(items_older) == 2
+        assert len(items_newer) == 1
+        assert items_older[1]["text"] == "item_older_2"
+
+    def test_item11_apostrophes_and_spacing_preserved(self, mgr):
+        ctx = make_ctx(mgr)
+        asyncio.run(run_cmd(ctx, "/batch start text_batch"))
+        raw_sentence = "I can't stop and won't stop now"
+        asyncio.run(run_cmd(ctx, f"/batch add {raw_sentence}"))
+
+        items = mgr.list_items(mgr.resolve("text_batch"))
+        assert len(items) == 1
+        assert items[0]["text"] == raw_sentence
+
+        # Test spacing and option extraction together
+        asyncio.run(run_cmd(ctx, "/batch add multiple   spaced    words id=custom_space_1"))
+        items = mgr.list_items(mgr.resolve("text_batch"))
+        assert len(items) == 2
+        assert items[1]["custom_id"] == "custom_space_1"
+        assert items[1]["text"] == "multiple   spaced    words"
+
+        # Test edit preserving apostrophes and spacing
+        asyncio.run(run_cmd(ctx, "/batch edit custom_space_1 replaced   can't   won't"))
+        updated_item = mgr.show_item(mgr.resolve("text_batch"), "custom_space_1")
+        assert updated_item["text"] == "replaced   can't   won't"
+
+    def test_item12_dump_payload_after_reopen_shows_live_items(self, mgr):
+        ctx = make_ctx(mgr)
+        asyncio.run(run_cmd(ctx, "/batch start dump_reopen"))
+        asyncio.run(run_cmd(ctx, "/batch add item1"))
+        asyncio.run(run_cmd(ctx, "/batch end"))
+
+        meta_sealed = mgr.resolve("dump_reopen")
+        assert os.path.exists(mgr._requests_path(meta_sealed["batch_id"]))
+
+        # Reopen and add another item
+        asyncio.run(run_cmd(ctx, "/batch start dump_reopen"))
+        meta_reopened = mgr.resolve("dump_reopen")
+        assert meta_reopened["status"] == STATUS_DRAFT
+        # Old requests.json was cleaned up
+        assert not os.path.exists(mgr._requests_path(meta_reopened["batch_id"]))
+
+        asyncio.run(run_cmd(ctx, "/batch add item2"))
+        payload_str = mgr.dump_payload(meta_reopened)
+        payload = json.loads(payload_str)
+        texts = [req["body"]["messages"][-1]["content"] for req in payload["requests"]]
+        assert texts == ["item1", "item2"]
+
+    def test_item13_commands_batch_imports_json_and_computes_wire_bytes(self, mgr, capsys):
+        import chatybot.commands.batch as batch_module
+        assert hasattr(batch_module, "json")
+
+        ctx = make_ctx(mgr)
+        asyncio.run(run_cmd(ctx, "/batch start dump_calc"))
+        asyncio.run(run_cmd(ctx, "/batch add test_calc_item"))
+        capsys.readouterr()
+
+        asyncio.run(run_cmd(ctx, "/batch dump dump_calc"))
+        out = capsys.readouterr().out
+        assert "Batch payload for 'dump_calc' (" in out
+        assert "B):" in out
+
+
