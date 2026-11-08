@@ -882,6 +882,19 @@ def test_tui_decision_apply_form_edits():
     assert tui.config.models["my_decide"].endpoint_path == "/custom/decide"
 
 
+def test_tui_decision_form_field_layout():
+    # Verify the coordinates for endpoint_path leave enough margin for the label
+    label = "Endpoint Path:"
+    label_start_x = 4
+    label_end_x = label_start_x + len(label)
+    field_x = 19
+    field_width = 39
+    dialog_width = 64
+
+    assert label_end_x < field_x, f"Label {label} overlaps text box starting at {field_x}"
+    assert field_x + field_width <= dialog_width, "Field overflows dialog width"
+
+
 
 
 

@@ -1513,7 +1513,7 @@ class ConfigTUI:
             
             # Decision API section
             ("section_dc",       "── Decision API ────────────────────", 15, 4, 0, "header", None),
-            ("endpoint_path",    "Endpoint Path:",   16, 16, 42, "text", None),
+            ("endpoint_path",    "Endpoint Path:",   16, 19, 39, "text", None),
 
             # Image Gen section
             ("section_im",       "── Image Generation ────────────────", 15, 4, 0, "header", None),
@@ -1536,25 +1536,19 @@ class ConfigTUI:
             # Draw headers and labels
             for f in fields:
                 key, label, y, x, width, f_type, _ = f
+                if self.is_field_hidden(key, form_data):
+                    continue
                 if f_type == "header":
-                    if self.is_field_hidden(key, form_data):
-                        win.addstr(y, x, " " * len(label))
-                    else:
-                        win.addstr(y, x, label, curses.color_pair(3))
-                elif not self.is_field_hidden(key, form_data):
-                    win.addstr(y, 4, label)
+                    win.addstr(y, x, label, curses.color_pair(3))
                 else:
-                    win.addstr(y, 4, " " * len(label))
+                    win.addstr(y, 4, label)
                     
             # Draw values
             for idx, f in enumerate(interactive_fields):
                 key, label, y, x, width, f_type, opts = f
-                val = form_data[key]
-
-                # Check visibility via is_field_hidden (covers reranker, apple_fm, image gen)
                 if self.is_field_hidden(key, form_data):
-                    win.addstr(y, x, " " * width)
                     continue
+                val = form_data[key]
                     
                 if f_type == "text":
                     win.addstr(y, x, "[" + " " * (width - 2) + "]")
