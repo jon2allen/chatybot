@@ -207,6 +207,20 @@ base_url = "https://openrouter.ai"
 endpoint_path = "/api/alpha/decisions"
 api_key = "OPENROUTER_API_KEY"
 
+[models.parallel_decisions]
+name = "parallel/decisions-fast:free"
+type = "decision"
+base_url = "https://openrouter.ai"
+endpoint_path = "/api/alpha/decisions"
+api_key = "OPENROUTER_API_KEY"
+
+[models.joey]
+name = "baseten/joey-1"
+type = "decision"
+base_url = "https://openrouter.ai"
+endpoint_path = "/api/alpha/decisions"
+api_key = "OPENROUTER_API_KEY"
+
 # ============================================================================
 # NVIDIA NIM MODELS
 # ============================================================================

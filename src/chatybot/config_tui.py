@@ -728,6 +728,7 @@ class ConfigTUI:
     REPLACE_FIELDS: ClassVar[list[tuple[str, str, str]]] = [
         ("api_key", "API Key Env Var", "str"),
         ("base_url", "Base URL Endpoint", "str"),
+        ("endpoint_path", "Endpoint Path", "str"),
         ("temperature", "Temperature", "float"),
         ("top_k", "Top K", "int"),
         ("context_limit", "Context Limit", "int"),
@@ -837,6 +838,8 @@ class ConfigTUI:
 
         candidates = []
         for alias, model in target_items:
+            if field_key == "endpoint_path" and getattr(model, "type", "") != "decision":
+                continue
             old_val = getattr(model, field_key, None)
             new_val = None
             should_change = False
@@ -1479,6 +1482,7 @@ class ConfigTUI:
             "image_endpoint": "",
             "image_modalities": "",
             "batch": "false",
+            "endpoint_path": getattr(model, "endpoint_path", "") or "/api/alpha/decisions",
         }
         
         # Populate additional fields if chat type
@@ -1507,6 +1511,10 @@ class ConfigTUI:
             ("temperature",      "Temperature:",     12, 16, 12, "text", None),
             ("top_k",            "Top K:",           13, 16, 12, "text", None),
             
+            # Decision API section
+            ("section_dc",       "── Decision API ────────────────────", 15, 4, 0, "header", None),
+            ("endpoint_path",    "Endpoint Path:",   16, 16, 42, "text", None),
+
             # Image Gen section
             ("section_im",       "── Image Generation ────────────────", 15, 4, 0, "header", None),
             ("image_generation", "Enabled:",         16, 16, 12, "cycle", ["true", "false"]),
@@ -1529,9 +1537,14 @@ class ConfigTUI:
             for f in fields:
                 key, label, y, x, width, f_type, _ = f
                 if f_type == "header":
-                    win.addstr(y, x, label, curses.color_pair(3))
-                elif f_type != "header" and not self.is_field_hidden(key, form_data):
+                    if self.is_field_hidden(key, form_data):
+                        win.addstr(y, x, " " * len(label))
+                    else:
+                        win.addstr(y, x, label, curses.color_pair(3))
+                elif not self.is_field_hidden(key, form_data):
                     win.addstr(y, 4, label)
+                else:
+                    win.addstr(y, 4, " " * len(label))
                     
             # Draw values
             for idx, f in enumerate(interactive_fields):
@@ -1591,6 +1604,10 @@ class ConfigTUI:
                         form_data[key] = opts[(c_idx - 1) % len(opts)]
                         # Auto-update presets if type/vendor cycles
                         self.handle_preset_auto_pop(key, form_data)
+                        win.erase()
+                        self.draw_dialog_border(win, f"Edit Model: {initial_alias}")
+                        while focus < len(interactive_fields) and self.is_field_hidden(interactive_fields[focus][0], form_data):
+                            focus = (focus + 1) % (len(interactive_fields) + 3)
                 else:
                     # Cycle buttons
                     btn_focus = focus - len(interactive_fields)
@@ -1604,6 +1621,10 @@ class ConfigTUI:
                         c_idx = self._cycle_index(opts, curr_val)
                         form_data[key] = opts[(c_idx + 1) % len(opts)]
                         self.handle_preset_auto_pop(key, form_data)
+                        win.erase()
+                        self.draw_dialog_border(win, f"Edit Model: {initial_alias}")
+                        while focus < len(interactive_fields) and self.is_field_hidden(interactive_fields[focus][0], form_data):
+                            focus = (focus + 1) % (len(interactive_fields) + 3)
                 else:
                     # Cycle buttons
                     btn_focus = focus - len(interactive_fields)
@@ -1625,6 +1646,10 @@ class ConfigTUI:
                         c_idx = self._cycle_index(opts, curr_val)
                         form_data[key] = opts[(c_idx + 1) % len(opts)]
                         self.handle_preset_auto_pop(key, form_data)
+                        win.erase()
+                        self.draw_dialog_border(win, f"Edit Model: {initial_alias}")
+                        while focus < len(interactive_fields) and self.is_field_hidden(interactive_fields[focus][0], form_data):
+                            focus = (focus + 1) % (len(interactive_fields) + 3)
                 elif ch in (10, 13):
                     btn_idx = focus - len(interactive_fields)
                     if btn_idx == 0:  # OK
@@ -1643,9 +1668,15 @@ class ConfigTUI:
 
     def is_field_hidden(self, key: str, form_data: dict) -> bool:
         if form_data["type"] == "apple_fm":
-            # apple_fm has no base_url, api_key, image generation, or batch
-            return key in ("base_url", "api_key", "image_generation", "image_endpoint", "image_modalities", "batch", "section_im", "section_bt")
+            # apple_fm has no base_url, api_key, image generation, batch, or decision endpoint
+            return key in (
+                "base_url", "api_key", "image_generation", "image_endpoint",
+                "image_modalities", "batch", "section_im", "section_bt",
+                "section_dc", "endpoint_path",
+            )
         if key in ("image_generation", "image_endpoint", "image_modalities", "batch", "section_im", "section_bt") and form_data["type"] in ("reranker", "decision"):
+            return True
+        if key in ("section_dc", "endpoint_path") and form_data["type"] != "decision":
             return True
         return bool(key in ("image_endpoint", "image_modalities") and form_data["image_generation"] == "false")
 
@@ -1671,6 +1702,11 @@ class ConfigTUI:
             form_data["image_generation"] = "true" if p.image_support else "false"
             if p.image_support:
                 form_data["image_endpoint"] = "/images/generations"
+            if form_data["type"] == "decision":
+                if form_data["vendor"] == "openrouter":
+                    form_data["endpoint_path"] = "/api/alpha/decisions"
+                elif form_data["vendor"] == "typesafe":
+                    form_data["endpoint_path"] = "/v1/systemone"
         elif changed_key == "type":
             if form_data["type"] == "apple_fm":
                 form_data["base_url"] = "on-device"
@@ -1690,12 +1726,19 @@ class ConfigTUI:
             elif form_data["type"] == "decision":
                 form_data["image_generation"] = "false"
                 form_data["batch"] = "false"
+                if not form_data.get("endpoint_path"):
+                    form_data["endpoint_path"] = "/api/alpha/decisions"
                 # If switching to decision, typesafe is a good default preset
                 if form_data["vendor"] == "":
                     form_data["vendor"] = "typesafe"
                     p = VENDOR_PRESETS["typesafe"]
                     form_data["base_url"] = p.base_url
                     form_data["api_key"] = p.api_key_env
+                    form_data["endpoint_path"] = "/v1/systemone"
+                elif form_data["vendor"] == "openrouter":
+                    form_data["endpoint_path"] = "/api/alpha/decisions"
+                elif form_data["vendor"] == "typesafe":
+                    form_data["endpoint_path"] = "/v1/systemone"
 
     def apply_form_edits(self, old_alias: str, form_data: dict, is_new: bool) -> bool:
         """Validate form data, construct model, and write to in-memory config."""
@@ -1773,6 +1816,7 @@ class ConfigTUI:
                         update["context_limit"] = existing.context_limit
                     updated_model = RerankerModelConfig(**update)
             elif m_type == "decision":
+                update["endpoint_path"] = form_data.get("endpoint_path", "").strip() or "/api/alpha/decisions"
                 if isinstance(existing, DecisionModelConfig):
                     updated_model = existing.model_copy(update=update)
                 else:

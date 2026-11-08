@@ -338,9 +338,9 @@ class DecisionModelConfig(BaseModelConfig):
     type: Literal["decision"] = "decision"
     """Discriminator field - always 'decision' for this class."""
 
-    endpoint_path: str = "/v1/systemone"
+    endpoint_path: str = "/api/alpha/decisions"
     """Path appended to base_url for the decisions API.
-    Native TypeSafe: '/v1/systemone'. OpenRouter: '/api/alpha/decisions'."""
+    OpenRouter: '/api/alpha/decisions'. Native TypeSafe: '/v1/systemone'."""
 
 
 # ============================================================================

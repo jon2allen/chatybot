@@ -61,6 +61,10 @@ async def evaluate(
         DecisionAPIError: On non-2xx HTTP status.
     """
     trace_enabled = trace_raw_payload or os.environ.get("CHATYBOT_TRACE_RAW_PAYLOAD") == "1"
+    # Auto-correct OpenRouter endpoint path if misconfigured with TypeSafe's native path
+    if "openrouter.ai" in base_url.lower() and endpoint_path == "/v1/systemone":
+        endpoint_path = "/api/alpha/decisions"
+
     url = f"{base_url.rstrip('/')}{endpoint_path}"
     body = {
         "state": state,

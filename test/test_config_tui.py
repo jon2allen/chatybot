@@ -834,6 +834,55 @@ def test_tui_batch_field_hidden_for_non_chat():
     assert tui.is_field_hidden("section_bt", {"type": "chat"}) is False
 
 
+def test_tui_decision_endpoint_path_visibility_and_presets():
+    tui = ConfigTUI()
+    # Visibility
+    assert tui.is_field_hidden("endpoint_path", {"type": "decision"}) is False
+    assert tui.is_field_hidden("section_dc", {"type": "decision"}) is False
+    assert tui.is_field_hidden("endpoint_path", {"type": "chat"}) is True
+    assert tui.is_field_hidden("section_dc", {"type": "chat"}) is True
+    assert tui.is_field_hidden("endpoint_path", {"type": "reranker"}) is True
+    assert tui.is_field_hidden("endpoint_path", {"type": "apple_fm"}) is True
+
+    # Presets
+    fd = {"type": "decision", "vendor": "typesafe", "base_url": "", "api_key": "", "endpoint_path": ""}
+    tui.handle_preset_auto_pop("vendor", fd)
+    assert fd["endpoint_path"] == "/v1/systemone"
+
+    fd = {"type": "decision", "vendor": "openrouter", "base_url": "", "api_key": "", "endpoint_path": ""}
+    tui.handle_preset_auto_pop("vendor", fd)
+    assert fd["endpoint_path"] == "/api/alpha/decisions"
+
+
+def test_tui_decision_apply_form_edits():
+    tui = ConfigTUI()
+    tui.config = ChatConfig(models={})
+    tui.sync_models_list()
+    form_data = {
+        "alias": "my_decide",
+        "name": "baseten/joey-1",
+        "type": "decision",
+        "base_url": "https://openrouter.ai",
+        "api_key": "OPENROUTER_API_KEY",
+        "vendor": "openrouter",
+        "temperature": "",
+        "top_k": "",
+        "endpoint_path": "/api/alpha/decisions",
+    }
+    success = tui.apply_form_edits("my_decide", form_data, is_new=True)
+    assert success is True
+    model = tui.config.models["my_decide"]
+    assert model.type == "decision"
+    assert model.endpoint_path == "/api/alpha/decisions"
+
+    # Edit endpoint_path
+    form_data["endpoint_path"] = "/custom/decide"
+    success = tui.apply_form_edits("my_decide", form_data, is_new=False)
+    assert success is True
+    assert tui.config.models["my_decide"].endpoint_path == "/custom/decide"
+
+
+
 
 
 
