@@ -166,6 +166,11 @@ endfor
    - Malformed slice specifications (e.g. non-numeric bounds or bare `slice`) emit `Error: Invalid slice parameters in modifier '...'. Usage: slice:start:end` and raise `StringModifierError`, halting execution immediately.
    - This strict policy prevents typos from silently executing with un-transformed data.
 
+5. **Chaining Order & Syntax Boundaries**:
+   - **Chaining Order**: Multiple chained modifiers evaluate strictly left-to-right (e.g. `lower:capitalize` on `"HELLO"` produces `"Hello"`, whereas `capitalize:lower` produces `"hello"`).
+   - **Array Elements**: Direct subscripts support modifiers (`${array[0]:upper}`). Dynamic indexing is performed via intermediate `set` (e.g. `set item = array[$idx]`).
+   - **Static Slice Parameters**: Slice boundaries require integer literals (e.g. `slice:0:5`). Placeholders inside modifier parameter positions (`slice:${start}:${end}`) and recursive indirection (`${${var}}`) are not supported by design to maintain deterministic single-pass parsing without risk of double-evaluation.
+
 ---
 
 ## 6. Testing & Verification
@@ -177,6 +182,7 @@ Comprehensive test coverage is implemented in [`test/test_str_modifiers.py`](fil
    - `test_apply_string_modifier_slice`: verifies forward, backward, omitted index, and negative index slices.
    - `test_apply_string_modifier_slice_invalid`: verifies warnings and graceful recovery for malformed slice parameters.
    - `test_apply_string_modifier_chained`: verifies multi-stage pipeline transformations (`trim:upper:len`, `slice:0:3:upper`).
+   - `test_apply_string_modifier_chaining_order`: verifies strict left-to-right modifier pipeline execution.
    - `test_apply_string_modifier_edge_cases`: verifies empty strings, non-string values, and unknown modifiers.
 
 2. **Placeholder Expansion Tests (`buffer_manager.py`)**:
@@ -190,5 +196,5 @@ Comprehensive test coverage is implemented in [`test/test_str_modifiers.py`](fil
    - `test_evaluate_condition_bare_modifier_truthiness`: verifies truthiness evaluation without binary operators (`flag:lower`).
    - `test_chatdsl_script_with_modifiers`: end-to-end execution of multi-line `if/else/endif` blocks using string modifiers.
 
-All 95 related tests across the test suite (`test_if_blocks.py`, `test_if_numeric.py`, `test_procs.py`, `test_foreach.py`, `test_str_modifiers.py`) pass cleanly.
+All 96 related tests across the test suite (`test_if_blocks.py`, `test_if_numeric.py`, `test_procs.py`, `test_foreach.py`, `test_str_modifiers.py`) pass cleanly.
 

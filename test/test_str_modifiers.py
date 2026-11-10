@@ -55,6 +55,17 @@ def test_apply_string_modifier_chained():
     assert apply_string_modifier("  hi  ", "trim:upper:len") == "2"
 
 
+def test_apply_string_modifier_chaining_order():
+    """Verify that modifier pipelines are strictly executed left-to-right."""
+    # lower:capitalize vs capitalize:lower
+    assert apply_string_modifier("HELLO WORLD", "lower:capitalize") == "Hello world"
+    assert apply_string_modifier("HELLO WORLD", "capitalize:lower") == "hello world"
+
+    # trim:slice vs slice:trim
+    assert apply_string_modifier("  abc  ", "trim:slice:0:2") == "ab"
+    assert apply_string_modifier("  abc  ", "slice:0:2:trim") == ""
+
+
 def test_apply_string_modifier_edge_cases(capsys):
     assert apply_string_modifier("test", "") == "test"
     # Unknown modifier outputs Error and raises StringModifierError
