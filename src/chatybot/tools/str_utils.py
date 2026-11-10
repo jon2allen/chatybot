@@ -1,12 +1,101 @@
 """
-String search utility for LLM tool calling in Chatybot.
-Searches for substring patterns in text with optional case-insensitive matching.
-Returns match count or match positions, and optionally stores the result in a script variable.
+String utility functions for Chatybot.
+Provides:
+  - String search utility (str_search) for tool calling and command execution
+  - String modifier transformation engine (apply_string_modifier) for variable expansions
 """
 
 import re
-from typing import Any
+from typing import Any, Callable
 
+# ---------------------------------------------------------------------------
+# String Modifiers Engine
+# ---------------------------------------------------------------------------
+
+STRING_MODIFIERS: dict[str, Callable[[str], str]] = {
+    "lower": lambda s: s.lower(),
+    "upper": lambda s: s.upper(),
+    "title": lambda s: re.sub(r"[A-Za-z]+('[A-Za-z]+)?", lambda m: m.group(0)[0].upper() + m.group(0)[1:].lower(), s),
+    "capitalize": lambda s: s.capitalize(),
+    "trim": lambda s: s.strip(),
+    "strip": lambda s: s.strip(),
+    "ltrim": lambda s: s.lstrip(),
+    "lstrip": lambda s: s.lstrip(),
+    "rtrim": lambda s: s.rstrip(),
+    "rstrip": lambda s: s.rstrip(),
+    "len": lambda s: str(len(s)),
+    "length": lambda s: str(len(s)),
+}
+
+
+def apply_single_modifier(val: str, mod_spec: str) -> str:
+    """Apply a single modifier like 'lower', 'upper', or 'slice:0:5'."""
+    mod_spec = mod_spec.strip()
+    if not mod_spec:
+        return val
+
+    mod_lower = mod_spec.lower()
+
+    # Parametric modifier: slice:start:end or sub:start:end (case-insensitive)
+    if mod_lower.startswith(("slice:", "sub:")):
+        parts = mod_spec.split(":")
+        try:
+            start = int(parts[1].strip()) if len(parts) > 1 and parts[1].strip() != "" else None
+            end = int(parts[2].strip()) if len(parts) > 2 and parts[2].strip() != "" else None
+            return val[start:end]
+        except ValueError:
+            print(f"Warning: Invalid slice parameters in modifier '{mod_spec}'.")
+            return val
+
+    if mod_lower in STRING_MODIFIERS:
+        return STRING_MODIFIERS[mod_lower](val)
+
+    print(f"Warning: Unknown string modifier '{mod_spec}'. Supported: {', '.join(sorted(STRING_MODIFIERS.keys()))}, slice:start:end")
+    return val
+
+
+def apply_string_modifier(val: str, modifier_spec: str) -> str:
+    """Apply one or more chained string modifiers separated by colons.
+
+    Examples:
+        apply_string_modifier("  Hello World  ", "trim:lower") -> "hello world"
+        apply_string_modifier("abcdef", "slice:0:3:upper") -> "ABC"
+        apply_string_modifier("hello", "upper") -> "HELLO"
+    """
+    if not modifier_spec or not isinstance(val, str):
+        return val if isinstance(val, str) else str(val)
+
+    # Tokenize modifier_spec respecting parametric modifiers (slice:start:end)
+    tokens: list[str] = []
+    raw_parts = [p.strip() for p in modifier_spec.split(":")]
+    i = 0
+    while i < len(raw_parts):
+        part = raw_parts[i]
+        if part.lower() in ("slice", "sub"):
+            slice_tokens = [part]
+            i += 1
+            if i < len(raw_parts) and (raw_parts[i].lstrip("-").isdigit() or raw_parts[i] == ""):
+                slice_tokens.append(raw_parts[i])
+                i += 1
+                if i < len(raw_parts) and (raw_parts[i].lstrip("-").isdigit() or raw_parts[i] == ""):
+                    slice_tokens.append(raw_parts[i])
+                    i += 1
+            tokens.append(":".join(slice_tokens))
+        else:
+            tokens.append(part)
+            i += 1
+
+    result = val
+    for tok in tokens:
+        if tok:
+            result = apply_single_modifier(result, tok)
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# String Search Utility
+# ---------------------------------------------------------------------------
 
 def str_search(
     pattern: str,

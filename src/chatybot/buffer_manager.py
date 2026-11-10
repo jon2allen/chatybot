@@ -14,6 +14,8 @@ from collections import UserDict
 from pathlib import Path
 from typing import Any
 
+from chatybot.tools.str_utils import apply_string_modifier
+
 # Dynamic Context Injection: !`command` syntax
 DYNAMIC_INJECTION_PATTERN = re.compile(r"!`([^`\r\n]+)`")
 MAX_DYNAMIC_INJECTION_BYTES = 4096
@@ -285,6 +287,8 @@ class BufferManager:
         Returns:
             True if variable was set successfully, False if protected and not allowed
         """
+        if isinstance(var_name, str) and var_name.endswith("[]"):
+            var_name = var_name[:-2]
         old_user_write = getattr(self.script_vars, '_is_user_write', False)
         if allow_protected and hasattr(self.script_vars, '_is_user_write'):
             self.script_vars._is_user_write = False
@@ -658,51 +662,85 @@ class BufferManager:
                         text_prompt = text_prompt.replace(ph, "")
                 continue
 
-            # B. Array subscript replacement (supports braced `${key[index]}` and `{key[index]}`)
+            # B. Array subscript replacement
             flags = re.IGNORECASE if key.upper() in self.script_vars.protected_vars or key.upper() in ('CHAT_HISTORY', 'LAST_RESPONSE') else 0
-            sub_pat = rf"\$?\{{{re.escape(key)}\[(-?\d+)\]\}}"
+            # B1. Braced subscript with $ (supports optional modifier: ${key[index]:mod} or ${key[index]})
+            sub_pat = rf"\$\{{{re.escape(key)}\[(-?\d+)\](?::([a-zA-Z0-9_:\-\s]+))?\}}"
             def replace_sub(m, k=key):
                 idx = m.group(1)
+                mod = m.group(2)
                 try:
-                    return self.get_variable_value(f"{k}[{idx}]")
+                    raw_val = self.get_variable_value(f"{k}[{idx}]")
+                    if raw_val is not None and mod:
+                        return apply_string_modifier(str(raw_val), mod)
+                    return str(raw_val) if raw_val is not None else m.group(0)
                 except Exception:
                     return m.group(0)
             text_prompt = re.sub(sub_pat, replace_sub, text_prompt, flags=flags)
 
+            # B2. Legacy braced subscript without $ (no modifier: {key[index]})
+            legacy_sub_pat = rf"\{{{re.escape(key)}\[(-?\d+)\]\}}"
+            def replace_legacy_sub(m, k=key):
+                idx = m.group(1)
+                try:
+                    raw_val = self.get_variable_value(f"{k}[{idx}]")
+                    return str(raw_val) if raw_val is not None else m.group(0)
+                except Exception:
+                    return m.group(0)
+            text_prompt = re.sub(legacy_sub_pat, replace_legacy_sub, text_prompt, flags=flags)
+
             # C. Standard unbraced subscript ($key[index])
             unbraced_sub_pat = rf"\${re.escape(key)}\[(-?\d+)\]"
-            text_prompt = re.sub(unbraced_sub_pat, replace_sub, text_prompt, flags=flags)
+            text_prompt = re.sub(unbraced_sub_pat, replace_legacy_sub, text_prompt, flags=flags)
 
-            # D. Base variable replacement (braced: `${key}` / `{key}`)
-            braced_pat = rf"\$?\{{{re.escape(key)}\}}"
-            def replace_base(m, k=key):
+            # D. Base variable replacement
+            # D1. Braced with $ (supports optional modifier: ${key:mod} or ${key})
+            braced_pat = rf"\$\{{{re.escape(key)}(?::([a-zA-Z0-9_:\-\s]+))?\}}"
+            def replace_base_braced(m, k=key):
+                mod = m.group(1)
+                val = self.resolve_text_variable(k)
+                if val is not None:
+                    val_str = str(val)
+                    if mod:
+                        return apply_string_modifier(val_str, mod)
+                    return val_str
+                return m.group(0)
+            text_prompt = re.sub(braced_pat, replace_base_braced, text_prompt, flags=flags)
+
+            # D2. Legacy braced without $ (no modifier: {key})
+            legacy_braced_pat = rf"\{{{re.escape(key)}\}}"
+            def replace_base_legacy(m, k=key):
                 val = self.resolve_text_variable(k)
                 return str(val) if val is not None else m.group(0)
-            text_prompt = re.sub(braced_pat, replace_base, text_prompt, flags=flags)
+            text_prompt = re.sub(legacy_braced_pat, replace_base_legacy, text_prompt, flags=flags)
 
-            # E. Standard unbraced variable ($key)
-            unbraced_pat = rf"\${re.escape(key)}\b"
-            text_prompt = re.sub(unbraced_pat, replace_base, text_prompt, flags=flags)
+            # E. Standard unbraced variable ($key) - does not match when followed by ':'
+            unbraced_pat = rf"\${re.escape(key)}\b(?!:)"
+            text_prompt = re.sub(unbraced_pat, replace_base_legacy, text_prompt, flags=flags)
         
         if clear_unresolved:
-            # 1. Braced subscript: ${var[idx]} or {var[idx]}
-            text_prompt = re.sub(r'\$?\{[a-zA-Z_]\w*\[-?\d+\]\}', "", text_prompt)
+            # 1. Braced subscript with $: ${var[idx]} or ${var[idx]:mod}
+            text_prompt = re.sub(r'\$\{[a-zA-Z_]\w*\[-?\d+\](?::[a-zA-Z0-9_:\-\s]+)?\}', "", text_prompt)
+            # 1b. Legacy braced subscript without $: {var[idx]} (no modifier!)
+            text_prompt = re.sub(r'\{[a-zA-Z_]\w*\[-?\d+\]\}', "", text_prompt)
             # 2. Unbraced subscript: $var[idx]
             text_prompt = re.sub(r'\$[a-zA-Z_]\w*\[-?\d+\]', "", text_prompt)
-            # 3. Braced base: ${var} or {var} - preserve valid loaded imagebanks
+            # 3. Braced base with $: ${var} or ${var:mod}
             def _clean_braced(m):
                 var = m.group(1)
                 if var in self.image_banks and self.image_banks[var]:
                     return m.group(0)
                 return ""
-            text_prompt = re.sub(r'\$?\{([a-zA-Z_]\w*)\}', _clean_braced, text_prompt)
+            text_prompt = re.sub(r'\$\{([a-zA-Z_]\w*)(?::[a-zA-Z0-9_:\-\s]+)?\}', _clean_braced, text_prompt)
+            # 3b. Legacy braced base without $: {var} (no modifier!)
+            text_prompt = re.sub(r'\{([a-zA-Z_]\w*)\}', _clean_braced, text_prompt)
             # 4. Unbraced base: $var
             def _clean_unbraced(m):
                 var = m.group(1)
                 if var in self.image_banks and self.image_banks[var]:
                     return m.group(0)
                 return ""
-            text_prompt = re.sub(r'\$([a-zA-Z_]\w*)\b', _clean_unbraced, text_prompt)
+            text_prompt = re.sub(r'\$([a-zA-Z_]\w*)\b(?!:)', _clean_unbraced, text_prompt)
             # Collapse whitespace gaps left by removed placeholders
             while "  " in text_prompt:
                 text_prompt = text_prompt.replace("  ", " ")

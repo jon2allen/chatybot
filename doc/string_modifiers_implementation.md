@@ -1,0 +1,165 @@
+# String Modifiers Implementation Document
+
+**Feature:** Variable Modifier Expansion (`${var:modifier}`) & String Utilities Engine  
+**Branch:** `if_update`  
+**Date:** November 2026  
+**Status:** Implemented & Verified  
+
+---
+
+## 1. Overview & Motivation
+
+In ChatDSL scripts and interactive prompts, user input frequently varies in casing, leading/trailing whitespace, or length (for instance, `/ask` returning `"Yes"`, `"YES"`, or `" yes "`). Previously, comparing or formatting string variables required exact textual matching or external processing.
+
+This feature introduces **Variable Modifiers** (`${var:modifier}`) and an underlying **String Utilities Engine** ([`str_utils.py`](file:///Users/jon2allen/github/chatybot/src/chatybot/tools/str_utils.py)). It allows inline transformations directly during variable placeholder resolution anywhere in Chatybot (conditionals, prompt buffers, `/echo`, `/set`, and templates), without introducing external dependencies.
+
+---
+
+## 2. Architecture & Component Integration
+
+```
+                         ┌──────────────────────────────────────────────┐
+                         │       src/chatybot/tools/str_utils.py        │
+                         │    (Dedicated String Utilities Module)       │
+                         │    - apply_string_modifier(val, spec)        │
+                         │    - STRING_MODIFIERS registry               │
+                         └──────────────┬───────────────────────────────┘
+                                        │ imports
+                ┌───────────────────────┴──────────────────────────────┐
+                ▼                                                      ▼
+┌─────────────────────────────────┐                  ┌──────────────────────────────────┐
+│  src/chatybot/buffer_manager.py │                  │   src/chatybot/chatybot_app.py   │
+│  - replace_placeholders()       │                  │  - evaluate_condition()          │
+│    expands: ${var:modifier}     │                  │    supports: toggle:lower == yes │
+│             ${arr[0]:modifier}  │                  │              $toggle:upper == YES│
+└────────────────┬────────────────┘                  └──────────────────────────────────┘
+                 │
+                 ▼
+Used everywhere: Prompts, Scripts, /set, /echo, LLM messages, /calc
+```
+
+### Component Roles:
+
+1. **`src/chatybot/tools/str_utils.py`**:
+   - Pure-Python module with zero application state or circular dependencies.
+   - Houses `STRING_MODIFIERS` mapping and `apply_string_modifier(val, modifier_spec)`.
+   - Supports single modifiers, chained modifiers (colon-separated), and parametric modifiers (`slice:start:end`).
+
+2. **`src/chatybot/buffer_manager.py`**:
+   - In `BufferManager.replace_placeholders`, recognizes modifier suffixes in braced variable references with a leading `$`: `${KEY:MODIFIER}` and `${ARRAY[INDEX]:MODIFIER}`.
+   - Preserves compatibility with plain unbraced `$KEY` references (with negative lookahead `(?!:)` so `$var:mod` in conditions is not mangled).
+   - Preserves plain `{key}` format specifications (e.g. `{x:02d}`, `{model:gpt-4}`) and JSON/dictionary syntax (e.g. `d = {a:1}`) by requiring the leading `$` for modifiers.
+   - Updates `clear_unresolved` regex so only unresolved modified variables (`${UNKNOWN:lower}`) are purged, leaving JSON or python format specs intact.
+
+3. **`src/chatybot/chatybot_app.py`**:
+   - In `ChatybotApp.evaluate_condition`, `_resolve_operand` handles bare variable syntax with modifiers (e.g. `toggle:lower == "yes"` and `$toggle:lower == "yes"`).
+   - Operands enclosed in quotes (`"12:30"`, `"https://..."`) are strictly treated as string literals, protecting embedded colons from being misinterpreted as modifiers.
+   - Colon splitting for modifiers is only activated when the left part is a known variable name.
+   - Bare modifier truthiness checks (`if flag:lower then`) evaluate the variable transformation directly before boolean resolution.
+
+---
+
+## 3. Supported Modifiers Reference
+
+| Modifier | Example | Input | Output | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| `lower` | `${name:lower}` | `"Alice Smith"` | `"alice smith"` | Converts string to lowercase |
+| `upper` | `${env:upper}` | `"prod"` | `"PROD"` | Converts string to uppercase |
+| `title` | `${msg:title}` | `"hello world"` | `"Hello World"` | Converts string to title case |
+| `capitalize` | `${word:capitalize}` | `"admin"` | `"Admin"` | Capitalizes first character |
+| `trim` / `strip` | `${text:trim}` | `"  hello  "` | `"hello"` | Strips leading and trailing whitespace |
+| `ltrim` / `lstrip` | `${text:ltrim}` | `"  hello  "` | `"hello  "` | Strips leading whitespace |
+| `rtrim` / `rstrip` | `${text:rtrim}` | `"  hello  "` | `"  hello"` | Strips trailing whitespace |
+| `len` / `length` | `${code:len}` | `"ABC123"` | `"6"` | Returns character count as numeric string |
+| `slice:s:e` | `${id:slice:0:4}` | `"user_101"` | `"user"` | Substring slice by index (`start:end`) |
+| `slice:s:` | `${id:slice:5:}` | `"user_101"` | `"101"` | Substring slice from start to end |
+| `slice:-n:` | `${id:slice:-3:}` | `"user_101"` | `"101"` | Negative index slicing from end |
+
+### Chaining Modifiers:
+Multiple modifiers can be chained sequentially using colons:
+```chatdsl
+set raw_input = "   yEs   "
+set clean = "${raw_input:trim:lower}"
+# Result: "yes"
+
+set text = "abcdef"
+set result = "${text:slice:0:3:upper}"
+# Result: "ABC"
+```
+
+---
+
+## 4. ChatDSL Usage Examples
+
+### 1. Robust Case-Insensitive Conditionals
+
+```chatdsl
+/ask "Proceed with deployment (Yes/No)?" -> CONFIRM
+
+# Matches "yes", "YES", "Yes", "  yes  ", etc.
+if CONFIRM:trim:lower == "yes" then
+    /echo "Starting deployment..."
+else
+    /echo "Deployment cancelled."
+endif
+```
+
+### 2. Formatted Output and Prompts
+
+```chatdsl
+set username = "john doe"
+set user_role = "admin"
+
+/echo Welcome, ${username:title}! Your role is: [${user_role:upper}]
+# Output: Welcome, John Doe! Your role is: [ADMIN]
+```
+
+### 3. String Length Checks
+
+```chatdsl
+/ask "Enter a password:" -> PWD
+
+if PWD:len < 8 then
+    /echo "Error: Password must be at least 8 characters long."
+else
+    /echo "Password length accepted."
+endif
+```
+
+### 4. Array Element Formatting
+
+```chatdsl
+set items[] = ["apple", "BANANA", "cherry"]
+
+foreach item in items
+    /echo Item: ${item:capitalize}
+endfor
+# Output:
+# Item: Apple
+# Item: Banana
+# Item: Cherry
+```
+
+---
+
+## 5. Testing & Verification
+
+Comprehensive test coverage is implemented in [`test/test_str_modifiers.py`](file:///Users/jon2allen/github/chatybot/test/test_str_modifiers.py):
+
+1. **Unit Tests (`str_utils.py`)**:
+   - `test_apply_string_modifier_basic_transforms`: verifies `lower`, `upper`, `title`, `capitalize`, `trim`, `ltrim`, `rtrim`, `len`.
+   - `test_apply_string_modifier_slice`: verifies forward, backward, omitted index, and negative index slices.
+   - `test_apply_string_modifier_chained`: verifies multi-stage pipeline transformations (`trim:upper:len`, `slice:0:3:upper`).
+   - `test_apply_string_modifier_edge_cases`: verifies empty strings, non-string values, and unknown modifiers.
+
+2. **Placeholder Expansion Tests (`buffer_manager.py`)**:
+   - `test_buffer_manager_modifiers`: validates `${VAR:modifier}` and `${ARRAY[idx]:modifier}` expansion.
+   - `test_buffer_manager_clear_unresolved_with_modifiers`: verifies unresolved modified variables are cleanly removed when `clear_unresolved=True`.
+
+3. **Condition Evaluator & Script Tests (`chatybot_app.py`)**:
+   - `test_evaluate_condition_braced_modifiers`: verifies braced syntax inside `if` comparisons.
+   - `test_evaluate_condition_bare_modifiers`: verifies bare variable syntax (`toggle:lower == "yes"`).
+   - `test_chatdsl_script_with_modifiers`: end-to-end execution of multi-line `if/else/endif` blocks using string modifiers.
+
+All 88 related tests across the test suite (`test_if_blocks.py`, `test_if_numeric.py`, `test_procs.py`, `test_foreach.py`, `test_str_modifiers.py`) pass cleanly.
+

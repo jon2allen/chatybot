@@ -3150,11 +3150,14 @@ class ChatybotApp:
             - 'not' prefix negation
         """
         condition_str = condition_str.strip()
-        # Strip optional outer quotes from condition
+        # Strip outer quotes ONLY if the entire condition was enclosed in a single quoted string
         if (condition_str.startswith('"') and condition_str.endswith('"')) or (
             condition_str.startswith("'") and condition_str.endswith("'")
         ):
-            condition_str = condition_str[1:-1].strip()
+            q = condition_str[0]
+            closing = condition_str.find(q, 1)
+            if closing == len(condition_str) - 1:
+                condition_str = condition_str[1:-1].strip()
 
         # Expand placeholders ($VAR or ${VAR}) if buffer_manager is present
         if hasattr(self, "buffer_manager") and self.buffer_manager:
@@ -3167,14 +3170,37 @@ class ChatybotApp:
             condition_str = condition_str[4:].strip()
 
         def _resolve_operand(val_str: str) -> str:
-            """Strip quotes and look up bare script variable names if present."""
-            v = val_str.strip().strip("\"'")
+            """Resolve an operand in a condition.
+
+            1. Quoted string literals: if enclosed in single or double quotes,
+               strip outer quotes and return the exact literal. Colons inside
+               quotes (e.g. "12:30", "https://...") are NEVER treated as modifiers.
+            2. Unquoted operands:
+               Only treat ':' as a modifier if the base name is a KNOWN script variable.
+               Otherwise, return the raw unquoted string untouched.
+            """
+            s = val_str.strip()
+            # 1. Quoted literal check (before stripping quotes)
+            if (s.startswith('"') and s.endswith('"') and len(s) >= 2) or (
+                s.startswith("'") and s.endswith("'") and len(s) >= 2
+            ):
+                return s[1:-1]
+
+            # 2. Unquoted operand
             if hasattr(self, "buffer_manager") and self.buffer_manager:
-                if v in self.buffer_manager.script_vars:
-                    return str(self.buffer_manager.script_vars[v]).strip("\"'")
-                if v.startswith("$") and v[1:] in self.buffer_manager.script_vars:
-                    return str(self.buffer_manager.script_vars[v[1:]]).strip("\"'")
-            return v
+                from chatybot.tools.str_utils import apply_string_modifier
+                if ":" in s:
+                    raw_var, mod = s.split(":", 1)
+                    clean_var = raw_var[1:] if raw_var.startswith("$") else raw_var
+                    if clean_var in self.buffer_manager.script_vars:
+                        res = str(self.buffer_manager.script_vars[clean_var]).strip("\"'")
+                        return apply_string_modifier(res, mod)
+
+                clean_var = s[1:] if s.startswith("$") else s
+                if clean_var in self.buffer_manager.script_vars:
+                    return str(self.buffer_manager.script_vars[clean_var]).strip("\"'")
+
+            return s
 
         def _parse_numeric(val_str: str) -> tuple[float | None, bool]:
             """Try to parse a string as a float. Returns (float, True) or (None, False)."""
@@ -3236,17 +3262,28 @@ class ChatybotApp:
             right_val = _resolve_operand(right)
             condition_met = left_val != right_val
         else:
-            val = condition_str.lower()
+            raw_target = condition_str.strip().strip("\"'")
+            # Check if condition_str is a variable with modifier: e.g. "flag:lower" or "$flag:lower"
+            if ":" in raw_target and hasattr(self, "buffer_manager") and self.buffer_manager:
+                from chatybot.tools.str_utils import apply_string_modifier
+                raw_var, mod = raw_target.split(":", 1)
+                clean_var = raw_var[1:] if raw_var.startswith("$") else raw_var
+                if clean_var in self.buffer_manager.script_vars:
+                    raw_val = str(self.buffer_manager.script_vars[clean_var]).strip("\"'")
+                    raw_target = apply_string_modifier(raw_val, mod)
+
+            val = raw_target.lower()
             if val in ["true", "1", "yes", "on"]:
                 condition_met = True
             elif val in ["false", "0", "no", "off", ""]:
                 condition_met = False
             else:
-                if condition_str in self.buffer_manager.script_vars:
-                    var_val = str(self.buffer_manager.script_vars[condition_str]).lower()
+                clean_var = raw_target[1:] if raw_target.startswith("$") else raw_target
+                if hasattr(self, "buffer_manager") and self.buffer_manager and clean_var in self.buffer_manager.script_vars:
+                    var_val = str(self.buffer_manager.script_vars[clean_var]).lower()
                     condition_met = var_val in ["true", "1", "yes", "on"]
                 else:
-                    condition_met = bool(condition_str)
+                    condition_met = bool(raw_target)
 
         if is_negated:
             condition_met = not condition_met
