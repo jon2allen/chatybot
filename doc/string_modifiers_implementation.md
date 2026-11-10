@@ -161,9 +161,10 @@ endfor
 3. **Unicode Word Handling in `title`**:
    The `title` modifier capitalizes initial letters using Unicode character class matching (`[^\W\d_]`), correctly handling accented and international characters (e.g. `élan vital über` -> `Élan Vital Über`).
 
-4. **Modifier Error Handling**:
-   - Unknown modifiers emit a descriptive console warning (listing supported modifiers) and preserve the input string untouched.
-   - Malformed slice specifications (e.g. non-numeric bounds or bare `slice`) emit `Warning: Invalid slice parameters in modifier '...'. Usage: slice:start:end` and preserve the input string.
+4. **Strict Error / Fail-Fast Handling**:
+   - Unknown modifiers (e.g. `${var:unknown_mod}`, `ans:lowr == "yes"`) emit `Error: Unknown string modifier '...'` (listing supported modifiers) and raise `StringModifierError(ValueError)`, failing the command and immediately aborting script execution.
+   - Malformed slice specifications (e.g. non-numeric bounds or bare `slice`) emit `Error: Invalid slice parameters in modifier '...'. Usage: slice:start:end` and raise `StringModifierError`, halting execution immediately.
+   - This strict policy prevents typos from silently executing with un-transformed data.
 
 ---
 
@@ -189,5 +190,5 @@ Comprehensive test coverage is implemented in [`test/test_str_modifiers.py`](fil
    - `test_evaluate_condition_bare_modifier_truthiness`: verifies truthiness evaluation without binary operators (`flag:lower`).
    - `test_chatdsl_script_with_modifiers`: end-to-end execution of multi-line `if/else/endif` blocks using string modifiers.
 
-All 92 related tests across the test suite (`test_if_blocks.py`, `test_if_numeric.py`, `test_procs.py`, `test_foreach.py`, `test_str_modifiers.py`) pass cleanly.
+All 95 related tests across the test suite (`test_if_blocks.py`, `test_if_numeric.py`, `test_procs.py`, `test_foreach.py`, `test_str_modifiers.py`) pass cleanly.
 

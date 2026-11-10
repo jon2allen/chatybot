@@ -12,6 +12,11 @@ from typing import Any, Callable
 # String Modifiers Engine
 # ---------------------------------------------------------------------------
 
+class StringModifierError(ValueError):
+    """Raised when an unknown string modifier or invalid modifier arguments are encountered."""
+    pass
+
+
 STRING_MODIFIERS: dict[str, Callable[[str], str]] = {
     "lower": lambda s: s.lower(),
     "upper": lambda s: s.upper(),
@@ -40,21 +45,21 @@ def apply_single_modifier(val: str, mod_spec: str) -> str:
     if mod_lower in ("slice", "sub") or mod_lower.startswith(("slice:", "sub:")):
         parts = mod_spec.split(":")
         if len(parts) == 1:
-            print(f"Warning: Invalid slice parameters in modifier '{mod_spec}'. Usage: slice:start:end")
-            return val
+            print(f"Error: Invalid slice parameters in modifier '{mod_spec}'. Usage: slice:start:end")
+            raise StringModifierError(f"Invalid slice parameters in modifier '{mod_spec}'. Usage: slice:start:end")
         try:
             start = int(parts[1].strip()) if len(parts) > 1 and parts[1].strip() != "" else None
             end = int(parts[2].strip()) if len(parts) > 2 and parts[2].strip() != "" else None
             return val[start:end]
         except (ValueError, IndexError):
-            print(f"Warning: Invalid slice parameters in modifier '{mod_spec}'. Usage: slice:start:end")
-            return val
+            print(f"Error: Invalid slice parameters in modifier '{mod_spec}'. Usage: slice:start:end")
+            raise StringModifierError(f"Invalid slice parameters in modifier '{mod_spec}'. Usage: slice:start:end")
 
     if mod_lower in STRING_MODIFIERS:
         return STRING_MODIFIERS[mod_lower](val)
 
-    print(f"Warning: Unknown string modifier '{mod_spec}'. Supported: {', '.join(sorted(STRING_MODIFIERS.keys()))}, slice:start:end")
-    return val
+    print(f"Error: Unknown string modifier '{mod_spec}'. Supported: {', '.join(sorted(STRING_MODIFIERS.keys()))}, slice:start:end")
+    raise StringModifierError(f"Unknown string modifier '{mod_spec}'")
 
 
 def apply_string_modifier(val: str, modifier_spec: str) -> str:

@@ -1,7 +1,7 @@
 """Tests for string modifiers engine (${var:modifier}) and str_utils."""
 
 import pytest
-from chatybot.tools.str_utils import apply_string_modifier
+from chatybot.tools.str_utils import StringModifierError, apply_string_modifier
 from chatybot.buffer_manager import BufferManager
 from chatybot.chatybot_app import ChatybotApp
 
@@ -37,14 +37,16 @@ def test_apply_string_modifier_slice():
 
 
 def test_apply_string_modifier_slice_invalid(capsys):
-    # Bare slice and invalid slice arguments
-    assert apply_string_modifier("abcdef", "slice") == "abcdef"
+    # Bare slice and invalid slice arguments raise StringModifierError
+    with pytest.raises(StringModifierError):
+        apply_string_modifier("abcdef", "slice")
     captured = capsys.readouterr()
-    assert "Warning: Invalid slice parameters in modifier 'slice'" in captured.out
+    assert "Error: Invalid slice parameters in modifier 'slice'" in captured.out
 
-    assert apply_string_modifier("abcdef", "slice:x:2") == "abcdef"
+    with pytest.raises(StringModifierError):
+        apply_string_modifier("abcdef", "slice:x:2")
     captured2 = capsys.readouterr()
-    assert "Warning: Invalid slice parameters in modifier 'slice:x:2'" in captured2.out
+    assert "Error: Invalid slice parameters in modifier 'slice:x:2'" in captured2.out
 
 
 def test_apply_string_modifier_chained():
@@ -55,10 +57,11 @@ def test_apply_string_modifier_chained():
 
 def test_apply_string_modifier_edge_cases(capsys):
     assert apply_string_modifier("test", "") == "test"
-    # Unknown modifier outputs warning and leaves string untouched
-    assert apply_string_modifier("test", "unknown_mod") == "test"
+    # Unknown modifier outputs Error and raises StringModifierError
+    with pytest.raises(StringModifierError):
+        apply_string_modifier("test", "unknown_mod")
     captured = capsys.readouterr()
-    assert "Warning: Unknown string modifier 'unknown_mod'" in captured.out
+    assert "Error: Unknown string modifier 'unknown_mod'" in captured.out
     assert apply_string_modifier(12345, "upper") == "12345"
 
 
@@ -213,3 +216,58 @@ endif
 """
     await app.execute_command_list([line for line in script.strip().splitlines()])
     assert app.buffer_manager.get_script_var("result") == "YES"
+
+
+@pytest.mark.anyio
+async def test_unknown_modifier_in_set_aborts(capsys):
+    app = ChatybotApp()
+    script = """
+set var = "Bob"
+set x = "${var:unknown_mod}"
+set reached = "yes"
+"""
+    with pytest.raises(StringModifierError):
+        await app.execute_command_list([line for line in script.strip().splitlines()])
+
+    assert app.buffer_manager.get_script_var("x") is None
+    assert app.buffer_manager.get_script_var("reached") is None
+    captured = capsys.readouterr()
+    assert "Error: Unknown string modifier 'unknown_mod'" in captured.out
+
+
+@pytest.mark.anyio
+async def test_unknown_modifier_in_condition_aborts(capsys):
+    app = ChatybotApp()
+    script = """
+set ans = "yes"
+if ans:lowr == "yes" then
+    set reached = "yes"
+endif
+"""
+    with pytest.raises(StringModifierError):
+        await app.execute_command_list([line for line in script.strip().splitlines()])
+
+    assert app.buffer_manager.get_script_var("reached") is None
+    captured = capsys.readouterr()
+    assert "Error: Unknown string modifier 'lowr'" in captured.out
+
+
+@pytest.mark.anyio
+async def test_unknown_modifier_aborts_execute_script(tmp_path, capsys):
+    app = ChatybotApp()
+    script_content = """
+set user = "Alice"
+set bad = "${user:uper}"
+set finished = "true"
+"""
+    f = tmp_path / "test_abort.chatdsl"
+    f.write_text(script_content)
+
+    await app.execute_script(str(f))
+
+    assert app.buffer_manager.get_script_var("bad") is None
+    assert app.buffer_manager.get_script_var("finished") is None
+    captured = capsys.readouterr()
+    assert "Error: Unknown string modifier 'uper'" in captured.out
+    assert "Error executing script:" in captured.out
+    assert "Script execution finished" not in captured.out

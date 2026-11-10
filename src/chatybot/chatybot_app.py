@@ -64,6 +64,7 @@ from .tool_args import unwrap_tool_args
 from .image_generator import ImageGenerator
 from .image_manager import ImageManager
 from .logging_manager import LoggingManager
+from chatybot.tools.str_utils import StringModifierError
 
 # Global variables needed for database functionality
 app = None  # Global app instance for database functions to access
@@ -3161,7 +3162,7 @@ class ChatybotApp:
 
         # Pre-resolve unbraced $var:modifier operands before general placeholder expansion
         if hasattr(self, "buffer_manager") and self.buffer_manager:
-            from chatybot.tools.str_utils import STRING_MODIFIERS, apply_string_modifier
+            from chatybot.tools.str_utils import STRING_MODIFIERS, StringModifierError, apply_string_modifier
 
             def _is_inside_quotes(s: str, pos: int) -> bool:
                 in_double = False
@@ -3177,14 +3178,12 @@ class ChatybotApp:
 
             def _expand_unbraced_mod(m):
                 var_name, mod = m.group(1), m.group(2)
-                base_mod = mod.split(":", 1)[0].lower()
-                if base_mod in STRING_MODIFIERS or base_mod in ("slice", "sub"):
-                    if var_name in self.buffer_manager.script_vars:
-                        raw_val = str(self.buffer_manager.script_vars[var_name]).strip("\"'")
-                        res = apply_string_modifier(raw_val, mod)
-                        if _is_inside_quotes(condition_str, m.start()):
-                            return res
-                        return f'"{res}"'
+                if var_name in self.buffer_manager.script_vars:
+                    raw_val = str(self.buffer_manager.script_vars[var_name]).strip("\"'")
+                    res = apply_string_modifier(raw_val, mod)
+                    if _is_inside_quotes(condition_str, m.start()):
+                        return res
+                    return f'"{res}"'
                 return m.group(0)
 
             condition_str = re.sub(
@@ -3415,6 +3414,8 @@ class ChatybotApp:
                     else:
                         print("Invalid set command format. Usage: set <name> = <value>")
                         return True
+                except StringModifierError:
+                    raise
                 except (ValueError, TypeError) as e:
                     print(f"Error parsing set command: {e}")
                     return True
@@ -3452,6 +3453,8 @@ class ChatybotApp:
                     else:
                         print("Invalid local command format. Usage: local <name> = <value>")
                         return True
+                except StringModifierError:
+                    raise
                 except (ValueError, TypeError) as e:
                     print(f"Error parsing local command: {e}")
                     return True
