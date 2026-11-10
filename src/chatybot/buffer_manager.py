@@ -714,8 +714,8 @@ class BufferManager:
                 return str(val) if val is not None else m.group(0)
             text_prompt = re.sub(legacy_braced_pat, replace_base_legacy, text_prompt, flags=flags)
 
-            # E. Standard unbraced variable ($key) - does not match when followed by ':'
-            unbraced_pat = rf"\${re.escape(key)}\b(?!:)"
+            # E. Standard unbraced variable ($key)
+            unbraced_pat = rf"\${re.escape(key)}\b"
             text_prompt = re.sub(unbraced_pat, replace_base_legacy, text_prompt, flags=flags)
         
         if clear_unresolved:
@@ -740,7 +740,7 @@ class BufferManager:
                 if var in self.image_banks and self.image_banks[var]:
                     return m.group(0)
                 return ""
-            text_prompt = re.sub(r'\$([a-zA-Z_]\w*)\b(?!:)', _clean_unbraced, text_prompt)
+            text_prompt = re.sub(r'\$([a-zA-Z_]\w*)\b', _clean_unbraced, text_prompt)
             # Collapse whitespace gaps left by removed placeholders
             while "  " in text_prompt:
                 text_prompt = text_prompt.replace("  ", " ")

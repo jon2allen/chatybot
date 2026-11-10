@@ -3159,8 +3159,20 @@ class ChatybotApp:
             if closing == len(condition_str) - 1:
                 condition_str = condition_str[1:-1].strip()
 
-        # Expand placeholders ($VAR or ${VAR}) if buffer_manager is present
+        # Pre-resolve unbraced $var:modifier operands before general placeholder expansion
         if hasattr(self, "buffer_manager") and self.buffer_manager:
+            from chatybot.tools.str_utils import STRING_MODIFIERS, apply_string_modifier
+
+            def _expand_unbraced_mod(m):
+                var_name, mod = m.group(1), m.group(2)
+                base_mod = mod.split(":", 1)[0].lower()
+                if base_mod in STRING_MODIFIERS or base_mod in ("slice", "sub"):
+                    if var_name in self.buffer_manager.script_vars:
+                        raw_val = str(self.buffer_manager.script_vars[var_name]).strip("\"'")
+                        return f'"{apply_string_modifier(raw_val, mod)}"'
+                return m.group(0)
+
+            condition_str = re.sub(r'\$([a-zA-Z_]\w*):([a-zA-Z0-9_:\-]+)\b', _expand_unbraced_mod, condition_str)
             condition_str = self.buffer_manager.replace_placeholders_legacy(condition_str, clear_unresolved=False)
 
         # Handle "not" prefix

@@ -15,6 +15,8 @@ def test_apply_string_modifier_basic_transforms():
     assert apply_string_modifier("hello world", "upper") == "HELLO WORLD"
     assert apply_string_modifier("hello world", "title") == "Hello World"
     assert apply_string_modifier("john's book", "title") == "John's Book"
+    assert apply_string_modifier("élan vital über", "title") == "Élan Vital Über"
+    assert apply_string_modifier("ÉCOLE", "title") == "École"
     assert apply_string_modifier("hello world", "capitalize") == "Hello world"
     assert apply_string_modifier("  spaced  ", "trim") == "spaced"
     assert apply_string_modifier("  spaced  ", "strip") == "spaced"
@@ -32,6 +34,17 @@ def test_apply_string_modifier_slice():
     assert apply_string_modifier("abcdef", "slice:-3:") == "def"
     assert apply_string_modifier("abcdef", "sub:1:4") == "bcd"
     assert apply_string_modifier("abcdef", "SUB:1:4") == "bcd"
+
+
+def test_apply_string_modifier_slice_invalid(capsys):
+    # Bare slice and invalid slice arguments
+    assert apply_string_modifier("abcdef", "slice") == "abcdef"
+    captured = capsys.readouterr()
+    assert "Warning: Invalid slice parameters in modifier 'slice'" in captured.out
+
+    assert apply_string_modifier("abcdef", "slice:x:2") == "abcdef"
+    captured2 = capsys.readouterr()
+    assert "Warning: Invalid slice parameters in modifier 'slice:x:2'" in captured2.out
 
 
 def test_apply_string_modifier_chained():
@@ -84,6 +97,21 @@ def test_buffer_manager_preserves_json_and_format_specs():
     assert bm.replace_placeholders("{name:10}")[0] == "{name:10}"
     assert bm.replace_placeholders("{model:gpt-4}")[0] == "{model:gpt-4}"
     assert bm.replace_placeholders('data = {"a": 1, "b": 2}')[0] == 'data = {"a": 1, "b": 2}'
+
+
+def test_buffer_manager_unbraced_colon_expansion():
+    bm = BufferManager()
+    bm.set_script_var("topic", "cats")
+    bm.set_script_var("name", "Bob")
+    bm.set_script_var("x", "5")
+
+    assert bm.replace_placeholders("Summarize $topic: be brief")[0] == "Summarize cats: be brief"
+    assert bm.replace_placeholders("Hello $name: welcome")[0] == "Hello Bob: welcome"
+    assert bm.replace_placeholders("ratio $x:1")[0] == "ratio 5:1"
+
+    # Undefined unbraced with colon is cleared when clear_unresolved=True
+    text, _ = bm.replace_placeholders("Look at $undefined: here", clear_unresolved=True)
+    assert text == "Look at : here"
 
 
 def test_buffer_manager_clear_unresolved_with_modifiers():

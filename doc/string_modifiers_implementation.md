@@ -142,24 +142,50 @@ endfor
 
 ---
 
-## 5. Testing & Verification
+## 5. Operand Quoting & Safety Guidelines
+
+1. **Quoted Operands are Strictly String Literals**:
+   In `if` condition expressions, quoted operands (e.g. `"yes"`, `"12:30"`, `"abc:len"`) are strictly evaluated as string literals. They are never inspected or resolved as variable names or modifier pipelines, preventing injection or confusion with colons in URLs/timestamps.
+
+2. **Quoting Expanded Operands**:
+   When comparing variables whose contents are user-provided or dynamically generated (e.g., from `/ask` or `$LAST_RESPONSE`), it is recommended to quote the operand:
+   ```chatdsl
+   if "$user_input" == "yes" then
+   # or with modifiers:
+   if "${user_input:trim:lower}" == "yes" then
+   ```
+   This guarantees the expanded string is evaluated as a strict literal.
+
+3. **Unicode Word Handling in `title`**:
+   The `title` modifier capitalizes initial letters using Unicode character class matching (`[^\W\d_]`), correctly handling accented and international characters (e.g. `élan vital über` -> `Élan Vital Über`).
+
+4. **Modifier Error Handling**:
+   - Unknown modifiers emit a descriptive console warning (listing supported modifiers) and preserve the input string untouched.
+   - Malformed slice specifications (e.g. non-numeric bounds or bare `slice`) emit `Warning: Invalid slice parameters in modifier '...'. Usage: slice:start:end` and preserve the input string.
+
+---
+
+## 6. Testing & Verification
 
 Comprehensive test coverage is implemented in [`test/test_str_modifiers.py`](file:///Users/jon2allen/github/chatybot/test/test_str_modifiers.py):
 
 1. **Unit Tests (`str_utils.py`)**:
-   - `test_apply_string_modifier_basic_transforms`: verifies `lower`, `upper`, `title`, `capitalize`, `trim`, `ltrim`, `rtrim`, `len`.
+   - `test_apply_string_modifier_basic_transforms`: verifies `lower`, `upper`, `title`, `capitalize`, `trim`, `ltrim`, `rtrim`, `len`, including Unicode support for `title`.
    - `test_apply_string_modifier_slice`: verifies forward, backward, omitted index, and negative index slices.
+   - `test_apply_string_modifier_slice_invalid`: verifies warnings and graceful recovery for malformed slice parameters.
    - `test_apply_string_modifier_chained`: verifies multi-stage pipeline transformations (`trim:upper:len`, `slice:0:3:upper`).
    - `test_apply_string_modifier_edge_cases`: verifies empty strings, non-string values, and unknown modifiers.
 
 2. **Placeholder Expansion Tests (`buffer_manager.py`)**:
    - `test_buffer_manager_modifiers`: validates `${VAR:modifier}` and `${ARRAY[idx]:modifier}` expansion.
-   - `test_buffer_manager_clear_unresolved_with_modifiers`: verifies unresolved modified variables are cleanly removed when `clear_unresolved=True`.
+   - `test_buffer_manager_unbraced_colon_expansion`: validates that unbraced `$var:` in normal prompt text (e.g. `Summarize $topic: be brief`) expands cleanly.
+   - `test_buffer_manager_clear_unresolved_with_modifiers`: verifies unresolved modified variables are cleanly removed when `clear_unresolved=True`, while preserving JSON dicts and Python format strings (`{x:02d}`).
 
 3. **Condition Evaluator & Script Tests (`chatybot_app.py`)**:
-   - `test_evaluate_condition_braced_modifiers`: verifies braced syntax inside `if` comparisons.
-   - `test_evaluate_condition_bare_modifiers`: verifies bare variable syntax (`toggle:lower == "yes"`).
+   - `test_evaluate_condition_colon_operands`: verifies that colons in literals, timestamps (`"12:30"`), URLs, and variable values are not treated as modifier splitters.
+   - `test_evaluate_condition_modifiers`: verifies braced and bare syntax inside `if` comparisons.
+   - `test_evaluate_condition_bare_modifier_truthiness`: verifies truthiness evaluation without binary operators (`flag:lower`).
    - `test_chatdsl_script_with_modifiers`: end-to-end execution of multi-line `if/else/endif` blocks using string modifiers.
 
-All 88 related tests across the test suite (`test_if_blocks.py`, `test_if_numeric.py`, `test_procs.py`, `test_foreach.py`, `test_str_modifiers.py`) pass cleanly.
+All 92 related tests across the test suite (`test_if_blocks.py`, `test_if_numeric.py`, `test_procs.py`, `test_foreach.py`, `test_str_modifiers.py`) pass cleanly.
 

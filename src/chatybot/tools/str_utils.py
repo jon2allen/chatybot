@@ -15,7 +15,7 @@ from typing import Any, Callable
 STRING_MODIFIERS: dict[str, Callable[[str], str]] = {
     "lower": lambda s: s.lower(),
     "upper": lambda s: s.upper(),
-    "title": lambda s: re.sub(r"[A-Za-z]+('[A-Za-z]+)?", lambda m: m.group(0)[0].upper() + m.group(0)[1:].lower(), s),
+    "title": lambda s: re.sub(r"[^\W\d_]+('[^\W\d_]+)?", lambda m: m.group(0)[0].upper() + m.group(0)[1:].lower(), s),
     "capitalize": lambda s: s.capitalize(),
     "trim": lambda s: s.strip(),
     "strip": lambda s: s.strip(),
@@ -37,14 +37,17 @@ def apply_single_modifier(val: str, mod_spec: str) -> str:
     mod_lower = mod_spec.lower()
 
     # Parametric modifier: slice:start:end or sub:start:end (case-insensitive)
-    if mod_lower.startswith(("slice:", "sub:")):
+    if mod_lower in ("slice", "sub") or mod_lower.startswith(("slice:", "sub:")):
         parts = mod_spec.split(":")
+        if len(parts) == 1:
+            print(f"Warning: Invalid slice parameters in modifier '{mod_spec}'. Usage: slice:start:end")
+            return val
         try:
             start = int(parts[1].strip()) if len(parts) > 1 and parts[1].strip() != "" else None
             end = int(parts[2].strip()) if len(parts) > 2 and parts[2].strip() != "" else None
             return val[start:end]
-        except ValueError:
-            print(f"Warning: Invalid slice parameters in modifier '{mod_spec}'.")
+        except (ValueError, IndexError):
+            print(f"Warning: Invalid slice parameters in modifier '{mod_spec}'. Usage: slice:start:end")
             return val
 
     if mod_lower in STRING_MODIFIERS:
@@ -74,12 +77,13 @@ def apply_string_modifier(val: str, modifier_spec: str) -> str:
         if part.lower() in ("slice", "sub"):
             slice_tokens = [part]
             i += 1
-            if i < len(raw_parts) and (raw_parts[i].lstrip("-").isdigit() or raw_parts[i] == ""):
+            param_count = 0
+            while i < len(raw_parts) and param_count < 2:
+                if raw_parts[i].lower() in STRING_MODIFIERS or raw_parts[i].lower() in ("slice", "sub"):
+                    break
                 slice_tokens.append(raw_parts[i])
                 i += 1
-                if i < len(raw_parts) and (raw_parts[i].lstrip("-").isdigit() or raw_parts[i] == ""):
-                    slice_tokens.append(raw_parts[i])
-                    i += 1
+                param_count += 1
             tokens.append(":".join(slice_tokens))
         else:
             tokens.append(part)
