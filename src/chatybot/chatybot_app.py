@@ -3163,16 +3163,35 @@ class ChatybotApp:
         if hasattr(self, "buffer_manager") and self.buffer_manager:
             from chatybot.tools.str_utils import STRING_MODIFIERS, apply_string_modifier
 
+            def _is_inside_quotes(s: str, pos: int) -> bool:
+                in_double = False
+                in_single = False
+                for i in range(min(pos, len(s))):
+                    ch = s[i]
+                    prev = s[i - 1] if i > 0 else ""
+                    if ch == '"' and prev != "\\" and not in_single:
+                        in_double = not in_double
+                    elif ch == "'" and prev != "\\" and not in_double:
+                        in_single = not in_single
+                return in_double or in_single
+
             def _expand_unbraced_mod(m):
                 var_name, mod = m.group(1), m.group(2)
                 base_mod = mod.split(":", 1)[0].lower()
                 if base_mod in STRING_MODIFIERS or base_mod in ("slice", "sub"):
                     if var_name in self.buffer_manager.script_vars:
                         raw_val = str(self.buffer_manager.script_vars[var_name]).strip("\"'")
-                        return f'"{apply_string_modifier(raw_val, mod)}"'
+                        res = apply_string_modifier(raw_val, mod)
+                        if _is_inside_quotes(condition_str, m.start()):
+                            return res
+                        return f'"{res}"'
                 return m.group(0)
 
-            condition_str = re.sub(r'\$([a-zA-Z_]\w*):([a-zA-Z0-9_:\-]+)\b', _expand_unbraced_mod, condition_str)
+            condition_str = re.sub(
+                r'\$([a-zA-Z_]\w*):([a-zA-Z0-9_:\-]+)(?=["\'\s<>=!)]|$)',
+                _expand_unbraced_mod,
+                condition_str,
+            )
             condition_str = self.buffer_manager.replace_placeholders_legacy(condition_str, clear_unresolved=False)
 
         # Handle "not" prefix

@@ -160,12 +160,26 @@ def test_evaluate_condition_modifiers():
     assert app.evaluate_condition('"${role:trim:lower}" == "admin"') is True
     assert app.evaluate_condition('"${toggle:len}" == "3"') is True
 
+    # Quoted unbraced $var:modifier
+    assert app.evaluate_condition('"$toggle:lower" == "yes"') is True
+    assert app.evaluate_condition('"$toggle:upper" == "YES"') is True
+    assert app.evaluate_condition('"$role:trim:lower" == "admin"') is True
+
     # Bare
     assert app.evaluate_condition('toggle:lower == "yes"') is True
     assert app.evaluate_condition('toggle:upper == "YES"') is True
     assert app.evaluate_condition('$toggle:lower == "yes"') is True
     assert app.evaluate_condition('code:slice:0:4 == "prod"') is True
     assert app.evaluate_condition('code:len > 5') is True
+
+    # Open-ended slices (unbraced, quoted unbraced, bare, braced)
+    app.buffer_manager.set_script_var("id", "user_101")
+    assert app.evaluate_condition('$id:slice:-3: == "101"') is True
+    assert app.evaluate_condition('$id:slice:5: == "101"') is True
+    assert app.evaluate_condition('"$id:slice:-3:" == "101"') is True
+    assert app.evaluate_condition('"$id:slice:5:" == "101"') is True
+    assert app.evaluate_condition('id:slice:-3: == "101"') is True
+    assert app.evaluate_condition('"${id:slice:-3:}" == "101"') is True
 
 
 def test_evaluate_condition_bare_modifier_truthiness():

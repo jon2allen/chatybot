@@ -47,12 +47,14 @@ Used everywhere: Prompts, Scripts, /set, /echo, LLM messages, /calc
 
 2. **`src/chatybot/buffer_manager.py`**:
    - In `BufferManager.replace_placeholders`, recognizes modifier suffixes in braced variable references with a leading `$`: `${KEY:MODIFIER}` and `${ARRAY[INDEX]:MODIFIER}`.
-   - Preserves compatibility with plain unbraced `$KEY` references (with negative lookahead `(?!:)` so `$var:mod` in conditions is not mangled).
+   - Plain unbraced `$KEY` references expand normally across prompt text, even when followed by punctuation or colons (e.g. `Summarize $topic: be brief`).
    - Preserves plain `{key}` format specifications (e.g. `{x:02d}`, `{model:gpt-4}`) and JSON/dictionary syntax (e.g. `d = {a:1}`) by requiring the leading `$` for modifiers.
    - Updates `clear_unresolved` regex so only unresolved modified variables (`${UNKNOWN:lower}`) are purged, leaving JSON or python format specs intact.
 
 3. **`src/chatybot/chatybot_app.py`**:
-   - In `ChatybotApp.evaluate_condition`, `_resolve_operand` handles bare variable syntax with modifiers (e.g. `toggle:lower == "yes"` and `$toggle:lower == "yes"`).
+   - In `ChatybotApp.evaluate_condition`, pre-resolves unbraced `$var:modifier` operands, respecting quotes (avoids double quoting when already enclosed in quotes, e.g. `"$ans:trim:lower" == "yes"`).
+   - Properly matches open-ended slice modifiers with trailing colons (e.g. `$id:slice:-3:`, `$id:slice:5:`).
+   - `_resolve_operand` handles bare variable syntax with modifiers (e.g. `toggle:lower == "yes"`).
    - Operands enclosed in quotes (`"12:30"`, `"https://..."`) are strictly treated as string literals, protecting embedded colons from being misinterpreted as modifiers.
    - Colon splitting for modifiers is only activated when the left part is a known variable name.
    - Bare modifier truthiness checks (`if flag:lower then`) evaluate the variable transformation directly before boolean resolution.
