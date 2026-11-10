@@ -3105,6 +3105,154 @@ class ChatybotApp:
             self.debug_response_mode = False
             self.debug_response_raw = False
 
+    @staticmethod
+    def _find_keyword_outside_quotes(text: str, keyword_pattern: str) -> re.Match | None:
+        """Find a regex keyword pattern match that is not inside single or double quotes."""
+        quoted_spans = []
+        in_quote = False
+        quote_char = ""
+        start_idx = -1
+        i = 0
+        n = len(text)
+        while i < n:
+            ch = text[i]
+            if ch == "\\" and in_quote and i + 1 < n:
+                i += 2
+                continue
+            if not in_quote:
+                if ch in ('"', "'"):
+                    in_quote = True
+                    quote_char = ch
+                    start_idx = i
+            else:
+                if ch == quote_char:
+                    quoted_spans.append((start_idx, i))
+                    in_quote = False
+            i += 1
+
+        for match in re.finditer(keyword_pattern, text):
+            m_start, m_end = match.span()
+            inside = any(q_start <= m_start and m_end <= q_end + 1 for q_start, q_end in quoted_spans)
+            if not inside:
+                return match
+        return None
+
+    def evaluate_condition(self, condition_str: str) -> bool:
+        """
+        Evaluate a ChatDSL condition string.
+
+        Supports:
+            - Comparison operators: >=, <=, >, <, ==, !=
+            - Numeric parsing for >=, <=, >, <
+            - String equality/inequality for ==, !=
+            - Boolean keywords: true/false, 1/0, yes/no, on/off
+            - Script variable lookup (bare names or $VAR / ${VAR})
+            - 'not' prefix negation
+        """
+        condition_str = condition_str.strip()
+        # Strip optional outer quotes from condition
+        if (condition_str.startswith('"') and condition_str.endswith('"')) or (
+            condition_str.startswith("'") and condition_str.endswith("'")
+        ):
+            condition_str = condition_str[1:-1].strip()
+
+        # Expand placeholders ($VAR or ${VAR}) if buffer_manager is present
+        if hasattr(self, "buffer_manager") and self.buffer_manager:
+            condition_str = self.buffer_manager.replace_placeholders_legacy(condition_str, clear_unresolved=False)
+
+        # Handle "not" prefix
+        is_negated = False
+        if condition_str.startswith("not "):
+            is_negated = True
+            condition_str = condition_str[4:].strip()
+
+        def _resolve_operand(val_str: str) -> str:
+            """Strip quotes and look up bare script variable names if present."""
+            v = val_str.strip().strip("\"'")
+            if hasattr(self, "buffer_manager") and self.buffer_manager:
+                if v in self.buffer_manager.script_vars:
+                    return str(self.buffer_manager.script_vars[v]).strip("\"'")
+                if v.startswith("$") and v[1:] in self.buffer_manager.script_vars:
+                    return str(self.buffer_manager.script_vars[v[1:]]).strip("\"'")
+            return v
+
+        def _parse_numeric(val_str: str) -> tuple[float | None, bool]:
+            """Try to parse a string as a float. Returns (float, True) or (None, False)."""
+            try:
+                return float(val_str), True
+            except (ValueError, TypeError):
+                return None, False
+
+        condition_met = False
+
+        if " >= " in condition_str:
+            left, right = condition_str.split(" >= ", 1)
+            left_val = _resolve_operand(left)
+            right_val = _resolve_operand(right)
+            left_num, left_ok = _parse_numeric(left_val)
+            right_num, right_ok = _parse_numeric(right_val)
+            if not left_ok or not right_ok:
+                print(f"Error: Cannot compare non-numeric values with >= ('{left_val}' and/or '{right_val}' are not numbers)")
+                return False
+            condition_met = left_num >= right_num
+        elif " <= " in condition_str:
+            left, right = condition_str.split(" <= ", 1)
+            left_val = _resolve_operand(left)
+            right_val = _resolve_operand(right)
+            left_num, left_ok = _parse_numeric(left_val)
+            right_num, right_ok = _parse_numeric(right_val)
+            if not left_ok or not right_ok:
+                print(f"Error: Cannot compare non-numeric values with <= ('{left_val}' and/or '{right_val}' are not numbers)")
+                return False
+            condition_met = left_num <= right_num
+        elif " > " in condition_str:
+            left, right = condition_str.split(" > ", 1)
+            left_val = _resolve_operand(left)
+            right_val = _resolve_operand(right)
+            left_num, left_ok = _parse_numeric(left_val)
+            right_num, right_ok = _parse_numeric(right_val)
+            if not left_ok or not right_ok:
+                print(f"Error: Cannot compare non-numeric values with > ('{left_val}' and/or '{right_val}' are not numbers)")
+                return False
+            condition_met = left_num > right_num
+        elif " < " in condition_str:
+            left, right = condition_str.split(" < ", 1)
+            left_val = _resolve_operand(left)
+            right_val = _resolve_operand(right)
+            left_num, left_ok = _parse_numeric(left_val)
+            right_num, right_ok = _parse_numeric(right_val)
+            if not left_ok or not right_ok:
+                print(f"Error: Cannot compare non-numeric values with < ('{left_val}' and/or '{right_val}' are not numbers)")
+                return False
+            condition_met = left_num < right_num
+        elif " == " in condition_str:
+            left, right = condition_str.split(" == ", 1)
+            left_val = _resolve_operand(left)
+            right_val = _resolve_operand(right)
+            condition_met = left_val == right_val
+        elif " != " in condition_str:
+            left, right = condition_str.split(" != ", 1)
+            left_val = _resolve_operand(left)
+            right_val = _resolve_operand(right)
+            condition_met = left_val != right_val
+        else:
+            val = condition_str.lower()
+            if val in ["true", "1", "yes", "on"]:
+                condition_met = True
+            elif val in ["false", "0", "no", "off", ""]:
+                condition_met = False
+            else:
+                if condition_str in self.buffer_manager.script_vars:
+                    var_val = str(self.buffer_manager.script_vars[condition_str]).lower()
+                    condition_met = var_val in ["true", "1", "yes", "on"]
+                else:
+                    condition_met = bool(condition_str)
+
+        if is_negated:
+            condition_met = not condition_met
+
+        return condition_met
+
     async def execute_script_command(
         self, command: str, original_handler: Callable[[str], bool | str]
     ) -> bool:
@@ -3285,122 +3433,49 @@ class ChatybotApp:
                 return True
             raise LoopBreak()
 
-        # Handle if-then commands
+        # Handle if-then commands (single-line: if <cond> then <cmd> [else <cmd>])
         if stripped_command.startswith("if "):
             try:
-                # Use regex to split by whitespace-surrounded "then"
-                if " then " in stripped_command:
-                    # Find the first " then " to split correctly.
-                    parts = re.split(r"\s+then\s+", stripped_command[3:], maxsplit=1)
-                    if len(parts) < 2:
-                        print("Invalid if command format. Usage: if <condition> then <command>")
-                        return True
-                    
-                    condition_str = parts[0].strip()
-                    then_command = parts[1].strip()
-                    
-                    # Strip optional outer quotes from condition
-                    if condition_str.startswith('"') and condition_str.endswith('"') or condition_str.startswith("'") and condition_str.endswith("'"):
-                        condition_str = condition_str[1:-1].strip()
-                    
-                    # Handle "not" prefix
-                    is_negated = False
-                    if condition_str.startswith("not "):
-                        is_negated = True
-                        condition_str = condition_str[4:].strip()
-                    
-                    condition_met = False
-                    
-                    # Check for comparison operators (order matters: >= and <= before > and <)
-                    def _parse_numeric(val_str):
-                        """Try to parse a string as a float. Returns (float, True) or (None, False)."""
-                        try:
-                            return float(val_str), True
-                        except (ValueError, TypeError):
-                            return None, False
+                # Find the first " then " outside quotes to split condition and body
+                then_match = self._find_keyword_outside_quotes(stripped_command[3:], r"\s+then\s+")
+                if not then_match:
+                    print("Invalid if command: missing 'then' or incorrect format.")
+                    return True
 
-                    if " >= " in condition_str:
-                        left, right = condition_str.split(" >= ", 1)
-                        left = left.strip().strip("\"'")
-                        right = right.strip().strip("\"'")
-                        left_num, left_ok = _parse_numeric(left)
-                        right_num, right_ok = _parse_numeric(right)
-                        if not left_ok or not right_ok:
-                            print(f"Error: Cannot compare non-numeric values with >= ('{left}' and/or '{right}' are not numbers)")
-                            return True
-                        condition_met = (left_num >= right_num)
-                    elif " <= " in condition_str:
-                        left, right = condition_str.split(" <= ", 1)
-                        left = left.strip().strip("\"'")
-                        right = right.strip().strip("\"'")
-                        left_num, left_ok = _parse_numeric(left)
-                        right_num, right_ok = _parse_numeric(right)
-                        if not left_ok or not right_ok:
-                            print(f"Error: Cannot compare non-numeric values with <= ('{left}' and/or '{right}' are not numbers)")
-                            return True
-                        condition_met = (left_num <= right_num)
-                    elif " > " in condition_str:
-                        left, right = condition_str.split(" > ", 1)
-                        left = left.strip().strip("\"'")
-                        right = right.strip().strip("\"'")
-                        left_num, left_ok = _parse_numeric(left)
-                        right_num, right_ok = _parse_numeric(right)
-                        if not left_ok or not right_ok:
-                            print(f"Error: Cannot compare non-numeric values with > ('{left}' and/or '{right}' are not numbers)")
-                            return True
-                        condition_met = (left_num > right_num)
-                    elif " < " in condition_str:
-                        left, right = condition_str.split(" < ", 1)
-                        left = left.strip().strip("\"'")
-                        right = right.strip().strip("\"'")
-                        left_num, left_ok = _parse_numeric(left)
-                        right_num, right_ok = _parse_numeric(right)
-                        if not left_ok or not right_ok:
-                            print(f"Error: Cannot compare non-numeric values with < ('{left}' and/or '{right}' are not numbers)")
-                            return True
-                        condition_met = (left_num < right_num)
-                    elif " == " in condition_str:
-                        left, right = condition_str.split(" == ", 1)
-                        # Strip operand quotes
-                        left = left.strip().strip("\"'")
-                        right = right.strip().strip("\"'")
-                        condition_met = (left == right)
-                    elif " != " in condition_str:
-                        left, right = condition_str.split(" != ", 1)
-                        left = left.strip().strip("\"'")
-                        right = right.strip().strip("\"'")
-                        condition_met = (left != right)
-                    else:
-                        # Truthy/Falsy check
-                        val = condition_str.lower()
-                        if val in ["true", "1", "yes", "on"]:
-                            condition_met = True
-                        elif val in ["false", "0", "no", "off", ""]:
-                            condition_met = False
-                        else:
-                            # Direct check of variable name if it wasn't replaced
-                            if condition_str in self.buffer_manager.script_vars:
-                                var_val = self.buffer_manager.script_vars[condition_str].lower()
-                                condition_met = var_val in ["true", "1", "yes", "on"]
-                            else:
-                                # Non-empty string is truthy
-                                condition_met = bool(condition_str)
-                    
-                    if is_negated:
-                        condition_met = not condition_met
-                        
-                    if condition_met:
-                        return await self.execute_script_command(
-                            then_command, original_handler
-                        )
-                    else:
-                        return True  # Handled but skipped
+                condition_str = stripped_command[3 : 3 + then_match.start()].strip()
+                rest = stripped_command[3 + then_match.end() :].strip()
+
+                if not condition_str or not rest:
+                    print("Invalid if command format. Usage: if <condition> then <command> [else <command>]")
+                    return True
+
+                # Check for " else " outside quotes in rest
+                else_match = self._find_keyword_outside_quotes(rest, r"\s+else\s+")
+                if else_match:
+                    then_command = rest[: else_match.start()].strip()
+                    else_command = rest[else_match.end() :].strip()
+                else:
+                    then_command = rest
+                    else_command = None
+
+                condition_met = self.evaluate_condition(condition_str)
+
+                if condition_met:
+                    return await self.execute_script_command(
+                        then_command, original_handler
+                    )
+                elif else_command:
+                    return await self.execute_script_command(
+                        else_command, original_handler
+                    )
+                else:
+                    return True  # Handled but skipped
             except LoopBreak:
                 raise
             except Exception as e:
                 print(f"Error evaluating if condition: {e}")
                 return True
-            
+
             # If we reached here without matching a 'then', it's still an if command but invalid
             print("Invalid if command: missing 'then' or incorrect format.")
             return True
@@ -3442,7 +3517,7 @@ class ChatybotApp:
 
         # Check if input looks like a command keyword but was not recognized
         stripped = command.strip()
-        script_keywords = ['set', 'if', 'wait', 'def', '%', '#', 'local', 'defproc', 'endproc', 'foreach', 'endfor']
+        script_keywords = ['set', 'if', 'wait', 'def', '%', '#', 'local', 'defproc', 'endproc', 'foreach', 'endfor', 'else', 'elseif', 'elif', 'endif']
         
         if stripped:
             first_word = stripped.split()[0] if stripped.split() else stripped
@@ -3450,7 +3525,7 @@ class ChatybotApp:
                 if first_word.lower() == 'set':
                     print("Invalid set command format. Usage: set <name> = <value>")
                 elif first_word.lower() == 'if':
-                    print("Invalid if command format. Usage: if <condition> then <command>")
+                    print("Invalid if command format. Usage: if <condition> then <command> [else <command>] or 'if <condition> then' ... 'endif'")
                 elif first_word.lower() == 'wait':
                     print("Invalid wait command. Usage: wait <seconds>")
                 elif first_word.lower() == 'def':
@@ -3465,6 +3540,8 @@ class ChatybotApp:
                     print("Invalid foreach command format. Usage: foreach <item_var> in <array_var>")
                 elif first_word.lower() == 'endfor':
                     print("Unexpected endfor keyword.")
+                elif first_word.lower() in ('else', 'elseif', 'elif', 'endif'):
+                    print(f"Error: '{first_word}' used outside of an if block.")
                 elif first_word.lower() == '%':
                     print("Invalid macro call. Usage: %<macro_name>(<args>)")
                 elif first_word.lower() == '#':
@@ -3797,6 +3874,11 @@ class ChatybotApp:
         foreach_item_var = ""
         foreach_array_var = ""
 
+        if_depth = 0
+        if_branches = []
+        if_else_lines = None
+        if_current_target = None
+
         idx = 0
         try:
             while idx < len(commands_list):
@@ -3853,43 +3935,46 @@ class ChatybotApp:
                     idx += 1
                     continue
 
-                # 3. Check for foreach start
-                m_for = re.match(r"^\s*foreach\s+([a-zA-Z_]\w*)\s+in\s+(.+)$", stripped_cmd)
-                if m_for:
-                    foreach_item_var = m_for.group(1)
-                    foreach_array_var = m_for.group(2).strip()
-                    foreach_buffer = []
-                    foreach_depth = 1
-                    idx += 1
-                    continue
-
-                # 4. Check for defproc start
-                if lstripped_cmd.startswith("defproc ") or stripped_cmd == "defproc":
-                    if self.foreach_active > 0:
-                        print("Warning: defproc defined inside a foreach loop body; it will be re-evaluated on every iteration.")
-                    m = re.match(r"defproc\s+([a-zA-Z_]\w*)(?:\(([^)]*)\))?", lstripped_cmd)
-                    if m:
-                        cur_proc_name = m.group(1)
-                        params_str = m.group(2)
-                        cur_proc_params = [p.strip() for p in params_str.split(',')] if params_str else []
-                        cur_proc_body = []
-                        in_defproc = True
+                # 3. Handle active if block buffer capture
+                if if_depth > 0:
+                    m_nested_if = re.match(r"^\s*if\s+(.+)\s+then:?$", stripped_cmd)
+                    if m_nested_if:
+                        if_depth += 1
+                        if_current_target.append(cmd)
+                    elif stripped_cmd in ("endif", "endif:"):
+                        if_depth -= 1
+                        if if_depth == 0:
+                            # Evaluate branches and execute chosen branch
+                            chosen_lines = None
+                            for cond_expr, branch_lines in if_branches:
+                                processed_cond = self.buffer_manager.replace_placeholders_legacy(cond_expr)
+                                if self.evaluate_condition(processed_cond):
+                                    chosen_lines = branch_lines
+                                    break
+                            if chosen_lines is None and if_else_lines is not None:
+                                chosen_lines = if_else_lines
+                            if chosen_lines:
+                                await self.execute_command_list(chosen_lines)
+                            if_branches = []
+                            if_else_lines = None
+                            if_current_target = None
+                        else:
+                            if_current_target.append(cmd)
+                    elif if_depth == 1 and (m_elif := re.match(r"^\s*(?:elseif|elif)\s+(.+)\s+then:?$", stripped_cmd)):
+                        new_branch = []
+                        if_branches.append((m_elif.group(1).strip(), new_branch))
+                        if_current_target = new_branch
+                    elif if_depth == 1 and stripped_cmd in ("else", "else:"):
+                        if if_else_lines is not None:
+                            print("Warning: Multiple 'else' clauses in if block; ignoring previous else.")
+                        if_else_lines = []
+                        if_current_target = if_else_lines
                     else:
-                        print("Invalid defproc format. Usage: defproc name(p1, p2)")
+                        if_current_target.append(cmd)
                     idx += 1
                     continue
 
-                # 5. Check if we're in multi-line mode
-                if (
-                    self.multi_line_mode
-                    and not cmd.startswith("/")
-                    and not in_multi_line
-                ):
-                    in_multi_line = True
-                    multi_line_buffer = [cmd]
-                    idx += 1
-                    continue
-
+                # 4. Handle active multi-line mode prompt capture
                 if in_multi_line:
                     if stripped_cmd == ";;":
                         self.multi_line_mode = False
@@ -3956,11 +4041,77 @@ class ChatybotApp:
                             multi_line_buffer.append(cmd if expanded_line.startswith("ERROR:") else expanded_line)
                         else:
                             multi_line_buffer.append(cmd)
-                else:
-                    print(f"Executing: {cmd}")
-                    handled = await self.execute_script_command(cmd, self.handle_escape_command)
-                    if not handled:
-                        print(f"Unknown command in script: {cmd}")
+                    idx += 1
+                    continue
+
+                # 5. Check for foreach start
+                m_for = re.match(r"^\s*foreach\s+([a-zA-Z_]\w*)\s+in\s+(.+)$", stripped_cmd)
+                if m_for:
+                    foreach_item_var = m_for.group(1)
+                    foreach_array_var = m_for.group(2).strip()
+                    foreach_buffer = []
+                    foreach_depth = 1
+                    idx += 1
+                    continue
+
+                # 6. Check for defproc start
+                if lstripped_cmd.startswith("defproc ") or stripped_cmd == "defproc":
+                    if self.foreach_active > 0:
+                        print("Warning: defproc defined inside a foreach loop body; it will be re-evaluated on every iteration.")
+                    m = re.match(r"defproc\s+([a-zA-Z_]\w*)(?:\(([^)]*)\))?", lstripped_cmd)
+                    if m:
+                        cur_proc_name = m.group(1)
+                        params_str = m.group(2)
+                        cur_proc_params = [p.strip() for p in params_str.split(',')] if params_str else []
+                        cur_proc_body = []
+                        in_defproc = True
+                    else:
+                        print("Invalid defproc format. Usage: defproc name(p1, p2)")
+                    idx += 1
+                    continue
+
+                # 7. Check for if block start (opens block when line ends with 'then' or 'then:')
+                m_if_block = re.match(r"^\s*if\s+(.+)\s+then:?$", stripped_cmd)
+                if m_if_block:
+                    cond_expr = m_if_block.group(1).strip()
+                    initial_branch = []
+                    if_branches = [(cond_expr, initial_branch)]
+                    if_else_lines = None
+                    if_current_target = initial_branch
+                    if_depth = 1
+                    idx += 1
+                    continue
+
+                # 8. Check for orphan else / elseif / endif outside of an if block
+                if stripped_cmd in ("endif", "endif:"):
+                    print("Error: 'endif' used without matching 'if' block.")
+                    idx += 1
+                    continue
+                if stripped_cmd in ("else", "else:"):
+                    print("Error: 'else' used without matching 'if' block.")
+                    idx += 1
+                    continue
+                if re.match(r"^\s*(?:elseif|elif)\b", stripped_cmd):
+                    print("Error: 'elseif' used without matching 'if' block.")
+                    idx += 1
+                    continue
+
+                # 9. Check if we're entering multi-line mode
+                if (
+                    self.multi_line_mode
+                    and not cmd.startswith("/")
+                    and not in_multi_line
+                ):
+                    in_multi_line = True
+                    multi_line_buffer = [cmd]
+                    idx += 1
+                    continue
+
+                # 10. Normal single-command execution
+                print(f"Executing: {cmd}")
+                handled = await self.execute_script_command(cmd, self.handle_escape_command)
+                if not handled:
+                    print(f"Unknown command in script: {cmd}")
 
                 idx += 1
 
@@ -3968,6 +4119,8 @@ class ChatybotApp:
                 print("Error: Unclosed defproc at end of script.")
             if foreach_depth > 0:
                 print("Error: Unclosed foreach loop at end of script.")
+            if if_depth > 0:
+                print("Error: Unclosed if block at end of script.")
 
             if in_multi_line and multi_line_buffer:
                 expanded_lines = []

@@ -477,7 +477,7 @@ async def cmd_calc(ctx: CommandContext, parts: list, command: str) -> CommandRes
             expr_str = rem_str[1:end_q]
             after_q = rem_str[end_q + 1:].strip()
             if after_q:
-                var_target = after_q.split()[0]
+                var_target = after_q.split()[0].lstrip("$")
         else:
             expr_str = rem_str.strip('"\'')
     else:
@@ -496,7 +496,7 @@ async def cmd_calc(ctx: CommandContext, parts: list, command: str) -> CommandRes
             except ValueError:
                 is_number = False
             if not any(op in last for op in "+-*/^()") and not is_number:
-                var_target = last
+                var_target = last.lstrip("$")
                 expr_str = " ".join(tokens[:-1])
             else:
                 expr_str = " ".join(tokens)
