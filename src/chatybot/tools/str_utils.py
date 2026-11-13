@@ -17,10 +17,12 @@ class StringModifierError(ValueError):
     pass
 
 
+_TITLE_RE = re.compile(r"[^\W\d_]+('[^\W\d_]+)?")
+
 STRING_MODIFIERS: dict[str, Callable[[str], str]] = {
     "lower": lambda s: s.lower(),
     "upper": lambda s: s.upper(),
-    "title": lambda s: re.sub(r"[^\W\d_]+('[^\W\d_]+)?", lambda m: m.group(0)[0].upper() + m.group(0)[1:].lower(), s),
+    "title": lambda s: _TITLE_RE.sub(lambda m: m.group(0)[0].upper() + m.group(0)[1:].lower(), s),
     "capitalize": lambda s: s.capitalize(),
     "trim": lambda s: s.strip(),
     "strip": lambda s: s.strip(),
@@ -70,8 +72,9 @@ def apply_string_modifier(val: str, modifier_spec: str) -> str:
         apply_string_modifier("abcdef", "slice:0:3:upper") -> "ABC"
         apply_string_modifier("hello", "upper") -> "HELLO"
     """
-    if not modifier_spec or not isinstance(val, str):
-        return val if isinstance(val, str) else str(val)
+    val_str = val if isinstance(val, str) else str(val)
+    if not modifier_spec:
+        return val_str
 
     # Tokenize modifier_spec respecting parametric modifiers (slice:start:end)
     tokens: list[str] = []
@@ -94,7 +97,7 @@ def apply_string_modifier(val: str, modifier_spec: str) -> str:
             tokens.append(part)
             i += 1
 
-    result = val
+    result = val_str
     for tok in tokens:
         if tok:
             result = apply_single_modifier(result, tok)

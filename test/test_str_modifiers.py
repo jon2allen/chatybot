@@ -74,6 +74,8 @@ def test_apply_string_modifier_edge_cases(capsys):
     captured = capsys.readouterr()
     assert "Error: Unknown string modifier 'unknown_mod'" in captured.out
     assert apply_string_modifier(12345, "upper") == "12345"
+    assert apply_string_modifier(12345, "len") == "5"
+    assert apply_string_modifier(12345, "slice:0:2") == "12"
 
 
 # ============================================================================

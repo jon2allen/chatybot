@@ -64,7 +64,7 @@ from .tool_args import unwrap_tool_args
 from .image_generator import ImageGenerator
 from .image_manager import ImageManager
 from .logging_manager import LoggingManager
-from chatybot.tools.str_utils import StringModifierError
+from chatybot.tools.str_utils import STRING_MODIFIERS, StringModifierError, apply_string_modifier
 
 # Global variables needed for database functionality
 app = None  # Global app instance for database functions to access
@@ -3162,8 +3162,6 @@ class ChatybotApp:
 
         # Pre-resolve unbraced $var:modifier operands before general placeholder expansion
         if hasattr(self, "buffer_manager") and self.buffer_manager:
-            from chatybot.tools.str_utils import STRING_MODIFIERS, StringModifierError, apply_string_modifier
-
             def _is_inside_quotes(s: str, pos: int) -> bool:
                 in_double = False
                 in_single = False
@@ -3218,7 +3216,6 @@ class ChatybotApp:
 
             # 2. Unquoted operand
             if hasattr(self, "buffer_manager") and self.buffer_manager:
-                from chatybot.tools.str_utils import apply_string_modifier
                 if ":" in s:
                     raw_var, mod = s.split(":", 1)
                     clean_var = raw_var[1:] if raw_var.startswith("$") else raw_var
@@ -3295,7 +3292,6 @@ class ChatybotApp:
             raw_target = condition_str.strip().strip("\"'")
             # Check if condition_str is a variable with modifier: e.g. "flag:lower" or "$flag:lower"
             if ":" in raw_target and hasattr(self, "buffer_manager") and self.buffer_manager:
-                from chatybot.tools.str_utils import apply_string_modifier
                 raw_var, mod = raw_target.split(":", 1)
                 clean_var = raw_var[1:] if raw_var.startswith("$") else raw_var
                 if clean_var in self.buffer_manager.script_vars:

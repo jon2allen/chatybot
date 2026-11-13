@@ -14,7 +14,7 @@ from collections import UserDict
 from pathlib import Path
 from typing import Any
 
-from chatybot.tools.str_utils import apply_string_modifier
+from chatybot.tools.str_utils import StringModifierError, apply_string_modifier
 
 # Dynamic Context Injection: !`command` syntax
 DYNAMIC_INJECTION_PATTERN = re.compile(r"!`([^`\r\n]+)`")
@@ -623,6 +623,12 @@ class BufferManager:
                             })
                         text_prompt = text_prompt.replace(placeholder, "")
 
+        # Fast path: skip variable substitution and cleanup if no placeholder delimiters exist
+        if "$" not in text_prompt and "{" not in text_prompt:
+            if expand_injections:
+                text_prompt = self.expand_dynamic_injections(text_prompt)
+            return text_prompt.strip(), multimodal_parts
+
         # 3. Sort keys by length descending to prevent shorter variable names matching prefixes of longer ones
         keys_to_resolve = list(self.script_vars.keys()) + ['LAST_RESPONSE', 'CHAT_HISTORY'] + list(self.file_banks.keys())
         sorted_keys = sorted(set(keys_to_resolve), key=len, reverse=True)
@@ -674,6 +680,8 @@ class BufferManager:
                     if raw_val is not None and mod:
                         return apply_string_modifier(str(raw_val), mod)
                     return str(raw_val) if raw_val is not None else m.group(0)
+                except StringModifierError:
+                    raise
                 except Exception:
                     return m.group(0)
             text_prompt = re.sub(sub_pat, replace_sub, text_prompt, flags=flags)
