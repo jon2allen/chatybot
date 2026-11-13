@@ -901,10 +901,6 @@ class ChatybotApp:
         os.makedirs(path, exist_ok=True)
         return path
 
-    def _resolve_session_file(self, target: str) -> str | None:
-        """Resolve a session identifier or custom name using session store."""
-        return self._get_session_store().resolve_session(target)
-
     def get_scratch_dir(self, create: bool = True) -> str | None:
         """
         Get the current active scratchpad directory path.

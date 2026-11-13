@@ -265,31 +265,6 @@ async def async_execute_decision(
     return result_payload
 
 
-def _execute_decision(
-    question_type: str,
-    state: str,
-    instructions: str,
-    criteria: Any = None,
-    threshold: float = 0.0,
-    model_alias: str | None = None,
-    target_variable: str | None = None,
-    app: Any = None,
-) -> dict[str, Any]:
-    """Sync wrapper around async_execute_decision."""
-    return _run_async(
-        async_execute_decision(
-            question_type=question_type,
-            state=state,
-            instructions=instructions,
-            criteria=criteria,
-            threshold=threshold,
-            model_alias=model_alias,
-            target_variable=target_variable,
-            app=app,
-        )
-    )
-
-
 async def async_decide_score(
     state: str,
     instructions: str,

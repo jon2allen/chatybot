@@ -1156,16 +1156,6 @@ class HelpSystem:
         """Get all registered commands sorted alphabetically."""
         return sorted(self.commands.values(), key=lambda c: c.name)
     
-    def get_commands_by_category(self, category: str) -> list[CommandHelp]:
-        """Get all commands in a specific category."""
-        if category not in self.categories:
-            return []
-        return [self.commands[name] for name in self.categories[category] if name in self.commands]
-    
-    def get_all_categories(self) -> list[str]:
-        """Get all available categories sorted alphabetically."""
-        return sorted(self.categories.keys())
-    
     def get_command(self, name: str) -> CommandHelp | None:
         """Get help for a specific command, checking exact name then aliases."""
         if name in self.commands:

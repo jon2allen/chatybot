@@ -213,20 +213,6 @@ class ProfileManager:
         path = self._resolve_path(name)
         return Profile.from_file(path)
 
-    def load_profile_string(self, name: str) -> str:
-        """
-        Load raw profile content as string.
-
-        Args:
-            name: Profile name.
-
-        Returns:
-            Profile content as string.
-        """
-        path = self._resolve_path(name)
-        with open(path, "r", encoding="utf-8") as f:
-            return f.read()
-
     def read_meta(self, name_or_path: str) -> ProfileMeta:
         """
         Read display metadata from annotation comments.
@@ -447,14 +433,6 @@ class ProfileManager:
 
         self._profiles_cache = None
         return dst
-
-    def get_preset_names(self) -> list[str]:
-        """Return list of available preset names."""
-        return list(PROFILE_PRESETS.keys())
-
-    def get_preset(self, name: str) -> dict[str, Any] | None:
-        """Get preset configuration by name."""
-        return PROFILE_PRESETS.get(name)
 
     def upgrade_all_profiles(self) -> list[str]:
         """
