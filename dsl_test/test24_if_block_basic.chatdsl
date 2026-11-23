@@ -1,0 +1,49 @@
+# Test Case 24: Block if / elseif / else / endif
+# Description: Multiline if blocks with multi-command branches.
+#              Block form:  if <cond> then  ...  elseif <cond> then  ...  else  ...  endif
+#              A trailing colon after then/else/endif is optional.
+#              Note: comparison operators need spaces around them (e.g. "$SCORE >= 80").
+# Run: /script dsl_test/test24_if_block_basic.chatdsl
+
+/echo === Block if: grade from score (no colons) ===
+
+set SCORE = "85"
+set grade = "none"
+set status = "none"
+
+if $SCORE >= 90 then
+    set grade = "A"
+    set status = "honors"
+elseif $SCORE >= 80 then
+    set grade = "B"
+    set status = "passed"
+elseif $SCORE >= 60 then
+    set grade = "C"
+    set status = "passed"
+else
+    set grade = "F"
+    set status = "failed"
+endif
+
+/dump grade
+/dump status
+
+/echo === Block if: string equality (with colons) ===
+
+set MODE = "fast"
+set plan = "none"
+
+if $MODE == fast then:
+    set plan = "quick pass"
+else:
+    set plan = "full pass"
+endif:
+
+/dump plan
+
+/echo === Single-line form still works, including else ===
+
+if $MODE == slow then /setvar plan "quick pass" else /setvar plan "full pass"
+/dump plan
+
+/dump all

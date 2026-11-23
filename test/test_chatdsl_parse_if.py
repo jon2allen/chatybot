@@ -29,6 +29,15 @@ PRE_EXISTING_PARSE_FAILURES = {
     "test/test_tool_retry_fix.chatdsl",
 }
 
+# Samples that intentionally use block if/endif. The standalone parser rejects
+# block form by design for now (block if is runtime-only in the chat app);
+# these become expected passes once chatdsl_parse is fixed to support blocks.
+BLOCK_IF_SCRIPTS = {
+    "dsl_test/test24_if_block_basic.chatdsl",
+    "dsl_test/test25_if_block_nested.chatdsl",
+    "dsl_test/test26_if_block_procs.chatdsl",
+}
+
 
 def parse_text(text: str):
     return TParser(Tokenizer().tokenize(text)).parse()
@@ -101,9 +110,16 @@ def test_block_if_error_never_produces_if_block_node():
     [
         pytest.param(
             rel,
-            marks=pytest.mark.xfail(strict=True, reason="pre-existing parse failure, unrelated to if"),
+            marks=pytest.mark.xfail(
+                strict=True,
+                reason=(
+                    "pre-existing parse failure, unrelated to if"
+                    if rel in PRE_EXISTING_PARSE_FAILURES
+                    else "uses block if/endif; rejected by the standalone parser until chatdsl_parse supports blocks"
+                ),
+            ),
         )
-        if rel in PRE_EXISTING_PARSE_FAILURES
+        if rel in PRE_EXISTING_PARSE_FAILURES or rel in BLOCK_IF_SCRIPTS
         else rel
         for rel in all_repo_scripts()
     ],

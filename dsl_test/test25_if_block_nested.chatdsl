@@ -1,0 +1,50 @@
+# Test Case 25: Nested if blocks, unset variables, modifiers in conditions
+# Description: - if blocks nest arbitrarily; the inner endif closes only the inner if
+#              - an unset variable in a condition is empty, so == comparisons fail
+#                and bare truthy checks are false
+#              - `not` negates a condition; $var:modifier applies a string modifier
+#                before comparing (here: $VERBOSE:lower == yes)
+# Run: /script dsl_test/test25_if_block_nested.chatdsl
+
+/echo === Nested block if ===
+
+set TIER = "gold"
+set REGION = "eu"
+set msg = "none"
+
+if $TIER == gold then
+    if $REGION == eu then
+        set msg = "gold-eu"
+    else
+        set msg = "gold-other"
+    endif
+else
+    set msg = "not-gold"
+endif
+
+/dump msg
+
+/echo === Unset variable is empty in conditions ===
+
+set res = "none"
+if $TARGET_LANG == fast then
+    set res = "then-branch"
+else
+    set res = "else-branch"
+endif
+/dump res
+
+/echo === not + modifier in a block condition ===
+
+set VERBOSE = "YES"
+set chatty = "off"
+
+if not $QUIET then
+    if $VERBOSE:lower == yes then
+        set chatty = "on"
+    endif
+endif
+
+/dump chatty
+
+/dump all
