@@ -33,10 +33,15 @@ from pathlib import Path
 from typing import Any
 
 from .pattern import PatternMatcher
+from .chatdsl_if import LineClassification, classify_script_line, resolve_var_check
 
 
 class LoopBreak(Exception):
     """Raised to exit a foreach loop early via the 'break' keyword."""
+
+
+class ScriptError(Exception):
+    """Raised for malformed scripts (unclosed blocks, orphan keywords) to abort the run."""
 
 
 try:
@@ -3106,37 +3111,11 @@ class ChatybotApp:
             self.debug_response_mode = False
             self.debug_response_raw = False
 
-    @staticmethod
-    def _find_keyword_outside_quotes(text: str, keyword_pattern: str) -> re.Match | None:
-        """Find a regex keyword pattern match that is not inside single or double quotes."""
-        quoted_spans = []
-        in_quote = False
-        quote_char = ""
-        start_idx = -1
-        i = 0
-        n = len(text)
-        while i < n:
-            ch = text[i]
-            if ch == "\\" and in_quote and i + 1 < n:
-                i += 2
-                continue
-            if not in_quote:
-                if ch in ('"', "'"):
-                    in_quote = True
-                    quote_char = ch
-                    start_idx = i
-            else:
-                if ch == quote_char:
-                    quoted_spans.append((start_idx, i))
-                    in_quote = False
-            i += 1
-
-        for match in re.finditer(keyword_pattern, text):
-            m_start, m_end = match.span()
-            inside = any(q_start <= m_start and m_end <= q_end + 1 for q_start, q_end in quoted_spans)
-            if not inside:
-                return match
-        return None
+    def _classify_script_line(self, line: str) -> LineClassification:
+        """The single rule for classifying a script/REPL line, used by every path
+        (execute_command_list, execute_script_command, execute_line): shared
+        classifier + runtime resolution of bare-variable conditions."""
+        return resolve_var_check(classify_script_line(line), self.buffer_manager.script_vars)
 
     def evaluate_condition(self, condition_str: str) -> bool:
         """
@@ -3483,11 +3462,15 @@ class ChatybotApp:
 
         # Replace variables in the command (supporting subscripts and unbraced names)
         # We do not replace variables on the command line for /setvar and /calc as they handle substitution internally
-        # `if` lines are left raw: evaluate_condition expands the condition itself (keeping
-        # unset variables intact), and the then/else bodies are expanded when they execute.
+        # Classify once from the raw line; every construct-vs-prompt decision below
+        # uses this single classification.
+        cls_cmd = self._classify_script_line(command)
+        # Real `if` constructs are left raw: evaluate_condition expands the condition itself
+        # (keeping unset variables intact), and the then/else bodies are expanded when they
+        # execute. Prose-if lines are prompts and get normal placeholder expansion.
         if command.lstrip().startswith("/setvar") or command.lstrip().startswith("/calc") or command.lstrip().startswith("/str_search"):
             processed_command = command
-        elif command.lstrip().startswith("if "):
+        elif cls_cmd.keyword == "if" and cls_cmd.kind in ("if_single", "if_block", "invalid_construct"):
             processed_command = command
         else:
             processed_command = self.buffer_manager.replace_placeholders_legacy(command)
@@ -3512,52 +3495,46 @@ class ChatybotApp:
                 return True
             raise LoopBreak()
 
-        # Handle if-then commands (single-line: if <cond> then <cmd> [else <cmd>])
-        if stripped_command.startswith("if "):
-            try:
-                # Find the first " then " outside quotes to split condition and body
-                then_match = self._find_keyword_outside_quotes(stripped_command[3:], r"\s+then\s+")
-                if not then_match:
-                    print("Invalid if command: missing 'then' or incorrect format.")
-                    return True
-
-                condition_str = stripped_command[3 : 3 + then_match.start()].strip()
-                rest = stripped_command[3 + then_match.end() :].strip()
-
-                if not condition_str or not rest:
-                    print("Invalid if command format. Usage: if <condition> then <command> [else <command>]")
-                    return True
-
-                # Check for " else " outside quotes in rest
-                else_match = self._find_keyword_outside_quotes(rest, r"\s+else\s+")
-                if else_match:
-                    then_command = rest[: else_match.start()].strip()
-                    else_command = rest[else_match.end() :].strip()
-                else:
-                    then_command = rest
-                    else_command = None
-
-                condition_met = self.evaluate_condition(condition_str)
-
-                if condition_met:
-                    return await self.execute_script_command(
-                        then_command, original_handler
-                    )
-                elif else_command:
-                    return await self.execute_script_command(
-                        else_command, original_handler
-                    )
-                else:
-                    return True  # Handled but skipped
-            except LoopBreak:
-                raise
-            except Exception as e:
-                print(f"Error evaluating if condition: {e}")
+        # Handle if-then commands (single-line: if <cond> then <cmd> [else <cmd>]).
+        # The shared classifier decides construct-vs-prose: only a condition that
+        # references a variable (or a set bare name) is a conditional; prose like
+        # "if you find a bug then fix" falls through to normal prompt handling below.
+        if cls_cmd.keyword == "if":
+            cls_if = cls_cmd
+            if cls_if.kind == "invalid_construct":
+                print(f"Invalid if command: {cls_if.reason}.")
                 return True
+            if cls_if.kind == "if_block":
+                print("Invalid if command format. Usage: if <condition> then <command> [else <command>] or block form 'if <condition> then' ... 'endif' as a script line")
+                return True
+            if cls_if.kind == "if_single":
+                try:
+                    condition_str = cls_if.condition
+                    then_command = cls_if.then_body
+                    else_command = cls_if.else_body
 
-            # If we reached here without matching a 'then', it's still an if command but invalid
-            print("Invalid if command: missing 'then' or incorrect format.")
-            return True
+                    if not condition_str or not then_command:
+                        print("Invalid if command format. Usage: if <condition> then <command> [else <command>]")
+                        return True
+
+                    condition_met = self.evaluate_condition(condition_str)
+
+                    if condition_met:
+                        return await self.execute_script_command(
+                            then_command, original_handler
+                        )
+                    elif else_command:
+                        return await self.execute_script_command(
+                            else_command, original_handler
+                        )
+                    else:
+                        return True  # Handled but skipped
+                except LoopBreak:
+                    raise
+                except Exception as e:
+                    print(f"Error evaluating if condition: {e}")
+                    return True
+            # cls_if.kind == "prompt": prose starting with 'if' - fall through to prompt handling
         # For other commands, use the original handler
         if processed_command.startswith("/"):
             # The original_handler (handle_escape_command) is now async, so we must await it.
@@ -3735,6 +3712,19 @@ class ChatybotApp:
                     return
                 except Exception:
                     pass
+
+            # Single-line `if <cond> then <cmd> [else <cmd>]` is allowed at the prompt.
+            # Only real constructs are routed here; prose starting with "if" stays a prompt.
+            # Same classification rule as scripts (case-insensitive, any whitespace).
+            stripped_line = line.strip()
+            cls_repl = self._classify_script_line(stripped_line)
+            if cls_repl.keyword == "if":
+                if cls_repl.kind == "if_single":
+                    await self.execute_script_command(stripped_line, self.handle_escape_command)
+                    return
+                if cls_repl.kind == "if_block":
+                    print("Block if is script-only. At the prompt use a single line: if <cond> then <cmd> [else <cmd>]")
+                    return
 
             # Handle macro expansion for regular prompts
             if line.lstrip().startswith("%"):
@@ -3968,14 +3958,15 @@ class ChatybotApp:
 
                 stripped_cmd = cmd.strip()
                 lstripped_cmd = cmd.lstrip()
+                # One shared classification per line drives all construct detection below
+                cls = self._classify_script_line(stripped_cmd)
 
                 # 1. Handle active foreach buffer capture
                 if foreach_depth > 0:
-                    m_for = re.match(r"^\s*foreach\s+([a-zA-Z_]\w*)\s+in\s+(.+)$", stripped_cmd)
-                    if m_for:
+                    if cls.kind == "foreach":
                         foreach_depth += 1
                         foreach_buffer.append(cmd)
-                    elif stripped_cmd == "endfor":
+                    elif cls.kind == "endfor":
                         foreach_depth -= 1
                         if foreach_depth == 0:
                             await self.execute_foreach_block(foreach_item_var, foreach_array_var, foreach_buffer)
@@ -3991,7 +3982,7 @@ class ChatybotApp:
 
                 # 2. Handle active defproc buffer capture
                 if in_defproc:
-                    if stripped_cmd == "endproc":
+                    if cls.kind == "endproc":
                         if cur_proc_name in self.procedures:
                             print(f"Warning: Redefining procedure '{cur_proc_name}' (previously defined with {len(self.procedures[cur_proc_name]['params'])} parameters).")
                         self.procedures[cur_proc_name] = {
@@ -4003,7 +3994,7 @@ class ChatybotApp:
                         cur_proc_name = ""
                         cur_proc_params = []
                         cur_proc_body = []
-                    elif lstripped_cmd.startswith("defproc ") or stripped_cmd == "defproc":
+                    elif cls.kind == "defproc":
                         print("Error: Nested defproc is not allowed.")
                         in_defproc = False
                         cur_proc_name = ""
@@ -4016,11 +4007,10 @@ class ChatybotApp:
 
                 # 3. Handle active if block buffer capture
                 if if_depth > 0:
-                    m_nested_if = re.match(r"^\s*if\s+(.+)\s+then:?$", stripped_cmd)
-                    if m_nested_if:
+                    if cls.kind == "if_block":
                         if_depth += 1
                         if_current_target.append(cmd)
-                    elif stripped_cmd in ("endif", "endif:"):
+                    elif cls.kind == "endif":
                         if_depth -= 1
                         if if_depth == 0:
                             # Evaluate branches and execute chosen branch
@@ -4038,11 +4028,11 @@ class ChatybotApp:
                             if_current_target = None
                         else:
                             if_current_target.append(cmd)
-                    elif if_depth == 1 and (m_elif := re.match(r"^\s*(?:elseif|elif)\s+(.+)\s+then:?$", stripped_cmd)):
+                    elif if_depth == 1 and cls.kind == "elseif":
                         new_branch = []
-                        if_branches.append((m_elif.group(1).strip(), new_branch))
+                        if_branches.append((cls.condition, new_branch))
                         if_current_target = new_branch
-                    elif if_depth == 1 and stripped_cmd in ("else", "else:"):
+                    elif if_depth == 1 and cls.kind == "else":
                         if if_else_lines is not None:
                             print("Warning: Multiple 'else' clauses in if block; ignoring previous else.")
                         if_else_lines = []
@@ -4123,17 +4113,16 @@ class ChatybotApp:
                     continue
 
                 # 5. Check for foreach start
-                m_for = re.match(r"^\s*foreach\s+([a-zA-Z_]\w*)\s+in\s+(.+)$", stripped_cmd)
-                if m_for:
-                    foreach_item_var = m_for.group(1)
-                    foreach_array_var = m_for.group(2).strip()
+                if cls.kind == "foreach":
+                    foreach_item_var = cls.item_var
+                    foreach_array_var = cls.iterable
                     foreach_buffer = []
                     foreach_depth = 1
                     idx += 1
                     continue
 
                 # 6. Check for defproc start
-                if lstripped_cmd.startswith("defproc ") or stripped_cmd == "defproc":
+                if cls.kind == "defproc":
                     if self.foreach_active > 0:
                         print("Warning: defproc defined inside a foreach loop body; it will be re-evaluated on every iteration.")
                     m = re.match(r"defproc\s+([a-zA-Z_]\w*)(?:\(([^)]*)\))?", lstripped_cmd)
@@ -4148,10 +4137,9 @@ class ChatybotApp:
                     idx += 1
                     continue
 
-                # 7. Check for if block start (opens block when line ends with 'then' or 'then:')
-                m_if_block = re.match(r"^\s*if\s+(.+)\s+then:?$", stripped_cmd)
-                if m_if_block:
-                    cond_expr = m_if_block.group(1).strip()
+                # 7. Check for if block start (classifier: 'if <cond with $var> then[:]' at end of line)
+                if cls.kind == "if_block":
+                    cond_expr = cls.condition
                     initial_branch = []
                     if_branches = [(cond_expr, initial_branch)]
                     if_else_lines = None
@@ -4160,17 +4148,17 @@ class ChatybotApp:
                     idx += 1
                     continue
 
-                # 8. Check for orphan else / elseif / endif outside of an if block
-                if stripped_cmd in ("endif", "endif:"):
-                    print("Error: 'endif' used without matching 'if' block.")
+                # 8. Check for orphan block keywords outside of their block
+                if cls.kind in ("endif", "else", "elseif"):
+                    print(f"Error: '{cls.keyword}' used without matching 'if' block.")
                     idx += 1
                     continue
-                if stripped_cmd in ("else", "else:"):
-                    print("Error: 'else' used without matching 'if' block.")
+                if cls.kind == "endfor":
+                    print("Error: 'endfor' used without matching 'foreach' block.")
                     idx += 1
                     continue
-                if re.match(r"^\s*(?:elseif|elif)\b", stripped_cmd):
-                    print("Error: 'elseif' used without matching 'if' block.")
+                if cls.kind == "endproc":
+                    print("Error: 'endproc' used without matching 'defproc' block.")
                     idx += 1
                     continue
 
@@ -4193,13 +4181,6 @@ class ChatybotApp:
 
                 idx += 1
 
-            if in_defproc:
-                print("Error: Unclosed defproc at end of script.")
-            if foreach_depth > 0:
-                print("Error: Unclosed foreach loop at end of script.")
-            if if_depth > 0:
-                print("Error: Unclosed if block at end of script.")
-
             if in_multi_line and multi_line_buffer:
                 expanded_lines = []
                 for line in multi_line_buffer:
@@ -4214,6 +4195,14 @@ class ChatybotApp:
                 if not handled:
                     print(f"Sending prompt to LLM: {full_prompt[:50]}...")
                     print("Prompt sent to LLM successfully")
+
+            # Unclosed constructs abort the script instead of silently swallowing lines
+            if in_defproc:
+                raise ScriptError("Error: Unclosed defproc at end of script.")
+            if foreach_depth > 0:
+                raise ScriptError("Error: Unclosed foreach loop at end of script.")
+            if if_depth > 0:
+                raise ScriptError("Error: Unclosed if block at end of script.")
         finally:
             self.script_context = old_script_context
 

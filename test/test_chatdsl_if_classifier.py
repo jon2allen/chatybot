@@ -10,6 +10,7 @@ from chatybot.chatdsl_if import (
     SCRIPT_KEYWORDS,
     classify_script_line,
     find_outside_quotes,
+    resolve_var_check,
 )
 
 
@@ -74,10 +75,45 @@ def test_if_prose_with_then_is_prompt():
     assert c.kind == "prompt" and c.keyword == "if"
 
 
-def test_if_prose_with_operator_is_prompt():
-    # Even with a comparison operator, no $var -> prose.
+def test_if_bare_lhs_with_operator_needs_var_check():
+    # "x" could be a script var; the runtime resolves it. Prose with an undefined
+    # name (e.g. "if x > 3 then answer" with no x set) becomes a prompt there.
     c = cl("if x > 3 then answer")
-    assert c.kind == "prompt" and c.keyword == "if"
+    assert c.kind == "if_single"
+    assert c.needs_var_check and c.lhs == "x"
+    assert c.then_body == "answer"
+
+
+def test_if_literal_comparison_is_construct():
+    c = cl("if 5 > 3 then")
+    assert c.kind == "if_block" and not c.needs_var_check
+    assert c.condition == "5 > 3"
+
+
+def test_if_quoted_lhs_comparison_is_construct():
+    c = cl('if "a" == "b" then /setvar r 1')
+    assert c.kind == "if_single" and not c.needs_var_check
+
+
+def test_if_bare_var_comparison_needs_var_check():
+    c = cl("if num_poems >= 5 then")
+    assert c.kind == "if_block" and c.needs_var_check and c.lhs == "num_poems"
+
+
+def test_if_bare_var_with_modifiers_needs_var_check():
+    c = cl('if answer:trim:lower == "yes" then')
+    assert c.kind == "if_block" and c.needs_var_check and c.lhs == "answer:trim:lower"
+
+
+def test_if_truthy_bare_var_needs_var_check():
+    c = cl("if flag then /setvar r 1")
+    assert c.kind == "if_single" and c.needs_var_check and c.lhs == "flag"
+
+
+def test_if_not_bare_var_needs_var_check():
+    c = cl("if not flag then /setvar r 1")
+    assert c.kind == "if_single" and c.needs_var_check and c.lhs == "flag"
+    assert c.condition == "not flag"
 
 
 def test_if_quoted_then_inside_condition_is_skipped():
@@ -206,6 +242,42 @@ def test_local_def_macro_break():
 def test_keywords_cover_expected_set():
     assert {"if", "elseif", "elif", "else", "endif", "set", "wait", "local",
             "def", "defproc", "endproc", "foreach", "endfor", "break"} <= SCRIPT_KEYWORDS
+
+
+# ---------------------------------------------------------------------------
+# resolve_var_check: the single bare-variable rule
+# ---------------------------------------------------------------------------
+
+def test_resolve_var_check_defined_var_stays_construct():
+    c = cl("if num_poems >= 5 then")
+    assert c.needs_var_check
+    r = resolve_var_check(c, {"num_poems": "5"})
+    assert r.kind == "if_block" and r.needs_var_check
+
+
+def test_resolve_var_check_undefined_var_becomes_prompt():
+    c = cl("if x > 3 then answer")
+    r = resolve_var_check(c, {})
+    assert r.kind == "prompt" and r.keyword == "if"
+
+
+def test_resolve_var_check_strips_modifiers():
+    c = cl('if answer:trim:lower == "yes" then')
+    r = resolve_var_check(c, {"answer": "yes"})
+    assert r.kind == "if_block"
+    r = resolve_var_check(c, {})
+    assert r.kind == "prompt"
+
+
+def test_resolve_var_check_passthrough_when_not_needed():
+    c = cl("if $X then /setvar a b")
+    assert resolve_var_check(c, {}) is c
+
+
+def test_if_detection_is_case_and_whitespace_insensitive():
+    # One rule everywhere: the classifier lowercases and accepts any whitespace.
+    for line in ["if $X then /y", "IF $X then /y", "If $X then /y", "if\t$X then /y", "  if $X then /y  "]:
+        assert cl(line).kind == "if_single", line
 
 
 # ---------------------------------------------------------------------------

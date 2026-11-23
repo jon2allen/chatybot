@@ -31,6 +31,9 @@ SCRIPT_KEYWORDS = frozenset({
 })
 
 _WORD_RE = re.compile(r"[A-Za-z_]\w*")
+_OP_RE = re.compile(r"(==|!=|>=|<=|>|<)")
+_NUM_RE = re.compile(r"-?\d+(?:\.\d+)?")
+_BARE_OPERAND_RE = re.compile(r"[A-Za-z_]\w*(?::[A-Za-z0-9_\-]+)*")  # bare name, optional :modifiers
 _SET_RE = re.compile(r"\s+([A-Za-z_]\w*)\s*(\[\])?\s*=")
 _WAIT_RE = re.compile(r"\s+(\d+(?:\.\d+)?)\s*$")
 _LOCAL_RE = re.compile(r"\s+([A-Za-z_]\w*)")
@@ -58,6 +61,8 @@ class LineClassification:
     item_var: str | None = None       # foreach
     iterable: str | None = None       # foreach
     reason: str | None = None         # invalid_construct
+    lhs: str | None = None            # if/elseif: left operand when needs_var_check
+    needs_var_check: bool = False     # True when construct-vs-prompt depends on a runtime variable
 
 
 def _quoted_mask(text: str) -> list[bool]:
@@ -101,9 +106,34 @@ def _classify_if(rest: str, kw: str) -> LineClassification:
     if not condition:
         return LineClassification("invalid_construct", keyword=kw,
                                   reason="empty condition")
+
+    # Decide construct-vs-prose. A variable reference ($var / ${var}) is always a
+    # construct. Otherwise the condition must have a comparison/truthy *shape*:
+    # numeric or quoted left operand -> construct; bare-identifier left operand ->
+    # needs_var_check (the runtime resolves it against actual script variables, so
+    # undefined names in prose like "if x > 3 then answer" still read as prompts).
+    needs_var_check = False
+    lhs = None
     if "$" not in condition:
-        # No variable reference -> prose prompt, not a conditional.
-        return LineClassification("prompt", keyword=kw, condition=condition)
+        cond_no_not = re.sub(r"^not\s+", "", condition, flags=re.IGNORECASE).strip()
+        op_m = find_outside_quotes(cond_no_not, _OP_RE.pattern)
+        if op_m is not None:
+            lhs = cond_no_not[:op_m.start()].strip()
+            rhs = cond_no_not[op_m.end():].strip()
+            if not lhs or not rhs:
+                return LineClassification("prompt", keyword=kw, condition=condition)
+            if _NUM_RE.fullmatch(lhs) or (lhs[:1] in ("\"", "'")):
+                pass  # literal comparison -> construct
+            elif _BARE_OPERAND_RE.fullmatch(lhs):
+                needs_var_check = True
+            else:
+                return LineClassification("prompt", keyword=kw, condition=condition)
+        elif _WORD_RE.fullmatch(cond_no_not):
+            # truthy check on a bare name: maybe a variable, maybe prose
+            needs_var_check = True
+            lhs = cond_no_not
+        else:
+            return LineClassification("prompt", keyword=kw, condition=condition)
 
     body = rest[then_m.end():].strip()
     if body.startswith(":"):
@@ -112,7 +142,8 @@ def _classify_if(rest: str, kw: str) -> LineClassification:
     if not body:
         return LineClassification(
             "if_block" if kw == "if" else "elseif",
-            keyword=kw, condition=condition, is_block=True)
+            keyword=kw, condition=condition, is_block=True,
+            lhs=lhs, needs_var_check=needs_var_check)
 
     if kw != "if":
         return LineClassification(
@@ -127,7 +158,22 @@ def _classify_if(rest: str, kw: str) -> LineClassification:
         then_body, else_body = body, None
     return LineClassification(
         "if_single", keyword=kw, condition=condition,
-        then_body=then_body, else_body=else_body, is_block=False)
+        then_body=then_body, else_body=else_body, is_block=False,
+        lhs=lhs, needs_var_check=needs_var_check)
+
+
+def resolve_var_check(cls: LineClassification, script_vars) -> LineClassification:
+    """Resolve a needs_var_check classification against actual script variables.
+
+    Rule (single source): a bare-name condition counts as a construct only if
+    that variable is set; otherwise the line is a prompt. `script_vars` is any
+    mapping, e.g. BufferManager.script_vars.
+    """
+    if cls.needs_var_check and cls.lhs:
+        base = cls.lhs.split(":")[0].lstrip("$")
+        if base not in script_vars:
+            return LineClassification("prompt", keyword=cls.keyword)
+    return cls
 
 
 def classify_script_line(line: str) -> LineClassification:
