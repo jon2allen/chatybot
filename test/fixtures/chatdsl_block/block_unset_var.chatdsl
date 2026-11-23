@@ -1,0 +1,4 @@
+set res = "none"
+if $TARGET_LANG == fast then
+    set res = "block"
+endif

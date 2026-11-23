@@ -1,0 +1,10 @@
+set TIER = "gold"
+set REGION = "eu"
+set msg = "none"
+if $TIER == gold then
+    if $REGION == eu then
+        set msg = "gold-eu"
+    else
+        set msg = "gold-other"
+    endif
+endif

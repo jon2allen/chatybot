@@ -412,7 +412,7 @@ class TParser:
             condition_tokens.append(self.current.raw)
             self.advance()
         self.expect(TokenType.IDENTIFIER, "then")
-        condition_str = " ".join(condition_tokens).strip()
+        condition_str = "".join(condition_tokens).strip()
 
         # Check for block form: trailing optional colon then newline/EOF
         lookahead = self.idx
@@ -426,55 +426,14 @@ class TParser:
         is_block = (lookahead >= len(self.tokens) or self.tokens[lookahead].type in (TokenType.NEWLINE, TokenType.EOF))
 
         if is_block:
-            self.idx = lookahead
-            if self.match(TokenType.NEWLINE):
-                self.advance()
+            raise ParseError(
+                "Block if/elseif/else/endif is not supported by chatdsl_parse; "
+                "it only runs in the chat app. Use single-line 'if <cond> then <cmd> [else <cmd>]'",
+                start_tok.line, start_tok.column)
 
-            branches = [{"condition": condition_str, "body": []}]
-            else_body = None
-            cur_body = branches[0]["body"]
-
-            while not self.match(TokenType.EOF):
-                if self.match(TokenType.WHITESPACE) or self.match(TokenType.NEWLINE):
-                    self.advance()
-                    continue
-                if self.match(TokenType.IDENTIFIER, "endif"):
-                    self.advance()
-                    if self.match(TokenType.SYMBOL, ":"):
-                        self.advance()
-                    break
-                elif self.match(TokenType.IDENTIFIER, "else"):
-                    self.advance()
-                    if self.match(TokenType.SYMBOL, ":"):
-                        self.advance()
-                    else_body = []
-                    cur_body = else_body
-                elif self.match(TokenType.IDENTIFIER, "elseif") or self.match(TokenType.IDENTIFIER, "elif"):
-                    self.advance()
-                    self.parse_opt_ws()
-                    elif_cond_tokens = []
-                    while not self.match(TokenType.IDENTIFIER, "then"):
-                        if self.match(TokenType.EOF) or self.match(TokenType.NEWLINE):
-                            raise ParseError("Missing 'then' in elseif statement", start_tok.line, start_tok.column)
-                        elif_cond_tokens.append(self.current.raw)
-                        self.advance()
-                    self.expect(TokenType.IDENTIFIER, "then")
-                    if self.match(TokenType.SYMBOL, ":"):
-                        self.advance()
-                    new_branch = []
-                    branches.append({"condition": " ".join(elif_cond_tokens).strip(), "body": new_branch})
-                    cur_body = new_branch
-                else:
-                    cur_body.append(self.parse_line())
-
-            res = {"type": "if_block", "branches": branches}
-            if else_body is not None:
-                res["else"] = else_body
-            return res
-        else:
-            self.expect(TokenType.WHITESPACE)
-            then_command = self.parse_line()
-            return {"type": "if_command", "condition": condition_str, "then": then_command}
+        self.expect(TokenType.WHITESPACE)
+        then_command = self.parse_line()
+        return {"type": "if_command", "condition": condition_str, "then": then_command}
 
     def parse_command_or_chat(self) -> dict[str, Any]:
         if self.match(TokenType.ESCAPE):

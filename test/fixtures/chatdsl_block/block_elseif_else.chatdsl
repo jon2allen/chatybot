@@ -1,0 +1,9 @@
+set SCORE = "65"
+set grade = "none"
+if $SCORE >= 90 then:
+    set grade = "A"
+elseif $SCORE >= 60 then:
+    set grade = "D"
+else:
+    set grade = "F"
+endif:
