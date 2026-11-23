@@ -148,6 +148,49 @@ def test_elseif_missing_then_raises():
 
 
 # ----------------------------------------------------------------------------
+# Orphan block keywords: parser must error like the runtime, not parse as chat
+# ----------------------------------------------------------------------------
+
+@pytest.mark.parametrize(
+    "line",
+    ["endif", "endif:", "else", "else:", "elseif $X == 1 then", "elif $X then", "elseif $X then:"],
+)
+def test_orphan_if_keywords_raise(line):
+    with pytest.raises(ParseError, match="without a matching 'if' block"):
+        parse_text(line + "\n")
+
+
+def test_stray_endif_after_complete_block_raises():
+    with pytest.raises(ParseError, match="without a matching 'if' block"):
+        parse_text("if $X then\n    /setvar a b\nendif\nendif\n")
+
+
+def test_orphan_keyword_does_not_produce_chat_input():
+    # Regression: a lone 'endif' used to parse as chat_input and would be
+    # sent to the model as a prompt.
+    with pytest.raises(ParseError):
+        parse_text("endif\n")
+
+
+def test_prose_if_without_var_is_chat_input_not_error():
+    # Heuristic: no $var in condition -> prose prompt, not a construct, not an error.
+    ast = parse_text("if you find a bug then fix\n")
+    assert ast[0]["type"] == "chat_input"
+
+
+def test_invalid_if_construct_raises():
+    with pytest.raises(ParseError, match="missing 'then'"):
+        parse_text("if $X\n")
+
+
+def test_non_if_orphans_deferred_until_foreach_defproc_parsing():
+    # endfor/endproc/break orphan checks land together with foreach/defproc
+    # block parsing in the parser; until then they parse as chat_input.
+    for line in ["endfor", "endproc", "break"]:
+        assert parse_text(line + "\n")[0]["type"] == "chat_input"
+
+
+# ----------------------------------------------------------------------------
 # Regression sweep over every real script in the repo
 # ----------------------------------------------------------------------------
 

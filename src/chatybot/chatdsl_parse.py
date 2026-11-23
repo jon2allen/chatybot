@@ -11,6 +11,11 @@ import logging
 import sys
 from typing import Any, ClassVar
 
+try:
+    from .chatdsl_if import classify_script_line
+except ImportError:  # direct script execution
+    from chatybot.chatdsl_if import classify_script_line
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 logger = logging.getLogger(__name__)
@@ -259,11 +264,34 @@ class TParser:
         self.expect(TokenType.ESCAPE, "/multiline")
         return {"type": "multiline_block", "content": body}
 
+    def _raw_line_from_here(self) -> str:
+        """Reconstruct the raw text of the current line (from self.idx to EOL/EOF)."""
+        parts = []
+        i = self.idx
+        while i < len(self.tokens) and self.tokens[i].type not in (TokenType.NEWLINE, TokenType.EOF):
+            parts.append(self.tokens[i].raw)
+            i += 1
+        return "".join(parts)
+
     def parse_line(self) -> dict[str, Any]:
         if self.match(TokenType.COMMENT):
             tok = self.expect(TokenType.COMMENT)
             return {"type": "comment", "val": tok.raw}
-        
+
+        # Orphan / malformed keyword constructs must fail loudly here, matching the
+        # runtime (which prints e.g. "Error: 'endif' used without matching 'if' block"),
+        # instead of being parsed as chat text and sent to the model.
+        # NOTE: endfor/endproc/break are deliberately NOT checked yet - the parser
+        # does not consume foreach/defproc bodies, so those keywords legitimately
+        # reach parse_line at top level until block parsing for them lands.
+        cls = classify_script_line(self._raw_line_from_here())
+        if cls.kind in ("else", "elseif", "endif"):
+            tok = self.current
+            raise ParseError(f"'{cls.keyword}' used without a matching 'if' block", tok.line, tok.column)
+        if cls.kind == "invalid_construct":
+            tok = self.current
+            raise ParseError(f"Invalid '{cls.keyword}' construct: {cls.reason}", tok.line, tok.column)
+
         if self.match(TokenType.IDENTIFIER, "set"):
             return self.parse_set()
         
@@ -273,7 +301,10 @@ class TParser:
         if self.match(TokenType.SYMBOL, "%"):
             return self.parse_macro_call()
         
-        if self.match(TokenType.IDENTIFIER, "if"):
+        # `if` lines only dispatch to parse_if when the shared classifier accepts
+        # them as a construct (condition references a variable); prose like
+        # "if you find a bug then fix" falls through to chat input.
+        if self.match(TokenType.IDENTIFIER, "if") and cls.kind in ("if_block", "if_single"):
             return self.parse_if()
         
         if self.match(TokenType.IDENTIFIER, "wait"):
