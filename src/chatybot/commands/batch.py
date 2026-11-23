@@ -149,16 +149,13 @@ def _build_provider(app: Any, meta: dict):
     Supports OpenRouter (Phase 1) and Mistral inline batching (Phase 2)."""
     vendor = (meta.get("provider") or "").lower()
     model_config = None
-    if not vendor or vendor not in ("openrouter", "mistral"):
-        try:
-            model_config = _batch_model_config(app, meta)
-            from ..config_model import detect_provider
-            detected = detect_provider(model_config)
-            if detected in ("openrouter", "mistral"):
-                vendor = detected
-                meta["provider"] = vendor
-        except Exception:
-            pass
+    if (not vendor or vendor not in ("openrouter", "mistral")) and hasattr(app, "config_manager"):
+        model_config = _batch_model_config(app, meta)
+        from ..config_model import detect_provider
+        detected = detect_provider(model_config)
+        if detected in ("openrouter", "mistral"):
+            vendor = detected
+            meta["provider"] = vendor
     if vendor not in ("openrouter", "mistral"):
         raise BatchError(f"Batch backend '{vendor or 'unknown'}' is not implemented yet. "
                          "Configure a model with vendor = \"openrouter\" or vendor = \"mistral\" "
@@ -1136,7 +1133,9 @@ async def _sc_results(ctx: CommandContext, mgr: BatchManager, rest: str) -> Comm
     bound = clean_var_name(opts.get("var"), default="BATCH_RESULTS")
     ctx.app.buffer_manager.set_script_var(bound, records, allow_protected=True)
 
-    empty_now = sum(1 for record in records if is_empty_result(record))
+    empty_now = (meta["empty_results"]
+                 if meta.get("empty_results") is not None
+                 else sum(1 for record in records if is_empty_result(record)))
     empty_note = f", {empty_now} empty" if empty_now else ""
     print(f"\n[Results: {meta['name']} - showing {len(page)} of "
           f"{len(records)} records{empty_note}, status: {meta['status']}]")
@@ -1334,7 +1333,7 @@ async def cmd_batch(ctx: CommandContext, parts: list, command: str) -> CommandRe
 
     try:
         return await handler(ctx, mgr, rest)
-    except BatchError as e:
+    except (BatchError, ValueError) as e:
         if str(e) == "batch model required":
             return CommandResult.ok()  # capability message already printed
         print(f"Error: {e}")
