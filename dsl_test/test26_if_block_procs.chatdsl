@@ -1,0 +1,48 @@
+# Test Case 26: Block if calling procs, and if blocks inside foreach
+# Description: - a block branch can run any command, including /proc
+#              - an if block can live inside a foreach body; the loop variable
+#                is an ordinary script variable inside the condition
+# Run: /script dsl_test/test26_if_block_procs.chatdsl
+
+defproc handle_high()
+  set verdict = "excellent"
+  /echo Branch ran: high
+endproc
+
+defproc handle_mid()
+  set verdict = "good"
+  /echo Branch ran: mid
+endproc
+
+defproc handle_low()
+  set verdict = "needs work"
+  /echo Branch ran: low
+endproc
+
+/echo === Block if dispatching to procs ===
+
+set SCORE = "95"
+set verdict = "none"
+
+if $SCORE >= 90 then
+    /proc handle_high
+elseif $SCORE >= 50 then
+    /proc handle_mid
+else
+    /proc handle_low
+endif
+
+/dump verdict
+
+/echo === if block inside foreach over range(1:6:1) ===
+
+foreach num in range(1:6:1)
+    if $num >= 4 then
+        set label = "big"
+    else
+        set label = "small"
+    endif
+    /echo num=${num} -> ${label}
+endfor
+
+/dump all

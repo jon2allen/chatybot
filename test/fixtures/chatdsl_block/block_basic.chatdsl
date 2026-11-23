@@ -1,0 +1,6 @@
+set SCORE = "85"
+set grade = "none"
+if $SCORE >= 80 then
+    set grade = "A"
+    set status = "passed"
+endif

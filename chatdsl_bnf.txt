@@ -58,7 +58,15 @@
 
 <break-command> ::= "break"
 
-<if-command> ::= "if" <whitespace> <condition> <whitespace> "then" <whitespace> <command>
+<if-command> ::= <if-single-line> | <if-block>
+
+<if-single-line> ::= "if" <whitespace> <condition> <whitespace> "then" <whitespace> <command>
+
+<if-block> ::= "if" <whitespace> <condition> <whitespace> "then" [ ":" ] <newline>
+               { <script-line> }
+               { "elseif" <whitespace> <condition> <whitespace> "then" [ ":" ] <newline> { <script-line> } }
+               [ "else" [ ":" ] <newline> { <script-line> } ]
+               "endif" [ ":" ]
 
 <condition> ::= [ "not" <whitespace> ] <logical-expression>
 

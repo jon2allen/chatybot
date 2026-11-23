@@ -361,3 +361,70 @@ endif
 """)
     assert app.buffer_manager.get_script_var("res") == "seven"
     assert str(app.buffer_manager.get_script_var("num_poems")) == "7"
+
+
+# ============================================================================
+# 9. Unset variables: block and single-line forms must agree
+# ============================================================================
+
+@pytest.mark.anyio
+async def test_unset_var_equality_false_in_block_form(app):
+    # MODE is never set; comparison must be false, not truthy
+    await run_script(app, """
+set res = "none"
+if $MODE == fast then
+    set res = "block"
+endif
+""")
+    assert app.buffer_manager.get_script_var("res") == "none"
+
+
+@pytest.mark.anyio
+async def test_unset_var_equality_false_in_single_line_form(app):
+    await run_script(app, """
+set res = "none"
+if $MODE == fast then set res = "single"
+""")
+    assert app.buffer_manager.get_script_var("res") == "none"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("ref", ["$TARGET_LANG", "${TARGET_LANG}", "$x", "${report_format2}"])
+async def test_unset_var_any_name_false_in_both_forms(app, ref):
+    await run_script(app, f"""
+set res = "none"
+if {ref} == fast then
+    set res = "block"
+endif
+if {ref} == fast then set res = "single"
+""")
+    assert app.buffer_manager.get_script_var("res") == "none"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("ref", ["$TARGET_LANG", "${TARGET_LANG}"])
+async def test_unset_var_is_empty_in_comparisons(app, ref):
+    await run_script(app, f"""
+set res = "none"
+if {ref} == "" then set res = "empty"
+""")
+    assert app.buffer_manager.get_script_var("res") == "empty"
+
+
+@pytest.mark.anyio
+async def test_unset_var_is_falsy_as_bare_condition(app):
+    await run_script(app, """
+set res = "none"
+if $TARGET_LANG then set res = "truthy"
+""")
+    assert app.buffer_manager.get_script_var("res") == "none"
+
+
+@pytest.mark.anyio
+async def test_set_var_still_compares_normally(app):
+    await run_script(app, """
+set LANG = "fr"
+set res = "none"
+if $LANG == fr then set res = "match"
+""")
+    assert app.buffer_manager.get_script_var("res") == "match"
