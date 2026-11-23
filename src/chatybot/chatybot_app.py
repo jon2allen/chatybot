@@ -3216,6 +3216,10 @@ class ChatybotApp:
 
             # 2. Unquoted operand
             if hasattr(self, "buffer_manager") and self.buffer_manager:
+                # An unset variable reference ($NAME or ${NAME}) is empty
+                m_unset = re.fullmatch(r"\$\{?([A-Za-z_]\w*)\}?", s)
+                if m_unset and m_unset.group(1) not in self.buffer_manager.script_vars:
+                    return ""
                 if ":" in s:
                     raw_var, mod = s.split(":", 1)
                     clean_var = raw_var[1:] if raw_var.startswith("$") else raw_var
@@ -3290,6 +3294,10 @@ class ChatybotApp:
             condition_met = left_val != right_val
         else:
             raw_target = condition_str.strip().strip("\"'")
+            # An unset variable reference ($NAME or ${NAME}) is empty, hence false
+            m_unset = re.fullmatch(r"\$\{?([A-Za-z_]\w*)\}?", raw_target)
+            if m_unset and hasattr(self, "buffer_manager") and self.buffer_manager and m_unset.group(1) not in self.buffer_manager.script_vars:
+                raw_target = ""
             # Check if condition_str is a variable with modifier: e.g. "flag:lower" or "$flag:lower"
             if ":" in raw_target and hasattr(self, "buffer_manager") and self.buffer_manager:
                 raw_var, mod = raw_target.split(":", 1)
@@ -3475,11 +3483,15 @@ class ChatybotApp:
 
         # Replace variables in the command (supporting subscripts and unbraced names)
         # We do not replace variables on the command line for /setvar and /calc as they handle substitution internally
+        # `if` lines are left raw: evaluate_condition expands the condition itself (keeping
+        # unset variables intact), and the then/else bodies are expanded when they execute.
         if command.lstrip().startswith("/setvar") or command.lstrip().startswith("/calc") or command.lstrip().startswith("/str_search"):
+            processed_command = command
+        elif command.lstrip().startswith("if "):
             processed_command = command
         else:
             processed_command = self.buffer_manager.replace_placeholders_legacy(command)
-        
+
         # Strip whitespace for command detection (used by multiple handlers)
         stripped_command = processed_command.lstrip()
 
@@ -4014,8 +4026,7 @@ class ChatybotApp:
                             # Evaluate branches and execute chosen branch
                             chosen_lines = None
                             for cond_expr, branch_lines in if_branches:
-                                processed_cond = self.buffer_manager.replace_placeholders_legacy(cond_expr)
-                                if self.evaluate_condition(processed_cond):
+                                if self.evaluate_condition(cond_expr):
                                     chosen_lines = branch_lines
                                     break
                             if chosen_lines is None and if_else_lines is not None:
