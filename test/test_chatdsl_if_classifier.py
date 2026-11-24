@@ -361,3 +361,9 @@ def test_bare_open_ended_slice_and_modifier_truthiness():
     assert res2.kind == "if_block"
     assert res2.needs_var_check is True
     assert res2.lhs == "flag:lower"
+
+
+def test_local_prose_is_prompt():
+    assert cl("local restaurants near me").kind == "prompt"
+    assert cl("local x").kind == "local"
+    assert cl("local x = 1").kind == "local"
