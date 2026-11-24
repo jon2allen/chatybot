@@ -8,6 +8,7 @@
   fixtures are executed by the chat app.
 """
 from pathlib import Path
+import subprocess
 
 import pytest
 
@@ -36,13 +37,21 @@ def parse_text(text: str):
 
 
 def all_repo_scripts():
-    scripts = []
-    for path in sorted(REPO_ROOT.rglob("*.chatdsl")):
-        rel = path.relative_to(REPO_ROOT).as_posix()
-        if rel.startswith(".venv/"):
-            continue
-        scripts.append(rel)
-    return scripts
+    try:
+        out = subprocess.check_output(
+            ["git", "ls-files", "*.chatdsl"],
+            cwd=REPO_ROOT,
+            text=True,
+        )
+        return sorted(line for line in out.splitlines() if line)
+    except (OSError, subprocess.CalledProcessError):
+        scripts = []
+        for path in sorted(REPO_ROOT.rglob("*.chatdsl")):
+            rel = path.relative_to(REPO_ROOT).as_posix()
+            if rel.startswith(".venv/"):
+                continue
+            scripts.append(rel)
+        return scripts
 
 
 # ----------------------------------------------------------------------------
