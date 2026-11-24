@@ -69,16 +69,20 @@ def _quoted_mask(text: str) -> list[bool]:
     """mask[i] is True when text[i] is inside a '...' or "..." region."""
     mask = [False] * len(text)
     in_dq = in_sq = False
-    for i, ch in enumerate(text):
+    i = 0
+    while i < len(text):
+        ch = text[i]
         if ch == "\\" and i + 1 < len(text):
             mask[i] = in_dq or in_sq
             mask[i + 1] = in_dq or in_sq
+            i += 2
             continue
         if ch == '"' and not in_sq:
             in_dq = not in_dq
         elif ch == "'" and not in_dq:
             in_sq = not in_sq
         mask[i] = in_dq or in_sq
+        i += 1
     return mask
 
 

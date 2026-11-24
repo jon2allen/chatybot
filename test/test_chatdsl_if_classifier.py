@@ -342,3 +342,10 @@ def test_walkthrough_if_conditions():
     assert cl(lines[8]).condition == "$SCORE >= 50"
     assert cl(lines[14]).condition == "$num >= 4"
     assert cl(lines[13]).kind == "foreach"
+
+
+def test_escaped_quote_does_not_close_quoted_region():
+    res = cl(r'if $X == "say \"then\" now" then /echo ok')
+    assert res.kind == "if_single"
+    assert res.condition == r'$X == "say \"then\" now"'
+    assert res.then_body == "/echo ok"
