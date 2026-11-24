@@ -349,3 +349,15 @@ def test_escaped_quote_does_not_close_quoted_region():
     assert res.kind == "if_single"
     assert res.condition == r'$X == "say \"then\" now"'
     assert res.then_body == "/echo ok"
+
+
+def test_bare_open_ended_slice_and_modifier_truthiness():
+    res1 = cl('if id:slice:-3: == "101" then')
+    assert res1.kind == "if_block"
+    assert res1.needs_var_check is True
+    assert res1.lhs == "id:slice:-3:"
+
+    res2 = cl("if flag:lower then")
+    assert res2.kind == "if_block"
+    assert res2.needs_var_check is True
+    assert res2.lhs == "flag:lower"

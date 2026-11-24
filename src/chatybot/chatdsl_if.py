@@ -33,7 +33,7 @@ SCRIPT_KEYWORDS = frozenset({
 _WORD_RE = re.compile(r"[A-Za-z_]\w*")
 _OP_RE = re.compile(r"(==|!=|>=|<=|>|<)")
 _NUM_RE = re.compile(r"-?\d+(?:\.\d+)?")
-_BARE_OPERAND_RE = re.compile(r"[A-Za-z_]\w*(?::[A-Za-z0-9_\-]+)*")  # bare name, optional :modifiers
+_BARE_OPERAND_RE = re.compile(r"[A-Za-z_]\w*(?::[A-Za-z0-9_\-]*)*")  # bare name, optional :modifiers (incl. open-ended slices)
 _SET_RE = re.compile(r"\s+([A-Za-z_]\w*)\s*(\[\])?\s*=")
 _WAIT_RE = re.compile(r"\s+(\d+(?:\.\d+)?)\s*$")
 _LOCAL_RE = re.compile(r"\s+([A-Za-z_]\w*)")
@@ -132,8 +132,8 @@ def _classify_if(rest: str, kw: str) -> LineClassification:
                 needs_var_check = True
             else:
                 return LineClassification("prompt", keyword=kw, condition=condition)
-        elif _WORD_RE.fullmatch(cond_no_not):
-            # truthy check on a bare name: maybe a variable, maybe prose
+        elif _BARE_OPERAND_RE.fullmatch(cond_no_not):
+            # truthy check on a bare name (or bare name with modifiers): maybe a variable, maybe prose
             needs_var_check = True
             lhs = cond_no_not
         else:
