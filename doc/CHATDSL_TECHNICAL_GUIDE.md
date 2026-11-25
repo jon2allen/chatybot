@@ -46,13 +46,24 @@ set x = 1  # This is an inline comment
 - **Safety**: Escape characters (`\`) are disallowed inside variable values to ensure prompt stability.
 
 ### Control Flow
-- **Conditional**: `if ${condition} then /command`
-- **Comparison**: `if ${var1} == "expected" then /echo Match Found`
-- **Negation**: `if not ${condition} then /command` or `if ${var1} != "value" then ...`
+- **Single-line Conditional**: `if ${condition} then /command [else /command]`
+- **Multi-line Block Conditional**:
+  ```dsl
+  if ${score} >= 90 then
+      /echo "Grade: A"
+  elseif ${score} >= 70 then
+      /echo "Grade: C"
+  else
+      /echo "Needs review"
+  endif
+  ```
+  Blocks support arbitrary nesting, optional `:` after `then`/`else`/`endif`, and `elif` as an alias for `elseif`. Unset variables evaluate as empty (`""`) in conditions.
+- **Comparison Operators**: String (`==`, `!=`), Numeric (`>=`, `<=`, `>`, `<`), and Negation (`not`).
+- **String Modifiers**: Inline transformations via `${var:modifier}` (or `${arr[idx]:modifier}`) and bare `var:modifier` / `$var:modifier` in conditions (`lower`, `upper`, `title`, `capitalize`, `trim`/`strip`, `ltrim`/`rtrim`, `len`/`length`, `slice:start:end`/`sub:start:end`). Modifiers chain left-to-right and raise `StringModifierError` (fail-fast) on unknown modifiers or invalid slice bounds (implemented in `src/chatybot/tools/str_utils.py`).
 - **Delay**: `wait <seconds>` (useful for API rate limit management)
 
-### Chat Input
-Any line that does not start with a command reserved word (`set`, `if`, `wait`, `#`) or an escape character (`/`) is treated as a prompt and sent to the active LLM.
+### Chat Input & Shared Line Classifier
+Both the runtime (`chatybot_app.py`) and standalone parser (`chatdsl_parse.py`) use the shared line classifier (`src/chatybot/chatdsl_if.py`) to disambiguate script constructs from LLM prompts. Prose lines that happen to start with a keyword (such as `if you find a bug then fix` or `local restaurants near me`) are classified as prompts and sent to the active LLM rather than executed.
 
 #### Multi-line Blocks
 For complex prompts, use the `/multiline` toggle:
