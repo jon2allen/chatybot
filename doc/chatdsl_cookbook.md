@@ -2127,6 +2127,42 @@ ${recipe_1_prompt}
 2. **Multimodal Content Array**: Accompanying text around `{imagebank1}` is preserved as the item prompt, and the image is attached as an `image_url` part.
 3. **Remote Image URLs**: Using `image=https://...` avoids base64 payload bloat entirely.
 
+### 14.14 Email triage with Jev (`/decide`), `mistral_1`, block `if/elseif/endif`, and string modifiers
+- **Combines:** `/model mistral_1` + `/decide ... choice|noul|score model=openrouter_jev` + `foreach` + nested block `if/elseif/else/endif` + numeric comparisons (`>=`) + string modifiers (`:trim:lower`, `:trim:upper`).
+- **Scripts:** `dsl_test/email_triage/triage_choice_and_reply.chatdsl` and `dsl_test/email_triage/triage_score_and_noul.chatdsl`
+- **Run:** `/script dsl_test/email_triage/triage_choice_and_reply.chatdsl`
+
+```dsl
+/model mistral_1
+set emails[] = ["dsl_test/email_triage/emails/email_outage.txt", "dsl_test/email_triage/emails/email_billing.txt", "dsl_test/email_triage/emails/email_phishing.txt", "dsl_test/email_triage/emails/email_general.txt"]
+
+foreach email_file in emails
+    /filebank1 ${email_file}
+    set email_body = "${filebank1}"
+
+    # Multi-class routing via Jev decision model
+    /decide "$email_body" choice "Classify this incoming email" options="urgent:Production outage,billing:Invoice or refund,phishing:Suspicious wire scam,general:Routine question" model=openrouter_jev var=category
+    /echo "Jev classification: ${category:trim:upper}"
+
+    if category:trim:lower == "phishing" then
+        /echo "[SECURITY] Quarantining suspected phishing email. No reply drafted."
+    elseif category:trim:lower == "urgent" then
+        Draft a concise 3-sentence incident acknowledgment reply: ${email_body}
+        /echo "[Draft Reply]: ${LAST_RESPONSE}"
+    elseif category:trim:lower == "billing" then
+        Draft a polite 3-sentence billing follow-up reply: ${email_body}
+        /echo "[Draft Reply]: ${LAST_RESPONSE}"
+    else
+        /echo "[GENERAL] Queuing low-priority ticket."
+    endif
+endfor
+```
+
+**Walkthrough**
+1. **Deterministic Routing + LLM Drafting**: `openrouter_jev` classifies each email cleanly before `mistral_1` drafts only the replies that need one (skipping phishing and routine tickets).
+2. **Block `if/elseif/else/endif` & String Modifiers**: `category:trim:lower` normalizes whitespace and casing inline; unknown modifiers fail fast with `StringModifierError`.
+3. **Nested Numeric Conditions**: See `triage_score_and_noul.chatdsl` for combining `/decide ... noul` (`"${is_financial:trim:lower}" == "yes"`) with `/decide ... score` (`$urgency >= 4`) in nested `if` blocks.
+
 ---
 
 ## Chapter 15 - Dynamic Skill Loading & Delegation
