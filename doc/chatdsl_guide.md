@@ -27,7 +27,7 @@ ChatDSL supports 6 languages out of the box:
 
 ### 2. Scripting Features
 - **Variable System**: Script-scoped variables with `${name}` syntax
-- **Conditional Logic**: `if` statements with `==`, `!=`, and `not` operators
+- **Conditional Logic**: Single-line and multi-line block `if`/`elseif`/`else`/`endif` statements with `==`, `!=`, `>=`, `<=`, `>`, `<`, `not`, and string modifiers (`${var:lower}`, `var:trim:lower`)
 - **Buffer Management**: Main buffer and 5 file banks for persistent context
 - **Multiline Input**: Complex prompts spanning multiple lines
 - **File Operations**: Upload, view, clear, and save files
@@ -651,17 +651,38 @@ What are the key developments in ML in 2024?
 
 | Operator | Description |
 |----------|-------------|
-| `==` | Equals |
-| `!=` | Not equals |
+| `==` | Equals (string comparison) |
+| `!=` | Not equals (string comparison) |
+| `>=` | Greater than or equal (numeric) |
+| `<=` | Less than or equal (numeric) |
+| `>` | Greater than (numeric) |
+| `<` | Less than (numeric) |
+| `not` | Boolean negation prefix |
 
 ## Control Flow
 
 | Command | Syntax | Description |
 |---------|--------|-------------|
-| `if` | `if condition then command` | Conditional execution |
+| `if` (single-line) | `if condition then command [else command]` | Inline conditional execution |
+| `if` (block) | `if condition then` ... `elseif condition then` ... `else` ... `endif` | Multi-line conditional block (supports nesting and optional `:`) |
 | `wait` | `wait N` | Pause N seconds |
 | `set` | `set name = value` | Define variable |
 | `#` | `# comment` | Comment |
+
+> **Note:** Unset variables evaluate as empty (`""`) in `if` conditions, and prose starting with `if` (without a variable/comparison shape) is sent to the LLM as a normal prompt.
+
+## String Modifiers
+
+Transform variables inline using `${var:modifier}` (or `${arr[idx]:modifier}`), or bare `var:modifier` / `$var:modifier` in `if` conditions. Modifiers chain left-to-right and fail fast with `StringModifierError` on unknown modifiers or invalid slice bounds:
+
+| Modifier | Description | Example |
+|----------|-------------|---------|
+| `lower` / `upper` | Lowercase / uppercase | `${role:upper}` |
+| `title` / `capitalize` | Unicode title case / capitalize first char | `${name:title}` |
+| `trim` / `strip` | Strip leading and trailing whitespace | `${ans:trim:lower}` |
+| `ltrim` / `rtrim` | Strip left / right whitespace | `${line:rtrim}` |
+| `len` / `length` | String length as a numeric string | `if pwd:len < 8 then` |
+| `slice:start:end` / `sub:start:end` | Substring slice (supports negative and open-ended bounds) | `${id:slice:-3:}` |
 
 ## Multiline Syntax
 
@@ -735,11 +756,11 @@ ChatDSL supports the following languages:
 ## Script Writing Guidelines
 
 ### 1. Variable Naming
-- ✅ Use **snake_case** for descriptive names
-- ✅ `article_num`, `model_name` (recommended)
-- ⚠️ camelCase works but is less common
-- ❌ UPPER_CASE for constants only
-- ❌ Single letters (x, y, z) for script parameters only
+- Use **snake_case** for descriptive names
+- `article_num`, `model_name` (recommended)
+- camelCase works but is less common
+- UPPER_CASE for constants only
+- Single letters (x, y, z) for script parameters only
 
 ### 2. Comment Style
 ```dsl
