@@ -69,7 +69,7 @@ from .tool_args import unwrap_tool_args
 from .image_generator import ImageGenerator
 from .image_manager import ImageManager
 from .logging_manager import LoggingManager
-from chatybot.tools.str_utils import STRING_MODIFIERS, StringModifierError, apply_string_modifier
+from chatybot.tools.str_utils import StringModifierError, apply_string_modifier
 
 # Global variables needed for database functionality
 app = None  # Global app instance for database functions to access
