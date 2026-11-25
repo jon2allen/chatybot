@@ -36,6 +36,8 @@
     "notemode" | "mem" | "dump" | "trace" | "debug" |
     # Interactive & Decision Prompts
     "ask" | "decide" |
+    # Batch API
+    "batch" | "batchlist" |
     # Tools & Execution
     "run" | "run_safe" | "run_unsafe" | "tool" |
     # Macros, Procedures & Scripts
@@ -60,11 +62,11 @@
 
 <if-command> ::= <if-single-line> | <if-block>
 
-<if-single-line> ::= "if" <whitespace> <condition> <whitespace> "then" <whitespace> <command>
+<if-single-line> ::= "if" <whitespace> <condition> <whitespace> "then" [ ":" ] <whitespace> <command> [ <whitespace> "else" <whitespace> <command> ]
 
 <if-block> ::= "if" <whitespace> <condition> <whitespace> "then" [ ":" ] <newline>
                { <script-line> }
-               { "elseif" <whitespace> <condition> <whitespace> "then" [ ":" ] <newline> { <script-line> } }
+               { ( "elseif" | "elif" ) <whitespace> <condition> <whitespace> "then" [ ":" ] <newline> { <script-line> } }
                [ "else" [ ":" ] <newline> { <script-line> } ]
                "endif" [ ":" ]
 
@@ -78,7 +80,12 @@
 
 <truthy-expression> ::= <operand>
 
-<operand> ::= <quoted-string> | <variable-reference> | <number> | <identifier>
+<operand> ::= <quoted-string>
+            | <variable-reference>
+            | "$" <variable-name> <modifier-chain>
+            | <identifier> <modifier-chain>
+            | <number>
+            | <identifier>
 
 <foreach-block> ::= "foreach" <whitespace> <item-var> <whitespace> "in" <whitespace> <iterable-expr> <newline>
                     { <script-line> }
@@ -113,7 +120,15 @@
 
 <text-content> ::= { <any-character> | <variable-reference> | <filebank-reference> | <imagebank-reference> }
 
-<variable-reference> ::= "${" <variable-name> "}"
+<variable-reference> ::= "${" <variable-name> [ "[" <integer> "]" ] [ <modifier-chain> ] "}"
+                       | "$" <variable-name> [ "[" <integer> "]" ]
+
+<modifier-chain> ::= ":" <modifier> { ":" <modifier> }
+
+<modifier> ::= "lower" | "upper" | "title" | "capitalize"
+             | "trim" | "strip" | "ltrim" | "lstrip" | "rtrim" | "rstrip"
+             | "len" | "length"
+             | ( "slice" | "sub" ) ":" [ <integer> ] [ ":" [ <integer> ] ]
 
 <filebank-reference> ::= "{" "filebank" <digit_1_5> "}"
 
