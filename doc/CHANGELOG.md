@@ -2,6 +2,18 @@
 
 All notable changes, release milestones, and version history for **Chatybot** are documented in this file.
 
+November 25th, 2026
+-------------------
+- **Block Conditionals, Numeric Comparisons & String Modifiers (`if_update`)**:
+  - Added multi-line block `if ... then` / `elseif` (`elif`) / `else` / `endif` with arbitrary nesting, optional `:`, and `if_block` AST parsing in `chatdsl_parse.py`.
+  - Added numeric comparison operators (`>=`, `<=`, `>`, `<`) in `if` conditions and treated unset variables as empty (`""`).
+  - Added inline string modifiers (`${var:mod}`, `${arr[idx]:mod}`, and bare `var:mod` / `$var:mod` in conditions) via `src/chatybot/tools/str_utils.py`: `lower`, `upper`, Unicode `title`, `capitalize`, `trim`/`strip`, `ltrim`/`lstrip`, `rtrim`/`rstrip`, `len`/`length`, and `slice:start:end`/`sub:start:end` (including negative and open-ended bounds).
+  - Implemented strict fail-fast `StringModifierError` on unknown modifiers or invalid slice bounds, aborting `set`/`local`/script execution immediately.
+  - Added shared construct-vs-prompt line classifier (`src/chatybot/chatdsl_if.py`) used by both runtime (`chatybot_app.py`) and standalone parser (`chatdsl_parse.py`).
+  - Optimized `BufferManager.replace_placeholders` with a delimiter fast-path (~100x faster on plain text) and top-level `str_utils` imports in `chatybot_app.py`.
+  - Fixed `/batch` provider config error surfacing, `ValueError` handling in `cmd_batch`, and cached `empty_results` reuse in `_sc_results`.
+  - Added email triage sample scripts (`dsl_test/email_triage/`) and Cookbook Recipe 14.14.
+
 November 6th, 2026
 ------------------
 - **Multimodal & Provider Batch Enhancements (`/batch`)**:
